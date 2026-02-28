@@ -1,0 +1,30 @@
+services:
+  backend:
+    volumes:
+      - ./backend:/app
+      - backend_venv:/app/.venv
+      - books_data:/data/books
+      - covers_data:/data/covers
+    environment:
+      DEV: "1"
+
+  metadata-daemon:
+    volumes:
+      - ./metadata-daemon:/app
+      - daemon_venv:/app/.venv
+    command: >
+      sh -c "uv sync --frozen --no-install-project && exec uv run python -m daemon.main"
+
+  frontend:
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      CI: "true"
+    command: >
+      sh -c "corepack enable && pnpm install && exec pnpm run dev --host 0.0.0.0 --port 3000"
+
+volumes:
+  backend_venv:
+  daemon_venv:
+  frontend_node_modules:
