@@ -3,8 +3,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import ebooklib
-from ebooklib import epub
+from app.vendor import ebooklib
+from app.vendor.ebooklib import epub
 from PIL import Image
 
 
@@ -76,11 +76,8 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
                 cover_item = book.get_item_with_id(cover_id)
 
         # Method 2: EPUB 3 — look for item with properties="cover-image"
-        print(cover_item)
         if cover_item is None:
-            for item in book.get_items_of_type(ebooklib.ITEM_IMAGE):
-                print(item)
-                print(getattr(item, "properties", None))
+            for item in book.get_items():
                 if "cover-image" in (getattr(item, "properties", None) or []):
                     cover_item = item
                     break

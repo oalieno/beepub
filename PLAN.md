@@ -43,6 +43,8 @@ beepub/
 │       │   ├── auth.py, user.py, library.py, book.py, bookshelf.py, reading.py
 │       ├── routers/
 │       │   ├── auth.py, libraries.py, books.py, bookshelves.py, reading.py, admin.py
+│       ├── vendor/
+│       │   └── ebooklib/  (vendored from github.com/aerkalov/ebooklib, 修改版)
 │       └── services/
 │           ├── auth.py, epub_parser.py, storage.py, metadata_queue.py
 ├── metadata-daemon/
@@ -86,7 +88,7 @@ beepub/
 | Auth | python-jose (JWT HS256), passlib[bcrypt] |
 | DB | PostgreSQL 16, asyncpg driver |
 | Queue | Redis 7, redis-py |
-| epub 解析 | ebooklib, Pillow (封面) |
+| epub 解析 | ebooklib (vendored, 修改版), Pillow (封面) |
 | Daemon 排程 | APScheduler 3 |
 | 爬蟲 | httpx, BeautifulSoup4, rapidfuzz (模糊匹配) |
 | Frontend | SvelteKit (@sveltejs/adapter-node), TailwindCSS 3 |
@@ -366,6 +368,15 @@ services:
 10. **Frontend Admin**：圖書館管理, 使用者管理
 
 ---
+
+## 已修復的重要問題
+
+### EPUB 封面抓取（2026-03）
+- **問題**：EPUB 3 格式書籍的封面無法正確識別，落回第一張圖片
+- **根因**：ebooklib 在 parse manifest 時，image items 的 `properties` 屬性（`cover-image`）有讀取但未賦值給物件；且 `EpubCover` 的 `get_type()` 回傳 `ITEM_COVER` 而非 `ITEM_IMAGE`
+- **修復**：
+  1. 將 ebooklib vendor 到 `backend/app/vendor/ebooklib/`，在 `epub.py` 加入 `ei.properties = properties`
+  2. `epub_parser.py` Method 2 改用 `book.get_items()` 全掃描配合 `properties` 欄位判斷
 
 ## 驗證方式
 
