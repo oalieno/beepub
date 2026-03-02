@@ -371,6 +371,7 @@ class DefaultViewManager {
         let offset = view.locationOf(this._lastTarget);
         let width = view.width();
         this.moveTo(offset, width);
+        this._lastTarget = null;
       } catch (e) {
         // target may no longer be in this view — ignore
       }
@@ -1048,12 +1049,18 @@ class DefaultViewManager {
       this.ignore = true;
     }
 
+    let prevLeft = this.container.scrollLeft;
+    let prevTop = this.container.scrollTop;
     if (!this.settings.fullsize) {
       if (x) this.container.scrollLeft += x * dir;
       if (y) this.container.scrollTop += y;
     } else {
       window.scrollBy(x * dir, y * dir);
     }
+    console.log(
+      `[scrollBy] dx:${x} dy:${y} silent:${silent} scrollLeft:${prevLeft}->${this.container.scrollLeft}`,
+      new Error().stack?.split("\n").slice(1, 4).join(" <- "),
+    );
     this.scrolled = true;
   }
 
@@ -1062,12 +1069,18 @@ class DefaultViewManager {
       this.ignore = true;
     }
 
+    let prevLeft = this.container.scrollLeft;
+    let prevTop = this.container.scrollTop;
     if (!this.settings.fullsize) {
       this.container.scrollLeft = x;
       this.container.scrollTop = y;
     } else {
       window.scrollTo(x, y);
     }
+    console.log(
+      `[scrollTo] x:${x} y:${y} silent:${silent} scrollLeft:${prevLeft}->${this.container.scrollLeft}`,
+      new Error().stack?.split("\n").slice(1, 4).join(" <- "),
+    );
     this.scrolled = true;
   }
 

@@ -5,7 +5,7 @@
   import HighlightMenu from './HighlightMenu.svelte';
   import type { HighlightOut } from '$lib/types';
 
-  let { bookId, token, fontFamily = 'serif', fontSize = 16, darkMode = false, onprogress, ontitle, ontoc, ondirection }: {
+  let { bookId, token, fontFamily = 'serif', fontSize = 16, darkMode = false, onprogress, ontitle, ontoc, ondirection, onhighlightschange }: {
     bookId: string;
     token: string;
     fontFamily?: string;
@@ -15,6 +15,7 @@
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
+    onhighlightschange?: (highlights: HighlightOut[]) => void;
   } = $props();
 
   let isRtl = false;
@@ -109,7 +110,8 @@
     try {
       const Epub = (await import('$lib/epubjs/epub.js')).default;
       const hiddenDiv = document.createElement('div');
-      hiddenDiv.style.cssText = `position:fixed;left:-9999px;top:0;width:${container.clientWidth}px;height:${container.clientHeight}px;overflow:hidden;`;
+      hiddenDiv.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${container.clientWidth}px;height:${container.clientHeight}px;overflow:hidden;contain:strict;`;
+      hiddenDiv.setAttribute('inert', '');
       document.body.appendChild(hiddenDiv);
 
       const hiddenBook = Epub(`/api/books/${bookId}/content/`, { openAs: 'directory' });
@@ -130,6 +132,8 @@
       const spineItems = (hiddenBook.spine as any).spineItems;
       const counts: number[] = [];
       for (const item of spineItems) {
+        // Yield to main thread between sections to avoid blocking UI
+        await new Promise<void>((r) => setTimeout(r, 0));
         try {
           const total = await new Promise<number>((resolve) => {
             const timeout = setTimeout(() => resolve(1), 5000);
@@ -251,25 +255,44 @@
     rendition.on('selected', (cfiRange: string, contents: { window: Window }) => {
       const selection = contents.window.getSelection();
       if (!selection || selection.toString().trim() === '') return;
-      selectedText = selection.toString().trim();
-      selectedCfi = cfiRange;
-      existingHighlight = highlights.find((h) => h.cfi_range === cfiRange) ?? null;
+      const text = selection.toString().trim();
+      const existing = highlights.find((h) => h.cfi_range === cfiRange) ?? null;
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      const containerRect = container.getBoundingClientRect();
-      highlightMenuX = rect.left - containerRect.left + rect.width / 2;
-      highlightMenuY = rect.top - containerRect.top - 8;
+
+      // rect is relative to the iframe element's origin (top-left of the full-width iframe).
+      // In paginated mode the iframe is wider than the visible area (covers all CSS columns).
+      // The epub-container (rendition.manager.container) scrolls horizontally to show the
+      // current page. Subtract scrollLeft to get the position within the visible area.
+      const mgr = rendition?.manager;
+      const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+      const scrollTop = mgr?.container?.scrollTop ?? 0;
+      const x = rect.left - scrollLeft + rect.width / 2;
+      const y = rect.top - scrollTop - 8;
+
+      selectedCfi = cfiRange;
+      selectedText = text;
+      existingHighlight = existing;
+      highlightMenuX = x;
+      highlightMenuY = y;
       showHighlightMenu = true;
     });
 
     rendition.on('click', () => {
-      showHighlightMenu = false;
+      // Only dismiss highlight menu if there's no active text selection
+      // (the 'selected' event fires after 'click' due to debounce, so avoid race)
+      const contents = rendition?.manager?.getContents?.();
+      const sel = contents?.[0]?.window?.getSelection();
+      if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
+        showHighlightMenu = false;
+      }
     });
 
     // Load highlights
     try {
       highlights = await booksApi.getHighlights(bookId, token);
+      onhighlightschange?.(highlights);
     } catch {
       // ignore
     }
@@ -472,6 +495,10 @@
     rendition?.display(href);
   }
 
+  export function displayCfi(cfi: string) {
+    rendition?.display(cfi);
+  }
+
   $effect(() => {
     fontFamily; fontSize; darkMode;
     if (rendition) {
@@ -507,6 +534,7 @@
         fill,
         'fill-opacity': '0.5',
       });
+      onhighlightschange?.(highlights);
       toastStore.success('Highlight saved');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -520,6 +548,7 @@
       await booksApi.deleteHighlight(bookId, existingHighlight.id, token);
       highlights = highlights.filter((h) => h.id !== existingHighlight!.id);
       rendition?.annotations.remove(selectedCfi, 'highlight');
+      onhighlightschange?.(highlights);
       toastStore.success('Highlight removed');
     } catch (e) {
       toastStore.error((e as Error).message);

@@ -8,7 +8,8 @@
   import { toastStore } from '$lib/stores/toast';
   import StarRating from '$lib/components/StarRating.svelte';
   import Modal from '$lib/components/Modal.svelte';
-  import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut } from '$lib/types';
+  import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut, HighlightOut } from '$lib/types';
+  import HighlightList from '$lib/components/HighlightList.svelte';
   import { UserRole } from '$lib/types';
   import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink } from '@lucide/svelte';
 
@@ -18,6 +19,7 @@
   let interaction = $state<InteractionOut | null>(null);
   let externalMeta = $state<ExternalMetadataOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
+  let bookHighlights = $state<HighlightOut[]>([]);
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
@@ -53,6 +55,12 @@
       // Load user interaction (rating, favorite, progress)
       try {
         interaction = await booksApi.getInteraction(bookId, $authStore.token!);
+      } catch {
+        // ignore
+      }
+      // Load highlights
+      try {
+        bookHighlights = await booksApi.getHighlights(bookId, $authStore.token!);
       } catch {
         // ignore
       }
@@ -143,7 +151,7 @@
   <title>{book?.display_title ?? 'Book'} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
       <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
@@ -244,6 +252,29 @@
             <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
             <div class="text-muted-foreground leading-relaxed prose-description">
               {@html book.description ?? book.epub_description}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Highlights -->
+        {#if bookHighlights.length > 0}
+          <div class="mt-6">
+            <h2 class="text-xl font-bold mb-3 text-foreground">Highlights</h2>
+            <div class="bg-card card-soft rounded-2xl p-4 max-h-80 overflow-y-auto">
+              <HighlightList
+                highlights={bookHighlights}
+                onselect={(hl) => goto(`/books/${bookId}/read`)}
+                ondelete={async (hl) => {
+                  if (!$authStore.token) return;
+                  try {
+                    await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
+                    bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
+                    toastStore.success('Highlight removed');
+                  } catch (e) {
+                    toastStore.error((e as Error).message);
+                  }
+                }}
+              />
             </div>
           </div>
         {/if}

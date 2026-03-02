@@ -21,6 +21,7 @@
     { href: '/', label: 'Home', active: $page.url.pathname === '/' },
     { href: '/libraries', label: 'Libraries', active: $page.url.pathname.startsWith('/libraries') },
     { href: '/bookshelves', label: 'Shelves', active: $page.url.pathname.startsWith('/bookshelves') },
+    { href: '/highlights', label: 'Highlights', active: $page.url.pathname.startsWith('/highlights') },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin', active: $page.url.pathname.startsWith('/admin') }] : []),
   ]);
 </script>

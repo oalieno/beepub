@@ -89,4 +89,7 @@ export const booksApi = {
 
   deleteHighlight: (bookId: string, highlightId: string, token: string) =>
     del(`/books/${bookId}/highlights/${highlightId}`, token),
+
+  getAllHighlights: (token: string) =>
+    get('/highlights', token) as Promise<HighlightOut[]>,
 };

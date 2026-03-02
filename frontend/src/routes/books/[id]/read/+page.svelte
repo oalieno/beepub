@@ -5,6 +5,11 @@
   import { authStore } from '$lib/stores/auth';
   import EpubReader from '$lib/components/reader/EpubReader.svelte';
   import Toolbar from '$lib/components/reader/Toolbar.svelte';
+  import HighlightSidebar from '$lib/components/reader/HighlightSidebar.svelte';
+  import TocSidebar from '$lib/components/reader/TocSidebar.svelte';
+  import { booksApi } from '$lib/api/books';
+  import { toastStore } from '$lib/stores/toast';
+  import type { HighlightOut } from '$lib/types';
 
   let bookId = $derived($page.params.id as string);
 
@@ -21,6 +26,9 @@
   let reader: EpubReader = $state(null as any);
   let ready = $state(false);
   let isRtl = $state(false);
+  let highlights = $state<HighlightOut[]>([]);
+  let showHighlightSidebar = $state(false);
+  let showTocSidebar = $state(false);
 
   onMount(() => {
     if (!$authStore.token) {
@@ -79,6 +87,7 @@
     {darkMode}
     {toc}
     {isRtl}
+    highlightCount={highlights.length}
     onprev={() => reader?.prev()}
     onnext={() => reader?.next()}
     onfontToggle={handleFontToggle}
@@ -86,6 +95,8 @@
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}
     onchapter={(href) => reader?.displayChapter(href)}
+    onhighlights={() => { showHighlightSidebar = !showHighlightSidebar; showTocSidebar = false; }}
+    ontoc_toggle={() => { showTocSidebar = !showTocSidebar; showHighlightSidebar = false; }}
   />
 
   <div class="flex-1 overflow-hidden relative">
@@ -101,6 +112,7 @@
         onprogress={(p) => { percentage = p.percentage; currentPage = p.currentPage; totalPages = p.totalPages; pageMapReady = p.pageMapReady; calculatingPages = p.calculatingPages; }}
         ontoc={(t) => (toc = t)}
         ondirection={(rtl) => (isRtl = rtl)}
+        onhighlightschange={(h) => (highlights = h)}
       />
     {/if}
 
@@ -120,6 +132,34 @@
           <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
         </span>
       </div>
+    {/if}
+
+    {#if showTocSidebar}
+      <TocSidebar
+        {toc}
+        {darkMode}
+        onchapter={(href) => { reader?.displayChapter(href); showTocSidebar = false; }}
+        onclose={() => (showTocSidebar = false)}
+      />
+    {/if}
+
+    {#if showHighlightSidebar}
+      <HighlightSidebar
+        {highlights}
+        {darkMode}
+        onselect={(hl) => { reader?.displayCfi(hl.cfi_range); showHighlightSidebar = false; }}
+        ondelete={async (hl) => {
+          if (!$authStore.token) return;
+          try {
+            await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
+            highlights = highlights.filter((h) => h.id !== hl.id);
+            toastStore.success('Highlight removed');
+          } catch (e) {
+            toastStore.error((e as Error).message);
+          }
+        }}
+        onclose={() => (showHighlightSidebar = false)}
+      />
     {/if}
   </div>
 </div>

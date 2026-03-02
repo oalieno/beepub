@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Sun, Moon, List } from '@lucide/svelte';
+  import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Sun, Moon, List, Highlighter } from '@lucide/svelte';
 
   let {
     bookId = '', title = '', fontFamily = 'serif', fontSize = 16, percentage = 0,
     currentPage = 0, totalPages = 0, pageMapReady = false, calculatingPages = false, darkMode = false,
-    toc = [], isRtl = false,
-    onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter,
+    toc = [], isRtl = false, highlightCount = 0,
+    onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter, onhighlights, ontoc_toggle,
   }: {
     bookId?: string;
     title?: string;
@@ -19,6 +19,7 @@
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
+    highlightCount?: number;
     onprev?: () => void;
     onnext?: () => void;
     onfontToggle?: () => void;
@@ -26,9 +27,9 @@
     onfontDecrease?: () => void;
     onthemeToggle?: () => void;
     onchapter?: (href: string) => void;
+    onhighlights?: () => void;
+    ontoc_toggle?: () => void;
   } = $props();
-
-  let showToc = $state(false);
 
   function btnClass(dark: boolean) {
     return dark
@@ -50,9 +51,23 @@
   <button
     class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
     title="Table of contents"
-    onclick={() => (showToc = !showToc)}
+    onclick={() => ontoc_toggle?.()}
   >
     <List size={18} />
+  </button>
+
+  <!-- Highlights button -->
+  <button
+    class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
+    title="Highlights"
+    onclick={() => onhighlights?.()}
+  >
+    <Highlighter size={18} />
+    {#if highlightCount > 0}
+      <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode ? 'bg-amber-500 text-gray-900' : 'bg-primary text-primary-foreground'}">
+        {highlightCount > 99 ? '99' : highlightCount}
+      </span>
+    {/if}
   </button>
 
   <div class="flex-1 min-w-0">
@@ -131,35 +146,3 @@
   </div>
 </div>
 
-<!-- TOC dropdown -->
-{#if showToc && toc.length > 0}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-40"
-    onclick={() => (showToc = false)}
-    onkeydown={(e) => { if (e.key === 'Escape') showToc = false; }}
-  ></div>
-  <div class="absolute left-12 top-14 z-50 w-72 max-h-[70vh] overflow-y-auto rounded-xl shadow-xl border {darkMode ? 'bg-gray-900 border-gray-700' : 'bg-card border-border'}">
-    <div class="p-3">
-      <p class="text-xs font-semibold uppercase tracking-wider mb-2 {darkMode ? 'text-gray-500' : 'text-muted-foreground'}">Chapters</p>
-      {#each toc as item}
-        <button
-          class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {darkMode ? 'hover:bg-gray-800 text-gray-300' : 'hover:bg-accent text-foreground'}"
-          onclick={() => { onchapter?.(item.href); showToc = false; }}
-        >
-          {item.label}
-        </button>
-        {#if item.subitems}
-          {#each item.subitems as sub}
-            <button
-              class="w-full text-left pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors {darkMode ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-accent text-muted-foreground'}"
-              onclick={() => { onchapter?.(sub.href); showToc = false; }}
-            >
-              {sub.label}
-            </button>
-          {/each}
-        {/if}
-      {/each}
-    </div>
-  </div>
-{/if}
