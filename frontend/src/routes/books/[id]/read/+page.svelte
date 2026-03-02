@@ -16,6 +16,7 @@
   let currentPage = $state(0);
   let totalPages = $state(0);
   let pageMapReady = $state(false);
+  let calculatingPages = $state(false);
   let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
   let reader: EpubReader = $state(null as any);
   let ready = $state(false);
@@ -74,6 +75,7 @@
     {currentPage}
     {totalPages}
     {pageMapReady}
+    {calculatingPages}
     {darkMode}
     {toc}
     {isRtl}
@@ -96,7 +98,7 @@
         {fontSize}
         {darkMode}
         ontitle={(t) => (title = t)}
-        onprogress={(p) => { percentage = p.percentage; currentPage = p.currentPage; totalPages = p.totalPages; pageMapReady = p.pageMapReady; }}
+        onprogress={(p) => { percentage = p.percentage; currentPage = p.currentPage; totalPages = p.totalPages; pageMapReady = p.pageMapReady; calculatingPages = p.calculatingPages; }}
         ontoc={(t) => (toc = t)}
         ondirection={(rtl) => (isRtl = rtl)}
       />
@@ -105,8 +107,17 @@
     <!-- Bottom page indicator -->
     {#if pageMapReady && totalPages > 0}
       <div class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none">
-        <span class="text-xs px-3 py-1 rounded-full {darkMode ? 'bg-gray-800/80 text-gray-400' : 'bg-black/5 text-muted-foreground'}">
+        <span class="text-xs px-3 py-1 rounded-full flex items-center gap-1.5 {darkMode ? 'bg-gray-800/80 text-gray-400' : 'bg-black/5 text-muted-foreground'}">
           {currentPage} / {totalPages}
+          {#if calculatingPages}
+            <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
+          {/if}
+        </span>
+      </div>
+    {:else if calculatingPages}
+      <div class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none">
+        <span class="text-xs px-3 py-1 rounded-full flex items-center gap-1.5 {darkMode ? 'bg-gray-800/80 text-gray-400' : 'bg-black/5 text-muted-foreground'}">
+          <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
         </span>
       </div>
     {/if}

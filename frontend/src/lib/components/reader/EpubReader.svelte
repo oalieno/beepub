@@ -11,7 +11,7 @@
     fontFamily?: string;
     fontSize?: number;
     darkMode?: boolean;
-    onprogress?: (detail: { cfi: string; percentage: number; currentPage: number; totalPages: number; pageMapReady: boolean }) => void;
+    onprogress?: (detail: { cfi: string; percentage: number; currentPage: number; totalPages: number; pageMapReady: boolean; calculatingPages: boolean }) => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
@@ -44,8 +44,10 @@
 
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let prevFontSize = 0;
-  let calculatingPages = false;
+  let calculatingPages = $state(false);
+  let pendingResize = false;
   let initialized = false;
 
   const HIGHLIGHT_COLORS: Record<string, string> = {
@@ -62,7 +64,9 @@
   // ── Page map cache ──
 
   function pageCacheKey(fs: number) {
-    return `pageMap:${bookId}:${fs}`;
+    const w = container?.clientWidth ?? 0;
+    const h = container?.clientHeight ?? 0;
+    return `pageMap:${bookId}:${fs}:${w}x${h}`;
   }
 
   function loadCachedPageMap(): number[] | null {
@@ -94,7 +98,7 @@
   }
 
   function emitProgress() {
-    onprogress?.({ cfi: currentCfi, percentage: currentPercentage, currentPage, totalPages, pageMapReady });
+    onprogress?.({ cfi: currentCfi, percentage: currentPercentage, currentPage, totalPages, pageMapReady, calculatingPages });
   }
 
   // ── Hidden rendition page calculation ──
@@ -145,21 +149,27 @@
       return counts;
     } finally {
       calculatingPages = false;
+      emitProgress();
+      if (pendingResize) {
+        pendingResize = false;
+        handleResize();
+      }
     }
   }
 
-  async function initOrRecalcPageMap() {
-    const cached = loadCachedPageMap();
-    if (cached) {
-      sectionPageCounts = cached;
-      totalPages = computeTotalPages(cached);
+  async function initOrRecalcPageMap(preview?: number[]) {
+    // Use preview data (from backend/localStorage) for instant display
+    if (preview?.length) {
+      sectionPageCounts = preview;
+      totalPages = computeTotalPages(preview);
       pageMapReady = true;
       currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
       currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-      emitProgress();
-      return;
+    } else {
+      // No preview at all — first time, show only spinner
+      pageMapReady = false;
     }
-    pageMapReady = false;
+    // Always recalculate in background for accuracy
     emitProgress();
     const counts = await calculatePageMap();
     sectionPageCounts = counts;
@@ -194,7 +204,14 @@
 
     // relocated handler: use real rendered page counts from displayed.page/total
     rendition.on('relocated', (location: any) => {
-      console.log('[relocated] cfi:', location.start.cfi, 'index:', location.start.index, 'displayed.page:', location.start.displayed?.page, '/', location.start.displayed?.total);
+      const _dp = location.start.displayed?.page;
+      const _dt = location.start.displayed?.total;
+      const _si = location.start.index ?? 0;
+      const _prevSum = sectionPageCounts.slice(0, _si).reduce((a: number, b: number) => a + b, 0);
+      console.log('[relocated] secIdx:', _si, 'secPage:', _dp, '/', _dt,
+        'prevSectionSum:', _prevSum, 'absolutePage:', _prevSum + (_dp ?? 1),
+        'pageMapReady:', pageMapReady, 'totalPages:', totalPages,
+        'sectionPageCounts:', JSON.stringify(sectionPageCounts.slice(Math.max(0, _si - 1), _si + 2)));
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
@@ -217,6 +234,9 @@
       emitProgress();
       if (pageMapReady) debouncedSave();
     });
+
+    // Recalculate page map on window/container resize
+    rendition.on('resized', handleResize);
 
     rendition.on('keyup', handleKeyboard);
     document.addEventListener('keyup', handleKeyboard);
@@ -304,17 +324,11 @@
       ontoc?.(nav.toc);
     });
 
-    // Load page map: try backend cache → localStorage → calculate via hidden rendition
-    if (savedProgress?.section_page_counts?.length && savedProgress?.font_size === fontSize) {
-      sectionPageCounts = savedProgress.section_page_counts;
-      totalPages = computeTotalPages(sectionPageCounts);
-      pageMapReady = true;
-      currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
-      currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-      emitProgress();
-    } else {
-      initOrRecalcPageMap();
-    }
+    // Load page map: use backend/localStorage cache as preview, always recalculate in background
+    const backendCounts = (savedProgress?.section_page_counts?.length && savedProgress?.font_size === fontSize)
+      ? savedProgress.section_page_counts : null;
+    const preview = backendCounts ?? loadCachedPageMap();
+    initOrRecalcPageMap(preview ?? undefined);
 
     // Save progress every 30s as backup
     progressTimer = setInterval(saveProgress, 30000);
@@ -326,6 +340,7 @@
   onDestroy(() => {
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
     saveProgress();
     window.removeEventListener('beforeunload', handleBeforeUnload);
     document.removeEventListener('keyup', handleKeyboard);
@@ -370,6 +385,29 @@
     const prevByX = isRtl ? e.deltaX > 0 : e.deltaX < 0;
     if (nextByY || nextByX) rendition?.next();
     else if (prevByY || prevByX) rendition?.prev();
+  }
+
+  function handleResize() {
+    if (!initialized) return;
+    if (calculatingPages) {
+      pendingResize = true;
+      return;
+    }
+    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
+    resizeDebounceTimer = setTimeout(async () => {
+      console.log('[resize] Recalculating page map for new dimensions:', container?.clientWidth, 'x', container?.clientHeight);
+      // Keep pageMapReady=true so old values stay visible with spinner
+      emitProgress();
+      const counts = await calculatePageMap();
+      sectionPageCounts = counts;
+      totalPages = computeTotalPages(counts);
+      pageMapReady = true;
+      saveCachedPageMap(counts);
+      currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
+      currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
+      emitProgress();
+      saveProgress();
+    }, 500);
   }
 
   function debouncedSave() {

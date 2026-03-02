@@ -514,6 +514,31 @@ class DefaultViewManager {
 
     if (!this.views.length) return;
 
+    console.log(
+      "[next] axis:",
+      this.settings.axis,
+      "dir:",
+      dir,
+      "scrollLeft:",
+      this.container.scrollLeft,
+      "scrollTop:",
+      this.container.scrollTop,
+      "delta:",
+      this.layout.delta,
+      "layout.width:",
+      this.layout.width,
+      "layout.height:",
+      this.layout.height,
+      "scrollWidth:",
+      this.container.scrollWidth,
+      "scrollHeight:",
+      this.container.scrollHeight,
+      "offsetWidth:",
+      this.container.offsetWidth,
+      "offsetHeight:",
+      this.container.offsetHeight,
+    );
+
     if (
       this.isPaginated &&
       this.settings.axis === "horizontal" &&
@@ -521,12 +546,9 @@ class DefaultViewManager {
     ) {
       this.scrollLeft = this.container.scrollLeft;
 
-      left =
-        this.container.scrollLeft +
-        this.container.offsetWidth +
-        this.layout.delta;
+      left = Math.round(this.container.scrollLeft) + this.container.offsetWidth;
 
-      if (left <= this.container.scrollWidth) {
+      if (left < this.container.scrollWidth) {
         this.scrollBy(this.layout.delta, 0, true);
       } else {
         next = this.views.last().section.next();
@@ -558,7 +580,8 @@ class DefaultViewManager {
     } else if (this.isPaginated && this.settings.axis === "vertical") {
       this.scrollTop = this.container.scrollTop;
 
-      let top = this.container.scrollTop + this.container.offsetHeight;
+      let top =
+        Math.round(this.container.scrollTop) + this.container.offsetHeight;
 
       if (top < this.container.scrollHeight) {
         this.scrollBy(0, this.layout.height, true);
@@ -617,6 +640,23 @@ class DefaultViewManager {
 
     if (!this.views.length) return;
 
+    console.log(
+      "[prev] axis:",
+      this.settings.axis,
+      "dir:",
+      dir,
+      "scrollLeft:",
+      this.container.scrollLeft,
+      "scrollTop:",
+      this.container.scrollTop,
+      "delta:",
+      this.layout.delta,
+      "layout.width:",
+      this.layout.width,
+      "layout.height:",
+      this.layout.height,
+    );
+
     if (
       this.isPaginated &&
       this.settings.axis === "horizontal" &&
@@ -639,7 +679,8 @@ class DefaultViewManager {
       this.scrollLeft = this.container.scrollLeft;
 
       if (this.settings.rtlScrollType === "default") {
-        left = this.container.scrollLeft + this.container.offsetWidth;
+        left =
+          Math.round(this.container.scrollLeft) + this.container.offsetWidth;
 
         if (left < this.container.scrollWidth) {
           this.scrollBy(-this.layout.delta, 0, true);
@@ -803,6 +844,35 @@ class DefaultViewManager {
       let pages = [];
       let endPage = Math.ceil(endPos / stopPos);
 
+      console.log(
+        "[scrolledLocation] index:",
+        index,
+        "startPos:",
+        startPos,
+        "endPos:",
+        endPos,
+        "stopPos:",
+        stopPos,
+        "currPage:",
+        currPage,
+        "endPage:",
+        endPage,
+        "totalPages:",
+        totalPages,
+        "vertical:",
+        vertical,
+        "rtl:",
+        rtl,
+        "containerTop:",
+        container.top,
+        "positionTop:",
+        position.top,
+        "width:",
+        width,
+        "height:",
+        height,
+      );
+
       // Reverse page counts for horizontal rtl
       if (this.settings.direction === "rtl" && !vertical) {
         let tempStartPage = currPage;
@@ -880,9 +950,9 @@ class DefaultViewManager {
       );
 
       let totalPages = this.layout.count(width).pages;
-      let startPage = Math.floor(start / this.layout.pageWidth);
+      let startPage = Math.floor((start + 1) / this.layout.pageWidth);
       let pages = [];
-      let endPage = Math.floor(end / this.layout.pageWidth);
+      let endPage = Math.floor((end + 1) / this.layout.pageWidth);
 
       console.log(
         "[paginatedLocation] start:",

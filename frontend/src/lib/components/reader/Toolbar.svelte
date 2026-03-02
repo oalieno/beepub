@@ -3,7 +3,7 @@
 
   let {
     bookId = '', title = '', fontFamily = 'serif', fontSize = 16, percentage = 0,
-    currentPage = 0, totalPages = 0, pageMapReady = false, darkMode = false,
+    currentPage = 0, totalPages = 0, pageMapReady = false, calculatingPages = false, darkMode = false,
     toc = [], isRtl = false,
     onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter,
   }: {
@@ -15,6 +15,7 @@
     currentPage?: number;
     totalPages?: number;
     pageMapReady?: boolean;
+    calculatingPages?: boolean;
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
@@ -61,6 +62,9 @@
         {percentage}%
         {#if totalPages > 0}
           &middot; {currentPage} / {totalPages}
+        {/if}
+        {#if calculatingPages}
+          <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
         {/if}
       {:else}
         <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
