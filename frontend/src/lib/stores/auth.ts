@@ -6,11 +6,23 @@ interface AuthState {
   token: string | null;
 }
 
+function getInitialState(): AuthState {
+  if (typeof localStorage === 'undefined') return { user: null, token: null };
+  const token = localStorage.getItem('token');
+  const userStr = localStorage.getItem('user');
+  if (token && userStr) {
+    try {
+      return { user: JSON.parse(userStr) as UserOut, token };
+    } catch {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+    }
+  }
+  return { user: null, token: null };
+}
+
 function createAuthStore() {
-  const { subscribe, set, update } = writable<AuthState>({
-    user: null,
-    token: null,
-  });
+  const { subscribe, set, update } = writable<AuthState>(getInitialState());
 
   return {
     subscribe,

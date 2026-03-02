@@ -6,14 +6,20 @@
   import EpubReader from '$lib/components/reader/EpubReader.svelte';
   import Toolbar from '$lib/components/reader/Toolbar.svelte';
 
-  $: bookId = $page.params.id;
+  let bookId = $derived($page.params.id as string);
 
-  let title = '';
-  let fontFamily = 'serif';
-  let fontSize = 16;
-  let percentage = 0;
-  let reader: EpubReader;
-  let ready = false;
+  let title = $state('');
+  let fontFamily = $state('serif');
+  let fontSize = $state(16);
+  let darkMode = $state(false);
+  let percentage = $state(0);
+  let currentPage = $state(0);
+  let totalPages = $state(0);
+  let pageMapReady = $state(false);
+  let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
+  let reader: EpubReader = $state(null as any);
+  let ready = $state(false);
+  let isRtl = $state(false);
 
   onMount(() => {
     if (!$authStore.token) {
@@ -22,8 +28,10 @@
     }
     const savedFont = localStorage.getItem('reader-font');
     const savedSize = localStorage.getItem('reader-size');
+    const savedTheme = localStorage.getItem('reader-dark');
     if (savedFont) fontFamily = savedFont;
     if (savedSize) fontSize = parseInt(savedSize);
+    if (savedTheme) darkMode = savedTheme === '1';
     ready = true;
   });
 
@@ -45,26 +53,40 @@
       localStorage.setItem('reader-size', String(fontSize));
     }
   }
+
+  function handleThemeToggle() {
+    darkMode = !darkMode;
+    localStorage.setItem('reader-dark', darkMode ? '1' : '0');
+  }
 </script>
 
 <svelte:head>
   <title>{title || 'Reading'} - BeePub</title>
 </svelte:head>
 
-<div class="flex flex-col h-screen bg-gray-950">
+<div class="flex flex-col h-screen {darkMode ? 'bg-gray-900' : 'bg-background'}">
   <Toolbar
+    {bookId}
     {title}
     {fontFamily}
     {fontSize}
     {percentage}
-    on:prev={() => reader?.prev()}
-    on:next={() => reader?.next()}
-    on:fontToggle={handleFontToggle}
-    on:fontIncrease={handleFontIncrease}
-    on:fontDecrease={handleFontDecrease}
+    {currentPage}
+    {totalPages}
+    {pageMapReady}
+    {darkMode}
+    {toc}
+    {isRtl}
+    onprev={() => reader?.prev()}
+    onnext={() => reader?.next()}
+    onfontToggle={handleFontToggle}
+    onfontIncrease={handleFontIncrease}
+    onfontDecrease={handleFontDecrease}
+    onthemeToggle={handleThemeToggle}
+    onchapter={(href) => reader?.displayChapter(href)}
   />
 
-  <div class="flex-1 overflow-hidden">
+  <div class="flex-1 overflow-hidden relative">
     {#if ready && $authStore.token}
       <EpubReader
         bind:this={reader}
@@ -72,9 +94,21 @@
         token={$authStore.token}
         {fontFamily}
         {fontSize}
-        on:title={(e) => (title = e.detail)}
-        on:progress={(e) => (percentage = e.detail.percentage)}
+        {darkMode}
+        ontitle={(t) => (title = t)}
+        onprogress={(p) => { percentage = p.percentage; currentPage = p.currentPage; totalPages = p.totalPages; pageMapReady = p.pageMapReady; }}
+        ontoc={(t) => (toc = t)}
+        ondirection={(rtl) => (isRtl = rtl)}
       />
+    {/if}
+
+    <!-- Bottom page indicator -->
+    {#if pageMapReady && totalPages > 0}
+      <div class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none">
+        <span class="text-xs px-3 py-1 rounded-full {darkMode ? 'bg-gray-800/80 text-gray-400' : 'bg-black/5 text-muted-foreground'}">
+          {currentPage} / {totalPages}
+        </span>
+      </div>
     {/if}
   </div>
 </div>

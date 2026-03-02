@@ -3,12 +3,18 @@
   import { authApi } from '$lib/api/auth';
   import { authStore } from '$lib/stores/auth';
   import { toastStore } from '$lib/stores/toast';
+  import { BookOpen } from '@lucide/svelte';
+  import { Button } from '$lib/components/ui/button';
+  import { Input } from '$lib/components/ui/input';
+  import { Label } from '$lib/components/ui/label';
+  import * as Card from '$lib/components/ui/card';
+  import * as Tabs from '$lib/components/ui/tabs';
 
-  let username = '';
-  let password = '';
-  let email = '';
-  let showRegister = false;
-  let loading = false;
+  let username = $state('');
+  let password = $state('');
+  let email = $state('');
+  let showRegister = $state(false);
+  let loading = $state(false);
 
   async function handleLogin() {
     if (!username || !password) return;
@@ -48,106 +54,61 @@
   <title>BeePub - Login</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-  <div class="bg-gray-800 rounded-xl p-8 w-full max-w-md shadow-xl">
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <!-- Logo -->
     <div class="text-center mb-8">
-      <h1 class="text-4xl font-bold text-amber-500">BeePub</h1>
-      <p class="text-gray-400 mt-2">Your personal ebook library</p>
+      <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4">
+        <BookOpen size={28} class="text-primary" />
+      </div>
+      <h1 class="text-3xl font-bold" style="font-family: var(--font-heading)">BeePub</h1>
+      <p class="text-muted-foreground mt-1">Your personal ebook library</p>
     </div>
 
-    <div class="flex rounded-lg overflow-hidden mb-6 border border-gray-700">
-      <button
-        class="flex-1 py-2 text-sm font-medium transition-colors {!showRegister
-          ? 'bg-amber-500 text-gray-900'
-          : 'bg-gray-800 text-gray-400 hover:text-white'}"
-        on:click={() => (showRegister = false)}
-      >
-        Login
-      </button>
-      <button
-        class="flex-1 py-2 text-sm font-medium transition-colors {showRegister
-          ? 'bg-amber-500 text-gray-900'
-          : 'bg-gray-800 text-gray-400 hover:text-white'}"
-        on:click={() => (showRegister = true)}
-      >
-        Register
-      </button>
-    </div>
+    <!-- Card -->
+    <div class="bg-card card-soft rounded-2xl p-6">
+      <Tabs.Root value={showRegister ? 'register' : 'login'} class="w-full">
+        <Tabs.List class="grid w-full grid-cols-2 mb-6 bg-secondary rounded-full p-1">
+          <Tabs.Trigger value="login" onclick={() => (showRegister = false)} class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm">Login</Tabs.Trigger>
+          <Tabs.Trigger value="register" onclick={() => (showRegister = true)} class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm">Register</Tabs.Trigger>
+        </Tabs.List>
 
-    {#if !showRegister}
-      <form on:submit|preventDefault={handleLogin} class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1" for="username">Username</label>
-          <input
-            id="username"
-            type="text"
-            bind:value={username}
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            placeholder="Enter username"
-            required
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1" for="password">Password</label>
-          <input
-            id="password"
-            type="password"
-            bind:value={password}
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            placeholder="Enter password"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          class="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-900 font-semibold py-2 rounded-lg transition-colors"
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </form>
-    {:else}
-      <form on:submit|preventDefault={handleRegister} class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1" for="reg-username">Username</label>
-          <input
-            id="reg-username"
-            type="text"
-            bind:value={username}
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            placeholder="Choose username"
-            required
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1" for="reg-email">Email (optional)</label>
-          <input
-            id="reg-email"
-            type="email"
-            bind:value={email}
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            placeholder="Enter email"
-          />
-        </div>
-        <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1" for="reg-password">Password</label>
-          <input
-            id="reg-password"
-            type="password"
-            bind:value={password}
-            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
-            placeholder="Choose password"
-            required
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          class="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-900 font-semibold py-2 rounded-lg transition-colors"
-        >
-          {loading ? 'Creating account...' : 'Register'}
-        </button>
-      </form>
-    {/if}
+        <Tabs.Content value="login">
+          <form onsubmit={(e) => { e.preventDefault(); handleLogin(); }} class="space-y-4">
+            <div class="space-y-1.5">
+              <Label for="username" class="text-sm font-medium">Username</Label>
+              <Input id="username" type="text" bind:value={username} placeholder="Enter username" required class="rounded-xl h-11" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="password" class="text-sm font-medium">Password</Label>
+              <Input id="password" type="password" bind:value={password} placeholder="Enter password" required class="rounded-xl h-11" />
+            </div>
+            <Button type="submit" disabled={loading} class="w-full rounded-xl h-11 text-sm font-semibold">
+              {loading ? 'Logging in...' : 'Login'}
+            </Button>
+          </form>
+        </Tabs.Content>
+
+        <Tabs.Content value="register">
+          <form onsubmit={(e) => { e.preventDefault(); handleRegister(); }} class="space-y-4">
+            <div class="space-y-1.5">
+              <Label for="reg-username" class="text-sm font-medium">Username</Label>
+              <Input id="reg-username" type="text" bind:value={username} placeholder="Choose username" required class="rounded-xl h-11" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="reg-email" class="text-sm font-medium">Email (optional)</Label>
+              <Input id="reg-email" type="email" bind:value={email} placeholder="Enter email" class="rounded-xl h-11" />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="reg-password" class="text-sm font-medium">Password</Label>
+              <Input id="reg-password" type="password" bind:value={password} placeholder="Choose password" required class="rounded-xl h-11" />
+            </div>
+            <Button type="submit" disabled={loading} class="w-full rounded-xl h-11 text-sm font-semibold">
+              {loading ? 'Creating account...' : 'Register'}
+            </Button>
+          </form>
+        </Tabs.Content>
+      </Tabs.Root>
+    </div>
   </div>
 </div>

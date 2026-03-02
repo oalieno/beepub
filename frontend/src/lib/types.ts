@@ -85,6 +85,12 @@ export interface HighlightOut {
 export interface ProgressOut {
   cfi: string | null;
   percentage: number | null;
+  current_page: number | null;
+  font_size: number | null;
+  section_index: number | null;
+  section_page: number | null;
+  section_page_counts: number[] | null;
+  total_pages: number | null;
   last_read_at: string | null;
 }
 

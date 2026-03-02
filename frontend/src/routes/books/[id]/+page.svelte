@@ -10,20 +10,20 @@
   import Modal from '$lib/components/Modal.svelte';
   import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut } from '$lib/types';
   import { UserRole } from '$lib/types';
-  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink } from 'lucide-svelte';
+  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink } from '@lucide/svelte';
 
-  $: bookId = $page.params.id;
+  let bookId = $derived($page.params.id as string);
 
-  let book: BookOut | null = null;
-  let interaction: InteractionOut | null = null;
-  let externalMeta: ExternalMetadataOut[] = [];
-  let bookshelves: BookshelfOut[] = [];
-  let loading = true;
-  let showEditModal = false;
-  let showAddToShelf = false;
-  let editForm = { title: '', authors: '', description: '', publisher: '', published_date: '' };
+  let book = $state<BookOut | null>(null);
+  let interaction = $state<InteractionOut | null>(null);
+  let externalMeta = $state<ExternalMetadataOut[]>([]);
+  let bookshelves = $state<BookshelfOut[]>([]);
+  let loading = $state(true);
+  let showEditModal = $state(false);
+  let showAddToShelf = $state(false);
+  let editForm = $state({ title: '', authors: '', description: '', publisher: '', published_date: '' });
 
-  $: isAdmin = $authStore.user?.role === UserRole.Admin;
+  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   onMount(async () => {
     if (!$authStore.token) { goto('/login'); return; }
@@ -63,12 +63,12 @@
     }
   }
 
-  async function handleRating(e: CustomEvent<number | null>) {
+  async function handleRating(rating: number) {
     if (!book || !$authStore.token) return;
     try {
-      await booksApi.updateRating(bookId, e.detail, $authStore.token);
-      if (interaction) interaction = { ...interaction, rating: e.detail };
-      else interaction = { rating: e.detail, is_favorite: false, reading_progress: null, updated_at: '' };
+      await booksApi.updateRating(bookId, rating, $authStore.token);
+      if (interaction) interaction = { ...interaction, rating };
+      else interaction = { rating, is_favorite: false, reading_progress: null, updated_at: '' };
       toastStore.success('Rating updated');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -143,48 +143,50 @@
   <title>{book?.display_title ?? 'Book'} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-4 py-8">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
   {:else if book}
-    <div class="flex flex-col md:flex-row gap-8">
+    <div class="flex flex-col md:flex-row gap-10">
       <!-- Cover -->
-      <div class="flex-shrink-0 w-48 mx-auto md:mx-0">
-        <div class="aspect-[2/3] bg-gray-800 rounded-lg overflow-hidden shadow-xl">
+      <div class="flex-shrink-0 w-64 mx-auto md:mx-0">
+        <div class="aspect-[2/3] rounded-lg overflow-hidden book-shadow">
           {#if book.cover_path}
             <img src="/covers/{book.id}.jpg" alt="{book.display_title} cover" class="w-full h-full object-cover" />
           {:else}
-            <div class="w-full h-full flex items-center justify-center">
-              <BookOpen class="text-gray-600" size={48} />
+            <div class="w-full h-full bg-secondary flex items-center justify-center">
+              <BookOpen class="text-muted-foreground/30" size={48} />
             </div>
           {/if}
         </div>
 
         <!-- Actions -->
-        <div class="mt-4 flex flex-col gap-2">
+        <div class="mt-5 flex flex-col gap-2.5">
           <a
             href="/books/{book.id}/read"
-            class="flex items-center justify-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold px-4 py-2.5 rounded-lg transition-colors"
+            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 py-3 rounded-xl transition-colors"
           >
             <BookOpen size={16} />
-            Read
+            Start Reading
           </a>
-          <button
-            class="flex items-center justify-center gap-2 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg transition-colors"
-            on:click={toggleFavorite}
-          >
-            <Heart size={16} class="{interaction?.is_favorite ? 'fill-red-500 text-red-500' : ''}" />
-            {interaction?.is_favorite ? 'Unfavorite' : 'Favorite'}
-          </button>
-          <button
-            class="flex items-center justify-center gap-2 border border-gray-700 hover:border-gray-600 text-gray-300 hover:text-white px-4 py-2.5 rounded-lg transition-colors"
-            on:click={() => (showAddToShelf = true)}
-          >
-            <BookMarked size={16} />
-            Add to Shelf
-          </button>
+          <div class="flex gap-2">
+            <button
+              class="flex-1 flex items-center justify-center gap-1.5 bg-card card-soft text-foreground px-3 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all"
+              onclick={toggleFavorite}
+            >
+              <Heart size={14} class={interaction?.is_favorite ? 'fill-red-500 text-red-500' : ''} />
+              {interaction?.is_favorite ? 'Saved' : 'Save'}
+            </button>
+            <button
+              class="flex-1 flex items-center justify-center gap-1.5 bg-card card-soft text-foreground px-3 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all"
+              onclick={() => (showAddToShelf = true)}
+            >
+              <BookMarked size={14} />
+              Shelf
+            </button>
+          </div>
         </div>
       </div>
 
@@ -192,74 +194,78 @@
       <div class="flex-1 min-w-0">
         <div class="flex items-start justify-between gap-4">
           <div>
-            <h1 class="text-3xl font-bold leading-tight">{book.display_title ?? 'Untitled'}</h1>
+            <h1 class="text-3xl font-bold leading-tight text-foreground">{book.display_title ?? 'Untitled'}</h1>
             {#if (book.display_authors ?? []).length > 0}
-              <p class="text-gray-400 text-lg mt-1">{(book.display_authors ?? []).join(', ')}</p>
+              <p class="text-muted-foreground text-lg mt-1.5">{(book.display_authors ?? []).join(', ')}</p>
             {/if}
           </div>
           {#if isAdmin}
-            <div class="flex items-center gap-2 flex-shrink-0">
-              <button class="p-2 text-gray-400 hover:text-white" on:click={() => (showEditModal = true)} title="Edit metadata">
-                <Edit size={18} />
+            <div class="flex items-center gap-1 flex-shrink-0">
+              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" onclick={() => (showEditModal = true)} title="Edit metadata">
+                <Edit size={14} />
               </button>
-              <button class="p-2 text-gray-400 hover:text-white" on:click={handleRefreshMeta} title="Refresh metadata">
-                <RefreshCw size={18} />
+              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" onclick={handleRefreshMeta} title="Refresh metadata">
+                <RefreshCw size={14} />
               </button>
-              <button class="p-2 text-red-400 hover:text-red-300" on:click={handleDelete} title="Delete book">
-                <Trash2 size={18} />
+              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors" onclick={handleDelete} title="Delete book">
+                <Trash2 size={14} />
               </button>
             </div>
           {/if}
         </div>
 
         <!-- Rating -->
-        <div class="mt-4">
-          <p class="text-sm text-gray-500 mb-1">Your rating</p>
-          <StarRating value={interaction?.rating ?? null} on:change={handleRating} />
+        <div class="mt-5">
+          <p class="text-sm text-muted-foreground mb-1.5">Your rating</p>
+          <StarRating value={interaction?.rating ?? null} onchange={handleRating} />
         </div>
 
         <!-- Metadata -->
-        <div class="mt-4 grid grid-cols-2 gap-2 text-sm">
-          {#if book.publisher ?? book.epub_publisher}
-            <div><span class="text-gray-500">Publisher:</span> <span class="text-gray-300">{book.publisher ?? book.epub_publisher}</span></div>
-          {/if}
-          {#if book.published_date ?? book.epub_published_date}
-            <div><span class="text-gray-500">Published:</span> <span class="text-gray-300">{book.published_date ?? book.epub_published_date}</span></div>
-          {/if}
-          {#if book.epub_language}
-            <div><span class="text-gray-500">Language:</span> <span class="text-gray-300">{book.epub_language}</span></div>
-          {/if}
-          {#if book.epub_isbn}
-            <div><span class="text-gray-500">ISBN:</span> <span class="text-gray-300">{book.epub_isbn}</span></div>
-          {/if}
+        <div class="mt-6 bg-card card-soft rounded-2xl p-5">
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            {#if book.publisher ?? book.epub_publisher}
+              <div><span class="text-muted-foreground block text-xs">Publisher</span> <span class="text-foreground font-medium">{book.publisher ?? book.epub_publisher}</span></div>
+            {/if}
+            {#if book.published_date ?? book.epub_published_date}
+              <div><span class="text-muted-foreground block text-xs">Published</span> <span class="text-foreground font-medium">{book.published_date ?? book.epub_published_date}</span></div>
+            {/if}
+            {#if book.epub_language}
+              <div><span class="text-muted-foreground block text-xs">Language</span> <span class="text-foreground font-medium">{book.epub_language}</span></div>
+            {/if}
+            {#if book.epub_isbn}
+              <div><span class="text-muted-foreground block text-xs">ISBN</span> <span class="text-foreground font-medium">{book.epub_isbn}</span></div>
+            {/if}
+          </div>
         </div>
 
         <!-- Description -->
         {#if book.description ?? book.epub_description}
           <div class="mt-6">
-            <h2 class="text-lg font-semibold mb-2">Description</h2>
-            <p class="text-gray-400 leading-relaxed">{book.description ?? book.epub_description}</p>
+            <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
+            <div class="text-muted-foreground leading-relaxed prose-description">
+              {@html book.description ?? book.epub_description}
+            </div>
           </div>
         {/if}
 
         <!-- External metadata -->
         {#if externalMeta.length > 0}
           <div class="mt-6">
-            <h2 class="text-lg font-semibold mb-3">External Ratings</h2>
+            <h2 class="text-xl font-bold mb-3 text-foreground">External Ratings</h2>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {#each externalMeta as meta}
-                <div class="bg-gray-800 rounded-lg p-3">
-                  <p class="text-sm font-medium capitalize mb-1">{meta.source.replace('_', ' ')}</p>
+                <div class="bg-card card-soft rounded-2xl p-4">
+                  <p class="text-sm font-medium capitalize mb-1 text-foreground">{meta.source.replace('_', ' ')}</p>
                   {#if meta.rating !== null}
-                    <p class="text-amber-500 text-lg font-bold">{meta.rating?.toFixed(1)}</p>
+                    <p class="text-primary text-xl font-bold">{meta.rating?.toFixed(1)}</p>
                   {:else}
-                    <p class="text-gray-500 text-sm">No rating</p>
+                    <p class="text-muted-foreground text-sm">No rating</p>
                   {/if}
                   {#if meta.rating_count !== null}
-                    <p class="text-gray-500 text-xs">{meta.rating_count?.toLocaleString()} ratings</p>
+                    <p class="text-muted-foreground text-xs">{meta.rating_count?.toLocaleString()} ratings</p>
                   {/if}
                   {#if meta.source_url}
-                    <a href={meta.source_url} target="_blank" rel="noopener" class="text-xs text-amber-500 hover:underline flex items-center gap-1 mt-1">
+                    <a href={meta.source_url} target="_blank" rel="noopener" class="text-xs text-primary hover:underline flex items-center gap-1 mt-1.5">
                       View <ExternalLink size={10} />
                     </a>
                   {/if}
@@ -275,48 +281,48 @@
 
 <!-- Edit Modal -->
 {#if book}
-  <Modal title="Edit Metadata" open={showEditModal} on:close={() => (showEditModal = false)}>
+  <Modal title="Edit Metadata" open={showEditModal} onclose={() => (showEditModal = false)}>
     <div class="space-y-4">
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Title</label>
-        <input bind:value={editForm.title} class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500" />
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="edit-title">Title</label>
+        <input id="edit-title" bind:value={editForm.title} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Authors (comma-separated)</label>
-        <input bind:value={editForm.authors} class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500" />
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="edit-authors">Authors (comma-separated)</label>
+        <input id="edit-authors" bind:value={editForm.authors} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Publisher</label>
-        <input bind:value={editForm.publisher} class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500" />
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="edit-publisher">Publisher</label>
+        <input id="edit-publisher" bind:value={editForm.publisher} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Published Date</label>
-        <input bind:value={editForm.published_date} class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500" />
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="edit-date">Published Date</label>
+        <input id="edit-date" bind:value={editForm.published_date} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
-        <textarea bind:value={editForm.description} rows={4} class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500 resize-none"></textarea>
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="edit-desc">Description</label>
+        <textarea id="edit-desc" bind:value={editForm.description} rows={4} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"></textarea>
       </div>
       <div class="flex justify-end gap-2 pt-2">
-        <button class="px-4 py-2 text-sm text-gray-400 hover:text-white" on:click={() => (showEditModal = false)}>Cancel</button>
-        <button class="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold rounded-lg" on:click={handleSaveEdit}>Save</button>
+        <button class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground" onclick={() => (showEditModal = false)}>Cancel</button>
+        <button class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl" onclick={handleSaveEdit}>Save</button>
       </div>
     </div>
   </Modal>
 
-  <Modal title="Add to Bookshelf" open={showAddToShelf} on:close={() => (showAddToShelf = false)}>
+  <Modal title="Add to Bookshelf" open={showAddToShelf} onclose={() => (showAddToShelf = false)}>
     <div class="space-y-2">
       {#if bookshelves.length === 0}
-        <p class="text-gray-400 text-sm">No bookshelves yet. <a href="/bookshelves" class="text-amber-500">Create one</a>.</p>
+        <p class="text-muted-foreground text-sm">No bookshelves yet. <a href="/bookshelves" class="text-primary">Create one</a>.</p>
       {:else}
         {#each bookshelves as shelf}
           <button
-            class="w-full text-left px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors"
-            on:click={() => addToShelf(shelf.id)}
+            class="w-full text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary hover:shadow-sm transition-all"
+            onclick={() => addToShelf(shelf.id)}
           >
-            <p class="font-medium">{shelf.name}</p>
+            <p class="font-medium text-foreground">{shelf.name}</p>
             {#if shelf.description}
-              <p class="text-gray-400 text-xs mt-0.5">{shelf.description}</p>
+              <p class="text-muted-foreground text-xs mt-0.5">{shelf.description}</p>
             {/if}
           </button>
         {/each}

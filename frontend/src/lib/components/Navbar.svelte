@@ -3,116 +3,107 @@
   import { page } from '$app/stores';
   import { authStore } from '$lib/stores/auth';
   import { UserRole } from '$lib/types';
-  import { BookOpen, Library, BookMarked, LogOut, Settings, Menu, X } from 'lucide-svelte';
+  import { BookOpen, LogOut, Menu, X, Bookmark } from '@lucide/svelte';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import * as Avatar from '$lib/components/ui/avatar';
+  import { Separator } from '$lib/components/ui/separator';
 
-  let menuOpen = false;
-  let userMenuOpen = false;
+  let menuOpen = $state(false);
 
   function logout() {
     authStore.logout();
     goto('/login');
   }
 
-  $: isAdmin = $authStore.user?.role === UserRole.Admin;
+  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
+
+  const navLinks = $derived([
+    { href: '/', label: 'Home', active: $page.url.pathname === '/' },
+    { href: '/libraries', label: 'Libraries', active: $page.url.pathname.startsWith('/libraries') },
+    { href: '/bookshelves', label: 'Shelves', active: $page.url.pathname.startsWith('/bookshelves') },
+    ...(isAdmin ? [{ href: '/admin', label: 'Admin', active: $page.url.pathname.startsWith('/admin') }] : []),
+  ]);
 </script>
 
-<nav class="fixed top-0 left-0 right-0 z-50 bg-gray-900 border-b border-gray-800 h-16">
-  <div class="max-w-7xl mx-auto px-4 h-full flex items-center justify-between">
+<nav class="fixed top-0 left-0 right-0 z-50 h-16">
+  <div class="max-w-6xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between">
     <!-- Logo -->
-    <a href="/" class="text-amber-500 font-bold text-xl flex items-center gap-2">
-      <BookOpen size={24} />
-      BeePub
+    <a href="/" class="flex items-center gap-2.5 group">
+      <div class="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+        <BookOpen size={18} class="text-primary" />
+      </div>
+      <span class="text-xl font-bold tracking-tight" style="font-family: var(--font-heading)">BeePub</span>
     </a>
 
-    <!-- Desktop nav -->
-    <div class="hidden md:flex items-center gap-6">
-      <a
-        href="/"
-        class="text-sm font-medium transition-colors {$page.url.pathname === '/' ? 'text-amber-500' : 'text-gray-400 hover:text-white'}"
-      >
-        Home
-      </a>
-      <a
-        href="/libraries"
-        class="text-sm font-medium transition-colors {$page.url.pathname.startsWith('/libraries') ? 'text-amber-500' : 'text-gray-400 hover:text-white'}"
-      >
-        Libraries
-      </a>
-      <a
-        href="/bookshelves"
-        class="text-sm font-medium transition-colors {$page.url.pathname.startsWith('/bookshelves') ? 'text-amber-500' : 'text-gray-400 hover:text-white'}"
-      >
-        Bookshelves
-      </a>
-      {#if isAdmin}
+    <!-- Desktop nav — pill tabs -->
+    <div class="hidden md:flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1">
+      {#each navLinks as link}
         <a
-          href="/admin"
-          class="text-sm font-medium transition-colors {$page.url.pathname.startsWith('/admin') ? 'text-amber-500' : 'text-gray-400 hover:text-white'}"
+          href={link.href}
+          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {link.active
+            ? 'bg-primary text-primary-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
         >
-          Admin
+          {link.label}
         </a>
-      {/if}
+      {/each}
     </div>
 
-    <!-- User menu -->
-    <div class="hidden md:flex items-center gap-4 relative">
-      <button
-        class="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
-        on:click={() => (userMenuOpen = !userMenuOpen)}
-      >
-        <div class="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-gray-900 font-bold text-sm">
-          {$authStore.user?.username?.charAt(0).toUpperCase() ?? '?'}
-        </div>
-        <span class="text-sm">{$authStore.user?.username}</span>
-      </button>
-
-      {#if userMenuOpen}
-        <div
-          class="absolute right-0 top-10 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1 w-40"
-          role="menu"
-        >
-          <button
-            class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 flex items-center gap-2"
-            on:click={logout}
-          >
+    <!-- Right side -->
+    <div class="hidden md:flex items-center gap-3">
+      <DropdownMenu.Root>
+        <DropdownMenu.Trigger>
+          <button class="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <Avatar.Root class="h-8 w-8">
+              <Avatar.Fallback class="bg-primary text-primary-foreground text-xs font-semibold">
+                {$authStore.user?.username?.charAt(0).toUpperCase() ?? '?'}
+              </Avatar.Fallback>
+            </Avatar.Root>
+          </button>
+        </DropdownMenu.Trigger>
+        <DropdownMenu.Content align="end" class="w-44">
+          <div class="px-3 py-2 border-b border-border">
+            <p class="text-sm font-medium">{$authStore.user?.username}</p>
+          </div>
+          <DropdownMenu.Item onclick={logout} class="gap-2 text-destructive focus:text-destructive">
             <LogOut size={14} />
             Logout
-          </button>
-        </div>
-      {/if}
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Root>
     </div>
 
     <!-- Mobile hamburger -->
-    <button class="md:hidden text-gray-400" on:click={() => (menuOpen = !menuOpen)}>
+    <button class="md:hidden p-2 text-foreground rounded-lg hover:bg-secondary transition-colors" onclick={() => (menuOpen = !menuOpen)}>
       {#if menuOpen}
-        <X size={24} />
+        <X size={22} />
       {:else}
-        <Menu size={24} />
+        <Menu size={22} />
       {/if}
     </button>
   </div>
 
   <!-- Mobile menu -->
   {#if menuOpen}
-    <div class="md:hidden bg-gray-900 border-t border-gray-800 px-4 py-4 flex flex-col gap-4">
-      <a href="/" class="text-sm font-medium text-gray-300 hover:text-white" on:click={() => (menuOpen = false)}>Home</a>
-      <a href="/libraries" class="text-sm font-medium text-gray-300 hover:text-white" on:click={() => (menuOpen = false)}>Libraries</a>
-      <a href="/bookshelves" class="text-sm font-medium text-gray-300 hover:text-white" on:click={() => (menuOpen = false)}>Bookshelves</a>
-      {#if isAdmin}
-        <a href="/admin" class="text-sm font-medium text-gray-300 hover:text-white" on:click={() => (menuOpen = false)}>Admin</a>
-      {/if}
-      <button class="text-left text-sm font-medium text-red-400 hover:text-red-300 flex items-center gap-2" on:click={logout}>
+    <div class="md:hidden bg-card card-soft mx-4 mt-2 rounded-2xl px-3 py-3 flex flex-col gap-1">
+      {#each navLinks as link}
+        <a
+          href={link.href}
+          class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {link.active
+            ? 'bg-primary text-primary-foreground'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          onclick={() => (menuOpen = false)}
+        >
+          {link.label}
+        </a>
+      {/each}
+      <Separator class="my-1.5" />
+      <button
+        class="px-4 py-2.5 rounded-xl text-sm font-medium text-destructive hover:bg-destructive/10 flex items-center gap-2 text-left"
+        onclick={logout}
+      >
         <LogOut size={14} /> Logout
       </button>
     </div>
   {/if}
 </nav>
-
-<!-- Close user menu on outside click -->
-{#if userMenuOpen}
-  <button
-    class="fixed inset-0 z-40"
-    aria-label="Close menu"
-    on:click={() => (userMenuOpen = false)}
-  ></button>
-{/if}

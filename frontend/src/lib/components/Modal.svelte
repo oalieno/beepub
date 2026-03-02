@@ -1,14 +1,16 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { X } from 'lucide-svelte';
+  import { X } from '@lucide/svelte';
+  import type { Snippet } from 'svelte';
 
-  export let title = '';
-  export let open = false;
-
-  const dispatch = createEventDispatcher();
+  let { title = '', open = false, onclose, children }: {
+    title?: string;
+    open?: boolean;
+    onclose?: () => void;
+    children?: Snippet;
+  } = $props();
 
   function close() {
-    dispatch('close');
+    onclose?.();
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -16,38 +18,34 @@
   }
 </script>
 
+<svelte:window onkeydown={handleKeydown} />
+
 {#if open}
   <div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-    <!-- Backdrop -->
     <button
-      class="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      class="absolute inset-0 bg-black/40 backdrop-blur-sm"
       aria-label="Close modal"
-      on:click={close}
+      onclick={close}
     ></button>
 
-    <!-- Panel -->
     <div
-      class="relative bg-gray-800 rounded-xl shadow-2xl w-full max-w-lg border border-gray-700"
+      class="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg"
       role="document"
     >
-      <!-- Header -->
-      <div class="flex items-center justify-between px-6 py-4 border-b border-gray-700">
-        <h2 class="text-lg font-semibold text-white">{title}</h2>
+      <div class="flex items-center justify-between px-6 py-5">
+        <h2 class="text-lg font-bold text-foreground">{title}</h2>
         <button
-          class="text-gray-400 hover:text-white transition-colors"
-          on:click={close}
+          class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+          onclick={close}
           aria-label="Close"
         >
-          <X size={20} />
+          <X size={16} />
         </button>
       </div>
 
-      <!-- Content -->
-      <div class="px-6 py-4">
-        <slot />
+      <div class="px-6 pb-6">
+        {#if children}{@render children()}{/if}
       </div>
     </div>
   </div>
 {/if}
-
-<svelte:window on:keydown={handleKeydown} />

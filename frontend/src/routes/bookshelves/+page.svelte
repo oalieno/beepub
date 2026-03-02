@@ -6,13 +6,15 @@
   import { toastStore } from '$lib/stores/toast';
   import Modal from '$lib/components/Modal.svelte';
   import type { BookshelfOut } from '$lib/types';
-  import { Plus, BookMarked, Trash2 } from 'lucide-svelte';
+  import { Plus, BookMarked, Trash2 } from '@lucide/svelte';
 
-  let shelves: BookshelfOut[] = [];
-  let loading = true;
-  let showCreateModal = false;
-  let createForm = { name: '', description: '', is_public: false };
-  let creating = false;
+  let bookshelves = $state<BookshelfOut[]>([]);
+  let loading = $state(true);
+  let showCreateModal = $state(false);
+  let createName = $state('');
+  let createDesc = $state('');
+  let creating = $state(false);
+  let isPublic = $state(false);
 
   onMount(async () => {
     if (!$authStore.token) { goto('/login'); return; }
@@ -22,7 +24,7 @@
   async function loadData() {
     loading = true;
     try {
-      shelves = await bookshelvesApi.list($authStore.token!);
+      bookshelves = await bookshelvesApi.list($authStore.token!);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -31,13 +33,15 @@
   }
 
   async function handleCreate() {
-    if (!createForm.name || !$authStore.token) return;
+    if (!createName || !$authStore.token) return;
     creating = true;
     try {
-      const shelf = await bookshelvesApi.create(createForm, $authStore.token);
-      shelves = [...shelves, shelf];
+      const shelf = await bookshelvesApi.create({ name: createName, description: createDesc, is_public: isPublic }, $authStore.token);
+      bookshelves = [...bookshelves, shelf];
       showCreateModal = false;
-      createForm = { name: '', description: '', is_public: false };
+      createName = '';
+      createDesc = '';
+      isPublic = false;
       toastStore.success('Bookshelf created');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -50,7 +54,7 @@
     if (!confirm(`Delete "${name}"?`) || !$authStore.token) return;
     try {
       await bookshelvesApi.delete(id, $authStore.token);
-      shelves = shelves.filter(s => s.id !== id);
+      bookshelves = bookshelves.filter(s => s.id !== id);
       toastStore.success('Bookshelf deleted');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -62,12 +66,15 @@
   <title>My Bookshelves - BeePub</title>
 </svelte:head>
 
-<div class="max-w-4xl mx-auto px-4 py-8">
-  <div class="flex items-center justify-between mb-8">
-    <h1 class="text-3xl font-bold">My Bookshelves</h1>
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+  <div class="flex items-end justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold text-foreground">My Shelves</h1>
+      <p class="text-muted-foreground mt-1">Organize your reading collections</p>
+    </div>
     <button
-      class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold px-4 py-2 rounded-lg"
-      on:click={() => (showCreateModal = true)}
+      class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
+      onclick={() => (showCreateModal = true)}
     >
       <Plus size={16} />
       New Shelf
@@ -76,33 +83,34 @@
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
-  {:else if shelves.length === 0}
-    <div class="text-center py-16 text-gray-500">
-      <BookMarked class="mx-auto mb-3" size={40} />
-      <p>No bookshelves yet. Create one to organize your reading.</p>
+  {:else if bookshelves.length === 0}
+    <div class="bg-card card-soft rounded-2xl p-12 text-center">
+      <BookMarked class="mx-auto mb-4 text-muted-foreground/30" size={48} />
+      <p class="text-muted-foreground text-lg">No shelves yet</p>
+      <p class="text-muted-foreground/70 text-sm mt-1">Create one to organize your reading.</p>
     </div>
   {:else}
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {#each shelves as shelf}
-        <div class="bg-gray-800 rounded-xl p-5 flex items-start justify-between group">
+      {#each bookshelves as shelf}
+        <div class="bg-card card-soft rounded-2xl p-5 flex items-start justify-between group hover:shadow-md transition-all duration-200">
           <a href="/bookshelves/{shelf.id}" class="flex-1 min-w-0">
-            <h2 class="font-semibold text-lg hover:text-amber-500 transition-colors truncate">{shelf.name}</h2>
+            <h2 class="font-semibold text-lg text-foreground group-hover:text-primary transition-colors truncate">{shelf.name}</h2>
             {#if shelf.description}
-              <p class="text-gray-400 text-sm mt-1 line-clamp-2">{shelf.description}</p>
+              <p class="text-muted-foreground text-sm mt-1 line-clamp-2">{shelf.description}</p>
             {/if}
-            <div class="flex items-center gap-2 mt-2">
-              <span class="text-xs px-2 py-0.5 rounded {shelf.is_public ? 'bg-green-900 text-green-300' : 'bg-gray-700 text-gray-400'}">
+            <div class="flex items-center gap-2 mt-2.5">
+              <span class="text-xs px-2.5 py-1 rounded-full font-medium {shelf.is_public ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary text-muted-foreground'}">
                 {shelf.is_public ? 'Public' : 'Private'}
               </span>
             </div>
           </a>
           <button
-            class="ml-3 p-1.5 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"
-            on:click={() => handleDelete(shelf.id, shelf.name)}
+            class="ml-3 w-7 h-7 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
+            onclick={() => handleDelete(shelf.id, shelf.name)}
           >
-            <Trash2 size={16} />
+            <Trash2 size={13} />
           </button>
         </div>
       {/each}
@@ -110,34 +118,36 @@
   {/if}
 </div>
 
-<Modal title="Create Bookshelf" open={showCreateModal} on:close={() => (showCreateModal = false)}>
+<Modal title="Create Bookshelf" open={showCreateModal} onclose={() => (showCreateModal = false)}>
   <div class="space-y-4">
-    <div>
-      <label class="block text-sm font-medium text-gray-300 mb-1">Name</label>
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-foreground" for="shelf-name">Name</label>
       <input
-        bind:value={createForm.name}
+        id="shelf-name"
+        bind:value={createName}
         placeholder="e.g. To Read, Sci-Fi Favorites"
-        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
-    <div>
-      <label class="block text-sm font-medium text-gray-300 mb-1">Description (optional)</label>
+    <div class="space-y-1">
+      <label class="block text-sm font-medium text-foreground" for="shelf-desc">Description (optional)</label>
       <input
-        bind:value={createForm.description}
+        id="shelf-desc"
+        bind:value={createDesc}
         placeholder="A description..."
-        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-amber-500"
+        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <label class="flex items-center gap-2 cursor-pointer">
-      <input type="checkbox" bind:checked={createForm.is_public} class="accent-amber-500" />
-      <span class="text-sm text-gray-300">Make public</span>
+      <input type="checkbox" bind:checked={isPublic} class="accent-primary" />
+      <span class="text-sm text-foreground">Make public</span>
     </label>
     <div class="flex justify-end gap-2 pt-2">
-      <button class="px-4 py-2 text-sm text-gray-400 hover:text-white" on:click={() => (showCreateModal = false)}>Cancel</button>
+      <button class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground" onclick={() => (showCreateModal = false)}>Cancel</button>
       <button
-        disabled={!createForm.name || creating}
-        class="px-4 py-2 text-sm bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-gray-900 font-semibold rounded-lg"
-        on:click={handleCreate}
+        disabled={!createName || creating}
+        class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold rounded-xl"
+        onclick={handleCreate}
       >
         {creating ? 'Creating...' : 'Create'}
       </button>

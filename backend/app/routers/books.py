@@ -349,17 +349,30 @@ async def get_progress(
 async def update_progress(
     book_id: uuid.UUID,
     body: ProgressUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
+    current_user: Annotated[User, Depends(get_current_user_or_cookie)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     from datetime import datetime, timezone
     await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
-    interaction.reading_progress = {
+    progress: dict = {
         "cfi": body.cfi,
         "percentage": body.percentage,
         "last_read_at": datetime.now(timezone.utc).isoformat(),
     }
+    if body.current_page is not None:
+        progress["current_page"] = body.current_page
+    if body.font_size is not None:
+        progress["font_size"] = body.font_size
+    if body.section_index is not None:
+        progress["section_index"] = body.section_index
+    if body.section_page is not None:
+        progress["section_page"] = body.section_page
+    if body.section_page_counts is not None:
+        progress["section_page_counts"] = body.section_page_counts
+    if body.total_pages is not None:
+        progress["total_pages"] = body.total_pages
+    interaction.reading_progress = progress
     await db.commit()
     return {"status": "updated"}
 

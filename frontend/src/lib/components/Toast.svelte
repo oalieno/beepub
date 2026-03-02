@@ -1,32 +1,34 @@
 <script lang="ts">
   import { toastStore } from '$lib/stores/toast';
-  import { CheckCircle, XCircle, Info, AlertTriangle, X } from 'lucide-svelte';
+  import { CheckCircle, XCircle, Info, AlertTriangle, X } from '@lucide/svelte';
+  import type { ToastType } from '$lib/stores/toast';
 
   const icons = {
     success: CheckCircle,
     error: XCircle,
     info: Info,
     warning: AlertTriangle,
-  };
+  } as const;
 
-  const colors = {
-    success: 'bg-green-800 border-green-600 text-green-100',
-    error: 'bg-red-800 border-red-600 text-red-100',
-    info: 'bg-blue-800 border-blue-600 text-blue-100',
-    warning: 'bg-yellow-800 border-yellow-600 text-yellow-100',
+  const colors: Record<ToastType, string> = {
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    error: 'bg-red-50 border-red-200 text-red-800',
+    info: 'bg-blue-50 border-blue-200 text-blue-800',
+    warning: 'bg-amber-50 border-amber-200 text-amber-800',
   };
 </script>
 
 <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none">
   {#each $toastStore as toast (toast.id)}
+    {@const IconComponent = icons[toast.type]}
     <div
-      class="flex items-start gap-3 px-4 py-3 rounded-lg border shadow-lg pointer-events-auto {colors[toast.type]}"
+      class="flex items-start gap-3 px-4 py-3 rounded-2xl border shadow-lg pointer-events-auto {colors[toast.type]}"
     >
-      <svelte:component this={icons[toast.type]} size={18} class="flex-shrink-0 mt-0.5" />
+      <IconComponent size={18} class="flex-shrink-0 mt-0.5" />
       <span class="text-sm flex-1">{toast.message}</span>
       <button
         class="flex-shrink-0 opacity-70 hover:opacity-100"
-        on:click={() => toastStore.remove(toast.id)}
+        onclick={() => toastStore.remove(toast.id)}
       >
         <X size={16} />
       </button>

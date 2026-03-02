@@ -6,10 +6,10 @@
   import { toastStore } from '$lib/stores/toast';
   import type { UserOut } from '$lib/types';
   import { UserRole } from '$lib/types';
-  import { Trash2, Shield, User } from 'lucide-svelte';
+  import { Trash2, Shield, User } from '@lucide/svelte';
 
-  let users: UserOut[] = [];
-  let loading = true;
+  let users = $state<UserOut[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
@@ -58,35 +58,36 @@
   <title>Users - Admin - BeePub</title>
 </svelte:head>
 
-<div class="max-w-4xl mx-auto px-4 py-8">
-  <div class="flex items-center gap-3 mb-8">
-    <a href="/admin" class="text-gray-400 hover:text-white text-sm">← Admin</a>
-    <h1 class="text-3xl font-bold">Users</h1>
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+  <div class="mb-8">
+    <a href="/admin" class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block">← Admin</a>
+    <h1 class="text-3xl font-bold text-foreground">Users</h1>
+    <p class="text-muted-foreground mt-1">Manage user accounts and roles</p>
   </div>
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
   {:else}
-    <div class="bg-gray-800 rounded-xl overflow-hidden">
+    <div class="bg-card card-soft rounded-2xl overflow-hidden">
       <table class="w-full">
-        <thead class="bg-gray-750 border-b border-gray-700">
+        <thead class="border-b border-border/50">
           <tr>
-            <th class="text-left px-4 py-3 text-sm font-medium text-gray-400">Username</th>
-            <th class="text-left px-4 py-3 text-sm font-medium text-gray-400">Email</th>
-            <th class="text-left px-4 py-3 text-sm font-medium text-gray-400">Role</th>
-            <th class="text-left px-4 py-3 text-sm font-medium text-gray-400">Joined</th>
-            <th class="px-4 py-3"></th>
+            <th class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Username</th>
+            <th class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</th>
+            <th class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Role</th>
+            <th class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Joined</th>
+            <th class="px-5 py-3.5"></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-700">
+        <tbody class="divide-y divide-border/30">
           {#each users as user}
-            <tr class="hover:bg-gray-750">
-              <td class="px-4 py-3 font-medium">{user.username}</td>
-              <td class="px-4 py-3 text-gray-400 text-sm">{user.email}</td>
-              <td class="px-4 py-3">
-                <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded {user.role === UserRole.Admin ? 'bg-amber-900 text-amber-300' : 'bg-gray-700 text-gray-300'}">
+            <tr class="hover:bg-secondary/30 transition-colors">
+              <td class="px-5 py-3.5 font-medium text-foreground">{user.username}</td>
+              <td class="px-5 py-3.5 text-muted-foreground text-sm">{user.email}</td>
+              <td class="px-5 py-3.5">
+                <span class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full font-medium {user.role === UserRole.Admin ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'}">
                   {#if user.role === UserRole.Admin}
                     <Shield size={10} />
                   {:else}
@@ -95,26 +96,26 @@
                   {user.role}
                 </span>
               </td>
-              <td class="px-4 py-3 text-gray-400 text-sm">{new Date(user.created_at).toLocaleDateString()}</td>
-              <td class="px-4 py-3">
+              <td class="px-5 py-3.5 text-muted-foreground text-sm">{new Date(user.created_at).toLocaleDateString()}</td>
+              <td class="px-5 py-3.5">
                 <div class="flex items-center justify-end gap-2">
                   {#if user.id !== $authStore.user?.id}
                     <button
-                      class="text-xs px-2 py-1 border border-gray-600 hover:border-gray-500 rounded text-gray-300 hover:text-white"
-                      on:click={() => toggleRole(user)}
+                      class="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
+                      onclick={() => toggleRole(user)}
                       title="Toggle admin role"
                     >
                       {user.role === UserRole.Admin ? 'Demote' : 'Promote'}
                     </button>
                     <button
-                      class="p-1 text-gray-500 hover:text-red-400"
-                      on:click={() => handleDelete(user)}
+                      class="w-7 h-7 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                      onclick={() => handleDelete(user)}
                       title="Delete user"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
                     </button>
                   {:else}
-                    <span class="text-xs text-gray-600">You</span>
+                    <span class="text-xs text-muted-foreground italic">You</span>
                   {/if}
                 </div>
               </td>

@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import { redirect, type Handle } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 
 const BACKEND_URL = env.BACKEND_URL || 'http://backend:8000';
@@ -23,6 +23,12 @@ export const handle: Handle = async ({ event, resolve }) => {
       event.cookies.delete('token', { path: '/' });
       event.locals.token = null;
     }
+  }
+
+  // Redirect unauthenticated users to login (except the login page itself)
+  const path = event.url.pathname;
+  if (!event.locals.user && path !== '/login') {
+    throw redirect(302, '/login');
   }
 
   return resolve(event);

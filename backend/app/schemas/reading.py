@@ -15,11 +15,23 @@ class FavoriteUpdate(BaseModel):
 class ProgressUpdate(BaseModel):
     cfi: str
     percentage: float
+    current_page: Optional[int] = None
+    font_size: Optional[int] = None
+    section_index: Optional[int] = None
+    section_page: Optional[int] = None
+    section_page_counts: Optional[list[int]] = None
+    total_pages: Optional[int] = None
 
 
 class ProgressOut(BaseModel):
     cfi: Optional[str] = None
     percentage: Optional[float] = None
+    current_page: Optional[int] = None
+    font_size: Optional[int] = None
+    section_index: Optional[int] = None
+    section_page: Optional[int] = None
+    section_page_counts: Optional[list[int]] = None
+    total_pages: Optional[int] = None
     last_read_at: Optional[str] = None
 
 

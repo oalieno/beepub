@@ -7,17 +7,17 @@
   import BookGrid from '$lib/components/BookGrid.svelte';
   import type { BookOut, BookshelfOut, LibraryOut } from '$lib/types';
   import { goto } from '$app/navigation';
-  import { BookOpen, Library, BookMarked } from 'lucide-svelte';
+  import { BookOpen, Library, BookMarked } from '@lucide/svelte';
 
-  let libraries: LibraryOut[] = [];
-  let bookshelves: BookshelfOut[] = [];
-  let recentBooks: BookOut[] = [];
-  let loading = true;
+  let libraries = $state<LibraryOut[]>([]);
+  let bookshelves = $state<BookshelfOut[]>([]);
+  let recentBooks = $state<BookOut[]>([]);
+  let loading = $state(true);
 
   onMount(async () => {
     try {
-      libraries = await librariesApi.list($authStore.token);
-      bookshelves = await bookshelvesApi.list($authStore.token);
+      libraries = await librariesApi.list($authStore.token!);
+      bookshelves = await bookshelvesApi.list($authStore.token!);
 
       // Gather recent books from all libraries
       const allBooks: BookOut[] = [];
@@ -47,42 +47,57 @@
   <title>BeePub - Home</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 py-8">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
   {:else}
-    <!-- Stats -->
-    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
-      <div class="bg-gray-800 rounded-lg p-6 flex items-center gap-4">
-        <Library class="text-amber-500" size={32} />
+    <!-- Hero greeting -->
+    <section class="mb-12">
+      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
         <div>
-          <p class="text-gray-400 text-sm">Libraries</p>
-          <p class="text-2xl font-bold">{libraries.length}</p>
+          <h1 class="text-4xl md:text-5xl font-bold leading-tight text-foreground">
+            Happy reading{$authStore.user ? `,\n${$authStore.user.username}` : ''}
+          </h1>
+          <p class="text-muted-foreground text-lg mt-3 max-w-md">Explore your personal library. Discover new stories and revisit old favorites.</p>
+        </div>
+        <div class="flex items-center gap-6 text-center">
+          <div>
+            <p class="text-3xl font-bold text-primary">{libraries.length}</p>
+            <p class="text-muted-foreground text-xs mt-0.5">Libraries</p>
+          </div>
+          <div class="w-px h-8 bg-border"></div>
+          <div>
+            <p class="text-3xl font-bold text-primary">{recentBooks.length > 0 ? recentBooks.length + '+' : '0'}</p>
+            <p class="text-muted-foreground text-xs mt-0.5">Books</p>
+          </div>
+          <div class="w-px h-8 bg-border"></div>
+          <div>
+            <p class="text-3xl font-bold text-primary">{bookshelves.length}</p>
+            <p class="text-muted-foreground text-xs mt-0.5">Shelves</p>
+          </div>
         </div>
       </div>
-      <div class="bg-gray-800 rounded-lg p-6 flex items-center gap-4">
-        <BookOpen class="text-amber-500" size={32} />
-        <div>
-          <p class="text-gray-400 text-sm">Total Books</p>
-          <p class="text-2xl font-bold">{recentBooks.length > 0 ? recentBooks.length + '+' : 0}</p>
-        </div>
-      </div>
-      <div class="bg-gray-800 rounded-lg p-6 flex items-center gap-4">
-        <BookMarked class="text-amber-500" size={32} />
-        <div>
-          <p class="text-gray-400 text-sm">Bookshelves</p>
-          <p class="text-2xl font-bold">{bookshelves.length}</p>
-        </div>
-      </div>
-    </div>
+    </section>
 
     <!-- Recent Books -->
-    <section class="mb-10">
-      <h2 class="text-2xl font-bold mb-4">Recently Added</h2>
+    <section class="mb-12">
+      <div class="flex items-end justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-foreground">Recently Added</h2>
+          <p class="text-muted-foreground text-sm mt-1">Fresh additions to your library</p>
+        </div>
+        {#if libraries.length > 0}
+          <a href="/libraries" class="text-primary hover:text-primary/80 text-sm font-medium">Browse all →</a>
+        {/if}
+      </div>
       {#if recentBooks.length === 0}
-        <p class="text-gray-400">No books yet. Upload some books to get started.</p>
+        <div class="bg-card card-soft rounded-2xl p-12 text-center">
+          <BookOpen class="mx-auto text-muted-foreground/30 mb-4" size={48} />
+          <p class="text-muted-foreground text-lg">No books yet</p>
+          <p class="text-muted-foreground/70 text-sm mt-1">Upload some EPUBs to get started.</p>
+        </div>
       {:else}
         <BookGrid books={recentBooks} />
       {/if}
@@ -90,22 +105,29 @@
 
     <!-- Bookshelves -->
     <section>
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-2xl font-bold">My Bookshelves</h2>
-        <a href="/bookshelves" class="text-amber-500 hover:text-amber-400 text-sm">View all</a>
+      <div class="flex items-end justify-between mb-6">
+        <div>
+          <h2 class="text-2xl font-bold text-foreground">My Shelves</h2>
+          <p class="text-muted-foreground text-sm mt-1">Your curated collections</p>
+        </div>
+        <a href="/bookshelves" class="text-primary hover:text-primary/80 text-sm font-medium">View all →</a>
       </div>
       {#if bookshelves.length === 0}
-        <p class="text-gray-400">No bookshelves yet.</p>
+        <div class="bg-card card-soft rounded-2xl p-12 text-center">
+          <BookMarked class="mx-auto text-muted-foreground/30 mb-4" size={48} />
+          <p class="text-muted-foreground text-lg">No shelves yet</p>
+          <p class="text-muted-foreground/70 text-sm mt-1">Create a bookshelf to organize your reading.</p>
+        </div>
       {:else}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {#each bookshelves.slice(0, 6) as shelf}
             <a
               href="/bookshelves/{shelf.id}"
-              class="bg-gray-800 rounded-lg p-4 hover:bg-gray-700 transition-colors"
+              class="bg-card card-soft rounded-2xl p-5 hover:shadow-md transition-all duration-200 group"
             >
-              <h3 class="font-semibold text-lg">{shelf.name}</h3>
+              <h3 class="font-semibold text-foreground group-hover:text-primary transition-colors">{shelf.name}</h3>
               {#if shelf.description}
-                <p class="text-gray-400 text-sm mt-1 line-clamp-2">{shelf.description}</p>
+                <p class="text-muted-foreground text-sm mt-1.5 line-clamp-2">{shelf.description}</p>
               {/if}
             </a>
           {/each}

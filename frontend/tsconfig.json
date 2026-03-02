@@ -9,5 +9,6 @@
     "sourceMap": true,
     "strict": true,
     "moduleResolution": "bundler"
-  }
+  },
+  "exclude": ["src/lib/epubjs/**"]
 }

@@ -59,8 +59,17 @@ export const booksApi = {
   getProgress: (bookId: string, token: string) =>
     get(`/books/${bookId}/progress`, token) as Promise<ProgressOut>,
 
-  updateProgress: (bookId: string, cfi: string, percentage: number, token: string) =>
-    put(`/books/${bookId}/progress`, { cfi, percentage }, token),
+  updateProgress: (bookId: string, data: {
+    cfi: string;
+    percentage: number;
+    current_page?: number;
+    font_size?: number;
+    section_index?: number;
+    section_page?: number;
+    section_page_counts?: number[];
+    total_pages?: number;
+  }, token: string) =>
+    put(`/books/${bookId}/progress`, data, token),
 
   getHighlights: (bookId: string, token: string) =>
     get(`/books/${bookId}/highlights`, token) as Promise<HighlightOut[]>,

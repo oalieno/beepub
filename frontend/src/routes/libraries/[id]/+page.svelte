@@ -10,20 +10,20 @@
   import Modal from '$lib/components/Modal.svelte';
   import type { LibraryOut, BookOut } from '$lib/types';
   import { UserRole } from '$lib/types';
-  import { Upload, Search, X } from 'lucide-svelte';
+  import { Upload, Search, X } from '@lucide/svelte';
 
-  $: libraryId = $page.params.id;
+  let libraryId = $derived($page.params.id as string);
 
-  let library: LibraryOut | null = null;
-  let books: BookOut[] = [];
-  let loading = true;
-  let searchQuery = '';
-  let uploading = false;
+  let library = $state<LibraryOut | null>(null);
+  let books = $state<BookOut[]>([]);
+  let loading = $state(true);
+  let searchQuery = $state('');
+  let uploading = $state(false);
   let fileInput: HTMLInputElement;
-  let showUploadModal = false;
-  let dragOver = false;
+  let showUploadModal = $state(false);
+  let dragOver = $state(false);
 
-  $: isAdmin = $authStore.user?.role === UserRole.Admin;
+  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   onMount(async () => {
     if (!$authStore.token) { goto('/login'); return; }
@@ -84,26 +84,28 @@
   <title>{library?.name ?? 'Library'} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 py-8">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
   {:else if library}
-    <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-8">
+    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
       <div>
-        <h1 class="text-3xl font-bold">{library.name}</h1>
+        <div class="flex items-center gap-2 mb-1">
+          <span class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}">
+            {library.visibility}
+          </span>
+        </div>
+        <h1 class="text-3xl font-bold text-foreground">{library.name}</h1>
         {#if library.description}
-          <p class="text-gray-400 mt-1">{library.description}</p>
+          <p class="text-muted-foreground mt-1">{library.description}</p>
         {/if}
-        <span class="inline-block mt-2 text-xs px-2 py-0.5 rounded {library.visibility === 'public' ? 'bg-green-900 text-green-300' : 'bg-red-900 text-red-300'}">
-          {library.visibility}
-        </span>
       </div>
       {#if isAdmin}
         <button
-          class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-gray-900 font-semibold px-4 py-2 rounded-lg transition-colors"
-          on:click={() => (showUploadModal = true)}
+          class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
+          onclick={() => (showUploadModal = true)}
         >
           <Upload size={16} />
           Upload Books
@@ -112,19 +114,19 @@
     </div>
 
     <!-- Search -->
-    <div class="relative mb-6">
-      <Search class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+    <div class="relative mb-8">
+      <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
       <input
         type="text"
         bind:value={searchQuery}
-        on:input={handleSearch}
-        placeholder="Search books..."
-        class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-9 pr-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-amber-500"
+        oninput={handleSearch}
+        placeholder="Search by title, author, or topic..."
+        class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
       {#if searchQuery}
         <button
-          class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white"
-          on:click={() => { searchQuery = ''; handleSearch(); }}
+          class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          onclick={() => { searchQuery = ''; handleSearch(); }}
         >
           <X size={16} />
         </button>
@@ -133,21 +135,22 @@
 
     {#if books.length === 0}
       <div
-        class="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center {dragOver ? 'border-amber-500 bg-amber-500/10' : ''}"
-        on:dragover|preventDefault={() => (dragOver = true)}
-        on:dragleave={() => (dragOver = false)}
-        on:drop={onDrop}
+        class="border-2 border-dashed rounded-2xl p-12 text-center transition-colors {dragOver ? 'border-primary bg-primary/5' : 'border-border'}"
+        ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+        ondragleave={() => (dragOver = false)}
+        ondrop={onDrop}
         role="region"
         aria-label="Drop zone"
       >
-        <Upload class="mx-auto text-gray-600 mb-3" size={40} />
-        <p class="text-gray-400">No books yet. {isAdmin ? 'Upload EPUBs or drag and drop here.' : 'No books in this library.'}</p>
+        <Upload class="mx-auto text-muted-foreground/30 mb-4" size={48} />
+        <p class="text-muted-foreground text-lg">No books yet</p>
+        <p class="text-muted-foreground/70 text-sm mt-1">{isAdmin ? 'Upload EPUBs or drag and drop here.' : 'No books in this library.'}</p>
       </div>
     {:else}
       <div
-        on:dragover|preventDefault={() => (dragOver = true)}
-        on:dragleave={() => (dragOver = false)}
-        on:drop={onDrop}
+        ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+        ondragleave={() => (dragOver = false)}
+        ondrop={onDrop}
         role="region"
         aria-label="Books"
       >
@@ -157,31 +160,32 @@
   {/if}
 </div>
 
-<Modal title="Upload Books" open={showUploadModal} on:close={() => (showUploadModal = false)}>
+<Modal title="Upload Books" open={showUploadModal} onclose={() => (showUploadModal = false)}>
   <div class="space-y-4">
     <div
-      class="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center cursor-pointer hover:border-amber-500 transition-colors"
-      on:click={() => fileInput?.click()}
-      on:dragover|preventDefault
-      on:drop={(e) => { e.preventDefault(); handleUpload(e.dataTransfer?.files ?? null); }}
+      class="border-2 border-dashed border-border rounded-2xl p-10 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+      onclick={() => fileInput?.click()}
+      ondragover={(e) => e.preventDefault()}
+      ondrop={(e) => { e.preventDefault(); handleUpload(e.dataTransfer?.files ?? null); }}
       role="button"
       tabindex="0"
-      on:keydown={(e) => e.key === 'Enter' && fileInput?.click()}
+      onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
     >
-      <Upload class="mx-auto text-gray-500 mb-2" size={32} />
-      <p class="text-gray-400 text-sm">Click or drag EPUB files here</p>
+      <Upload class="mx-auto text-muted-foreground/40 mb-3" size={36} />
+      <p class="text-foreground font-medium">Click or drag files</p>
+      <p class="text-muted-foreground text-sm mt-1">EPUB format supported</p>
       <input
         bind:this={fileInput}
         type="file"
         accept=".epub"
         multiple
         class="hidden"
-        on:change={(e) => handleUpload(e.currentTarget.files)}
+        onchange={(e) => handleUpload(e.currentTarget.files)}
       />
     </div>
     {#if uploading}
-      <div class="flex items-center gap-2 text-amber-500">
-        <div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-amber-500"></div>
+      <div class="flex items-center gap-2 text-primary text-sm">
+        <div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
         Uploading...
       </div>
     {/if}
