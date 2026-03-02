@@ -121,7 +121,7 @@
         },
       });
       hiddenRendition.themes.select('default');
-      await hiddenBook.ready;
+      await (hiddenBook as any).ready;
 
       const spineItems = (hiddenBook.spine as any).spineItems;
       const counts: number[] = [];
@@ -129,7 +129,7 @@
         try {
           const total = await new Promise<number>((resolve) => {
             const timeout = setTimeout(() => resolve(1), 5000);
-            hiddenRendition.once('relocated', (loc: any) => {
+            (hiddenRendition as any).once('relocated', (loc: any) => {
               clearTimeout(timeout);
               resolve(loc?.start?.displayed?.total || 1);
             });
