@@ -33,6 +33,12 @@
   let selectedText = $state('');
   let existingHighlight: HighlightOut | null = $state(null);
 
+  // Footnote popup
+  let showFootnote = $state(false);
+  let footnoteContent = $state('');
+  let footnoteOpenedThisClick = false;
+  let footnoteSourcePath = '';
+
   // Page tracking — real rendered pages, not character-based estimates
   let sectionPageCounts: number[] = [];
   let pageMapReady = $state(false);
@@ -102,6 +108,37 @@
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage, currentPage, totalPages, pageMapReady, calculatingPages });
   }
 
+  function normalizeFootnoteHref(rawHref: string): string | null {
+    const href = (rawHref ?? '').trim();
+    if (!href || href.startsWith('javascript:')) return null;
+
+    // Resolve popup links against the original section path of this footnote,
+    // then map them back to epub.js-relative spine hrefs.
+    const basePath = footnoteSourcePath || '';
+    const baseUrl = `https://epub.local/${basePath}`;
+    const resolved = new URL(href, baseUrl);
+
+    if (resolved.origin !== 'https://epub.local') return null;
+
+    const path = resolved.pathname.replace(/^\/+/, '');
+    const hash = resolved.hash || '';
+    return path || hash ? `${path}${hash}` : null;
+  }
+
+  async function handleFootnoteContentClick(e: MouseEvent) {
+    const target = e.target as HTMLElement | null;
+    const anchor = target?.closest?.('a') as HTMLAnchorElement | null;
+    if (!anchor) return;
+
+    const hrefAttr = anchor.getAttribute('href') ?? '';
+    const normalized = normalizeFootnoteHref(hrefAttr);
+    if (!normalized) return;
+
+    e.preventDefault();
+    showFootnote = false;
+    await rendition?.display(normalized);
+  }
+
   // ── Hidden rendition page calculation ──
 
   async function calculatePageMap(): Promise<number[]> {
@@ -109,6 +146,9 @@
     calculatingPages = true;
     emitProgress();
     try {
+      // Wait for fonts to be loaded so column layout uses final font metrics
+      await document.fonts.ready;
+
       const Epub = (await import('$lib/epubjs/epub.js')).default;
       const hiddenDiv = document.createElement('div');
       hiddenDiv.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${container.clientWidth}px;height:${container.clientHeight}px;overflow:hidden;contain:strict;`;
@@ -140,7 +180,8 @@
             const timeout = setTimeout(() => resolve(1), 5000);
             (hiddenRendition as any).once('relocated', (loc: any) => {
               clearTimeout(timeout);
-              resolve(loc?.start?.displayed?.total || 1);
+              // Small delay to let CSS column layout stabilize before reading page count
+              setTimeout(() => resolve(loc?.start?.displayed?.total || 1), 20);
             });
             hiddenRendition.display(item.href).catch(() => { clearTimeout(timeout); resolve(1); });
           });
@@ -287,6 +328,64 @@
       const sel = contents?.[0]?.window?.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
         showHighlightMenu = false;
+        // Don't close footnote if it was just opened by a link click in the same event cycle
+        if (!footnoteOpenedThisClick) {
+          showFootnote = false;
+        }
+      }
+    });
+
+    rendition.on('link', async (linkEvent: any) => {
+      const href: string = linkEvent.href;
+      const hashIdx = href.indexOf('#');
+      console.log('[link] href:', href, 'hashIdx:', hashIdx, 'isRtl:', isRtl);
+      if (hashIdx === -1) {
+        console.log('[link] no hash, letting default handleLinks run');
+        return;
+      }
+
+      const filePath = href.slice(0, hashIdx);
+      const elementId = href.slice(hashIdx + 1);
+
+      const section = epubBook.spine.get(filePath);
+      console.log('[link] filePath:', filePath, 'elementId:', elementId, 'section found:', !!section, 'section.index:', section?.index);
+      if (!section) return;
+
+      // Prevent default synchronously — async handler can't prevent after await
+      linkEvent.preventDefault();
+      // Flag to prevent the click handler (same event cycle) from closing the popup
+      footnoteOpenedThisClick = true;
+      setTimeout(() => { footnoteOpenedThisClick = false; }, 0);
+
+      try {
+        // Fetch section HTML independently (don't use section.load() which corrupts spine state)
+        const sectionUrl = section.url;
+        const response = await fetch(sectionUrl);
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'application/xhtml+xml');
+        const el = doc.querySelector(`#${CSS.escape(elementId)}`);
+
+        // Check if the target element has meaningful text content (not just a number/marker)
+        const textLen = (el?.textContent ?? '').trim().length;
+        console.log('[link] el found:', !!el, 'textLen:', textLen, 'tagName:', el?.tagName, 'text preview:', (el?.textContent ?? '').trim().slice(0, 50));
+        if (!el || textLen < 2) {
+          // Back-reference link or empty target — navigate instead of popup
+          console.log('[link] back-reference → display()', href);
+          const mgr = rendition?.manager;
+          console.log('[link] BEFORE display: scrollLeft:', mgr?.container?.scrollLeft, 'scrollWidth:', mgr?.container?.scrollWidth, 'direction:', mgr?.settings?.direction);
+          await rendition?.display(href);
+          const mgr2 = rendition?.manager;
+          console.log('[link] AFTER display: scrollLeft:', mgr2?.container?.scrollLeft, 'scrollWidth:', mgr2?.container?.scrollWidth);
+          return;
+        }
+
+        footnoteSourcePath = filePath;
+        footnoteContent = el.innerHTML;
+        showFootnote = true;
+      } catch (err) {
+        console.error('[link] error:', err);
+        await rendition?.display(href);
       }
     });
 
@@ -316,12 +415,10 @@
         // override scroll position using the saved section page number.
         if (savedProgress.section_page != null && savedProgress.font_size === fontSize && rendition.manager) {
           const mgr = rendition.manager;
-          const targetPage = savedProgress.section_page - 1; // 0-indexed
+          const targetPage = Math.max(0, savedProgress.section_page - 1); // 0-indexed
           mgr._lastTarget = null; // Prevent CFI-based re-scroll in afterResized
           mgr._lastTargetPage = targetPage;
-          const distX = targetPage * mgr.layout.delta;
-          if (distX + mgr.layout.delta <= mgr.container.scrollWidth) {
-            mgr.scrollTo(distX, 0, true);
+          if (typeof mgr.scrollToPageIndex === 'function' && mgr.scrollToPageIndex(targetPage)) {
             mgr._lastTargetPage = null;
           }
           // else: afterResized will handle when scrollWidth expands
@@ -393,6 +490,7 @@
   }
 
   function handleKeyboard(e: KeyboardEvent) {
+    showFootnote = false;
     if (e.key === 'ArrowLeft') isRtl ? rendition?.next() : rendition?.prev();
     if (e.key === 'ArrowRight') isRtl ? rendition?.prev() : rendition?.next();
   }
@@ -407,8 +505,8 @@
     const prevByY = e.deltaY < 0;
     const nextByX = isRtl ? e.deltaX < 0 : e.deltaX > 0;
     const prevByX = isRtl ? e.deltaX > 0 : e.deltaX < 0;
-    if (nextByY || nextByX) rendition?.next();
-    else if (prevByY || prevByX) rendition?.prev();
+    if (nextByY || nextByX) { showFootnote = false; rendition?.next(); }
+    else if (prevByY || prevByX) { showFootnote = false; rendition?.prev(); }
   }
 
   function handleResize() {
@@ -485,10 +583,12 @@
   }
 
   export function prev() {
+    showFootnote = false;
     rendition?.prev();
   }
 
   export function next() {
+    showFootnote = false;
     rendition?.next();
   }
 
@@ -577,4 +677,28 @@
       />
     </div>
   {/if}
+
+  {#if showFootnote}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="absolute inset-0 z-50 flex items-center justify-center"
+      onclick={() => (showFootnote = false)}
+    >
+      <div
+        class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode ? 'bg-gray-800 text-gray-200 border-2 border-gray-500' : 'bg-white text-gray-900 border-2 border-black'}"
+        style="width: 50%; height: 50%; overflow-y: auto; font-size: {fontSize}px;{isRtl ? ' writing-mode: vertical-rl; max-height: none; overflow-x: auto; overflow-y: hidden;' : ''}"
+        onclick={async (e: MouseEvent) => { e.stopPropagation(); await handleFootnoteContentClick(e); }}
+      >
+        {@html footnoteContent}
+      </div>
+    </div>
+  {/if}
 </div>
+
+<style>
+  :global(.footnote-content a),
+  :global(.footnote-content sup) {
+    text-orientation: upright;
+    text-combine-upright: all;
+  }
+</style>

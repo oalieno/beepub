@@ -103,14 +103,16 @@ export function replaceLinks(contents, fn) {
 				// NOOP
 			}
 
-			link.onclick = function(){
+			link.onclick = function(e){
+				e.preventDefault();
+				e.stopPropagation();
 
 				if(linkUrl && linkUrl.hash) {
-					fn(linkUrl.Path.path + linkUrl.hash);
+					fn(linkUrl.Path.path + linkUrl.hash, e);
 				} else if(linkUrl){
-					fn(linkUrl.Path.path);
+					fn(linkUrl.Path.path, e);
 				} else {
-					fn(href);
+					fn(href, e);
 				}
 
 				return false;

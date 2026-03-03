@@ -1007,9 +1007,17 @@ class Rendition {
 	 */
 	handleLinks(contents) {
 		if (contents) {
-			contents.on(EVENTS.CONTENTS.LINK_CLICKED, (href) => {
+			contents.on(EVENTS.CONTENTS.LINK_CLICKED, (href, event) => {
 				let relative = this.book.path.relative(href);
-				this.display(relative);
+				let linkEvent = { href: relative, originalHref: href, event, defaultPrevented: false };
+				linkEvent.preventDefault = () => { linkEvent.defaultPrevented = true; };
+				this.emit("link", linkEvent);
+				if (!linkEvent.defaultPrevented) {
+					// Defer navigation to next tick — calling display() synchronously
+					// from within an iframe's click handler can destroy the iframe
+					// while its event is still being processed, corrupting layout.
+					setTimeout(() => this.display(relative), 0);
+				}
 			});
 		}
 	}

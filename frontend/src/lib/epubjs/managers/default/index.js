@@ -361,9 +361,7 @@ class DefaultViewManager {
     // Re-scroll after content resize (e.g. font load) when scrollWidth was too small.
     if (this._lastTargetPage != null && this.isPaginated) {
       // Page-based re-scroll
-      let distX = this._lastTargetPage * this.layout.delta;
-      if (distX + this.layout.delta <= this.container.scrollWidth) {
-        this.scrollTo(distX, 0, true);
+      if (this.scrollToPageIndex(this._lastTargetPage)) {
         this._lastTargetPage = null;
       }
     } else if (this._lastTarget && this.isPaginated) {
@@ -378,44 +376,108 @@ class DefaultViewManager {
     }
   }
 
+  scrollToPageIndex(pageIndex) {
+    if (!this.isPaginated || !this.layout || this.layout.delta <= 0) {
+      return false;
+    }
+
+    const vertical = this.settings.axis === "vertical";
+    const pageStep = vertical ? this.layout.height : this.layout.delta;
+    if (!pageStep || pageStep <= 0) {
+      return false;
+    }
+
+    const maxScrollable = vertical
+      ? this.container.scrollHeight - pageStep
+      : this.container.scrollWidth - pageStep;
+    if (maxScrollable < 0) {
+      return false;
+    }
+
+    // Not enough rendered width yet for this target page.
+    if (pageIndex * pageStep > maxScrollable) {
+      return false;
+    }
+
+    let distX = 0;
+    let distY = 0;
+
+    if (vertical) {
+      distY = pageIndex * pageStep;
+    } else {
+      distX = pageIndex * pageStep;
+      if (
+        this.settings.direction === "rtl" &&
+        this.settings.rtlScrollType === "default"
+      ) {
+        // In rtl default mode, rightmost page has the largest positive scrollLeft.
+        distX = maxScrollable - distX;
+      } else if (
+        this.settings.direction === "rtl" &&
+        this.settings.rtlScrollType === "negative"
+      ) {
+        distX = -distX;
+      }
+    }
+
+    this.scrollTo(distX, distY, true);
+    return true;
+  }
+
   moveTo(offset, width) {
     var distX = 0,
       distY = 0;
+    const vertical = this.settings.axis === "vertical";
 
     if (!this.isPaginated) {
       distY = offset.top;
     } else {
-      // Add small tolerance (3px) before flooring to avoid off-by-one from
-      // sub-pixel getBoundingClientRect() values near page boundaries.
-      distX =
-        Math.floor((offset.left + 3) / this.layout.delta) * this.layout.delta;
+      if (vertical) {
+        const pageStep = this.layout.height;
+        distY = Math.floor((offset.top + 3) / pageStep) * pageStep;
 
-      console.log(
-        "[moveTo] offset.left:",
-        offset.left,
-        "delta:",
-        this.layout.delta,
-        "page (0-idx):",
-        Math.floor((offset.left + 3) / this.layout.delta),
-        "distX:",
-        distX,
-        "scrollWidth:",
-        this.container.scrollWidth,
-      );
+        console.log(
+          "[moveTo] offset.top:",
+          offset.top,
+          "pageStep:",
+          pageStep,
+          "page (0-idx):",
+          Math.floor((offset.top + 3) / pageStep),
+          "distY:",
+          distY,
+          "scrollHeight:",
+          this.container.scrollHeight,
+        );
 
-      if (distX + this.layout.delta > this.container.scrollWidth) {
-        distX = this.container.scrollWidth - this.layout.delta;
-        console.log("[moveTo] capped distX to:", distX);
-      }
+        if (distY + pageStep > this.container.scrollHeight) {
+          distY = this.container.scrollHeight - pageStep;
+        }
+      } else {
+        // Add small tolerance (3px) before flooring to avoid off-by-one from
+        // sub-pixel getBoundingClientRect() values near page boundaries.
+        distX =
+          Math.floor((offset.left + 3) / this.layout.delta) * this.layout.delta;
 
-      distY =
-        Math.floor((offset.top + 3) / this.layout.delta) * this.layout.delta;
+        console.log(
+          "[moveTo] offset.left:",
+          offset.left,
+          "delta:",
+          this.layout.delta,
+          "page (0-idx):",
+          Math.floor((offset.left + 3) / this.layout.delta),
+          "distX:",
+          distX,
+          "scrollWidth:",
+          this.container.scrollWidth,
+        );
 
-      if (distY + this.layout.delta > this.container.scrollHeight) {
-        distY = this.container.scrollHeight - this.layout.delta;
+        if (distX + this.layout.delta > this.container.scrollWidth) {
+          distX = this.container.scrollWidth - this.layout.delta;
+          console.log("[moveTo] capped distX to:", distX);
+        }
       }
     }
-    if (this.settings.direction === "rtl") {
+    if (!vertical && this.settings.direction === "rtl") {
       /***
 				the `floor` function above (L343) is on positive values, so we should add one `layout.delta`
 				to distX or use `Math.ceil` function, or multiply offset.left by -1
@@ -508,6 +570,7 @@ class DefaultViewManager {
 
   next() {
     this._lastTarget = null;
+    this._lastTargetPage = null;
     var next;
     var left;
 
@@ -570,7 +633,8 @@ class DefaultViewManager {
           next = this.views.last().section.next();
         }
       } else {
-        left = Math.round(this.container.scrollLeft) - this.container.offsetWidth;
+        left =
+          Math.round(this.container.scrollLeft) - this.container.offsetWidth;
 
         if (left > this.container.scrollWidth * -1) {
           this.scrollBy(this.layout.delta, 0, true);
@@ -635,6 +699,7 @@ class DefaultViewManager {
 
   prev() {
     this._lastTarget = null;
+    this._lastTargetPage = null;
     var prev;
     var left;
     let dir = this.settings.direction;
