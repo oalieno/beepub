@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { authStore } from '$lib/stores/auth';
@@ -29,8 +30,15 @@
   let highlights = $state<HighlightOut[]>([]);
   let showHighlightSidebar = $state(false);
   let showTocSidebar = $state(false);
+  let prevHtmlOverflow = '';
+  let prevBodyOverflow = '';
 
   onMount(() => {
+    prevHtmlOverflow = document.documentElement.style.overflow;
+    prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
     if (!$authStore.token) {
       goto('/login');
       return;
@@ -42,6 +50,12 @@
     if (savedSize) fontSize = parseInt(savedSize);
     if (savedTheme) darkMode = savedTheme === '1';
     ready = true;
+  });
+
+  onDestroy(() => {
+    if (!browser) return;
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.body.style.overflow = prevBodyOverflow;
   });
 
   function handleFontToggle() {
@@ -73,7 +87,7 @@
   <title>{title || 'Reading'} - BeePub</title>
 </svelte:head>
 
-<div class="flex flex-col h-screen {darkMode ? 'bg-gray-900' : 'bg-background'}">
+<div class="flex flex-col h-[100dvh] min-h-0 {darkMode ? 'bg-gray-900' : 'bg-background'}">
   <Toolbar
     {bookId}
     {title}
@@ -99,7 +113,7 @@
     ontoc_toggle={() => { showTocSidebar = !showTocSidebar; showHighlightSidebar = false; }}
   />
 
-  <div class="flex-1 overflow-hidden relative">
+  <div class="flex-1 min-h-0 overflow-hidden relative">
     {#if ready && $authStore.token}
       <EpubReader
         bind:this={reader}

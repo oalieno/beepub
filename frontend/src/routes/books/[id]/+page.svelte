@@ -200,7 +200,7 @@
 
       <!-- Details -->
       <div class="flex-1 min-w-0">
-        <div class="flex items-start justify-between gap-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
           <div>
             <h1 class="text-3xl font-bold leading-tight text-foreground">{book.display_title ?? 'Untitled'}</h1>
             {#if (book.display_authors ?? []).length > 0}
@@ -208,7 +208,7 @@
             {/if}
           </div>
           {#if isAdmin}
-            <div class="flex items-center gap-1 flex-shrink-0">
+            <div class="flex items-center gap-1 flex-shrink-0 self-start sm:self-auto">
               <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" onclick={() => (showEditModal = true)} title="Edit metadata">
                 <Edit size={14} />
               </button>

@@ -18,7 +18,7 @@
     onhighlightschange?: (highlights: HighlightOut[]) => void;
   } = $props();
 
-  let isRtl = false;
+  let isRtl = $state(false);
 
   let container: HTMLDivElement;
   let epubBook: any = $state(null);
@@ -164,6 +164,8 @@
           'font-family': fontFamily === 'serif' ? SERIF_FONTS : SANS_FONTS,
           'font-size': `${fontSize}px`,
           'line-height': '1.8',
+          '-webkit-text-size-adjust': '100%',
+          'text-size-adjust': '100%',
           padding: '2rem !important',
         },
       });
@@ -509,6 +511,18 @@
     else if (prevByY || prevByX) { showFootnote = false; rendition?.prev(); }
   }
 
+  function handleLeftTapNav() {
+    if (showFootnote || showHighlightMenu) return;
+    showFootnote = false;
+    isRtl ? rendition?.next() : rendition?.prev();
+  }
+
+  function handleRightTapNav() {
+    if (showFootnote || showHighlightMenu) return;
+    showFootnote = false;
+    isRtl ? rendition?.prev() : rendition?.next();
+  }
+
   function handleResize() {
     if (!initialized) return;
     if (calculatingPages) {
@@ -560,6 +574,8 @@
         'font-family': fontFamily === 'serif' ? SERIF_FONTS : SANS_FONTS,
         'font-size': `${fontSize}px`,
         'line-height': '1.8',
+        '-webkit-text-size-adjust': '100%',
+        'text-size-adjust': '100%',
         color: darkMode ? '#e5e7eb' : '#1a1a1a',
         background: darkMode ? '#111827' : '#ffffff',
         padding: '2rem !important',
@@ -661,8 +677,21 @@
   }
 </script>
 
-<div class="relative w-full h-full" class:pointer-events-none={calculatingPages}>
-  <div bind:this={container} class="w-full h-full transition-opacity duration-300" class:opacity-50={calculatingPages}></div>
+<div class="relative w-full h-full overflow-hidden touch-pan-x {darkMode ? 'bg-gray-900' : 'bg-white'}" class:pointer-events-none={calculatingPages}>
+  <div bind:this={container} class="w-full h-full overflow-hidden {darkMode ? 'bg-gray-900' : 'bg-white'} transition-opacity duration-300" class:opacity-50={calculatingPages}></div>
+
+  <button
+    type="button"
+    class="absolute inset-y-0 left-0 z-10 w-20 sm:w-20 md:w-24"
+    aria-label="Previous page"
+    onclick={handleLeftTapNav}
+  ></button>
+  <button
+    type="button"
+    class="absolute inset-y-0 right-0 z-10 w-20 sm:w-20 md:w-24"
+    aria-label="Next page"
+    onclick={handleRightTapNav}
+  ></button>
 
   {#if showHighlightMenu}
     <div

@@ -38,10 +38,10 @@
   }
 </script>
 
-<div class="h-14 border-b flex items-center px-4 gap-3 z-10 relative {darkMode ? 'bg-gray-900 border-gray-800 text-gray-200' : 'bg-background border-border text-foreground'}">
+<div class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-2 sm:gap-3 py-2 z-10 relative {darkMode ? 'bg-gray-900 border-gray-800 text-gray-200' : 'bg-background border-border text-foreground'}">
   <a
     href="/books/{bookId}"
-    class="{btnClass(darkMode)} transition-colors"
+    class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
     aria-label="Go back"
   >
     <ArrowLeft size={20} />
@@ -70,9 +70,9 @@
     {/if}
   </button>
 
-  <div class="flex-1 min-w-0">
+  <div class="flex-1 basis-full sm:basis-auto min-w-0 order-last sm:order-none text-center sm:text-left">
     <p class="text-sm font-medium truncate">{title}</p>
-    <p class="text-xs {darkMode ? 'text-gray-500' : 'text-muted-foreground'} flex items-center gap-1.5">
+    <p class="hidden sm:flex text-xs {darkMode ? 'text-gray-500' : 'text-muted-foreground'} items-center gap-1.5">
       {#if pageMapReady}
         {percentage}%
         {#if totalPages > 0}
@@ -87,16 +87,16 @@
     </p>
   </div>
 
-  <div class="flex items-center gap-1">
+  <div class="ml-auto flex items-center gap-1">
     <button
-      class="px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(darkMode)}"
+      class="hidden sm:inline-flex px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(darkMode)}"
       title="Toggle font family"
       onclick={() => onfontToggle?.()}
     >
       {fontFamily === 'serif' ? 'Serif' : 'Sans'}
     </button>
 
-    <div class="w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"></div>
+    <div class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"></div>
 
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
@@ -105,7 +105,7 @@
     >
       <Minus size={14} />
     </button>
-    <span class="text-xs w-8 text-center {darkMode ? 'text-gray-500' : 'text-muted-foreground'}">{fontSize}px</span>
+    <span class="text-[11px] w-8 text-center {darkMode ? 'text-gray-500' : 'text-muted-foreground'}">{fontSize}px</span>
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
       onclick={() => onfontIncrease?.()}
