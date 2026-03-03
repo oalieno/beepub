@@ -19,3 +19,5 @@
 | [debug/001-epub-page-restore.md](debug/001-epub-page-restore.md) | EPUB 頁面還原 off-by-one | ✅ 已修復 |
 | [debug/002-epub-cover-extraction.md](debug/002-epub-cover-extraction.md) | EPUB 3 封面抓取失敗 | ✅ 已修復 |
 | [debug/003-auth-session-expiry.md](debug/003-auth-session-expiry.md) | Token 過期太快 + 未跳轉登入頁 | ✅ 已修復 |
+| [debug/004-epub-page-skip.md](debug/004-epub-page-skip.md) | EPUB 翻頁跳頁 (sub-pixel scrollLeft) | ✅ 已修復 |
+| [debug/005-epub-prev-subpixel-shift.md](debug/005-epub-prev-subpixel-shift.md) | EPUB prev() section 開頭卡住並平移 | ✅ 已修復 |

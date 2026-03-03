@@ -153,6 +153,7 @@
           try {
             await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
             highlights = highlights.filter((h) => h.id !== hl.id);
+            reader?.removeHighlightAnnotation(hl.cfi_range);
             toastStore.success('Highlight removed');
           } catch (e) {
             toastStore.error((e as Error).message);

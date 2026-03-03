@@ -107,6 +107,7 @@
   async function calculatePageMap(): Promise<number[]> {
     if (calculatingPages) return sectionPageCounts;
     calculatingPages = true;
+    emitProgress();
     try {
       const Epub = (await import('$lib/epubjs/epub.js')).default;
       const hiddenDiv = document.createElement('div');
@@ -499,6 +500,10 @@
     rendition?.display(cfi);
   }
 
+  export function removeHighlightAnnotation(cfiRange: string) {
+    rendition?.annotations.remove(cfiRange, 'highlight');
+  }
+
   $effect(() => {
     fontFamily; fontSize; darkMode;
     if (rendition) {
@@ -556,8 +561,8 @@
   }
 </script>
 
-<div class="relative w-full h-full">
-  <div bind:this={container} class="w-full h-full"></div>
+<div class="relative w-full h-full" class:pointer-events-none={calculatingPages}>
+  <div bind:this={container} class="w-full h-full transition-opacity duration-300" class:opacity-50={calculatingPages}></div>
 
   {#if showHighlightMenu}
     <div

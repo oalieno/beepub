@@ -246,16 +246,6 @@
           </div>
         </div>
 
-        <!-- Description -->
-        {#if book.description ?? book.epub_description}
-          <div class="mt-6">
-            <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
-            <div class="text-muted-foreground leading-relaxed prose-description">
-              {@html book.description ?? book.epub_description}
-            </div>
-          </div>
-        {/if}
-
         <!-- Highlights -->
         {#if bookHighlights.length > 0}
           <div class="mt-6">
@@ -275,6 +265,16 @@
                   }
                 }}
               />
+            </div>
+          </div>
+        {/if}
+
+        <!-- Description -->
+        {#if book.description ?? book.epub_description}
+          <div class="mt-6">
+            <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
+            <div class="text-muted-foreground leading-relaxed prose-description">
+              {@html book.description ?? book.epub_description}
             </div>
           </div>
         {/if}

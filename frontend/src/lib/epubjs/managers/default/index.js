@@ -564,13 +564,13 @@ class DefaultViewManager {
       if (this.settings.rtlScrollType === "default") {
         left = this.container.scrollLeft;
 
-        if (left > 0) {
+        if (left >= this.layout.delta / 2) {
           this.scrollBy(this.layout.delta, 0, true);
         } else {
           next = this.views.last().section.next();
         }
       } else {
-        left = this.container.scrollLeft + this.layout.delta * -1;
+        left = Math.round(this.container.scrollLeft) - this.container.offsetWidth;
 
         if (left > this.container.scrollWidth * -1) {
           this.scrollBy(this.layout.delta, 0, true);
@@ -667,7 +667,7 @@ class DefaultViewManager {
 
       left = this.container.scrollLeft;
 
-      if (left > 0) {
+      if (left >= this.layout.delta / 2) {
         this.scrollBy(-this.layout.delta, 0, true);
       } else {
         prev = this.views.first().section.prev();
@@ -691,7 +691,7 @@ class DefaultViewManager {
       } else {
         left = this.container.scrollLeft;
 
-        if (left < 0) {
+        if (left <= -(this.layout.delta / 2)) {
           this.scrollBy(-this.layout.delta, 0, true);
         } else {
           prev = this.views.first().section.prev();

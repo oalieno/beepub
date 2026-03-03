@@ -67,7 +67,7 @@
         </div>
         {#if ondelete}
           <button
-            class="opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode ? 'text-gray-500 hover:text-red-400' : 'text-muted-foreground hover:text-destructive'}"
+            class="self-center opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode ? 'text-gray-500 hover:text-red-400' : 'text-muted-foreground hover:text-destructive'}"
             title="Delete highlight"
             onclick={(e) => { e.stopPropagation(); ondelete?.(hl); }}
           >
