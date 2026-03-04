@@ -3,8 +3,7 @@
 
   let {
     bookId = '', title = '', fontFamily = 'serif', fontSize = 16, percentage = 0,
-    currentPage = 0, totalPages = 0, pageMapReady = false, calculatingPages = false, darkMode = false,
-    toc = [], isRtl = false, highlightCount = 0,
+    darkMode = false, toc = [], isRtl = false, highlightCount = 0,
     onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter, onhighlights, ontoc_toggle,
   }: {
     bookId?: string;
@@ -12,10 +11,6 @@
     fontFamily?: string;
     fontSize?: number;
     percentage?: number;
-    currentPage?: number;
-    totalPages?: number;
-    pageMapReady?: boolean;
-    calculatingPages?: boolean;
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
@@ -73,17 +68,7 @@
   <div class="flex-1 basis-full sm:basis-auto min-w-0 order-last sm:order-none text-center sm:text-left">
     <p class="text-sm font-medium truncate">{title}</p>
     <p class="hidden sm:flex text-xs {darkMode ? 'text-gray-500' : 'text-muted-foreground'} items-center gap-1.5">
-      {#if pageMapReady}
-        {percentage}%
-        {#if totalPages > 0}
-          &middot; {currentPage} / {totalPages}
-        {/if}
-        {#if calculatingPages}
-          <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
-        {/if}
-      {:else}
-        <span class="inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin opacity-50"></span>
-      {/if}
+      {percentage}%
     </p>
   </div>
 

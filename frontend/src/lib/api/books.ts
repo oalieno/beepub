@@ -62,12 +62,9 @@ export const booksApi = {
   updateProgress: (bookId: string, data: {
     cfi: string;
     percentage: number;
-    current_page?: number;
     font_size?: number;
     section_index?: number;
     section_page?: number;
-    section_page_counts?: number[];
-    total_pages?: number;
   }, token: string) =>
     put(`/books/${bookId}/progress`, data, token),
 

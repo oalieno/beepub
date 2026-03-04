@@ -21,3 +21,6 @@
 | [debug/003-auth-session-expiry.md](debug/003-auth-session-expiry.md) | Token 過期太快 + 未跳轉登入頁 | ✅ 已修復 |
 | [debug/004-epub-page-skip.md](debug/004-epub-page-skip.md) | EPUB 翻頁跳頁 (sub-pixel scrollLeft) | ✅ 已修復 |
 | [debug/005-epub-prev-subpixel-shift.md](debug/005-epub-prev-subpixel-shift.md) | EPUB prev() section 開頭卡住並平移 | ✅ 已修復 |
+| [debug/006-epub-rtl-footnote-and-vertical-restore.md](debug/006-epub-rtl-footnote-and-vertical-restore.md) | RTL 註腳 + 直書頁面還原 | ✅ 已修復 |
+| [debug/007-mobile-safari-and-book-detail-actions.md](debug/007-mobile-safari-and-book-detail-actions.md) | Mobile UX + Safari 問題 | ✅ 已修復 |
+| [debug/008-remove-hidden-book-percentage-only.md](debug/008-remove-hidden-book-percentage-only.md) | 移除 hidden book，改百分比顯示 | ✅ 已完成 |

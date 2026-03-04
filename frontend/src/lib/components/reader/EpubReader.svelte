@@ -11,7 +11,7 @@
     fontFamily?: string;
     fontSize?: number;
     darkMode?: boolean;
-    onprogress?: (detail: { cfi: string; percentage: number; currentPage: number; totalPages: number; pageMapReady: boolean; calculatingPages: boolean }) => void;
+    onprogress?: (detail: { cfi: string; percentage: number }) => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
@@ -39,22 +39,15 @@
   let footnoteOpenedThisClick = false;
   let footnoteSourcePath = '';
 
-  // Page tracking — real rendered pages, not character-based estimates
-  let sectionPageCounts: number[] = [];
-  let pageMapReady = $state(false);
+  // Progress tracking
   let currentCfi = '';
   let currentSectionIndex = 0;
   let currentSectionPage = 0;
-  let currentPage = 0;
-  let totalPages = 0;
   let currentPercentage = 0;
 
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let resizeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let prevFontSize = 0;
-  let calculatingPages = $state(false);
-  let pendingResize = false;
   let initialized = false;
 
   const HIGHLIGHT_COLORS: Record<string, string> = {
@@ -68,44 +61,8 @@
   const SERIF_FONTS = '"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif';
   const SANS_FONTS = '"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif';
 
-  // ── Page map cache ──
-
-  function pageCacheKey(fs: number) {
-    const w = container?.clientWidth ?? 0;
-    const h = container?.clientHeight ?? 0;
-    return `pageMap:${bookId}:${fs}:${w}x${h}`;
-  }
-
-  function loadCachedPageMap(): number[] | null {
-    try {
-      const raw = localStorage.getItem(pageCacheKey(fontSize));
-      if (!raw) return null;
-      const data = JSON.parse(raw);
-      if (Array.isArray(data) && data.length > 0) return data;
-    } catch {}
-    return null;
-  }
-
-  function saveCachedPageMap(counts: number[]) {
-    try { localStorage.setItem(pageCacheKey(fontSize), JSON.stringify(counts)); } catch {}
-  }
-
-  // ── Page computation ──
-
-  function computeAbsolutePage(secIdx: number, displayedPage: number): number {
-    let page = 0;
-    for (let i = 0; i < secIdx && i < sectionPageCounts.length; i++) {
-      page += sectionPageCounts[i];
-    }
-    return page + displayedPage;
-  }
-
-  function computeTotalPages(counts: number[]): number {
-    return counts.reduce((a, b) => a + b, 0);
-  }
-
   function emitProgress() {
-    onprogress?.({ cfi: currentCfi, percentage: currentPercentage, currentPage, totalPages, pageMapReady, calculatingPages });
+    onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
   }
 
   function normalizeFootnoteHref(rawHref: string): string | null {
@@ -139,97 +96,6 @@
     await rendition?.display(normalized);
   }
 
-  // ── Hidden rendition page calculation ──
-
-  async function calculatePageMap(): Promise<number[]> {
-    if (calculatingPages) return sectionPageCounts;
-    calculatingPages = true;
-    emitProgress();
-    try {
-      // Wait for fonts to be loaded so column layout uses final font metrics
-      await document.fonts.ready;
-
-      const Epub = (await import('$lib/epubjs/epub.js')).default;
-      const hiddenDiv = document.createElement('div');
-      hiddenDiv.style.cssText = `position:fixed;left:-9999px;top:-9999px;width:${container.clientWidth}px;height:${container.clientHeight}px;overflow:hidden;contain:strict;`;
-      hiddenDiv.setAttribute('inert', '');
-      document.body.appendChild(hiddenDiv);
-
-      const hiddenBook = Epub(`/api/books/${bookId}/content/`, { openAs: 'directory' });
-      const hiddenRendition = hiddenBook.renderTo(hiddenDiv, {
-        width: '100%', height: '100%', spread: 'none',
-      });
-      hiddenRendition.themes.default({
-        body: {
-          'font-family': fontFamily === 'serif' ? SERIF_FONTS : SANS_FONTS,
-          'font-size': `${fontSize}px`,
-          'line-height': '1.8',
-          '-webkit-text-size-adjust': '100%',
-          'text-size-adjust': '100%',
-          padding: '2rem !important',
-        },
-      });
-      hiddenRendition.themes.select('default');
-      await (hiddenBook as any).ready;
-
-      const spineItems = (hiddenBook.spine as any).spineItems;
-      const counts: number[] = [];
-      for (const item of spineItems) {
-        // Yield to main thread between sections to avoid blocking UI
-        await new Promise<void>((r) => setTimeout(r, 0));
-        try {
-          const total = await new Promise<number>((resolve) => {
-            const timeout = setTimeout(() => resolve(1), 5000);
-            (hiddenRendition as any).once('relocated', (loc: any) => {
-              clearTimeout(timeout);
-              // Small delay to let CSS column layout stabilize before reading page count
-              setTimeout(() => resolve(loc?.start?.displayed?.total || 1), 20);
-            });
-            hiddenRendition.display(item.href).catch(() => { clearTimeout(timeout); resolve(1); });
-          });
-          counts.push(total);
-        } catch { counts.push(1); }
-      }
-
-      hiddenRendition.destroy();
-      hiddenBook.destroy();
-      document.body.removeChild(hiddenDiv);
-      return counts;
-    } finally {
-      calculatingPages = false;
-      emitProgress();
-      if (pendingResize) {
-        pendingResize = false;
-        handleResize();
-      }
-    }
-  }
-
-  async function initOrRecalcPageMap(preview?: number[]) {
-    // Use preview data (from backend/localStorage) for instant display
-    if (preview?.length) {
-      sectionPageCounts = preview;
-      totalPages = computeTotalPages(preview);
-      pageMapReady = true;
-      currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
-      currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-    } else {
-      // No preview at all — first time, show only spinner
-      pageMapReady = false;
-    }
-    // Always recalculate in background for accuracy
-    emitProgress();
-    const counts = await calculatePageMap();
-    sectionPageCounts = counts;
-    totalPages = computeTotalPages(counts);
-    pageMapReady = true;
-    saveCachedPageMap(counts);
-    currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
-    currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-    emitProgress();
-    saveProgress();
-  }
-
   onMount(async () => {
     const Epub = (await import('$lib/epubjs/epub.js')).default;
 
@@ -250,41 +116,19 @@
     // Apply theme
     applyTheme();
 
-    // relocated handler: use real rendered page counts from displayed.page/total
+    // relocated handler: calculate percentage from section position
     rendition.on('relocated', (location: any) => {
-      const _dp = location.start.displayed?.page;
-      const _dt = location.start.displayed?.total;
-      const _si = location.start.index ?? 0;
-      const _prevSum = sectionPageCounts.slice(0, _si).reduce((a: number, b: number) => a + b, 0);
-      console.log('[relocated] secIdx:', _si, 'secPage:', _dp, '/', _dt,
-        'prevSectionSum:', _prevSum, 'absolutePage:', _prevSum + (_dp ?? 1),
-        'pageMapReady:', pageMapReady, 'totalPages:', totalPages,
-        'sectionPageCounts:', JSON.stringify(sectionPageCounts.slice(Math.max(0, _si - 1), _si + 2)));
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
-      const sectionTotal = location.start.displayed?.total ?? 1;
-
-      // Update this section's page count from live rendered data
-      while (sectionPageCounts.length <= currentSectionIndex) {
-        sectionPageCounts.push(1);
-      }
-      if (sectionPageCounts[currentSectionIndex] !== sectionTotal) {
-        sectionPageCounts[currentSectionIndex] = sectionTotal;
-        totalPages = computeTotalPages(sectionPageCounts);
-      }
-
-      if (pageMapReady) {
-        currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
-        currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-      }
-
+      const displayedTotal = location.start.displayed?.total ?? 1;
+      const totalSections = epubBook?.spine?.spineItems?.length ?? 1;
+      currentPercentage = Math.min(100, Math.max(0, Math.round(
+        ((currentSectionIndex + currentSectionPage / displayedTotal) / totalSections) * 100
+      )));
       emitProgress();
-      if (pageMapReady) debouncedSave();
+      debouncedSave();
     });
-
-    // Recalculate page map on window/container resize
-    rendition.on('resized', handleResize);
 
     rendition.on('keyup', handleKeyboard);
     document.addEventListener('keyup', handleKeyboard);
@@ -404,10 +248,8 @@
     try {
       savedProgress = await booksApi.getProgress(bookId, token);
       if (savedProgress?.cfi) {
-        // Show saved values immediately while loading
+        // Show saved percentage immediately while loading
         if (savedProgress.percentage != null) currentPercentage = savedProgress.percentage;
-        if (savedProgress.current_page != null) currentPage = savedProgress.current_page;
-        if (savedProgress.total_pages != null) totalPages = savedProgress.total_pages;
         emitProgress();
 
         await rendition.display(savedProgress.cfi);
@@ -447,12 +289,6 @@
       ontoc?.(nav.toc);
     });
 
-    // Load page map: use backend/localStorage cache as preview, always recalculate in background
-    const backendCounts = (savedProgress?.section_page_counts?.length && savedProgress?.font_size === fontSize)
-      ? savedProgress.section_page_counts : null;
-    const preview = backendCounts ?? loadCachedPageMap();
-    initOrRecalcPageMap(preview ?? undefined);
-
     // Save progress every 30s as backup
     progressTimer = setInterval(saveProgress, 30000);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -463,7 +299,6 @@
   onDestroy(() => {
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
-    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
     saveProgress();
     window.removeEventListener('beforeunload', handleBeforeUnload);
     document.removeEventListener('keyup', handleKeyboard);
@@ -472,16 +307,13 @@
   });
 
   function handleBeforeUnload() {
-    if (!currentCfi || !pageMapReady) return;
+    if (!currentCfi) return;
     const data = {
       cfi: currentCfi,
       percentage: currentPercentage,
-      current_page: currentPage,
       font_size: fontSize,
       section_index: currentSectionIndex,
       section_page: currentSectionPage,
-      section_page_counts: sectionPageCounts,
-      total_pages: totalPages,
     };
     fetch(`/api/books/${bookId}/progress`, {
       method: 'PUT',
@@ -523,46 +355,20 @@
     isRtl ? rendition?.prev() : rendition?.next();
   }
 
-  function handleResize() {
-    if (!initialized) return;
-    if (calculatingPages) {
-      pendingResize = true;
-      return;
-    }
-    if (resizeDebounceTimer) clearTimeout(resizeDebounceTimer);
-    resizeDebounceTimer = setTimeout(async () => {
-      console.log('[resize] Recalculating page map for new dimensions:', container?.clientWidth, 'x', container?.clientHeight);
-      // Keep pageMapReady=true so old values stay visible with spinner
-      emitProgress();
-      const counts = await calculatePageMap();
-      sectionPageCounts = counts;
-      totalPages = computeTotalPages(counts);
-      pageMapReady = true;
-      saveCachedPageMap(counts);
-      currentPage = computeAbsolutePage(currentSectionIndex, currentSectionPage);
-      currentPercentage = totalPages > 0 ? Math.round((currentPage / totalPages) * 100) : 0;
-      emitProgress();
-      saveProgress();
-    }, 500);
-  }
-
   function debouncedSave() {
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(saveProgress, 2000);
   }
 
   async function saveProgress() {
-    if (!currentCfi || !pageMapReady) return;
+    if (!currentCfi) return;
     try {
       await booksApi.updateProgress(bookId, {
         cfi: currentCfi,
         percentage: currentPercentage,
-        current_page: currentPage,
         font_size: fontSize,
         section_index: currentSectionIndex,
         section_page: currentSectionPage,
-        section_page_counts: sectionPageCounts,
-        total_pages: totalPages,
       }, token);
     } catch {}
   }
@@ -626,9 +432,6 @@
       applyTheme();
       if (initialized && fontSize !== prevFontSize) {
         prevFontSize = fontSize;
-        pageMapReady = false;
-        emitProgress();
-        initOrRecalcPageMap();
       }
     }
   });
@@ -677,8 +480,8 @@
   }
 </script>
 
-<div class="relative w-full h-full overflow-hidden touch-pan-x {darkMode ? 'bg-gray-900' : 'bg-white'}" class:pointer-events-none={calculatingPages}>
-  <div bind:this={container} class="w-full h-full overflow-hidden {darkMode ? 'bg-gray-900' : 'bg-white'} transition-opacity duration-300" class:opacity-50={calculatingPages}></div>
+<div class="relative w-full h-full overflow-hidden touch-pan-x {darkMode ? 'bg-gray-900' : 'bg-white'}">
+  <div bind:this={container} class="w-full h-full overflow-hidden {darkMode ? 'bg-gray-900' : 'bg-white'}"></div>
 
   <button
     type="button"
