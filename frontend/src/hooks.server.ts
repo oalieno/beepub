@@ -15,19 +15,19 @@ export const handle: Handle = async ({ event, resolve }) => {
       });
       if (res.ok) {
         event.locals.user = await res.json();
-      } else {
+      } else if (res.status === 401 || res.status === 403) {
         event.cookies.delete('token', { path: '/' });
         event.locals.token = null;
       }
     } catch {
-      event.cookies.delete('token', { path: '/' });
-      event.locals.token = null;
+      // Keep existing token on transient backend/network errors.
+      // We only clear cookie when backend explicitly says the token is invalid.
     }
   }
 
   // Redirect unauthenticated users to login (except the login page itself)
   const path = event.url.pathname;
-  if (!event.locals.user && path !== '/login') {
+  if (!event.locals.token && path !== '/login') {
     throw redirect(302, '/login');
   }
 

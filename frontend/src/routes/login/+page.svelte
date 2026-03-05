@@ -23,8 +23,6 @@
       const token = await authApi.login(username, password);
       const user = await authApi.me(token.access_token);
       authStore.login(user, token.access_token);
-      // Set cookie for server-side auth
-      document.cookie = `token=${token.access_token}; path=/; SameSite=Lax`;
       toastStore.success('Welcome back, ' + user.username + '!');
       goto('/');
     } catch (e) {

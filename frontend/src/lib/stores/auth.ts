@@ -6,6 +6,18 @@ interface AuthState {
   token: string | null;
 }
 
+function setTokenCookie(token: string): void {
+  if (typeof document === 'undefined') return;
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `token=${encodeURIComponent(token)}; Max-Age=2592000; Path=/; SameSite=Lax${secure}`;
+}
+
+function clearTokenCookie(): void {
+  if (typeof document === 'undefined') return;
+  const secure = typeof location !== 'undefined' && location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `token=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
+}
+
 function getInitialState(): AuthState {
   if (typeof localStorage === 'undefined') return { user: null, token: null };
   const token = localStorage.getItem('token');
@@ -33,10 +45,12 @@ function createAuthStore() {
       if (token && userStr) {
         try {
           const user = JSON.parse(userStr) as UserOut;
+          setTokenCookie(token);
           set({ user, token });
         } catch {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          clearTokenCookie();
         }
       }
     },
@@ -45,6 +59,7 @@ function createAuthStore() {
         localStorage.setItem('token', token);
         localStorage.setItem('user', JSON.stringify(user));
       }
+      setTokenCookie(token);
       set({ user, token });
     },
     logout: () => {
@@ -53,8 +68,7 @@ function createAuthStore() {
         localStorage.removeItem('user');
       }
       set({ user: null, token: null });
-      // Clear server cookie
-      document.cookie = 'token=; Max-Age=0; path=/';
+      clearTokenCookie();
     },
     setUser: (user: UserOut) => {
       update((s) => {
