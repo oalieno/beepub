@@ -119,6 +119,7 @@
       width: '100%',
       height: '100%',
       spread: 'none',
+      allowScriptedContent: true,
     });
 
     // Apply theme
@@ -147,34 +148,240 @@
     rendition.hooks.content.register((contents: any) => {
       const doc = contents.document;
       doc.addEventListener('wheel', handleWheel, { passive: false });
-      // Mobile: check selection after touch ends (some browsers don't fire epubjs 'selected')
-      doc.addEventListener('touchend', () => {
-        setTimeout(() => {
-          const sel = contents.window?.getSelection();
-          if (sel && !sel.isCollapsed && sel.toString().trim()) {
-            // epubjs selected event should have fired; if menu isn't showing, try to trigger it
+
+      // Detect iOS (iPhone/iPad/iPod or desktop iPad with touch)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+      // Helper: show highlight menu from current selection
+      function tryShowMenuFromSelection() {
+        if (showHighlightMenu) return;
+        const sel = contents.window?.getSelection();
+        if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+        const cfiRange = rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(sel.getRangeAt(0));
+        if (!cfiRange) return;
+        const text = sel.toString().trim();
+        const existing = highlights.find((h: HighlightOut) => h.cfi_range === cfiRange) ?? null;
+        const range = sel.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        const mgr = rendition?.manager;
+        const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+        const scrollTop = mgr?.container?.scrollTop ?? 0;
+        selectedCfi = cfiRange;
+        selectedText = text;
+        existingHighlight = existing;
+        highlightMenuX = rect.left - scrollLeft + rect.width / 2;
+        highlightMenuY = rect.top - scrollTop - 8;
+        showHighlightMenu = true;
+        highlightMenuShownAt = Date.now();
+      }
+
+      if (isIOS) {
+        // === iOS: disable native selection, implement custom long-press ===
+        const iosStyle = doc.createElement('style');
+        iosStyle.textContent = [
+          '* { -webkit-touch-callout: none !important; }',
+          'body { -webkit-user-select: none !important; user-select: none !important; touch-action: pan-x pan-y; }',
+          'body.beepub-selecting { -webkit-user-select: text !important; user-select: text !important; }',
+          '::selection { background: rgba(59, 130, 246, 0.35) !important; }',
+        ].join('\n');
+        doc.head.appendChild(iosStyle);
+
+        // Block epub inline scripts via CSP (allowScriptedContent is needed for event handlers only)
+        const cspMeta = doc.createElement('meta');
+        cspMeta.setAttribute('http-equiv', 'Content-Security-Policy');
+        cspMeta.setAttribute('content', "script-src 'none'");
+        doc.head.insertBefore(cspMeta, doc.head.firstChild);
+
+        // Selection overlay: draw blue rectangles over selected text
+        let overlayContainer: HTMLDivElement | null = null;
+        function updateSelectionOverlay(range: Range | null) {
+          if (!overlayContainer) {
+            overlayContainer = doc.createElement('div');
+            overlayContainer.id = 'beepub-sel-overlay';
+            overlayContainer.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:9999;';
+            doc.body.appendChild(overlayContainer);
+          }
+          overlayContainer.innerHTML = '';
+          if (!range) return;
+          const rects = range.getClientRects();
+          const scrollX = contents.window.scrollX || 0;
+          const scrollY = contents.window.scrollY || 0;
+          for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            const div = doc.createElement('div');
+            div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgba(59,130,246,0.3);border-radius:2px;`;
+            overlayContainer.appendChild(div);
+          }
+        }
+        function clearSelectionOverlay() {
+          if (overlayContainer) overlayContainer.innerHTML = '';
+        }
+
+        // Touch state machine: IDLE → WAITING → SELECTING or SWIPING
+        type TouchState = 'idle' | 'waiting' | 'selecting' | 'swiping';
+        let touchState: TouchState = 'idle';
+        let lpTimer: ReturnType<typeof setTimeout> | null = null;
+        let startX = 0;
+        let startY = 0;
+        // Anchor point of selection (start of the initially selected word)
+        let anchorNode: Node | null = null;
+        let anchorOffset = 0;
+
+        const isCJK = (ch: string) =>
+          /[\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/.test(ch);
+        const isLatinWord = (ch: string) =>
+          /[\w\u00C0-\u024F\u0400-\u04FF]/.test(ch);
+
+        /** Select word at (x, y) and return the Range, or null */
+        function selectWordAt(x: number, y: number): Range | null {
+          doc.body.classList.add('beepub-selecting');
+          const caretRange = doc.caretRangeFromPoint(x, y);
+          if (!caretRange) { doc.body.classList.remove('beepub-selecting'); return null; }
+          const node = caretRange.startContainer;
+          if (node.nodeType !== Node.TEXT_NODE) { doc.body.classList.remove('beepub-selecting'); return null; }
+          const nodeText = node.textContent || '';
+          let s = caretRange.startOffset;
+          let e = caretRange.startOffset;
+          if (s < nodeText.length && isCJK(nodeText[s])) {
+            e = s + 1;
+          } else if (s < nodeText.length && isLatinWord(nodeText[s])) {
+            while (s > 0 && isLatinWord(nodeText[s - 1])) s--;
+            while (e < nodeText.length && isLatinWord(nodeText[e])) e++;
+          } else if (e < nodeText.length) {
+            e++;
+          }
+          if (s === e) { doc.body.classList.remove('beepub-selecting'); return null; }
+          caretRange.setStart(node, s);
+          caretRange.setEnd(node, e);
+          const sel = contents.window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(caretRange);
+          updateSelectionOverlay(caretRange);
+          return caretRange;
+        }
+
+        /** Extend selection from anchor to the caret position at (x, y) */
+        function extendSelectionTo(x: number, y: number) {
+          if (!anchorNode) return;
+          const caretRange = doc.caretRangeFromPoint(x, y);
+          if (!caretRange) return;
+          const sel = contents.window.getSelection();
+          if (!sel) return;
+          const range = doc.createRange();
+          const focusNode = caretRange.startContainer;
+          const focusOffset = caretRange.startOffset;
+          const cmp = anchorNode.compareDocumentPosition(focusNode);
+          const isBefore = (cmp & Node.DOCUMENT_POSITION_PRECEDING) ||
+            (anchorNode === focusNode && focusOffset < anchorOffset);
+          if (isBefore) {
+            range.setStart(focusNode, focusOffset);
+            range.setEnd(anchorNode, anchorOffset);
+          } else {
+            range.setStart(anchorNode, anchorOffset);
+            range.setEnd(focusNode, focusOffset);
+          }
+          sel.removeAllRanges();
+          sel.addRange(range);
+          updateSelectionOverlay(range);
+        }
+
+        /** Show the highlight menu for the current selection */
+        function showMenuForSelection() {
+          const sel = contents.window.getSelection();
+          if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+          const range = sel.getRangeAt(0);
+          const cfi = rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(range);
+          if (!cfi) return;
+          const rect = range.getBoundingClientRect();
+          const mgr = rendition?.manager;
+          const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+          const scrollTop = mgr?.container?.scrollTop ?? 0;
+          const existing = highlights.find((h: HighlightOut) => h.cfi_range === cfi) ?? null;
+          selectedCfi = cfi;
+          selectedText = sel.toString().trim();
+          existingHighlight = existing;
+          highlightMenuX = rect.left - scrollLeft + rect.width / 2;
+          highlightMenuY = rect.top - scrollTop - 8;
+          showHighlightMenu = true;
+          highlightMenuShownAt = Date.now();
+        }
+
+        doc.addEventListener('touchstart', (e: TouchEvent) => {
+          if (e.touches.length !== 1) return;
+          e.preventDefault(); // Block native long-press magnifier
+          const t = e.touches[0];
+          startX = t.clientX;
+          startY = t.clientY;
+          touchState = 'waiting';
+
+          lpTimer = setTimeout(() => {
+            lpTimer = null;
+            // Long-press fired → select word and enter selecting mode
+            const range = selectWordAt(startX, startY);
+            if (range) {
+              // Save anchor (start of selected word) for drag-to-extend
+              anchorNode = range.startContainer;
+              anchorOffset = range.startOffset;
+              touchState = 'selecting';
+              showMenuForSelection();
+            } else {
+              touchState = 'idle';
+            }
+          }, 500);
+        }, { passive: false });
+
+        doc.addEventListener('touchmove', (e: TouchEvent) => {
+          const t = e.touches[0];
+          if (touchState === 'waiting') {
+            // Moved before long-press timer → switch to swiping
+            if (Math.abs(t.clientX - startX) > 10 || Math.abs(t.clientY - startY) > 10) {
+              if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+              touchState = 'swiping';
+            }
+          } else if (touchState === 'selecting') {
+            // Dragging after long-press → extend selection
+            extendSelectionTo(t.clientX, t.clientY);
+          }
+        }, { passive: true });
+
+        doc.addEventListener('touchend', (e: TouchEvent) => {
+          if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; }
+          const endX = e.changedTouches[0]?.clientX ?? startX;
+          const dx = endX - startX;
+
+          if (touchState === 'swiping') {
+            // Swipe navigation
+            if (Math.abs(dx) > 50) {
+              if (dx < 0) rendition?.next();
+              else rendition?.prev();
+            }
+          } else if (touchState === 'selecting') {
+            // Finished drag-selecting → update menu position for final selection
+            showMenuForSelection();
+          } else if (touchState === 'waiting') {
+            // Quick tap (released before 500ms, no movement)
             if (!showHighlightMenu) {
-              const cfiRange = rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(sel.getRangeAt(0));
-              if (cfiRange) {
-                const text = sel.toString().trim();
-                const existing = highlights.find((h) => h.cfi_range === cfiRange) ?? null;
-                const range = sel.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-                const mgr = rendition?.manager;
-                const scrollLeft = mgr?.container?.scrollLeft ?? 0;
-                const scrollTop = mgr?.container?.scrollTop ?? 0;
-                selectedCfi = cfiRange;
-                selectedText = text;
-                existingHighlight = existing;
-                highlightMenuX = rect.left - scrollLeft + rect.width / 2;
-                highlightMenuY = rect.top - scrollTop - 8;
-                showHighlightMenu = true;
-                highlightMenuShownAt = Date.now();
-              }
+              const w = doc.documentElement.clientWidth;
+              if (startX < w / 3) rendition?.prev();
+              else if (startX > w * 2 / 3) rendition?.next();
             }
           }
-        }, 300);
-      });
+          touchState = 'idle';
+          anchorNode = null;
+        }, { passive: true });
+      } else {
+        // === Non-iOS: use selectionchange + touchend fallback ===
+        let selChangeTimer: ReturnType<typeof setTimeout> | null = null;
+        doc.addEventListener('selectionchange', () => {
+          if (selChangeTimer) clearTimeout(selChangeTimer);
+          selChangeTimer = setTimeout(tryShowMenuFromSelection, 500);
+        });
+
+        doc.addEventListener('touchend', () => {
+          setTimeout(tryShowMenuFromSelection, 300);
+        });
+      }
     });
     container.addEventListener('wheel', handleWheel, { passive: false });
 
@@ -216,6 +423,7 @@
       const sel = contents?.[0]?.window?.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
         showHighlightMenu = false;
+        clearIOSSelection();
         // Don't close footnote if it was just opened by a link click in the same event cycle
         if (!footnoteOpenedThisClick) {
           showFootnote = false;
@@ -535,6 +743,16 @@
     rendition?.annotations.remove(cfiRange, 'highlight');
   }
 
+  /** Clear iOS custom selection state (remove selecting class + clear selection + overlay) */
+  function clearIOSSelection() {
+    const c = rendition?.manager?.getContents?.()?.[0];
+    if (!c) return;
+    c.document?.body?.classList?.remove('beepub-selecting');
+    c.window?.getSelection()?.removeAllRanges();
+    const overlay = c.document?.getElementById('beepub-sel-overlay');
+    if (overlay) overlay.innerHTML = '';
+  }
+
   $effect(() => {
     fontFamily; fontSize; darkMode;
     if (rendition) {
@@ -548,6 +766,7 @@
   async function handleHighlightColor(detail: { color: string }) {
     const color = detail.color;
     showHighlightMenu = false;
+    clearIOSSelection();
     if (!selectedCfi || !selectedText) return;
 
     const colorKey = Object.entries(HIGHLIGHT_COLORS).find(([, v]) => v === color)?.[0] ?? color;
@@ -574,14 +793,28 @@
     }
   }
 
+  async function handleCopy() {
+    showHighlightMenu = false;
+    clearIOSSelection();
+    if (!selectedText) return;
+    try {
+      await navigator.clipboard.writeText(selectedText);
+      toastStore.success('Copied');
+    } catch {
+      toastStore.error('Copy failed');
+    }
+  }
+
   function handleIllustrate() {
     showHighlightMenu = false;
+    clearIOSSelection();
     if (!selectedCfi || !selectedText) return;
     onillustrate?.({ cfiRange: selectedCfi, text: selectedText });
   }
 
   async function handleRemoveHighlight() {
     showHighlightMenu = false;
+    clearIOSSelection();
     if (!existingHighlight) return;
     try {
       await booksApi.deleteHighlight(bookId, existingHighlight.id, token);
@@ -632,7 +865,8 @@
         oncolor={handleHighlightColor}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
-        onclose={() => (showHighlightMenu = false)}
+        oncopy={handleCopy}
+        onclose={() => { showHighlightMenu = false; clearIOSSelection(); }}
       />
     </div>
   {/if}

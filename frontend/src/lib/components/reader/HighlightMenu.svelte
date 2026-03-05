@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { Trash2, X, Sparkles } from '@lucide/svelte';
+  import { Trash2, X, Sparkles, Copy } from '@lucide/svelte';
 
-  let { hasExisting = false, oncolor, onremove, onillustrate, onclose }: {
+  let { hasExisting = false, oncolor, onremove, onillustrate, oncopy, onclose }: {
     hasExisting?: boolean;
     oncolor?: (detail: { color: string }) => void;
     onremove?: () => void;
     onillustrate?: () => void;
+    oncopy?: () => void;
     onclose?: () => void;
   } = $props();
 
@@ -27,6 +28,15 @@
       onclick={() => oncolor?.({ color: color.name })}
     ></button>
   {/each}
+
+  <div class="w-px h-4 bg-border"></div>
+  <button
+    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
+    title="Copy"
+    onclick={() => oncopy?.()}
+  >
+    <Copy size={14} />
+  </button>
 
   <div class="w-px h-4 bg-border"></div>
   <button
