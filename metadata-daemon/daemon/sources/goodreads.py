@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
@@ -16,6 +17,59 @@ HEADERS = {
 class GoodreadsSource(AbstractMetadataSource):
     source_name = "goodreads"
 
+    @staticmethod
+    def _build_queries(title: str, authors: list[str]) -> list[str]:
+        first_author = " ".join(authors[:1]).strip()
+        normalized_title = re.sub(r"[（(][^）)]*[）)]", "", title)
+        normalized_title = re.sub(r"[【\[][^】\]]*[】\]]", "", normalized_title)
+        normalized_title = " ".join(normalized_title.split()).strip()
+
+        candidates = [
+            f"{title} {first_author}".strip(),
+            title.strip(),
+            f"{normalized_title} {first_author}".strip(),
+            normalized_title,
+        ]
+
+        queries: list[str] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            cleaned = " ".join(candidate.split())
+            if not cleaned or cleaned in seen:
+                continue
+            seen.add(cleaned)
+            queries.append(cleaned)
+        return queries
+
+    @staticmethod
+    def _extract_book_links(soup: BeautifulSoup, limit: int) -> list[tuple[str, str]]:
+        links: list[tuple[str, str]] = []
+        seen: set[str] = set()
+
+        selectors = ["a.bookTitle", "a[data-testid='bookTitle']", "a[href^='/book/show/']"]
+        for selector in selectors:
+            for link in soup.select(selector):
+                href = link.get("href", "")
+                text = link.get_text(strip=True)
+                if not href or not text:
+                    continue
+
+                if href.startswith("http"):
+                    full_url = href
+                else:
+                    full_url = f"https://www.goodreads.com{href}"
+
+                if full_url in seen:
+                    continue
+
+                seen.add(full_url)
+                links.append((full_url, text))
+
+                if len(links) >= limit:
+                    return links
+
+        return links
+
     async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
         results = []
 
@@ -23,17 +77,11 @@ class GoodreadsSource(AbstractMetadataSource):
         if isbn:
             try:
                 async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-                    url = f"https://www.goodreads.com/search?q={isbn}"
-                    resp = await client.get(url)
+                    resp = await client.get("https://www.goodreads.com/search", params={"q": isbn})
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
-                        book_links = soup.select("a.bookTitle")
-                        for link in book_links[:3]:
-                            href = link.get("href", "")
-                            text = link.get_text(strip=True)
-                            if href:
-                                full_url = f"https://www.goodreads.com{href}"
-                                results.append(SearchResult(url=full_url, title=text, authors=[]))
+                        for full_url, text in self._extract_book_links(soup, limit=3):
+                            results.append(SearchResult(url=full_url, title=text, authors=[]))
             except Exception as e:
                 logger.warning(f"Goodreads ISBN search failed: {e}")
 
@@ -42,21 +90,25 @@ class GoodreadsSource(AbstractMetadataSource):
 
         # Fallback: title+author search
         try:
-            query = f"{title} {' '.join(authors[:1])}"
+            queries = self._build_queries(title, authors)
             async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-                url = f"https://www.goodreads.com/search?q={httpx.QueryParams({'q': query})}"
-                resp = await client.get(f"https://www.goodreads.com/search?q={query}")
-                if resp.status_code == 200:
+                for query in queries:
+                    if not query:
+                        continue
+
+                    resp = await client.get("https://www.goodreads.com/search", params={"q": query})
+                    if resp.status_code != 200:
+                        continue
+
                     soup = BeautifulSoup(resp.text, "html.parser")
-                    book_links = soup.select("a.bookTitle")
-                    for link in book_links[:5]:
-                        href = link.get("href", "")
-                        text = link.get_text(strip=True)
-                        if href:
+                    links = self._extract_book_links(soup, limit=5)
+
+                    if links:
+                        for full_url, text in links:
                             score = fuzz.token_set_ratio(title.lower(), text.lower())
-                            full_url = f"https://www.goodreads.com{href}"
                             results.append(SearchResult(url=full_url, title=text, authors=[], score=score))
-                    results.sort(key=lambda r: r.score, reverse=True)
+                        results.sort(key=lambda r: r.score, reverse=True)
+                        break
         except Exception as e:
             logger.warning(f"Goodreads title search failed: {e}")
 

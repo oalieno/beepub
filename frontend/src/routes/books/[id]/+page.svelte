@@ -11,7 +11,22 @@
   import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut, HighlightOut } from '$lib/types';
   import HighlightList from '$lib/components/HighlightList.svelte';
   import { UserRole } from '$lib/types';
-  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink } from '@lucide/svelte';
+  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink, Star, StarHalf } from '@lucide/svelte';
+
+  const SOURCE_META: Record<string, { label: string; color: string; logo: string }> = {
+    goodreads: { label: 'Goodreads', color: '#5C4B3A', logo: 'g' },
+    readmoo: { label: 'Readmoo', color: '#2E7D32', logo: 'R' },
+    kobo_tw: { label: 'Kobo', color: '#BF360C', logo: 'K' },
+  };
+
+  function renderStars(rating: number): { full: number; half: boolean; empty: number } {
+    const full = Math.floor(rating);
+    const half = rating - full >= 0.25 && rating - full < 0.75;
+    const extra = rating - full >= 0.75 ? 1 : 0;
+    const totalFull = full + extra;
+    const empty = 5 - totalFull - (half ? 1 : 0);
+    return { full: totalFull, half, empty };
+  }
 
   let bookId = $derived($page.params.id as string);
 
@@ -228,6 +243,64 @@
           <StarRating value={interaction?.rating ?? null} onchange={handleRating} />
         </div>
 
+        <!-- External Ratings -->
+        {#if externalMeta.length > 0}
+          <div class="mt-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {#each externalMeta as meta}
+                {@const src = SOURCE_META[meta.source] ?? { label: meta.source, color: '#666', logo: '?' }}
+                {@const stars = meta.rating != null ? renderStars(meta.rating) : null}
+                <div class="bg-card card-soft rounded-2xl p-4 flex flex-col gap-2.5">
+                  <!-- Source header -->
+                  <div class="flex items-center gap-2.5">
+                    <span
+                      class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                      style="background-color: {src.color}"
+                    >{src.logo}</span>
+                    <span class="font-semibold text-foreground text-sm">{src.label}</span>
+                  </div>
+                  <!-- Rating row -->
+                  {#if meta.rating != null && stars}
+                    <div class="flex items-center gap-2">
+                      <span class="text-2xl font-bold" style="color: {src.color}">{meta.rating.toFixed(1)}</span>
+                      <div class="flex items-center gap-px">
+                        {#each Array(stars.full) as _}
+                          <Star size={16} class="fill-amber-500 text-amber-500" />
+                        {/each}
+                        {#if stars.half}
+                          <StarHalf size={16} class="fill-amber-500 text-amber-500" />
+                        {/if}
+                        {#each Array(stars.empty) as _}
+                          <Star size={16} class="text-amber-500/30" />
+                        {/each}
+                      </div>
+                    </div>
+                  {:else}
+                    <p class="text-muted-foreground text-sm">No rating</p>
+                  {/if}
+                  <!-- Count -->
+                  {#if meta.rating_count != null}
+                    <p class="text-muted-foreground text-xs">{meta.rating_count.toLocaleString()} ratings</p>
+                  {/if}
+                  <!-- Link -->
+                  {#if meta.source_url}
+                    <a
+                      href={meta.source_url}
+                      target="_blank"
+                      rel="noopener"
+                      class="inline-flex items-center gap-1.5 text-xs font-medium hover:underline mt-auto"
+                      style="color: {src.color}"
+                    >
+                      View Details
+                      <ExternalLink size={11} />
+                    </a>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
         <!-- Metadata -->
         <div class="mt-6 bg-card card-soft rounded-2xl p-5">
           <div class="grid grid-cols-2 gap-3 text-sm">
@@ -279,32 +352,6 @@
           </div>
         {/if}
 
-        <!-- External metadata -->
-        {#if externalMeta.length > 0}
-          <div class="mt-6">
-            <h2 class="text-xl font-bold mb-3 text-foreground">External Ratings</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {#each externalMeta as meta}
-                <div class="bg-card card-soft rounded-2xl p-4">
-                  <p class="text-sm font-medium capitalize mb-1 text-foreground">{meta.source.replace('_', ' ')}</p>
-                  {#if meta.rating !== null}
-                    <p class="text-primary text-xl font-bold">{meta.rating?.toFixed(1)}</p>
-                  {:else}
-                    <p class="text-muted-foreground text-sm">No rating</p>
-                  {/if}
-                  {#if meta.rating_count !== null}
-                    <p class="text-muted-foreground text-xs">{meta.rating_count?.toLocaleString()} ratings</p>
-                  {/if}
-                  {#if meta.source_url}
-                    <a href={meta.source_url} target="_blank" rel="noopener" class="text-xs text-primary hover:underline flex items-center gap-1 mt-1.5">
-                      View <ExternalLink size={10} />
-                    </a>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
       </div>
     </div>
   {/if}

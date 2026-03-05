@@ -1,23 +1,19 @@
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 
 import redis.asyncio as redis
-from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from daemon.config import settings
 from daemon.database import AsyncSessionLocal
 from daemon.sources.goodreads import GoodreadsSource
 from daemon.sources.readmoo import ReadmooSource
-from daemon.sources.kobo_tw import KoboTWSource
 
 logger = logging.getLogger(__name__)
 
 QUEUE_KEY = "beepub:metadata:queue"
 
-SOURCES = [GoodreadsSource(), ReadmooSource(), KoboTWSource()]
+SOURCES = [GoodreadsSource(), ReadmooSource()]
 
 
 async def process_job(book_id: str) -> None:
@@ -62,7 +58,7 @@ async def process_job(book_id: str) -> None:
                         INSERT INTO external_metadata
                             (id, book_id, source, source_url, rating, rating_count, reviews, raw_data, fetched_at)
                         VALUES
-                            (gen_random_uuid(), :book_id, :source, :source_url, :rating, :rating_count, :reviews::jsonb, :raw_data::jsonb, :fetched_at)
+                            (gen_random_uuid(), :book_id, :source, :source_url, :rating, :rating_count, CAST(:reviews AS jsonb), CAST(:raw_data AS jsonb), :fetched_at)
                         ON CONFLICT (book_id, source) DO UPDATE SET
                             source_url = EXCLUDED.source_url,
                             rating = EXCLUDED.rating,

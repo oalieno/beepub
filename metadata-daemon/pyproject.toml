@@ -11,4 +11,5 @@ dependencies = [
     "rapidfuzz>=3.10.0",
     "APScheduler>=3.10.4",
     "pydantic-settings>=2.5.2",
+    "pytest>=9.0.2",
 ]

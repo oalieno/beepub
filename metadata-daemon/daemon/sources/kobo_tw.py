@@ -17,6 +17,13 @@ HEADERS = {
 class KoboTWSource(AbstractMetadataSource):
     source_name = "kobo_tw"
 
+    @staticmethod
+    def _is_challenged_response(status_code: int, body: str) -> bool:
+        if status_code == 403:
+            return True
+        lowered = body.lower()
+        return "challenged | kobo.com" in lowered or "captcha" in lowered
+
     async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
         results = []
 
@@ -28,6 +35,9 @@ class KoboTWSource(AbstractMetadataSource):
                         "https://www.kobo.com/tw/zh/search",
                         params={"query": isbn},
                     )
+                    if self._is_challenged_response(resp.status_code, resp.text):
+                        logger.warning("Kobo TW search blocked by anti-bot challenge (ISBN)")
+                        return []
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
                         items = soup.select(".result-items .item-detail")
@@ -54,6 +64,9 @@ class KoboTWSource(AbstractMetadataSource):
                     "https://www.kobo.com/tw/zh/search",
                     params={"query": query},
                 )
+                if self._is_challenged_response(resp.status_code, resp.text):
+                    logger.warning("Kobo TW search blocked by anti-bot challenge (title)")
+                    return []
                 if resp.status_code == 200:
                     soup = BeautifulSoup(resp.text, "html.parser")
                     items = soup.select(".result-items .item-detail")
@@ -77,6 +90,9 @@ class KoboTWSource(AbstractMetadataSource):
         try:
             async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
                 resp = await client.get(url)
+                if self._is_challenged_response(resp.status_code, resp.text):
+                    logger.warning("Kobo TW fetch blocked by anti-bot challenge")
+                    return FetchResult(source_url=url)
                 if resp.status_code != 200:
                     return FetchResult(source_url=url)
 
