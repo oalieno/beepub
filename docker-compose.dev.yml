@@ -13,7 +13,7 @@ services:
       - ./metadata-daemon:/app
       - daemon_venv:/app/.venv
     command: >
-      sh -c "uv sync --frozen --no-install-project && exec uv run python -m daemon.main"
+      sh -c "uv sync --frozen --no-install-project && exec uv run --with watchfiles watchfiles --filter python 'python -m daemon.main' /app/daemon"
 
   frontend:
     volumes:
