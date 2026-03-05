@@ -16,6 +16,10 @@ def get_cover_path(book_id: uuid.UUID) -> str:
     return str(Path(settings.covers_dir) / f"{book_id}.jpg")
 
 
+def get_illustration_path(illustration_id: uuid.UUID) -> str:
+    return str(Path(settings.illustrations_dir) / f"{illustration_id}.png")
+
+
 async def save_upload_file(upload_file: UploadFile, dest_path: str) -> int:
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     size = 0

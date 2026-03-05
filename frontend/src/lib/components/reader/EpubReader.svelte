@@ -3,9 +3,9 @@
   import { booksApi } from '$lib/api/books';
   import { toastStore } from '$lib/stores/toast';
   import HighlightMenu from './HighlightMenu.svelte';
-  import type { HighlightOut } from '$lib/types';
+  import type { HighlightOut, IllustrationOut } from '$lib/types';
 
-  let { bookId, token, fontFamily = 'serif', fontSize = 16, darkMode = false, onprogress, ontitle, ontoc, ondirection, onhighlightschange }: {
+  let { bookId, token, fontFamily = 'serif', fontSize = 16, darkMode = false, onprogress, ontitle, ontoc, ondirection, onhighlightschange, onillustrate, onillustrationschange, onillustrationclick }: {
     bookId: string;
     token: string;
     fontFamily?: string;
@@ -16,6 +16,9 @@
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
     onhighlightschange?: (highlights: HighlightOut[]) => void;
+    onillustrate?: (detail: { cfiRange: string; text: string }) => void;
+    onillustrationschange?: (illustrations: IllustrationOut[]) => void;
+    onillustrationclick?: (illustration: IllustrationOut) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -24,6 +27,7 @@
   let epubBook: any = $state(null);
   let rendition: any = $state(null);
   let highlights: HighlightOut[] = $state([]);
+  let illustrations: IllustrationOut[] = $state([]);
 
   // Highlight menu
   let showHighlightMenu = $state(false);
@@ -32,6 +36,10 @@
   let selectedCfi = $state('');
   let selectedText = $state('');
   let existingHighlight: HighlightOut | null = $state(null);
+  let highlightMenuShownAt = 0;
+
+  // Illustration floating icons
+  let illustrationIcons = $state<{ id: string; x: number; y: number; size: number; ill: IllustrationOut }[]>([]);
 
   // Footnote popup
   let showFootnote = $state(false);
@@ -128,6 +136,8 @@
       )));
       emitProgress();
       debouncedSave();
+      // Reposition floating illustration icons for the current page
+      updateIllustrationIcons();
     });
 
     rendition.on('keyup', handleKeyboard);
@@ -137,6 +147,34 @@
     rendition.hooks.content.register((contents: any) => {
       const doc = contents.document;
       doc.addEventListener('wheel', handleWheel, { passive: false });
+      // Mobile: check selection after touch ends (some browsers don't fire epubjs 'selected')
+      doc.addEventListener('touchend', () => {
+        setTimeout(() => {
+          const sel = contents.window?.getSelection();
+          if (sel && !sel.isCollapsed && sel.toString().trim()) {
+            // epubjs selected event should have fired; if menu isn't showing, try to trigger it
+            if (!showHighlightMenu) {
+              const cfiRange = rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(sel.getRangeAt(0));
+              if (cfiRange) {
+                const text = sel.toString().trim();
+                const existing = highlights.find((h) => h.cfi_range === cfiRange) ?? null;
+                const range = sel.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                const mgr = rendition?.manager;
+                const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+                const scrollTop = mgr?.container?.scrollTop ?? 0;
+                selectedCfi = cfiRange;
+                selectedText = text;
+                existingHighlight = existing;
+                highlightMenuX = rect.left - scrollLeft + rect.width / 2;
+                highlightMenuY = rect.top - scrollTop - 8;
+                showHighlightMenu = true;
+                highlightMenuShownAt = Date.now();
+              }
+            }
+          }
+        }, 300);
+      });
     });
     container.addEventListener('wheel', handleWheel, { passive: false });
 
@@ -165,11 +203,15 @@
       highlightMenuX = x;
       highlightMenuY = y;
       showHighlightMenu = true;
+      highlightMenuShownAt = Date.now();
     });
 
     rendition.on('click', () => {
+      // Guard: on mobile, 'click' fires right after 'selected' and would
+      // immediately dismiss the menu. Ignore clicks within 500ms of showing.
+      if (Date.now() - highlightMenuShownAt < 500) return;
+
       // Only dismiss highlight menu if there's no active text selection
-      // (the 'selected' event fires after 'click' due to debounce, so avoid race)
       const contents = rendition?.manager?.getContents?.();
       const sel = contents?.[0]?.window?.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim() === '') {
@@ -243,6 +285,14 @@
       // ignore
     }
 
+    // Load illustrations
+    try {
+      illustrations = await booksApi.getIllustrations(bookId, token);
+      onillustrationschange?.(illustrations);
+    } catch {
+      // ignore
+    }
+
     // Load saved progress & display
     let savedProgress: any = null;
     try {
@@ -274,8 +324,9 @@
       await rendition.display();
     }
 
-    // Apply existing highlights
+    // Apply existing highlights & illustrations
     applyAllHighlights();
+    applyAllIllustrations();
 
     // Get book title & TOC
     epubBook.loaded.metadata.then((meta: { title?: string; direction?: string }) => {
@@ -404,6 +455,64 @@
     }
   }
 
+  function applyAllIllustrations() {
+    if (!rendition) return;
+    for (const ill of illustrations) {
+      if (ill.status === 'completed') {
+        addIllustrationAnnotation(ill);
+      }
+    }
+  }
+
+  export function addIllustrationAnnotation(ill: IllustrationOut) {
+    if (!rendition) return;
+    updateIllustrationIcons();
+  }
+
+  export function removeIllustrationAnnotation(cfiRange: string) {
+    updateIllustrationIcons();
+  }
+
+  function updateIllustrationIcons() {
+    if (!rendition) { illustrationIcons = []; return; }
+    const icons: typeof illustrationIcons = [];
+    const mgr = rendition.manager;
+    if (!mgr) { illustrationIcons = []; return; }
+    const scrollLeft = mgr.container?.scrollLeft ?? 0;
+    const scrollTop = mgr.container?.scrollTop ?? 0;
+    const containerWidth = container?.clientWidth ?? 0;
+    const containerHeight = container?.clientHeight ?? 0;
+    for (const ill of illustrations) {
+      if (ill.status !== 'completed') continue;
+      try {
+        const range = rendition.getRange(ill.cfi_range);
+        if (!range) continue;
+        // Use first line rect for accurate positioning
+        const rects = range.getClientRects();
+        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect();
+        const x = rect.left - scrollLeft;
+        const y = rect.top - scrollTop;
+        // Only show icons for illustrations visible on the current page
+        if (x >= -20 && x <= containerWidth + 20 && y >= -20 && y <= containerHeight + 20) {
+          // Vertically center icon with the first line of text
+          const lineHeight = rect.height;
+          const iconSize = x >= 28 ? 24 : 18; // smaller icon when margin is tight
+          const iconY = y + lineHeight / 2 - iconSize / 2;
+          const iconX = Math.max(2, x - iconSize - 4);
+          icons.push({ id: ill.id, x: iconX, y: iconY, size: iconSize, ill });
+        }
+      } catch {
+        // CFI might not be on current section
+      }
+    }
+    illustrationIcons = icons;
+  }
+
+  export function updateIllustrations(newIllustrations: IllustrationOut[]) {
+    illustrations = newIllustrations;
+    onillustrationschange?.(illustrations);
+  }
+
   export function prev() {
     showFootnote = false;
     rendition?.prev();
@@ -465,6 +574,12 @@
     }
   }
 
+  function handleIllustrate() {
+    showHighlightMenu = false;
+    if (!selectedCfi || !selectedText) return;
+    onillustrate?.({ cfiRange: selectedCfi, text: selectedText });
+  }
+
   async function handleRemoveHighlight() {
     showHighlightMenu = false;
     if (!existingHighlight) return;
@@ -496,6 +611,17 @@
     onclick={handleRightTapNav}
   ></button>
 
+  {#each illustrationIcons as icon (icon.id)}
+    <button
+      class="absolute z-20 flex items-center justify-center rounded-md shadow-md transition-transform hover:scale-110"
+      style="left: {icon.x}px; top: {icon.y}px; width: {icon.size}px; height: {icon.size}px; background: linear-gradient(135deg, #a855f7, #3b82f6, #ec4899);"
+      title="View illustration"
+      onclick={(e) => { e.stopPropagation(); onillustrationclick?.(icon.ill); }}
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width={icon.size * 0.58} height={icon.size * 0.58} viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+    </button>
+  {/each}
+
   {#if showHighlightMenu}
     <div
       class="absolute z-20 transform -translate-x-1/2 -translate-y-full"
@@ -505,6 +631,7 @@
         hasExisting={!!existingHighlight}
         oncolor={handleHighlightColor}
         onremove={handleRemoveHighlight}
+        onillustrate={handleIllustrate}
         onclose={() => (showHighlightMenu = false)}
       />
     </div>

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Sun, Moon, List, Highlighter } from '@lucide/svelte';
+  import { ArrowLeft, ChevronLeft, ChevronRight, Minus, Plus, Sun, Moon, List, Highlighter, Sparkles } from '@lucide/svelte';
 
   let {
     bookId = '', title = '', fontFamily = 'serif', fontSize = 16, percentage = 0,
-    darkMode = false, toc = [], isRtl = false, highlightCount = 0,
-    onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter, onhighlights, ontoc_toggle,
+    darkMode = false, toc = [], isRtl = false, highlightCount = 0, illustrationCount = 0,
+    onprev, onnext, onfontToggle, onfontIncrease, onfontDecrease, onthemeToggle, onchapter, onhighlights, onillustrations, ontoc_toggle,
   }: {
     bookId?: string;
     title?: string;
@@ -15,6 +15,7 @@
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
     highlightCount?: number;
+    illustrationCount?: number;
     onprev?: () => void;
     onnext?: () => void;
     onfontToggle?: () => void;
@@ -23,6 +24,7 @@
     onthemeToggle?: () => void;
     onchapter?: (href: string) => void;
     onhighlights?: () => void;
+    onillustrations?: () => void;
     ontoc_toggle?: () => void;
   } = $props();
 
@@ -61,6 +63,20 @@
     {#if highlightCount > 0}
       <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode ? 'bg-amber-500 text-gray-900' : 'bg-primary text-primary-foreground'}">
         {highlightCount > 99 ? '99' : highlightCount}
+      </span>
+    {/if}
+  </button>
+
+  <!-- Illustrations button -->
+  <button
+    class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
+    title="AI Illustrations"
+    onclick={() => onillustrations?.()}
+  >
+    <Sparkles size={18} />
+    {#if illustrationCount > 0}
+      <span class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center" style="background: linear-gradient(135deg, #a855f7, #3b82f6); color: white;">
+        {illustrationCount > 99 ? '99' : illustrationCount}
       </span>
     {/if}
   </button>

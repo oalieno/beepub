@@ -106,6 +106,26 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface IllustrationOut {
+  id: string;
+  user_id: string;
+  book_id: string;
+  cfi_range: string;
+  text: string;
+  style_prompt: string | null;
+  custom_prompt: string | null;
+  status: 'pending' | 'generating' | 'completed' | 'failed';
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StylePromptOut {
+  key: string;
+  label: string;
+  description: string;
+}
+
 export interface AdminStats {
   users: number;
   books: number;

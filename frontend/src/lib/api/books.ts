@@ -1,5 +1,5 @@
 import { get, post, put, del } from './client';
-import type { BookOut, ExternalMetadataOut, HighlightOut, InteractionOut, ProgressOut } from '$lib/types';
+import type { BookOut, ExternalMetadataOut, HighlightOut, IllustrationOut, InteractionOut, ProgressOut, StylePromptOut } from '$lib/types';
 
 export const booksApi = {
   search: (query: string, token: string) =>
@@ -89,4 +89,26 @@ export const booksApi = {
 
   getAllHighlights: (token: string) =>
     get('/highlights', token) as Promise<HighlightOut[]>,
+
+  // Illustrations
+  getIllustrations: (bookId: string, token: string) =>
+    get(`/books/${bookId}/illustrations`, token) as Promise<IllustrationOut[]>,
+
+  createIllustration: (
+    bookId: string,
+    data: { cfi_range: string; text: string; style_prompt?: string; custom_prompt?: string },
+    token: string
+  ) => post(`/books/${bookId}/illustrations`, data, token) as Promise<IllustrationOut>,
+
+  getIllustration: (bookId: string, illustrationId: string, token: string) =>
+    get(`/books/${bookId}/illustrations/${illustrationId}`, token) as Promise<IllustrationOut>,
+
+  deleteIllustration: (bookId: string, illustrationId: string, token: string) =>
+    del(`/books/${bookId}/illustrations/${illustrationId}`, token),
+
+  getStylePrompts: (bookId: string, token: string) =>
+    get(`/books/${bookId}/illustrations/styles`, token) as Promise<StylePromptOut[]>,
+
+  getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
+    `/api/books/${bookId}/illustrations/${illustrationId}/image`,
 };

@@ -35,9 +35,13 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
       BOOKS_DIR: ${BOOKS_DIR:-/data/books}
       COVERS_DIR: ${COVERS_DIR:-/data/covers}
+      ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-exp}
     volumes:
       - books_data:/data/books
       - covers_data:/data/covers
+      - illustrations_data:/data/illustrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -82,3 +86,4 @@ volumes:
   redis_data:
   books_data:
   covers_data:
+  illustrations_data:

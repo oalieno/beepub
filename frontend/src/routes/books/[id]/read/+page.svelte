@@ -10,7 +10,10 @@
   import TocSidebar from '$lib/components/reader/TocSidebar.svelte';
   import { booksApi } from '$lib/api/books';
   import { toastStore } from '$lib/stores/toast';
-  import type { HighlightOut } from '$lib/types';
+  import IllustrationPromptModal from '$lib/components/reader/IllustrationPromptModal.svelte';
+  import IllustrationSidebar from '$lib/components/reader/IllustrationSidebar.svelte';
+  import IllustrationViewer from '$lib/components/reader/IllustrationViewer.svelte';
+  import type { HighlightOut, IllustrationOut, StylePromptOut } from '$lib/types';
 
   let bookId = $derived($page.params.id as string);
 
@@ -24,8 +27,15 @@
   let ready = $state(false);
   let isRtl = $state(false);
   let highlights = $state<HighlightOut[]>([]);
+  let illustrations = $state<IllustrationOut[]>([]);
+  let stylePrompts = $state<StylePromptOut[]>([]);
   let showHighlightSidebar = $state(false);
   let showTocSidebar = $state(false);
+  let showIllustrationSidebar = $state(false);
+  let showIllustrationModal = $state(false);
+  let illustrationModalCfi = $state('');
+  let illustrationModalText = $state('');
+  let viewingIllustration = $state<IllustrationOut | null>(null);
   let prevHtmlOverflow = '';
   let prevBodyOverflow = '';
 
@@ -77,6 +87,78 @@
     darkMode = !darkMode;
     localStorage.setItem('reader-dark', darkMode ? '1' : '0');
   }
+
+  async function handleIllustrate(detail: { cfiRange: string; text: string }) {
+    illustrationModalCfi = detail.cfiRange;
+    illustrationModalText = detail.text;
+    // Load style prompts if not cached
+    if (stylePrompts.length === 0 && $authStore.token) {
+      try {
+        stylePrompts = await booksApi.getStylePrompts(bookId, $authStore.token);
+      } catch { /* ignore */ }
+    }
+    showIllustrationModal = true;
+  }
+
+  async function handleCreateIllustration(detail: { style_prompt?: string; custom_prompt?: string }) {
+    showIllustrationModal = false;
+    if (!$authStore.token) return;
+    try {
+      const ill = await booksApi.createIllustration(bookId, {
+        cfi_range: illustrationModalCfi,
+        text: illustrationModalText,
+        ...detail,
+      }, $authStore.token);
+      illustrations = [...illustrations, ill];
+      toastStore.success('Generating illustration...');
+      pollIllustration(ill.id);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function pollIllustration(illustrationId: string) {
+    if (!$authStore.token) return;
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (!$authStore.token) return;
+      try {
+        const ill = await booksApi.getIllustration(bookId, illustrationId, $authStore.token);
+        if (ill.status === 'completed') {
+          illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
+          reader?.addIllustrationAnnotation(ill);
+          toastStore.success('Illustration ready!');
+          return;
+        }
+        if (ill.status === 'failed') {
+          illustrations = illustrations.filter((x) => x.id !== ill.id);
+          toastStore.error(`Generation failed: ${ill.error_message ?? 'unknown error'}`);
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+    toastStore.error('Generation timed out');
+  }
+
+  async function handleDeleteIllustration(ill: IllustrationOut) {
+    if (!$authStore.token) return;
+    try {
+      await booksApi.deleteIllustration(bookId, ill.id, $authStore.token);
+      illustrations = illustrations.filter((x) => x.id !== ill.id);
+      reader?.removeIllustrationAnnotation(ill.cfi_range);
+      toastStore.success('Illustration deleted');
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function handleSelectIllustration(ill: IllustrationOut) {
+    reader?.displayCfi(ill.cfi_range);
+    showIllustrationSidebar = false;
+    viewingIllustration = ill;
+  }
 </script>
 
 <svelte:head>
@@ -94,6 +176,7 @@
     {toc}
     {isRtl}
     highlightCount={highlights.length}
+    illustrationCount={illustrations.length}
     onprev={() => reader?.prev()}
     onnext={() => reader?.next()}
     onfontToggle={handleFontToggle}
@@ -101,8 +184,9 @@
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}
     onchapter={(href) => reader?.displayChapter(href)}
-    onhighlights={() => { showHighlightSidebar = !showHighlightSidebar; showTocSidebar = false; }}
-    ontoc_toggle={() => { showTocSidebar = !showTocSidebar; showHighlightSidebar = false; }}
+    onhighlights={() => { showHighlightSidebar = !showHighlightSidebar; showTocSidebar = false; showIllustrationSidebar = false; }}
+    onillustrations={() => { showIllustrationSidebar = !showIllustrationSidebar; showHighlightSidebar = false; showTocSidebar = false; }}
+    ontoc_toggle={() => { showTocSidebar = !showTocSidebar; showHighlightSidebar = false; showIllustrationSidebar = false; }}
   />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
@@ -119,6 +203,9 @@
         ontoc={(t) => (toc = t)}
         ondirection={(rtl) => (isRtl = rtl)}
         onhighlightschange={(h) => (highlights = h)}
+        onillustrate={handleIllustrate}
+        onillustrationschange={(ills) => (illustrations = ills)}
+        onillustrationclick={(ill) => (viewingIllustration = ill)}
       />
     {/if}
 
@@ -157,5 +244,35 @@
         onclose={() => (showHighlightSidebar = false)}
       />
     {/if}
+
+    {#if showIllustrationSidebar}
+      <IllustrationSidebar
+        {illustrations}
+        {bookId}
+        {darkMode}
+        onselect={handleSelectIllustration}
+        ondelete={handleDeleteIllustration}
+        onclose={() => (showIllustrationSidebar = false)}
+      />
+    {/if}
   </div>
+
+  {#if showIllustrationModal}
+    <IllustrationPromptModal
+      text={illustrationModalText}
+      styles={stylePrompts}
+      {darkMode}
+      oncreate={handleCreateIllustration}
+      onclose={() => (showIllustrationModal = false)}
+    />
+  {/if}
+
+  {#if viewingIllustration}
+    <IllustrationViewer
+      illustration={viewingIllustration}
+      {bookId}
+      {darkMode}
+      onclose={() => (viewingIllustration = null)}
+    />
+  {/if}
 </div>

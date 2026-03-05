@@ -3,6 +3,7 @@ from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisib
 from app.models.book import Book, ExternalMetadata, MetadataSource
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.reading import UserBookInteraction, Highlight
+from app.models.illustration import Illustration
 
 __all__ = [
     "User", "UserRole",
@@ -10,4 +11,5 @@ __all__ = [
     "Book", "ExternalMetadata", "MetadataSource",
     "Bookshelf", "BookshelfBook",
     "UserBookInteraction", "Highlight",
+    "Illustration",
 ]

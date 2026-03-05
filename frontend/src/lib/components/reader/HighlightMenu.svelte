@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Trash2, X } from '@lucide/svelte';
+  import { Trash2, X, Sparkles } from '@lucide/svelte';
 
-  let { hasExisting = false, oncolor, onremove, onclose }: {
+  let { hasExisting = false, oncolor, onremove, onillustrate, onclose }: {
     hasExisting?: boolean;
     oncolor?: (detail: { color: string }) => void;
     onremove?: () => void;
+    onillustrate?: () => void;
     onclose?: () => void;
   } = $props();
 
@@ -26,6 +27,15 @@
       onclick={() => oncolor?.({ color: color.name })}
     ></button>
   {/each}
+
+  <div class="w-px h-4 bg-border"></div>
+  <button
+    class="p-0.5 transition-colors hover:scale-110 transform text-purple-500 hover:text-purple-400"
+    title="AI Illustration"
+    onclick={() => onillustrate?.()}
+  >
+    <Sparkles size={14} />
+  </button>
 
   {#if hasExisting}
     <div class="w-px h-4 bg-border"></div>
