@@ -374,6 +374,21 @@ class DefaultViewManager {
         // target may no longer be in this view — ignore
       }
     }
+
+    // Vertical paginated: re-snap scrollTop to current page grid.
+    // pageStep may change after content resize (e.g. font load: 871 → 851),
+    // leaving scrollTop misaligned from the previous grid.
+    if (this.settings.axis === "vertical" && this.isPaginated) {
+      const pageStep = this.getPageStep();
+      if (pageStep > 0) {
+        const scrollTop = this.container.scrollTop;
+        const remainder = scrollTop % pageStep;
+        if (remainder > 2 && pageStep - remainder > 2) {
+          const currentPage = Math.round(scrollTop / pageStep);
+          this.scrollTo(0, currentPage * pageStep, true);
+        }
+      }
+    }
   }
 
   getPageStep() {
@@ -386,13 +401,17 @@ class DefaultViewManager {
         this.container && this.container.getBoundingClientRect
           ? this.container.getBoundingClientRect()
           : null;
-      const visibleHeight = bounds && bounds.height ? bounds.height : 0;
 
-      return (
-        (visibleHeight && Math.min(visibleHeight, window.innerHeight)) ||
+      const raw =
+        (bounds && bounds.height) ||
+        (this.container && this.container.clientHeight) ||
         (this.container && this.container.offsetHeight) ||
-        this.layout.height
-      );
+        this.layout.height ||
+        0;
+
+      // Floor to integer to prevent floating-point drift when multiplying
+      // pageIndex * pageStep over many pages (continuous paging).
+      return Math.floor(raw);
     }
 
     return this.layout.delta;
@@ -553,7 +572,25 @@ class DefaultViewManager {
     var view = this.createView(section, forceRight);
 
     view.on(EVENTS.VIEWS.RESIZED, (bounds) => {
+      if (this.settings.axis === "vertical" && this.isPaginated) {
+        console.log("[split-diag][prepend-resized:before-counter]", {
+          href: view?.section?.href,
+          heightDelta: bounds?.heightDelta,
+          widthDelta: bounds?.widthDelta,
+          scrollTop: this.container.scrollTop,
+          scrollHeight: this.container.scrollHeight,
+          pageStep: this.getPageStep(),
+        });
+      }
       this.counter(bounds);
+      if (this.settings.axis === "vertical" && this.isPaginated) {
+        console.log("[split-diag][prepend-resized:after-counter]", {
+          href: view?.section?.href,
+          scrollTop: this.container.scrollTop,
+          scrollHeight: this.container.scrollHeight,
+          pageStep: this.getPageStep(),
+        });
+      }
     });
 
     this.views.prepend(view);
@@ -574,7 +611,39 @@ class DefaultViewManager {
 
   counter(bounds) {
     if (this.settings.axis === "vertical") {
-      this.scrollBy(0, bounds.heightDelta, true);
+      if (this.isPaginated) {
+        const pageStep = this.getPageStep();
+        const topBefore = this.container.scrollTop;
+        const delta = bounds?.heightDelta || 0;
+        const maxScrollable = Math.max(
+          0,
+          this.container.scrollHeight - pageStep,
+        );
+        const targetTop = Math.max(
+          0,
+          Math.min(topBefore + delta, maxScrollable),
+        );
+        const targetPage = Math.max(0, Math.floor((targetTop + 1) / pageStep));
+        const snappedTop = targetPage * pageStep;
+
+        console.log("[split-diag][counter:vertical]", {
+          heightDelta: bounds?.heightDelta,
+          scrollTopBefore: topBefore,
+          scrollHeightBefore: this.container.scrollHeight,
+          pageStep,
+          targetTop,
+          targetPage,
+          snappedTop,
+        });
+
+        this.scrollTo(0, snappedTop, true);
+        console.log("[split-diag][counter:vertical:after]", {
+          scrollTopAfter: this.container.scrollTop,
+          scrollHeightAfter: this.container.scrollHeight,
+        });
+      } else {
+        this.scrollBy(0, bounds.heightDelta, true);
+      }
     } else {
       this.scrollBy(bounds.widthDelta, 0, true);
     }
@@ -599,31 +668,6 @@ class DefaultViewManager {
     let dir = this.settings.direction;
 
     if (!this.views.length) return;
-
-    console.log(
-      "[next] axis:",
-      this.settings.axis,
-      "dir:",
-      dir,
-      "scrollLeft:",
-      this.container.scrollLeft,
-      "scrollTop:",
-      this.container.scrollTop,
-      "delta:",
-      this.layout.delta,
-      "layout.width:",
-      this.layout.width,
-      "layout.height:",
-      this.layout.height,
-      "scrollWidth:",
-      this.container.scrollWidth,
-      "scrollHeight:",
-      this.container.scrollHeight,
-      "offsetWidth:",
-      this.container.offsetWidth,
-      "offsetHeight:",
-      this.container.offsetHeight,
-    );
 
     if (
       this.isPaginated &&
@@ -668,11 +712,15 @@ class DefaultViewManager {
       this.scrollTop = this.container.scrollTop;
       const pageStep = this.getPageStep();
 
-      let top =
-        Math.round(this.container.scrollTop) + this.container.offsetHeight;
+      const maxScrollable = this.container.scrollHeight - pageStep;
+      const currentPage = Math.max(
+        0,
+        Math.floor((this.container.scrollTop + 1) / pageStep),
+      );
+      const targetPage = currentPage + 1;
 
-      if (top < this.container.scrollHeight) {
-        this.scrollBy(0, pageStep, true);
+      if (targetPage * pageStep <= maxScrollable + 1) {
+        this.scrollToPageIndex(targetPage);
       } else {
         next = this.views.last().section.next();
       }
@@ -729,23 +777,6 @@ class DefaultViewManager {
 
     if (!this.views.length) return;
 
-    console.log(
-      "[prev] axis:",
-      this.settings.axis,
-      "dir:",
-      dir,
-      "scrollLeft:",
-      this.container.scrollLeft,
-      "scrollTop:",
-      this.container.scrollTop,
-      "delta:",
-      this.layout.delta,
-      "layout.width:",
-      this.layout.width,
-      "layout.height:",
-      this.layout.height,
-    );
-
     if (
       this.isPaginated &&
       this.settings.axis === "horizontal" &&
@@ -789,12 +820,23 @@ class DefaultViewManager {
       this.scrollTop = this.container.scrollTop;
       const pageStep = this.getPageStep();
 
-      let top = this.container.scrollTop;
+      const currentPage = Math.max(
+        0,
+        Math.floor((this.container.scrollTop + 1) / pageStep),
+      );
 
-      if (top > 0) {
-        this.scrollBy(0, -pageStep, true);
+      if (currentPage > 0) {
+        this.scrollToPageIndex(currentPage - 1);
       } else {
         prev = this.views.first().section.prev();
+        console.log("[split-diag][prev-boundary]", {
+          currentHref: this.views.first()?.section?.href,
+          prevHref: prev?.href,
+          scrollTop: this.container.scrollTop,
+          scrollHeight: this.container.scrollHeight,
+          offsetHeight: this.container.offsetHeight,
+          pageStep,
+        });
       }
     } else {
       prev = this.views.first().section.prev();
@@ -852,6 +894,23 @@ class DefaultViewManager {
                   true,
                 );
               }
+            } else if (this.isPaginated && this.settings.axis === "vertical") {
+              // Scroll to last page of the prepended chapter, mirroring
+              // horizontal's scroll-to-end above.
+              const pageStep = this.getPageStep();
+              const maxScroll = this.container.scrollHeight - pageStep;
+              const lastPage = Math.max(
+                0,
+                Math.floor((maxScroll + 1) / pageStep),
+              );
+              this.scrollToPageIndex(lastPage);
+              console.log("[split-diag][prev-scroll-to-last]", {
+                scrollHeight: this.container.scrollHeight,
+                pageStep,
+                maxScroll,
+                lastPage,
+                scrollTopAfter: this.container.scrollTop,
+              });
             }
             this.views.show();
           }.bind(this),
@@ -891,13 +950,14 @@ class DefaultViewManager {
   scrolledLocation() {
     let visible = this.visible();
     let container = this.container.getBoundingClientRect();
-    let pageHeight =
-      container.height < window.innerHeight
+    let vertical = this.settings.axis === "vertical";
+    let pageHeight = vertical
+      ? this.getPageStep()
+      : container.height < window.innerHeight
         ? container.height
         : window.innerHeight;
     let pageWidth =
       container.width < window.innerWidth ? container.width : window.innerWidth;
-    let vertical = this.settings.axis === "vertical";
     let rtl = this.settings.direction === "rtl";
 
     let offset = 0;
@@ -930,9 +990,19 @@ class DefaultViewManager {
         stopPos = pageWidth;
       }
 
-      let currPage = Math.ceil(startPos / stopPos);
+      // For vertical paginated, scroll positions are always on exact page
+      // boundaries (integer pageStep).  getBoundingClientRect adds sub-pixel
+      // noise (~0.003 px) to startPos/endPos, so Math.ceil would inflate
+      // by +1 at every boundary.  Use Math.round to be robust against this.
+      let currPage =
+        vertical && this.isPaginated
+          ? Math.round(startPos / stopPos)
+          : Math.ceil(startPos / stopPos);
       let pages = [];
-      let endPage = Math.ceil(endPos / stopPos);
+      let endPage =
+        vertical && this.isPaginated
+          ? Math.round(endPos / stopPos)
+          : Math.ceil(endPos / stopPos);
 
       console.log(
         "[scrolledLocation] index:",
@@ -1146,10 +1216,16 @@ class DefaultViewManager {
     } else {
       window.scrollBy(x * dir, y * dir);
     }
-    console.log(
-      `[scrollBy] dx:${x} dy:${y} silent:${silent} scrollLeft:${prevLeft}->${this.container.scrollLeft}`,
-      new Error().stack?.split("\n").slice(1, 4).join(" <- "),
-    );
+    if (this.isPaginated && this.settings.axis === "vertical" && y) {
+      console.log("[split-diag][scrollBy]", {
+        x,
+        y,
+        silent,
+        scrollTopBefore: prevTop,
+        scrollTopAfter: this.container.scrollTop,
+        scrollHeight: this.container.scrollHeight,
+      });
+    }
     this.scrolled = true;
   }
 
@@ -1166,10 +1242,16 @@ class DefaultViewManager {
     } else {
       window.scrollTo(x, y);
     }
-    console.log(
-      `[scrollTo] x:${x} y:${y} silent:${silent} scrollLeft:${prevLeft}->${this.container.scrollLeft}`,
-      new Error().stack?.split("\n").slice(1, 4).join(" <- "),
-    );
+    if (this.isPaginated && this.settings.axis === "vertical") {
+      console.log("[split-diag][scrollTo]", {
+        x,
+        y,
+        silent,
+        scrollTopBefore: prevTop,
+        scrollTopAfter: this.container.scrollTop,
+        scrollHeight: this.container.scrollHeight,
+      });
+    }
     this.scrolled = true;
   }
 

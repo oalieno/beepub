@@ -28,3 +28,4 @@
 | [debug/008-remove-hidden-book-percentage-only.md](debug/008-remove-hidden-book-percentage-only.md) | 移除 hidden book，改百分比顯示 | ✅ 已完成 |
 | [debug/009-mobile-rtl-vertical-split-pages.md](debug/009-mobile-rtl-vertical-split-pages.md) | 在手機板（螢幕較小）閱讀某些 **RTL 直排 EPUB** 時，畫面會出現裂頁 | ✅ 已修復 |
 | [debug/010-ios-custom-text-selection.md](debug/010-ios-custom-text-selection.md) | iOS PWA 自訂文字選取（取代原生 UI） | ✅ 已修復 |
+| [debug/011-illustration-overlay-and-highlight-rect-dedup.md](debug/011-illustration-overlay-and-highlight-rect-dedup.md) | Illustration 改為文字漸層標記 + getClientRects 矩形去重 | ✅ 已修復 |

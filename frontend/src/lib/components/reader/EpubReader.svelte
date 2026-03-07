@@ -58,9 +58,6 @@
     highlightMenuY = y < MENU_H + 8 ? y + MENU_H + 16 : y;
   }
 
-  // Illustration floating icons
-  let illustrationIcons = $state<{ id: string; x: number; y: number; size: number; ill: IllustrationOut }[]>([]);
-
   // Footnote popup
   let showFootnote = $state(false);
   let footnoteContent = $state('');
@@ -85,6 +82,9 @@
     pink: '#fbcfe8',
     orange: '#fed7aa',
   };
+
+  const ILLUSTRATION_OVERLAY_ID = 'beepub-illustration-overlay';
+  const ILLUSTRATION_GRADIENT = 'linear-gradient(135deg, rgba(168,85,247,0.30), rgba(59,130,246,0.30), rgba(236,72,153,0.30))';
 
   const SERIF_FONTS = '"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif';
   const SANS_FONTS = '"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif';
@@ -147,6 +147,19 @@
 
     // relocated handler: calculate percentage from section position
     rendition.on('relocated', (location: any) => {
+      const mgr = rendition?.manager;
+      if (mgr?.isPaginated && mgr?.settings?.axis === 'vertical') {
+        console.log('[split-diag][relocated]', {
+          cfi: location?.start?.cfi,
+          href: location?.start?.href,
+          sectionIndex: location?.start?.index,
+          page: location?.start?.displayed?.page,
+          total: location?.start?.displayed?.total,
+          scrollTop: mgr?.container?.scrollTop,
+          scrollHeight: mgr?.container?.scrollHeight,
+          offsetHeight: mgr?.container?.offsetHeight,
+        });
+      }
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
@@ -157,8 +170,7 @@
       )));
       emitProgress();
       debouncedSave();
-      // Reposition floating illustration icons for the current page
-      updateIllustrationIcons();
+      updateIllustrationOverlays();
     });
 
     rendition.on('keyup', handleKeyboard);
@@ -531,6 +543,12 @@
     let savedProgress: any = null;
     try {
       savedProgress = await booksApi.getProgress(bookId, token);
+      console.log('[split-diag][restore-progress]', {
+        cfi: savedProgress?.cfi,
+        section_page: savedProgress?.section_page,
+        section_index: savedProgress?.section_index,
+        font_size: savedProgress?.font_size,
+      });
       if (savedProgress?.cfi) {
         // Show saved percentage immediately while loading
         if (savedProgress.percentage != null) currentPercentage = savedProgress.percentage;
@@ -543,17 +561,21 @@
         // override scroll position using the saved section page number.
         if (savedProgress.section_page != null && savedProgress.font_size === fontSize && rendition.manager) {
           const mgr = rendition.manager;
-          if (mgr?.settings?.axis === 'vertical') {
-            mgr._lastTargetPage = null;
-          } else {
-            const targetPage = Math.max(0, savedProgress.section_page - 1); // 0-indexed
-            mgr._lastTarget = null; // Prevent CFI-based re-scroll in afterResized
-            mgr._lastTargetPage = targetPage;
-            if (typeof mgr.scrollToPageIndex === 'function' && mgr.scrollToPageIndex(targetPage)) {
+          const targetPage = Math.max(0, savedProgress.section_page - 1); // 0-indexed
+          mgr._lastTarget = null; // Prevent CFI-based re-scroll in afterResized
+          mgr._lastTargetPage = targetPage;
+          if (typeof mgr.scrollToPageIndex === 'function') {
+            const ok = mgr.scrollToPageIndex(targetPage);
+            // For horizontal: clear only on success. If scrollWidth isn't
+            // fully expanded yet, afterResized will retry with _lastTargetPage.
+            // For vertical: never clear here because pageStep may change
+            // after font/CSS load (e.g. 871 → 851). afterResized will
+            // re-apply with the stable pageStep and clear it then.
+            if (ok && mgr?.settings?.axis !== 'vertical') {
               mgr._lastTargetPage = null;
             }
           }
-          // else: afterResized will handle when scrollWidth expands
+          // else: afterResized will handle when scrollWidth/scrollHeight expands
         }
       } else {
         await rendition.display();
@@ -562,13 +584,27 @@
       await rendition.display();
     }
 
-    // Fix half-page offset on re-enter: snap scroll position after layout settles
+    // Fix half-page offset on re-enter: snap scroll position after layout settles.
+    // For vertical paginated, pageStep may change after CSS recalculation
+    // (e.g. container 871 → 851 after font load) leaving scrollTop misaligned.
     setTimeout(() => {
       const mgr = rendition?.manager;
-      if (mgr?.snap) {
-        mgr.snap.snap(0); // snap to nearest page boundary
+      if (mgr?.settings?.axis === 'vertical' && mgr?.isPaginated) {
+        const pageStep = typeof mgr.getPageStep === 'function' ? mgr.getPageStep() : 0;
+        const scrollTop = mgr.container?.scrollTop;
+        if (pageStep > 0 && scrollTop != null) {
+          const remainder = scrollTop % pageStep;
+          if (remainder > 2 && pageStep - remainder > 2) {
+            const page = Math.round(scrollTop / pageStep);
+            if (typeof mgr.scrollToPageIndex === 'function') {
+              mgr.scrollToPageIndex(page);
+            }
+          }
+        }
+      } else if (mgr?.snap) {
+        mgr.snap.snap(0);
       }
-    }, 100);
+    }, 150);
 
     // Apply existing highlights & illustrations
     applyAllHighlights();
@@ -679,6 +715,108 @@
     } catch {}
   }
 
+  function ensureIllustrationOverlayRoot(contents: any): HTMLDivElement | null {
+    const doc = contents?.document;
+    if (!doc?.body) return null;
+
+    let root = doc.getElementById(ILLUSTRATION_OVERLAY_ID) as HTMLDivElement | null;
+    if (!root) {
+      root = doc.createElement('div') as HTMLDivElement;
+      root!.id = ILLUSTRATION_OVERLAY_ID;
+      root!.style.cssText = 'position:absolute;top:0;left:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:9998;writing-mode:horizontal-tb;';
+      doc.body.appendChild(root);
+    }
+
+    return root;
+  }
+
+  function updateIllustrationOverlays() {
+    if (!rendition) return;
+
+    const contentItems = rendition.getContents?.() ?? [];
+    if (contentItems.length === 0) return;
+
+    for (const contents of contentItems) {
+      const doc = contents?.document;
+      const win = contents?.window;
+      if (!doc || !win) continue;
+
+      const root = ensureIllustrationOverlayRoot(contents);
+      if (!root) continue;
+      root.innerHTML = '';
+
+      const scrollX = win.scrollX || 0;
+      const scrollY = win.scrollY || 0;
+
+      for (const ill of illustrations) {
+        if (ill.status !== 'completed') continue;
+
+        try {
+          const range = contents.range(ill.cfi_range);
+          if (!range) continue;
+
+          const allRects = Array.from(range.getClientRects()) as DOMRect[];
+          const nonEmpty = allRects.filter(r => r.width > 0 && r.height > 0);
+          // Deduplicate overlapping rects produced by getClientRects().
+          // For multi-line ranges the browser may return aggregate bounding rects
+          // that overlap with per-line rects. When two rects overlap by >50% of
+          // the smaller rect's area, discard the larger one.
+          const discard = new Set<number>();
+          for (let i = 0; i < nonEmpty.length; i++) {
+            if (discard.has(i)) continue;
+            for (let j = i + 1; j < nonEmpty.length; j++) {
+              if (discard.has(j)) continue;
+              const a = nonEmpty[i], b = nonEmpty[j];
+              const ox = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+              const oy = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+              const overlap = ox * oy;
+              if (overlap <= 0) continue;
+              const areaA = a.width * a.height;
+              const areaB = b.width * b.height;
+              const smaller = Math.min(areaA, areaB);
+              if (overlap > smaller * 0.5) {
+                // Discard the larger rect
+                discard.add(areaA >= areaB ? i : j);
+              }
+            }
+          }
+          const rects = nonEmpty.filter((_r, idx) => !discard.has(idx));
+          for (const rect of rects) {
+
+            const overlay = doc.createElement('button');
+            overlay.type = 'button';
+            overlay.title = 'View illustration';
+            overlay.setAttribute('aria-label', 'View illustration');
+            overlay.style.cssText = [
+              'position:absolute',
+              `left:${rect.left + scrollX}px`,
+              `top:${rect.top + scrollY}px`,
+              `width:${rect.width}px`,
+              `height:${rect.height}px`,
+              `background:${ILLUSTRATION_GRADIENT}`,
+              'border:none',
+              'border-radius:4px',
+              'padding:0',
+              'margin:0',
+              'cursor:pointer',
+              'pointer-events:auto',
+              'box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10)',
+              'mix-blend-mode:multiply',
+              'touch-action:manipulation'
+            ].join(';');
+            overlay.addEventListener('click', (e: Event) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onillustrationclick?.(ill);
+            });
+            root.appendChild(overlay);
+          }
+        } catch {
+        }
+      }
+    }
+  }
+
   function applyTheme() {
     if (!rendition) return;
     rendition.themes.default({
@@ -721,51 +859,18 @@
 
   export function addIllustrationAnnotation(ill: IllustrationOut) {
     if (!rendition) return;
-    updateIllustrationIcons();
+    updateIllustrationOverlays();
   }
 
   export function removeIllustrationAnnotation(cfiRange: string) {
-    updateIllustrationIcons();
-  }
-
-  function updateIllustrationIcons() {
-    if (!rendition) { illustrationIcons = []; return; }
-    const icons: typeof illustrationIcons = [];
-    const mgr = rendition.manager;
-    if (!mgr) { illustrationIcons = []; return; }
-    const scrollLeft = mgr.container?.scrollLeft ?? 0;
-    const scrollTop = mgr.container?.scrollTop ?? 0;
-    const containerWidth = container?.clientWidth ?? 0;
-    const containerHeight = container?.clientHeight ?? 0;
-    for (const ill of illustrations) {
-      if (ill.status !== 'completed') continue;
-      try {
-        const range = rendition.getRange(ill.cfi_range);
-        if (!range) continue;
-        // Use first line rect for accurate positioning
-        const rects = range.getClientRects();
-        const rect = rects.length > 0 ? rects[0] : range.getBoundingClientRect();
-        const x = rect.left - scrollLeft;
-        const y = rect.top - scrollTop;
-        // Only show icons for illustrations visible on the current page
-        if (x >= -20 && x <= containerWidth + 20 && y >= -20 && y <= containerHeight + 20) {
-          // Vertically center icon with the first line of text
-          const lineHeight = rect.height;
-          const iconSize = x >= 28 ? 24 : 18; // smaller icon when margin is tight
-          const iconY = y + lineHeight / 2 - iconSize / 2;
-          const iconX = Math.max(2, x - iconSize - 4);
-          icons.push({ id: ill.id, x: iconX, y: iconY, size: iconSize, ill });
-        }
-      } catch {
-        // CFI might not be on current section
-      }
-    }
-    illustrationIcons = icons;
+    if (!rendition) return;
+    updateIllustrationOverlays();
   }
 
   export function updateIllustrations(newIllustrations: IllustrationOut[]) {
     illustrations = newIllustrations;
     onillustrationschange?.(illustrations);
+    updateIllustrationOverlays();
   }
 
   export function prev() {
@@ -779,7 +884,27 @@
   }
 
   export function displayChapter(href: string) {
-    rendition?.display(href);
+    const mgr = rendition?.manager;
+    console.log('[split-diag][displayChapter:before]', {
+      href,
+      axis: mgr?.settings?.axis,
+      isPaginated: mgr?.isPaginated,
+      scrollTop: mgr?.container?.scrollTop,
+      scrollHeight: mgr?.container?.scrollHeight,
+      offsetHeight: mgr?.container?.offsetHeight,
+    });
+
+    rendition?.display(href).then(() => {
+      const mgr2 = rendition?.manager;
+      console.log('[split-diag][displayChapter:after]', {
+        href,
+        axis: mgr2?.settings?.axis,
+        isPaginated: mgr2?.isPaginated,
+        scrollTop: mgr2?.container?.scrollTop,
+        scrollHeight: mgr2?.container?.scrollHeight,
+        offsetHeight: mgr2?.container?.offsetHeight,
+      });
+    });
   }
 
   export function displayCfi(cfi: string) {
@@ -893,17 +1018,6 @@
     aria-label="Next page"
     onclick={handleRightTapNav}
   ></button>
-
-  {#each illustrationIcons as icon (icon.id)}
-    <button
-      class="absolute z-20 flex items-center justify-center rounded-md shadow-md transition-transform hover:scale-110"
-      style="left: {icon.x}px; top: {icon.y}px; width: {icon.size}px; height: {icon.size}px; background: linear-gradient(135deg, #a855f7, #3b82f6, #ec4899);"
-      title="View illustration"
-      onclick={(e) => { e.stopPropagation(); onillustrationclick?.(icon.ill); }}
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width={icon.size * 0.58} height={icon.size * 0.58} viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
-    </button>
-  {/each}
 
   {#if showHighlightMenu}
     <div

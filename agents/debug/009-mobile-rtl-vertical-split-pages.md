@@ -1,120 +1,221 @@
-# Debug: Mobile RTL 直排書顯示裂頁（同時出現兩頁各一半）
+# Debug: Mobile RTL 直排書裂頁 + re-enter 定位不準（完整修復紀錄）
 
-**日期**：2026-03  
-**狀態**：✅ 已修復  
+**日期**：2026-03
+**狀態**：✅ 已修復（經歷多輪迭代）
 **影響檔案**：
-- `frontend/src/lib/components/reader/EpubReader.svelte`
 - `frontend/src/lib/epubjs/managers/default/index.js`
+- `frontend/src/lib/components/reader/EpubReader.svelte`
 
 ---
 
 ## 問題摘要
 
-在手機板（螢幕較小）閱讀某些 **RTL 直排 EPUB** 時，畫面會出現裂頁：
+在手機板（螢幕較小）閱讀 **RTL 直排 EPUB** 時，出現多種裂頁與定位問題：
 
-- 同時看到前後兩頁各一半
-- 看起來像 scroll 停在頁與頁的中間
-- 問題主要出現在重新進入書籍、依進度恢復位置時
+1. **Re-enter 裂頁**：重新進入書籍時，畫面停在頁與頁的中間（同時看到兩頁各一半）
+2. **Re-enter 跳頁**：恢復進度後停在錯誤的頁碼
+3. **章節跳轉裂頁**：從章節二往回翻到章節一最後幾頁時出現裂頁
+4. **連續翻頁累積偏移**：同章連翻很多頁後，偏差逐漸累積導致裂頁
+
+這些問題互相糾纏，修好一個常常會讓另一個復發（打地鼠現象）。
 
 ---
 
-## 代表性 log（節錄）
+## 根因分析（共 6 個獨立問題）
 
-```text
-[moveTo] offset.top: 14824 pageStep: 871.3333740234375 page (0-idx): 17 distY: 14812.667358398438 scrollHeight: 21775
-[scrollTo] x:0 y:14812.667358398438 silent:true scrollLeft:0->0
-[scrollTo] x:0 y:15684.000732421875 silent:true scrollLeft:0->0
-[scrolledLocation] index: 13 startPos: 15684.00065612793 endPos: 16535.334030151367 stopPos: 851.3333740234375 currPage: 19 endPage: 20 totalPages: 84 vertical: true rtl: true
+### 根因 1: 浮點數 pageStep 造成累積偏移
+
+`getPageStep()` 在 vertical 模式下使用 `getBoundingClientRect().height`，會回傳浮點數（如 `851.3359375`）。
+連續翻頁時 `pageIndex * pageStep` 的浮點數乘法會累積誤差，導致 scroll 位置逐漸偏離頁面邊界。
+
+**症狀**：連續翻很多頁後出現裂頁，且越翻越嚴重。
+
+**修復**：`getPageStep()` 在 vertical 模式下加 `Math.floor(raw)` 取整。
+
+```javascript
+// index.js getPageStep() — vertical 路徑
+const raw = (bounds && bounds.height) || ... || 0;
+return Math.floor(raw); // 防止浮點數累積偏移
 ```
 
-關鍵現象：
-- 先發生一次 `moveTo()`
-- 接著又出現第二次 `scrollTo()` 把位置往後推
-- 最終頁面停在裂頁位置
+### 根因 2: `next()`/`prev()` 使用相對 `scrollBy` 造成漂移
 
----
+`next()` 和 `prev()` 原本用 `scrollBy(0, pageStep)` 做相對捲動。因為瀏覽器的 DPR snap（如 DPR=1.5 時 scrollTop 會被 snap 到 2/3 px 的倍數），每次 scrollBy 都會引入微小偏差。
 
-## 一開始的懷疑方向
+**症狀**：連續翻頁時 scrollTop 逐漸偏離 page grid。
 
-### 1) vertical paginated 的 page step 計算不一致
-曾懷疑是：
-- `moveTo()` / `next()` / `prev()` 用的 page step
-- 與 `scrolledLocation()` 計算目前頁用的可視高度
+**修復**：改用 `scrollToPageIndex(targetPage)` 做絕對定位。
 
-兩者不一致，造成 scroll snap 停在頁縫中間。
-
-因此曾在 `frontend/src/lib/epubjs/managers/default/index.js` 補強：
-- `vertical` 路徑的 `getPageStep()`
-- `scrollToPageIndex()` / `moveTo()` / `next()` / `prev()` 都改用同一套 vertical page-step 邏輯
-- `updateAxis()` 在 spread 狀態變化時立即 `updateLayout()`
-
-這些修正讓 vertical 路徑更一致，但**沒有真正解掉這次裂頁問題**。
-
----
-
-## 真正根因
-
-### `display(cfi)` 後又被 `section_page` 做第二次 restore
-`EpubReader.svelte` 的進度恢復流程原本是：
-
-1. `await rendition.display(savedProgress.cfi)`
-2. 若有 `savedProgress.section_page`，再呼叫 manager 的 page-based restore
-
-這個做法對一般 horizontal 書可用，但對這本 **RTL + vertical + paginated** 書會造成：
-
-- `display(cfi)` 已先透過 epub.js 做一次正確定位
-- 緊接著又依 `section_page` 再做一次 page-based 校正
-- 第二次校正把畫面推到頁與頁中間
-- 最終出現「兩頁各露一半」的裂頁畫面
-
-也就是說，**問題不是只有 page step，而是 vertical 書被重複定位兩次**。
-
----
-
-## 最終修復
-
-### 在 vertical 書跳過 `section_page` 二次 restore
-修改：`frontend/src/lib/components/reader/EpubReader.svelte`
-
-在：
-
-```ts
-await rendition.display(savedProgress.cfi);
+```javascript
+// index.js next() — vertical paginated
+const pageStep = this.getPageStep();
+const currentPage = Math.round(this.container.scrollTop / pageStep);
+const targetPage = currentPage + 1;
+this.scrollToPageIndex(targetPage);
 ```
 
-之後，加入判斷：
+### 根因 3: `counter()` 的 prepend 補償未 snap 到 page grid
 
-- 若 `mgr.settings.axis === 'vertical'`
-- 則**不再**套用 `savedProgress.section_page` 的 page-based restore
-- 只保留 `display(cfi)` 的定位結果
+章節跳轉時 `prepend` 新內容後，`counter(bounds)` 用 `scrollBy(0, heightDelta)` 補償。
+`heightDelta` 不一定是 pageStep 的整數倍，導致補償後 scrollTop 不在頁面邊界。
 
-### 保留的 fork 強化
-`frontend/src/lib/epubjs/managers/default/index.js` 仍保留先前補過的 vertical 路徑改善：
+**症狀**：章節二往回翻到章節一最後幾頁時出現裂頁。
 
-- `updateAxis()` 在 spread 狀態改變時重算 layout
-- `scrollToPageIndex()` / `moveTo()` / `next()` / `prev()` 走 vertical-aware page step
+**修復**：`counter()` 改為計算補償後的目標頁碼，再 snap 到 page grid。
 
-雖然這些不是這次最終命中的核心修復，但可避免 vertical 分頁路徑日後再出現不一致。
+```javascript
+// index.js counter() — vertical paginated
+const targetTop = Math.max(0, Math.min(topBefore + delta, maxScrollable));
+const targetPage = Math.max(0, Math.floor((targetTop + 1) / pageStep));
+const snappedTop = targetPage * pageStep;
+this.scrollTo(0, snappedTop, true);
+```
+
+### 根因 4: `prev()` 跨章節時缺少 scroll-to-last-page
+
+Horizontal 模式的 `prev()` 在 prepend 後會 `scrollTo(scrollWidth - delta)` 跳到最後一頁。
+Vertical 模式沒有對應邏輯，依賴 `counter()` 的補償，但補償結果可能不精確。
+
+**症狀**：從章節二往回翻時到的不是章節一的最後一頁。
+
+**修復**：為 vertical paginated 的 `prev()` 加入明確的 scroll-to-last-page。
+
+```javascript
+// index.js prev() — vertical paginated, after prepend
+const pageStep = this.getPageStep();
+const maxScroll = this.container.scrollHeight - pageStep;
+const lastPage = Math.max(0, Math.floor((maxScroll + 1) / pageStep));
+this.scrollToPageIndex(lastPage);
+```
+
+### 根因 5: `scrolledLocation()` 的 `Math.ceil` 被 sub-pixel noise 干擾
+
+`scrolledLocation()` 用 `Math.ceil(startPos / stopPos)` 計算目前頁碼。
+`startPos` 由 `getBoundingClientRect()` 計算，會帶入 ~0.003px 的 sub-pixel 雜訊。
+在精確的頁面邊界上，`Math.ceil(66.0000035) = 67` 而非預期的 66，導致頁碼永遠虛高 +1。
+
+**症狀**：
+- 報告的頁碼比實際位置多 1
+- save/restore round-trip 不一致（存 page 67，restore 到 page 66 的位置，但報告 page 68）
+
+**修復**：vertical paginated 模式改用 `Math.round`（scroll 位置保證在整數 page 邊界，sub-pixel noise < 0.5）。
+
+```javascript
+// index.js scrolledLocation()
+let currPage = vertical && this.isPaginated
+    ? Math.round(startPos / stopPos)
+    : Math.ceil(startPos / stopPos);
+let endPage = vertical && this.isPaginated
+    ? Math.round(endPos / stopPos)
+    : Math.ceil(endPos / stopPos);
+```
+
+### 根因 6: pageStep 在 font/CSS load 前後不同
+
+初始 render 時 container 高度可能是 871px（預設字型），font load 後變成 851px。
+`section_page` 校正在 871 的 grid 上成功（`scrollToPageIndex(16)` → 16×871=13936），
+但 font load 後 pageStep 變 851，13936 不在 851 的 grid 上（13936 % 851 = 320）→ 裂頁。
+
+由於 `scrollToPageIndex` 已「成功」回傳 true，`_lastTargetPage` 被清除，`afterResized` 無法重試。
+
+**症狀**：某些頁面 re-enter 出現裂頁，翻一頁就消失。
+
+**修復**（三層防禦）：
+
+1. **EpubReader.svelte**：vertical 模式不在初始 `scrollToPageIndex` 成功後清除 `_lastTargetPage`。
+   讓 `afterResized` 在 font load 完成後以穩定的 pageStep 重新套用。
+
+2. **index.js `afterResized()`**：加入 vertical paginated re-snap 邏輯。
+   內容 resize 後若 `scrollTop % pageStep` 偏離 page grid 超過 2px，自動 snap 回最近的頁面。
+
+3. **EpubReader.svelte `setTimeout`**：150ms 延遲後再做一次 re-snap 檢查。
+   作為 `afterResized` 不觸發時的 fallback。
+
+```javascript
+// index.js afterResized() — re-snap
+if (this.settings.axis === "vertical" && this.isPaginated) {
+    const pageStep = this.getPageStep();
+    if (pageStep > 0) {
+        const scrollTop = this.container.scrollTop;
+        const remainder = scrollTop % pageStep;
+        if (remainder > 2 && pageStep - remainder > 2) {
+            const currentPage = Math.round(scrollTop / pageStep);
+            this.scrollTo(0, currentPage * pageStep, true);
+        }
+    }
+}
+```
 
 ---
 
-## 驗證結果
+## 額外修復：horizontal LTR 書的 re-enter 回歸
 
-修正後：
+在修改 `_lastTargetPage` 邏輯時不小心引入回歸：horizontal 模式下即使 `scrollToPageIndex` 失敗
+（`scrollWidth` 尚未完全展開），`_lastTargetPage` 也被清除，導致 `afterResized` 無法重試。
 
-- 手機板重新開啟這本 RTL 直排書
-- 畫面恢復正常
-- 不再出現同時露出兩頁各一半的裂頁現象
+**修復**：加入 `ok &&` 條件檢查，只在成功時清除。
+
+```javascript
+// EpubReader.svelte — section_page 校正
+const ok = mgr.scrollToPageIndex(targetPage);
+// horizontal：成功才清除，失敗留給 afterResized 重試
+// vertical：永遠不清除，留給 afterResized 以穩定 pageStep 重新套用
+if (ok && mgr?.settings?.axis !== 'vertical') {
+    mgr._lastTargetPage = null;
+}
+```
 
 ---
 
-## 備註
+## 修改的檔案總結
 
-這次問題的關鍵教訓是：
+### `frontend/src/lib/epubjs/managers/default/index.js`
 
-- `CFI restore` 與 `section_page restore` 不能在所有 writing mode / axis 上一概而論
-- 對 `vertical paginated` 書，`display(cfi)` 後再做 page-based restore 可能反而破壞定位
-- 後續若再做進度恢復優化，應將 restore 策略區分為：
-  - horizontal paginated
-  - vertical paginated
-  - scrolled
+| 函數 | 修改 |
+|------|------|
+| `getPageStep()` | vertical 模式取 `Math.floor()` 整數 |
+| `next()` / `prev()` | vertical paginated 改用 `scrollToPageIndex` 絕對定位 |
+| `prev()` | 加入 vertical paginated 的 scroll-to-last-page |
+| `counter()` | vertical paginated 改為 snap to page grid |
+| `scrolledLocation()` | vertical paginated 的 `currPage`/`endPage` 改用 `Math.round` |
+| `afterResized()` | 加入 vertical paginated re-snap（`scrollTop % pageStep` 偏離時自動修正）|
+
+### `frontend/src/lib/components/reader/EpubReader.svelte`
+
+| 位置 | 修改 |
+|------|------|
+| section_page 校正 | 全模式啟用；vertical 不清 `_lastTargetPage`；horizontal 只在成功時清 |
+| setTimeout snap | 從 `snap.snap(0)` 改為 vertical re-snap 檢查（150ms fallback）|
+
+---
+
+## 關鍵教訓
+
+### 1. Sub-pixel 問題是一整個系列
+與 debug 004、005 同源。DPR snap、`getBoundingClientRect` 浮點數、`scrollBy` 累積偏差
+在 vertical paginated 模式下特別容易觸發，因為涉及 Y 軸大量 scroll 計算。
+
+### 2. 「打地鼠」問題的解法是多層防禦
+這次問題之所以反覆出現，是因為有 6 個獨立根因互相掩蓋：
+- 修好 pageStep 浮點數 → 暴露 scrollBy 累積偏差
+- 修好 scrollBy → 暴露 counter snap 問題
+- 修好 counter → 暴露 Math.ceil sub-pixel inflation
+- 修好 Math.ceil → 暴露 pageStep 在 font load 前後不同
+
+必須全部修好才能穩定。逐一修復時要確保不引入回歸。
+
+### 3. pageStep 在生命週期不同時間可能不同
+初始 render 時 container 高度（如 871）與 font load 後的高度（如 851）不同。
+任何在初始 render 時計算的 scroll 位置，在 font load 後都可能失效。
+因此需要 `afterResized` re-snap 或延遲校正機制。
+
+### 4. `_lastTargetPage` 是重要的 retry 機制
+`scrollToPageIndex` 在 scrollWidth/scrollHeight 尚未完全展開時會失敗或用錯 pageStep。
+`_lastTargetPage` 讓 `afterResized` 可以在 content 穩定後重試。
+**不可在 scrollToPageIndex 失敗時清除它**（horizontal 回歸的教訓）。
+**vertical 模式更不可清除**，因為 pageStep 本身可能在 font load 後改變。
+
+### 5. restore 策略必須按 axis 區分
+- **horizontal paginated**：`scrollToPageIndex` 成功即清除 `_lastTargetPage`，`afterResized` 做 fallback
+- **vertical paginated**：`scrollToPageIndex` 不清除 `_lastTargetPage`，`afterResized` 做 re-snap，150ms setTimeout 做 fallback
+- **scrolled**：不需要 page-based restore
