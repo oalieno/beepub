@@ -11,7 +11,7 @@
   onclick={() => goto(`/books/${book.id}`)}
 >
   <!-- Cover with book shadow -->
-  <div class="aspect-[2/3] rounded-lg overflow-hidden book-shadow book-shadow-hover transition-all duration-300 mb-3">
+  <div class="aspect-[2/3] rounded-sm overflow-hidden book-shadow book-shadow-hover transition-all duration-300 mb-3">
     {#if book.cover_path}
       <img
         src="/covers/{book.id}.jpg"
