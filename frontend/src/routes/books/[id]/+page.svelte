@@ -11,7 +11,7 @@
   import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut, HighlightOut } from '$lib/types';
   import HighlightList from '$lib/components/HighlightList.svelte';
   import { UserRole } from '$lib/types';
-  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink, Star, StarHalf } from '@lucide/svelte';
+  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink, Star, StarHalf, EllipsisVertical } from '@lucide/svelte';
 
   const SOURCE_META: Record<string, { label: string; color: string; logo: string }> = {
     goodreads: { label: 'Goodreads', color: '#5C4B3A', logo: 'g' },
@@ -38,6 +38,7 @@
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
+  let showAdminMenu = $state(false);
   let editForm = $state({ title: '', authors: '', description: '', publisher: '', published_date: '' });
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
@@ -172,10 +173,11 @@
       <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
     </div>
   {:else if book}
-    <div class="flex flex-col md:flex-row gap-10">
+    <!-- Hero Section -->
+    <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->
       <div class="flex-shrink-0 w-64 mx-auto md:mx-0">
-        <div class="aspect-[2/3] rounded-lg overflow-hidden book-shadow">
+        <div class="aspect-[2/3] rounded-sm overflow-hidden book-shadow">
           {#if book.cover_path}
             <img src="/covers/{book.id}.jpg" alt="{book.display_title} cover" class="w-full h-full object-cover" />
           {:else}
@@ -184,56 +186,14 @@
             </div>
           {/if}
         </div>
-
-        <!-- Actions -->
-        <div class="mt-5 flex flex-col gap-2.5">
-          <a
-            href="/books/{book.id}/read"
-            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 py-3 rounded-xl transition-colors"
-          >
-            <BookOpen size={16} />
-            Start Reading
-          </a>
-          <div class="flex gap-2">
-            <button
-              class="flex-1 flex items-center justify-center gap-1.5 bg-card card-soft text-foreground px-3 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all"
-              onclick={toggleFavorite}
-            >
-              <Heart size={14} class={interaction?.is_favorite ? 'fill-red-500 text-red-500' : ''} />
-              {interaction?.is_favorite ? 'Saved' : 'Save'}
-            </button>
-            <button
-              class="flex-1 flex items-center justify-center gap-1.5 bg-card card-soft text-foreground px-3 py-2.5 rounded-xl text-sm font-medium hover:shadow-md transition-all"
-              onclick={() => (showAddToShelf = true)}
-            >
-              <BookMarked size={14} />
-              Shelf
-            </button>
-          </div>
-        </div>
       </div>
 
-      <!-- Details -->
-      <div class="flex-1 min-w-0">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div>
-            <h1 class="text-3xl font-bold leading-tight text-foreground">{book.display_title ?? 'Untitled'}</h1>
-            {#if (book.display_authors ?? []).length > 0}
-              <p class="text-muted-foreground text-lg mt-1.5">{(book.display_authors ?? []).join(', ')}</p>
-            {/if}
-          </div>
-          {#if isAdmin}
-            <div class="flex items-center gap-1 flex-shrink-0 self-start sm:self-auto">
-              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" onclick={() => (showEditModal = true)} title="Edit metadata">
-                <Edit size={14} />
-              </button>
-              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors" onclick={handleRefreshMeta} title="Refresh metadata">
-                <RefreshCw size={14} />
-              </button>
-              <button class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-destructive hover:bg-destructive/10 transition-colors" onclick={handleDelete} title="Delete book">
-                <Trash2 size={14} />
-              </button>
-            </div>
+      <!-- Info -->
+      <div class="flex-1 min-w-0 flex flex-col pt-6">
+        <div>
+          <h1 class="text-4xl font-bold leading-tight text-foreground">{book.display_title ?? 'Untitled'}</h1>
+          {#if (book.display_authors ?? []).length > 0}
+            <p class="text-muted-foreground text-lg mt-2">{(book.display_authors ?? []).join(', ')}</p>
           {/if}
         </div>
 
@@ -243,117 +203,162 @@
           <StarRating value={interaction?.rating ?? null} onchange={handleRating} />
         </div>
 
-        <!-- External Ratings -->
+        <!-- External Ratings (compact inline) -->
         {#if externalMeta.length > 0}
-          <div class="mt-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {#each externalMeta as meta}
-                {@const src = SOURCE_META[meta.source] ?? { label: meta.source, color: '#666', logo: '?' }}
-                {@const stars = meta.rating != null ? renderStars(meta.rating) : null}
-                <div class="bg-card card-soft rounded-2xl p-4 flex flex-col gap-2.5">
-                  <!-- Source header -->
-                  <div class="flex items-center gap-2.5">
-                    <span
-                      class="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                      style="background-color: {src.color}"
-                    >{src.logo}</span>
-                    <span class="font-semibold text-foreground text-sm">{src.label}</span>
+          <div class="mt-4 flex flex-wrap items-center gap-4">
+            {#each externalMeta as meta}
+              {@const src = SOURCE_META[meta.source] ?? { label: meta.source, color: '#666', logo: '?' }}
+              {@const stars = meta.rating != null ? renderStars(meta.rating) : null}
+              <a
+                href={meta.source_url ?? '#'}
+                target={meta.source_url ? '_blank' : undefined}
+                rel={meta.source_url ? 'noopener' : undefined}
+                class="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                onclick={meta.source_url ? undefined : (e) => e.preventDefault()}
+              >
+                <span class="text-muted-foreground text-sm font-medium">{src.label}</span>
+                {#if meta.rating != null && stars}
+                  <span class="text-lg font-bold text-foreground">{meta.rating.toFixed(1)}</span>
+                  <div class="flex items-center gap-px">
+                    {#each Array(stars.full) as _}
+                      <Star size={12} class="fill-muted-foreground text-muted-foreground" />
+                    {/each}
+                    {#if stars.half}
+                      <StarHalf size={12} class="fill-muted-foreground text-muted-foreground" />
+                    {/if}
+                    {#each Array(stars.empty) as _}
+                      <Star size={12} class="text-muted-foreground/30" />
+                    {/each}
                   </div>
-                  <!-- Rating row -->
-                  {#if meta.rating != null && stars}
-                    <div class="flex items-center gap-2">
-                      <span class="text-2xl font-bold" style="color: {src.color}">{meta.rating.toFixed(1)}</span>
-                      <div class="flex items-center gap-px">
-                        {#each Array(stars.full) as _}
-                          <Star size={16} class="fill-amber-500 text-amber-500" />
-                        {/each}
-                        {#if stars.half}
-                          <StarHalf size={16} class="fill-amber-500 text-amber-500" />
-                        {/if}
-                        {#each Array(stars.empty) as _}
-                          <Star size={16} class="text-amber-500/30" />
-                        {/each}
-                      </div>
-                    </div>
-                  {:else}
-                    <p class="text-muted-foreground text-sm">No rating</p>
-                  {/if}
-                  <!-- Count -->
-                  {#if meta.rating_count != null}
-                    <p class="text-muted-foreground text-xs">{meta.rating_count.toLocaleString()} ratings</p>
-                  {/if}
-                  <!-- Link -->
-                  {#if meta.source_url}
-                    <a
-                      href={meta.source_url}
-                      target="_blank"
-                      rel="noopener"
-                      class="inline-flex items-center gap-1.5 text-xs font-medium hover:underline mt-auto"
-                      style="color: {src.color}"
-                    >
-                      View Details
-                      <ExternalLink size={11} />
-                    </a>
-                  {/if}
-                </div>
-              {/each}
-            </div>
+                {:else}
+                  <span class="text-muted-foreground text-sm">-</span>
+                {/if}
+              </a>
+            {/each}
           </div>
         {/if}
 
-        <!-- Metadata -->
-        <div class="mt-6 bg-card card-soft rounded-2xl p-5">
-          <div class="grid grid-cols-2 gap-3 text-sm">
+        <!-- Action Buttons -->
+        <div class="mt-auto pt-6 flex items-center gap-3">
+          <a
+            href="/books/{book.id}/read"
+            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-6 py-3 rounded-full transition-colors"
+          >
+            <BookOpen size={16} />
+            Start Reading
+          </a>
+          <button
+            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            onclick={toggleFavorite}
+            title={interaction?.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+          >
+            <Heart size={16} class={interaction?.is_favorite ? 'fill-red-500 text-red-500' : ''} />
+          </button>
+          <button
+            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            onclick={() => (showAddToShelf = true)}
+            title="Add to bookshelf"
+          >
+            <BookMarked size={16} />
+          </button>
+          {#if isAdmin}
+            <div class="relative">
+              <button
+                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
+                onclick={() => (showAdminMenu = !showAdminMenu)}
+                title="Admin actions"
+              >
+                <EllipsisVertical size={16} />
+              </button>
+              {#if showAdminMenu}
+                <button class="fixed inset-0 z-40" onclick={() => (showAdminMenu = false)} aria-label="Close menu"></button>
+                <div class="absolute left-0 bottom-full mb-2 z-50 bg-card border border-border rounded-xl shadow-lg whitespace-nowrap">
+                  <button
+                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors rounded-t-xl"
+                    onclick={() => { showAdminMenu = false; showEditModal = true; }}
+                  >
+                    <Edit size={14} class="flex-shrink-0" />
+                    Edit metadata
+                  </button>
+                  <button
+                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
+                    onclick={() => { showAdminMenu = false; handleRefreshMeta(); }}
+                  >
+                    <RefreshCw size={14} class="flex-shrink-0" />
+                    Refresh metadata
+                  </button>
+                  <button
+                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors rounded-b-xl"
+                    onclick={() => { showAdminMenu = false; handleDelete(); }}
+                  >
+                    <Trash2 size={14} class="flex-shrink-0" />
+                    Delete book
+                  </button>
+                </div>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+
+    <!-- Separator -->
+    <div class="border-t border-border my-8"></div>
+
+    <!-- Description + Metadata -->
+    <div class="flex flex-col md:flex-row gap-10">
+      {#if book.description ?? book.epub_description}
+        <div class="flex-1 min-w-0">
+          <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
+          <div class="text-muted-foreground leading-relaxed prose-description">
+            {@html book.description ?? book.epub_description}
+          </div>
+        </div>
+      {/if}
+
+      {#if (book.publisher ?? book.epub_publisher) || (book.published_date ?? book.epub_published_date) || book.epub_language || book.epub_isbn}
+        <div class="flex-shrink-0 w-full md:w-64">
+          <div class="flex flex-col gap-4 text-sm">
             {#if book.publisher ?? book.epub_publisher}
-              <div><span class="text-muted-foreground block text-xs">Publisher</span> <span class="text-foreground font-medium">{book.publisher ?? book.epub_publisher}</span></div>
+              <div><span class="text-muted-foreground block text-xs mb-0.5">Publisher</span> <span class="text-foreground font-medium">{book.publisher ?? book.epub_publisher}</span></div>
             {/if}
             {#if book.published_date ?? book.epub_published_date}
-              <div><span class="text-muted-foreground block text-xs">Published</span> <span class="text-foreground font-medium">{book.published_date ?? book.epub_published_date}</span></div>
+              <div><span class="text-muted-foreground block text-xs mb-0.5">Published</span> <span class="text-foreground font-medium">{book.published_date ?? book.epub_published_date}</span></div>
             {/if}
             {#if book.epub_language}
-              <div><span class="text-muted-foreground block text-xs">Language</span> <span class="text-foreground font-medium">{book.epub_language}</span></div>
+              <div><span class="text-muted-foreground block text-xs mb-0.5">Language</span> <span class="text-foreground font-medium">{book.epub_language}</span></div>
             {/if}
             {#if book.epub_isbn}
-              <div><span class="text-muted-foreground block text-xs">ISBN</span> <span class="text-foreground font-medium">{book.epub_isbn}</span></div>
+              <div><span class="text-muted-foreground block text-xs mb-0.5">ISBN</span> <span class="text-foreground font-medium">{book.epub_isbn}</span></div>
             {/if}
           </div>
         </div>
-
-        <!-- Highlights -->
-        {#if bookHighlights.length > 0}
-          <div class="mt-6">
-            <h2 class="text-xl font-bold mb-3 text-foreground">Highlights</h2>
-            <div class="bg-card card-soft rounded-2xl p-4 max-h-80 overflow-y-auto">
-              <HighlightList
-                highlights={bookHighlights}
-                onselect={(hl) => goto(`/books/${bookId}/read`)}
-                ondelete={async (hl) => {
-                  if (!$authStore.token) return;
-                  try {
-                    await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
-                    bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
-                    toastStore.success('Highlight removed');
-                  } catch (e) {
-                    toastStore.error((e as Error).message);
-                  }
-                }}
-              />
-            </div>
-          </div>
-        {/if}
-
-        <!-- Description -->
-        {#if book.description ?? book.epub_description}
-          <div class="mt-6">
-            <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
-            <div class="text-muted-foreground leading-relaxed prose-description">
-              {@html book.description ?? book.epub_description}
-            </div>
-          </div>
-        {/if}
-
-      </div>
+      {/if}
     </div>
+
+    <!-- Highlights -->
+    {#if bookHighlights.length > 0}
+      <div class="border-t border-border my-8"></div>
+      <div>
+        <h2 class="text-xl font-bold mb-3 text-foreground">Highlights</h2>
+        <div class="bg-card card-soft rounded-2xl p-4 max-h-80 overflow-y-auto">
+          <HighlightList
+            highlights={bookHighlights}
+            onselect={(hl) => goto(`/books/${bookId}/read`)}
+            ondelete={async (hl) => {
+              if (!$authStore.token) return;
+              try {
+                await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
+                bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
+                toastStore.success('Highlight removed');
+              } catch (e) {
+                toastStore.error((e as Error).message);
+              }
+            }}
+          />
+        </div>
+      </div>
+    {/if}
   {/if}
 </div>
 
