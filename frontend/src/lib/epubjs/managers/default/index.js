@@ -376,13 +376,35 @@ class DefaultViewManager {
     }
   }
 
+  getPageStep() {
+    if (!this.layout) {
+      return 0;
+    }
+
+    if (this.settings.axis === "vertical") {
+      const bounds =
+        this.container && this.container.getBoundingClientRect
+          ? this.container.getBoundingClientRect()
+          : null;
+      const visibleHeight = bounds && bounds.height ? bounds.height : 0;
+
+      return (
+        (visibleHeight && Math.min(visibleHeight, window.innerHeight)) ||
+        (this.container && this.container.offsetHeight) ||
+        this.layout.height
+      );
+    }
+
+    return this.layout.delta;
+  }
+
   scrollToPageIndex(pageIndex) {
     if (!this.isPaginated || !this.layout || this.layout.delta <= 0) {
       return false;
     }
 
     const vertical = this.settings.axis === "vertical";
-    const pageStep = vertical ? this.layout.height : this.layout.delta;
+    const pageStep = this.getPageStep();
     if (!pageStep || pageStep <= 0) {
       return false;
     }
@@ -433,7 +455,7 @@ class DefaultViewManager {
       distY = offset.top;
     } else {
       if (vertical) {
-        const pageStep = this.layout.height;
+        const pageStep = this.getPageStep();
         distY = Math.floor((offset.top + 3) / pageStep) * pageStep;
 
         console.log(
@@ -644,12 +666,13 @@ class DefaultViewManager {
       }
     } else if (this.isPaginated && this.settings.axis === "vertical") {
       this.scrollTop = this.container.scrollTop;
+      const pageStep = this.getPageStep();
 
       let top =
         Math.round(this.container.scrollTop) + this.container.offsetHeight;
 
       if (top < this.container.scrollHeight) {
-        this.scrollBy(0, this.layout.height, true);
+        this.scrollBy(0, pageStep, true);
       } else {
         next = this.views.last().section.next();
       }
@@ -764,11 +787,12 @@ class DefaultViewManager {
       }
     } else if (this.isPaginated && this.settings.axis === "vertical") {
       this.scrollTop = this.container.scrollTop;
+      const pageStep = this.getPageStep();
 
       let top = this.container.scrollTop;
 
       if (top > 0) {
-        this.scrollBy(0, -this.layout.height, true);
+        this.scrollBy(0, -pageStep, true);
       } else {
         prev = this.views.first().section.prev();
       }
@@ -1277,10 +1301,20 @@ class DefaultViewManager {
     }
 
     if (this.layout) {
+      const prevSpread = this.layout.props.spread;
+      const prevDivisor = this.layout.divisor;
+
       if (axis === "vertical") {
         this.layout.spread("none");
       } else {
         this.layout.spread(this.layout.settings.spread);
+      }
+
+      if (
+        prevSpread !== this.layout.props.spread ||
+        prevDivisor !== this.layout.divisor
+      ) {
+        this.updateLayout();
       }
     }
   }

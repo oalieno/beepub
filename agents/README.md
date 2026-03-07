@@ -14,6 +14,8 @@
 
 ## Debug 記錄
 
+注意: 我們 008 以前的部分改動是在處理 hidden book (為了要精確顯示頁數) 的 bug，在 008 以後我們移除了 hidden book 放棄顯示精確頁數，改用百分比顯示。
+
 | 檔案 | 問題 | 狀態 |
 |------|------|------|
 | [debug/001-epub-page-restore.md](debug/001-epub-page-restore.md) | EPUB 頁面還原 off-by-one | ✅ 已修復 |
@@ -24,3 +26,5 @@
 | [debug/006-epub-rtl-footnote-and-vertical-restore.md](debug/006-epub-rtl-footnote-and-vertical-restore.md) | RTL 註腳 + 直書頁面還原 | ✅ 已修復 |
 | [debug/007-mobile-safari-and-book-detail-actions.md](debug/007-mobile-safari-and-book-detail-actions.md) | Mobile UX + Safari 問題 | ✅ 已修復 |
 | [debug/008-remove-hidden-book-percentage-only.md](debug/008-remove-hidden-book-percentage-only.md) | 移除 hidden book，改百分比顯示 | ✅ 已完成 |
+| [debug/009-mobile-rtl-vertical-split-pages.md](debug/009-mobile-rtl-vertical-split-pages.md) | 在手機板（螢幕較小）閱讀某些 **RTL 直排 EPUB** 時，畫面會出現裂頁 | ✅ 已修復 |
+| [debug/010-ios-custom-text-selection.md](debug/010-ios-custom-text-selection.md) | iOS PWA 自訂文字選取（取代原生 UI） | ✅ 已修復 |

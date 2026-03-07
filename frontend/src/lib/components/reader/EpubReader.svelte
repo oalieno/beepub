@@ -26,6 +26,10 @@
   let container: HTMLDivElement;
   let epubBook: any = $state(null);
   let rendition: any = $state(null);
+  const isIOSDevice = typeof navigator !== 'undefined' && (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
   let highlights: HighlightOut[] = $state([]);
   let illustrations: IllustrationOut[] = $state([]);
 
@@ -37,6 +41,22 @@
   let selectedText = $state('');
   let existingHighlight: HighlightOut | null = $state(null);
   let highlightMenuShownAt = 0;
+  let highlightMenuEl: HTMLDivElement | undefined = $state();
+  const MENU_H = 44;
+
+  function setClampedMenuPosition(x: number, y: number) {
+    const cw = container?.clientWidth ?? window.innerWidth;
+    const menuW = highlightMenuEl?.offsetWidth ?? 0;
+    if (menuW > 0) {
+      // Menu is rendered, clamp based on actual width (centered via -translate-x-1/2)
+      highlightMenuX = Math.max(menuW / 2 + 8, Math.min(cw - menuW / 2 - 8, x));
+    } else {
+      // Menu not yet rendered, use unclamped — will be corrected on next call
+      highlightMenuX = x;
+    }
+    // If above viewport, show below selection
+    highlightMenuY = y < MENU_H + 8 ? y + MENU_H + 16 : y;
+  }
 
   // Illustration floating icons
   let illustrationIcons = $state<{ id: string; x: number; y: number; size: number; ill: IllustrationOut }[]>([]);
@@ -170,8 +190,10 @@
         selectedCfi = cfiRange;
         selectedText = text;
         existingHighlight = existing;
-        highlightMenuX = rect.left - scrollLeft + rect.width / 2;
-        highlightMenuY = rect.top - scrollTop - 8;
+        setClampedMenuPosition(
+          rect.left - scrollLeft + rect.width / 2,
+          rect.top - scrollTop - 8,
+        );
         showHighlightMenu = true;
         highlightMenuShownAt = Date.now();
       }
@@ -227,6 +249,9 @@
         // Anchor point of selection (start of the initially selected word)
         let anchorNode: Node | null = null;
         let anchorOffset = 0;
+        let didDragSelect = false; // true if user dragged after long-press
+        let currentRange: Range | null = null;
+        let currentRangeText = '';
 
         const isCJK = (ch: string) =>
           /[\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/.test(ch);
@@ -257,6 +282,11 @@
           const sel = contents.window.getSelection();
           sel.removeAllRanges();
           sel.addRange(caretRange);
+          // Save range/text before re-disabling selection (user-select:none clears getSelection)
+          currentRange = caretRange.cloneRange();
+          currentRangeText = sel.toString().trim();
+          // Immediately re-disable native selection — our overlay handles the visual highlight
+          doc.body.classList.remove('beepub-selecting');
           updateSelectionOverlay(caretRange);
           return caretRange;
         }
@@ -264,10 +294,11 @@
         /** Extend selection from anchor to the caret position at (x, y) */
         function extendSelectionTo(x: number, y: number) {
           if (!anchorNode) return;
+          doc.body.classList.add('beepub-selecting');
           const caretRange = doc.caretRangeFromPoint(x, y);
-          if (!caretRange) return;
+          if (!caretRange) { doc.body.classList.remove('beepub-selecting'); return; }
           const sel = contents.window.getSelection();
-          if (!sel) return;
+          if (!sel) { doc.body.classList.remove('beepub-selecting'); return; }
           const range = doc.createRange();
           const focusNode = caretRange.startContainer;
           const focusOffset = caretRange.startOffset;
@@ -283,14 +314,14 @@
           }
           sel.removeAllRanges();
           sel.addRange(range);
+          currentRange = range.cloneRange();
+          currentRangeText = sel.toString().trim();
+          doc.body.classList.remove('beepub-selecting');
           updateSelectionOverlay(range);
         }
 
-        /** Show the highlight menu for the current selection */
-        function showMenuForSelection() {
-          const sel = contents.window.getSelection();
-          if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-          const range = sel.getRangeAt(0);
+        /** Show the highlight menu for a given range and its text */
+        function showMenuForRange(range: Range, text: string) {
           const cfi = rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(range);
           if (!cfi) return;
           const rect = range.getBoundingClientRect();
@@ -299,17 +330,18 @@
           const scrollTop = mgr?.container?.scrollTop ?? 0;
           const existing = highlights.find((h: HighlightOut) => h.cfi_range === cfi) ?? null;
           selectedCfi = cfi;
-          selectedText = sel.toString().trim();
+          selectedText = text;
           existingHighlight = existing;
-          highlightMenuX = rect.left - scrollLeft + rect.width / 2;
-          highlightMenuY = rect.top - scrollTop - 8;
+          setClampedMenuPosition(
+            rect.left - scrollLeft + rect.width / 2,
+            rect.top - scrollTop - 8,
+          );
           showHighlightMenu = true;
           highlightMenuShownAt = Date.now();
         }
 
         doc.addEventListener('touchstart', (e: TouchEvent) => {
           if (e.touches.length !== 1) return;
-          e.preventDefault(); // Block native long-press magnifier
           const t = e.touches[0];
           startX = t.clientX;
           startY = t.clientY;
@@ -324,12 +356,13 @@
               anchorNode = range.startContainer;
               anchorOffset = range.startOffset;
               touchState = 'selecting';
-              showMenuForSelection();
+              didDragSelect = false;
+              if (currentRange && currentRangeText) showMenuForRange(currentRange, currentRangeText);
             } else {
               touchState = 'idle';
             }
           }, 500);
-        }, { passive: false });
+        }, { passive: true });
 
         doc.addEventListener('touchmove', (e: TouchEvent) => {
           const t = e.touches[0];
@@ -340,8 +373,11 @@
               touchState = 'swiping';
             }
           } else if (touchState === 'selecting') {
-            // Dragging after long-press → extend selection
-            extendSelectionTo(t.clientX, t.clientY);
+            // Dragging after long-press → extend selection (require >15px to avoid finger tremor)
+            if (Math.abs(t.clientX - startX) > 15 || Math.abs(t.clientY - startY) > 15) {
+              didDragSelect = true;
+              extendSelectionTo(t.clientX, t.clientY);
+            }
           }
         }, { passive: true });
 
@@ -350,23 +386,15 @@
           const endX = e.changedTouches[0]?.clientX ?? startX;
           const dx = endX - startX;
 
-          if (touchState === 'swiping') {
-            // Swipe navigation
-            if (Math.abs(dx) > 50) {
-              if (dx < 0) rendition?.next();
-              else rendition?.prev();
-            }
-          } else if (touchState === 'selecting') {
-            // Finished drag-selecting → update menu position for final selection
-            showMenuForSelection();
-          } else if (touchState === 'waiting') {
-            // Quick tap (released before 500ms, no movement)
-            if (!showHighlightMenu) {
-              const w = doc.documentElement.clientWidth;
-              if (startX < w / 3) rendition?.prev();
-              else if (startX > w * 2 / 3) rendition?.next();
-            }
+          if (touchState === 'selecting') {
+            // Only update menu position if user actually dragged to extend
+            if (didDragSelect && currentRange && currentRangeText) showMenuForRange(currentRange, currentRangeText);
+          } else if (touchState === 'waiting' && showHighlightMenu) {
+            // Quick tap to dismiss menu
+            showHighlightMenu = false;
+            clearIOSSelection();
           }
+          // Note: swipe/tap page navigation is handled by epub.js snap module
           touchState = 'idle';
           anchorNode = null;
         }, { passive: true });
@@ -386,6 +414,9 @@
     container.addEventListener('wheel', handleWheel, { passive: false });
 
     rendition.on('selected', (cfiRange: string, contents: { window: Window }) => {
+      // On iOS, our custom touch handler manages selection and menu
+      if (isIOSDevice) return;
+
       const selection = contents.window.getSelection();
       if (!selection || selection.toString().trim() === '') return;
       const text = selection.toString().trim();
@@ -394,10 +425,6 @@
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
-      // rect is relative to the iframe element's origin (top-left of the full-width iframe).
-      // In paginated mode the iframe is wider than the visible area (covers all CSS columns).
-      // The epub-container (rendition.manager.container) scrolls horizontally to show the
-      // current page. Subtract scrollLeft to get the position within the visible area.
       const mgr = rendition?.manager;
       const scrollLeft = mgr?.container?.scrollLeft ?? 0;
       const scrollTop = mgr?.container?.scrollTop ?? 0;
@@ -407,8 +434,7 @@
       selectedCfi = cfiRange;
       selectedText = text;
       existingHighlight = existing;
-      highlightMenuX = x;
-      highlightMenuY = y;
+      setClampedMenuPosition(x, y);
       showHighlightMenu = true;
       highlightMenuShownAt = Date.now();
     });
@@ -517,11 +543,15 @@
         // override scroll position using the saved section page number.
         if (savedProgress.section_page != null && savedProgress.font_size === fontSize && rendition.manager) {
           const mgr = rendition.manager;
-          const targetPage = Math.max(0, savedProgress.section_page - 1); // 0-indexed
-          mgr._lastTarget = null; // Prevent CFI-based re-scroll in afterResized
-          mgr._lastTargetPage = targetPage;
-          if (typeof mgr.scrollToPageIndex === 'function' && mgr.scrollToPageIndex(targetPage)) {
+          if (mgr?.settings?.axis === 'vertical') {
             mgr._lastTargetPage = null;
+          } else {
+            const targetPage = Math.max(0, savedProgress.section_page - 1); // 0-indexed
+            mgr._lastTarget = null; // Prevent CFI-based re-scroll in afterResized
+            mgr._lastTargetPage = targetPage;
+            if (typeof mgr.scrollToPageIndex === 'function' && mgr.scrollToPageIndex(targetPage)) {
+              mgr._lastTargetPage = null;
+            }
           }
           // else: afterResized will handle when scrollWidth expands
         }
@@ -531,6 +561,14 @@
     } catch {
       await rendition.display();
     }
+
+    // Fix half-page offset on re-enter: snap scroll position after layout settles
+    setTimeout(() => {
+      const mgr = rendition?.manager;
+      if (mgr?.snap) {
+        mgr.snap.snap(0); // snap to nearest page boundary
+      }
+    }, 100);
 
     // Apply existing highlights & illustrations
     applyAllHighlights();
@@ -551,6 +589,15 @@
     // Save progress every 30s as backup
     progressTimer = setInterval(saveProgress, 30000);
     window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Fix layout offset when returning to the app (e.g. iOS task switcher)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && rendition) {
+        rendition.resize();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
     prevFontSize = fontSize;
     initialized = true;
   });
@@ -743,7 +790,7 @@
     rendition?.annotations.remove(cfiRange, 'highlight');
   }
 
-  /** Clear iOS custom selection state (remove selecting class + clear selection + overlay) */
+  /** Clear iOS custom selection state (clear selection + overlay) */
   function clearIOSSelection() {
     const c = rendition?.manager?.getContents?.()?.[0];
     if (!c) return;
@@ -828,18 +875,21 @@
   }
 </script>
 
-<div class="relative w-full h-full overflow-hidden touch-pan-x {darkMode ? 'bg-gray-900' : 'bg-white'}">
+<div
+  class="relative w-full h-full overflow-hidden touch-pan-x {darkMode ? 'bg-gray-900' : 'bg-white'}"
+  style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
+>
   <div bind:this={container} class="w-full h-full overflow-hidden {darkMode ? 'bg-gray-900' : 'bg-white'}"></div>
 
   <button
     type="button"
-    class="absolute inset-y-0 left-0 z-10 w-20 sm:w-20 md:w-24"
+    class="absolute inset-y-0 left-0 z-10 w-8"
     aria-label="Previous page"
     onclick={handleLeftTapNav}
   ></button>
   <button
     type="button"
-    class="absolute inset-y-0 right-0 z-10 w-20 sm:w-20 md:w-24"
+    class="absolute inset-y-0 right-0 z-10 w-8"
     aria-label="Next page"
     onclick={handleRightTapNav}
   ></button>
@@ -857,6 +907,7 @@
 
   {#if showHighlightMenu}
     <div
+      bind:this={highlightMenuEl}
       class="absolute z-20 transform -translate-x-1/2 -translate-y-full"
       style="left: {highlightMenuX}px; top: {highlightMenuY}px;"
     >
