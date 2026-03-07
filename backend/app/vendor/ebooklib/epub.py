@@ -33,7 +33,8 @@ except ImportError:
 
 from lxml import etree
 
-from . import __init__ as ebooklib
+import sys as _sys
+ebooklib = _sys.modules[__package__]  # reference package __init__ for ITEM_* constants
 from .utils import Directory, get_pages_for_items, guess_type, parse_html_string, parse_string
 
 # Version of EPUB library

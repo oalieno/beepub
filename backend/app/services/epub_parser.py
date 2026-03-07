@@ -73,10 +73,15 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
 
     def _first_img_src_from_html(content: bytes) -> str | None:
         text = content.decode("utf-8", errors="ignore")
+        # Try <img src="...">
         match = re.search(r"<img[^>]+src=[\"']([^\"']+)[\"']", text, re.IGNORECASE)
-        if not match:
-            return None
-        return match.group(1)
+        if match:
+            return match.group(1)
+        # Try SVG <image xlink:href="..."> or <image href="...">
+        match = re.search(r"<image[^>]+(?:xlink:)?href=[\"']([^\"']+)[\"']", text, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        return None
 
     def _normalize_href(base_href: str, target_href: str) -> str:
         target = (target_href or "").split("#", 1)[0].split("?", 1)[0]
