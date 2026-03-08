@@ -80,7 +80,7 @@
     --hm-5: var(--primary);
   "
 >
-  <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+  <div class="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
     <h3 class="text-lg font-semibold text-foreground">Reading Activity ({year})</h3>
     <span class="text-sm text-muted-foreground">
       {#if totalHours > 0}
