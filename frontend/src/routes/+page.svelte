@@ -6,10 +6,11 @@
   import { toastStore } from '$lib/stores/toast';
   import BookGrid from '$lib/components/BookGrid.svelte';
   import ReadingActivityHeatmap from '$lib/components/ReadingActivityHeatmap.svelte';
+  import CollectionCard from '$lib/components/CollectionCard.svelte';
   import { booksApi } from '$lib/api/books';
   import type { BookOut, BookshelfOut, LibraryOut } from '$lib/types';
   import { goto } from '$app/navigation';
-  import { BookOpen, Library, BookMarked } from '@lucide/svelte';
+  import { BookOpen, BookMarked } from '@lucide/svelte';
 
   let libraries = $state<LibraryOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
@@ -136,17 +137,20 @@
           <p class="text-muted-foreground/70 text-sm mt-1">Create a bookshelf to organize your reading.</p>
         </div>
       {:else}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
           {#each bookshelves.slice(0, 6) as shelf}
-            <a
+            <CollectionCard
               href="/bookshelves/{shelf.id}"
-              class="bg-card card-soft rounded-2xl p-5 hover:shadow-md transition-all duration-200 group"
+              name={shelf.name}
+              previewBookIds={shelf.preview_book_ids}
+              bookCount={shelf.book_count}
+              badgeLabel={shelf.is_public ? 'Public' : 'Private'}
+              badgeClass={shelf.is_public ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}
             >
-              <h3 class="font-semibold text-foreground group-hover:text-primary transition-colors">{shelf.name}</h3>
-              {#if shelf.description}
-                <p class="text-muted-foreground text-sm mt-1.5 line-clamp-2">{shelf.description}</p>
-              {/if}
-            </a>
+              {#snippet icon()}
+                <BookMarked class="text-muted-foreground/50 shrink-0" size={16} />
+              {/snippet}
+            </CollectionCard>
           {/each}
         </div>
       {/if}
