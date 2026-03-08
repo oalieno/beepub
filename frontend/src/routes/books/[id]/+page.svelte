@@ -24,6 +24,8 @@
     { value: 'did_not_finish', label: 'Did Not Finish', icon: CircleX },
   ];
 
+  const CLEAR_STATUS_VALUE = '__clear_status__';
+
   const SOURCE_META: Record<string, { label: string; color: string; logo: string }> = {
     goodreads: { label: 'Goodreads', color: '#5C4B3A', logo: 'g' },
     readmoo: { label: 'Readmoo', color: '#2E7D32', logo: 'R' },
@@ -37,6 +39,14 @@
     const totalFull = full + extra;
     const empty = 5 - totalFull - (half ? 1 : 0);
     return { full: totalFull, half, empty };
+  }
+
+  function handleStatusSelectChange(value: string) {
+    if (value === CLEAR_STATUS_VALUE) {
+      handleStatusChange(null);
+      return;
+    }
+    handleStatusChange(value as ReadingStatus);
   }
 
   let bookId = $derived($page.params.id as string);
@@ -169,14 +179,21 @@
     if (!book || !$authStore.token) return;
     savingStatus = true;
     try {
+      const shouldClearDates = newStatus === null;
       const data: { reading_status: ReadingStatus | null; started_at?: string | null; finished_at?: string | null } = {
         reading_status: newStatus || null,
-        started_at: interaction?.started_at ?? null,
-        finished_at: interaction?.finished_at ?? null,
+        started_at: shouldClearDates ? null : (interaction?.started_at ?? null),
+        finished_at: shouldClearDates ? null : (interaction?.finished_at ?? null),
       };
       await booksApi.updateReadingStatus(bookId, data, $authStore.token);
-      if (interaction) interaction = { ...interaction, reading_status: newStatus || null };
-      else interaction = { rating: null, is_favorite: false, reading_progress: null, reading_status: newStatus || null, started_at: null, finished_at: null, notes: null, updated_at: '' };
+      if (interaction) {
+        interaction = {
+          ...interaction,
+          reading_status: newStatus || null,
+          started_at: shouldClearDates ? null : interaction.started_at,
+          finished_at: shouldClearDates ? null : interaction.finished_at,
+        };
+      } else interaction = { rating: null, is_favorite: false, reading_progress: null, reading_status: newStatus || null, started_at: null, finished_at: null, notes: null, updated_at: '' };
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -309,10 +326,10 @@
             <Select.Root
               type="single"
               value={interaction?.reading_status ?? undefined}
-              onValueChange={(v) => handleStatusChange(v as ReadingStatus)}
+              onValueChange={handleStatusSelectChange}
               disabled={savingStatus}
             >
-              <Select.Trigger class="rounded-full {interaction?.reading_status === 'read' ? 'text-green-600 border-green-600/30' : ''}">
+              <Select.Trigger class="rounded-full bg-white {interaction?.reading_status === 'read' ? 'text-green-600 border-green-600/30' : ''}">
                 {#if interaction?.reading_status}
                   {@const current = READING_STATUS_OPTIONS.find(o => o.value === interaction?.reading_status)}
                   {#if current}
@@ -324,6 +341,13 @@
                 {/if}
               </Select.Trigger>
               <Select.Content align="start">
+                <Select.Item value={CLEAR_STATUS_VALUE}>
+                  {#snippet children()}
+                    <BookMarked size={14} class="text-muted-foreground" />
+                    <span>Clear status</span>
+                  {/snippet}
+                </Select.Item>
+                <Select.Separator />
                 {#each READING_STATUS_OPTIONS as opt}
                   <Select.Item value={opt.value}>
                     {#snippet children({ selected })}
@@ -336,7 +360,7 @@
             </Select.Root>
             {#if interaction?.reading_status === 'read' || interaction?.reading_status === 'currently_reading'}
               <div class="flex items-center gap-2">
-                <label class="text-xs text-muted-foreground">Started</label>
+                <span class="text-xs text-muted-foreground">Started</span>
                 <DatePicker
                   value={interaction?.started_at ?? null}
                   onchange={(v) => handleDateChange('started_at', v ?? '')}
@@ -345,7 +369,7 @@
             {/if}
             {#if interaction?.reading_status === 'read'}
               <div class="flex items-center gap-2">
-                <label class="text-xs text-muted-foreground">Finished</label>
+                <span class="text-xs text-muted-foreground">Finished</span>
                 <DatePicker
                   value={interaction?.finished_at ?? null}
                   onchange={(v) => handleDateChange('finished_at', v ?? '')}

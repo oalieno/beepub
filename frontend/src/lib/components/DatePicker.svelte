@@ -45,7 +45,7 @@
   <Popover.Trigger>
     <button
       type="button"
-      class="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] {value ? 'text-foreground' : 'text-muted-foreground'}"
+      class="flex h-9 items-center gap-2 rounded-full border border-input bg-white px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] {value ? 'text-foreground' : 'text-muted-foreground'}"
     >
       <CalendarIcon size={14} class="text-muted-foreground" />
       {formatDisplay(value)}
