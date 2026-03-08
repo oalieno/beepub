@@ -15,8 +15,8 @@ from app.models.user import User, UserRole
 from app.models.book import Book, ExternalMetadata
 from app.models.library import LibraryBook, LibraryAccess, Library, LibraryVisibility
 from app.schemas.book import BookOut, BookMetadataUpdate, ExternalMetadataOut
-from app.schemas.reading import RatingUpdate, FavoriteUpdate, ProgressUpdate, ProgressOut, HighlightCreate, HighlightUpdate, HighlightOut, InteractionOut
-from app.models.reading import UserBookInteraction, Highlight
+from app.schemas.reading import RatingUpdate, FavoriteUpdate, ProgressUpdate, ProgressOut, HighlightCreate, HighlightUpdate, HighlightOut, InteractionOut, ReadingStatusUpdate, NotesUpdate, ReadingActivityOut
+from app.models.reading import UserBookInteraction, Highlight, ReadingActivity
 from app.services.storage import get_book_path, get_cover_path, save_upload_file, delete_file
 from app.services.epub_parser import parse_epub_metadata, extract_cover
 from app.services.metadata_queue import push_metadata_job
@@ -160,6 +160,25 @@ async def upload_books_bulk(
     return books
 
 
+@router.get("/reading-activity", response_model=list[ReadingActivityOut])
+async def get_reading_activity(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    year: int = Query(None),
+):
+    from datetime import date as date_type
+    if year is None:
+        year = date_type.today().year
+    from sqlalchemy import extract
+    result = await db.execute(
+        select(ReadingActivity).where(
+            ReadingActivity.user_id == current_user.id,
+            extract('year', ReadingActivity.date) == year,
+        ).order_by(ReadingActivity.date)
+    )
+    return result.scalars().all()
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,
@@ -292,7 +311,7 @@ async def get_interaction(
     )
     interaction = result.scalar_one_or_none()
     if not interaction:
-        return InteractionOut(rating=None, is_favorite=False, reading_progress=None, updated_at=datetime.now(timezone.utc))
+        return InteractionOut(rating=None, is_favorite=False, reading_progress=None, reading_status=None, started_at=None, finished_at=None, notes=None, updated_at=datetime.now(timezone.utc))
     return interaction
 
 
@@ -326,6 +345,41 @@ async def update_favorite(
     return {"status": "updated"}
 
 
+@router.put("/{book_id}/reading-status")
+async def update_reading_status(
+    book_id: uuid.UUID,
+    body: ReadingStatusUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.reading import ReadingStatus
+    await _get_book_with_access(book_id, current_user, db)
+    if body.reading_status is not None:
+        valid = {s.value for s in ReadingStatus}
+        if body.reading_status not in valid:
+            raise HTTPException(status_code=400, detail=f"Invalid reading status. Must be one of: {', '.join(valid)}")
+    interaction = await _get_or_create_interaction(current_user.id, book_id, db)
+    interaction.reading_status = body.reading_status
+    interaction.started_at = body.started_at
+    interaction.finished_at = body.finished_at
+    await db.commit()
+    return {"status": "updated"}
+
+
+@router.put("/{book_id}/notes")
+async def update_notes(
+    book_id: uuid.UUID,
+    body: NotesUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _get_book_with_access(book_id, current_user, db)
+    interaction = await _get_or_create_interaction(current_user.id, book_id, db)
+    interaction.notes = body.notes
+    await db.commit()
+    return {"status": "updated"}
+
+
 @router.get("/{book_id}/progress", response_model=ProgressOut)
 async def get_progress(
     book_id: uuid.UUID,
@@ -352,13 +406,39 @@ async def update_progress(
     current_user: Annotated[User, Depends(get_current_user_or_cookie)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    from datetime import datetime, timezone
+    from datetime import datetime, timezone, date as date_type
     await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
+
+    now = datetime.now(timezone.utc)
+    # Track reading minutes from time delta
+    old_last_read = None
+    if interaction.reading_progress and interaction.reading_progress.get("last_read_at"):
+        try:
+            old_last_read = datetime.fromisoformat(interaction.reading_progress["last_read_at"])
+        except (ValueError, TypeError):
+            pass
+    if old_last_read:
+        delta = (now - old_last_read).total_seconds()
+        if 0 < delta < 300:  # < 5 minutes = same session
+            delta_seconds = int(delta)
+            today = date_type.today()
+            result = await db.execute(
+                select(ReadingActivity).where(
+                    ReadingActivity.user_id == current_user.id,
+                    ReadingActivity.date == today,
+                )
+            )
+            activity = result.scalar_one_or_none()
+            if activity:
+                activity.seconds = activity.seconds + delta_seconds
+            else:
+                db.add(ReadingActivity(user_id=current_user.id, date=today, seconds=delta_seconds))
+
     progress: dict = {
         "cfi": body.cfi,
         "percentage": body.percentage,
-        "last_read_at": datetime.now(timezone.utc).isoformat(),
+        "last_read_at": now.isoformat(),
     }
     if body.current_page is not None:
         progress["current_page"] = body.current_page

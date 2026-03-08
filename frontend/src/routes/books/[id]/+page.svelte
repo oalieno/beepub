@@ -8,10 +8,21 @@
   import { toastStore } from '$lib/stores/toast';
   import StarRating from '$lib/components/StarRating.svelte';
   import Modal from '$lib/components/Modal.svelte';
-  import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut, HighlightOut } from '$lib/types';
+  import type { BookOut, ExternalMetadataOut, BookshelfOut, InteractionOut, HighlightOut, ReadingStatus } from '$lib/types';
   import HighlightList from '$lib/components/HighlightList.svelte';
   import { UserRole } from '$lib/types';
-  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink, Star, StarHalf, EllipsisVertical } from '@lucide/svelte';
+  import { Heart, BookOpen, Trash2, Edit, RefreshCw, BookMarked, ExternalLink, Star, StarHalf, EllipsisVertical, NotebookPen, Bookmark, BookOpenCheck, CircleCheck, CircleX } from '@lucide/svelte';
+  import * as Select from '$lib/components/ui/select';
+  import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+  import DatePicker from '$lib/components/DatePicker.svelte';
+  import { marked } from 'marked';
+
+  const READING_STATUS_OPTIONS: { value: ReadingStatus; label: string; icon: typeof Bookmark }[] = [
+    { value: 'want_to_read', label: 'Want to Read', icon: Bookmark },
+    { value: 'currently_reading', label: 'Currently Reading', icon: BookOpenCheck },
+    { value: 'read', label: 'Read', icon: CircleCheck },
+    { value: 'did_not_finish', label: 'Did Not Finish', icon: CircleX },
+  ];
 
   const SOURCE_META: Record<string, { label: string; color: string; logo: string }> = {
     goodreads: { label: 'Goodreads', color: '#5C4B3A', logo: 'g' },
@@ -38,8 +49,11 @@
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
-  let showAdminMenu = $state(false);
+  let showNotesModal = $state(false);
   let editForm = $state({ title: '', authors: '', description: '', publisher: '', published_date: '' });
+  let notesText = $state('');
+  let savingNotes = $state(false);
+  let savingStatus = $state(false);
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
@@ -92,7 +106,7 @@
     try {
       await booksApi.updateRating(bookId, rating, $authStore.token);
       if (interaction) interaction = { ...interaction, rating };
-      else interaction = { rating, is_favorite: false, reading_progress: null, updated_at: '' };
+      else interaction = { rating, is_favorite: false, reading_progress: null, reading_status: null, started_at: null, finished_at: null, notes: null, updated_at: '' };
       toastStore.success('Rating updated');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -105,7 +119,7 @@
     try {
       await booksApi.updateFavorite(bookId, newVal, $authStore.token);
       if (interaction) interaction = { ...interaction, is_favorite: newVal };
-      else interaction = { rating: null, is_favorite: newVal, reading_progress: null, updated_at: '' };
+      else interaction = { rating: null, is_favorite: newVal, reading_progress: null, reading_status: null, started_at: null, finished_at: null, notes: null, updated_at: '' };
       toastStore.success(newVal ? 'Added to favorites' : 'Removed from favorites');
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -148,6 +162,57 @@
       toastStore.success('Metadata refresh queued');
     } catch (e) {
       toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleStatusChange(newStatus: ReadingStatus | null) {
+    if (!book || !$authStore.token) return;
+    savingStatus = true;
+    try {
+      const data: { reading_status: ReadingStatus | null; started_at?: string | null; finished_at?: string | null } = {
+        reading_status: newStatus || null,
+        started_at: interaction?.started_at ?? null,
+        finished_at: interaction?.finished_at ?? null,
+      };
+      await booksApi.updateReadingStatus(bookId, data, $authStore.token);
+      if (interaction) interaction = { ...interaction, reading_status: newStatus || null };
+      else interaction = { rating: null, is_favorite: false, reading_progress: null, reading_status: newStatus || null, started_at: null, finished_at: null, notes: null, updated_at: '' };
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      savingStatus = false;
+    }
+  }
+
+  async function handleDateChange(field: 'started_at' | 'finished_at', value: string) {
+    if (!book || !$authStore.token) return;
+    const dateVal = value || null;
+    try {
+      const data = {
+        reading_status: interaction?.reading_status ?? null,
+        started_at: field === 'started_at' ? dateVal : (interaction?.started_at ?? null),
+        finished_at: field === 'finished_at' ? dateVal : (interaction?.finished_at ?? null),
+      };
+      await booksApi.updateReadingStatus(bookId, data, $authStore.token);
+      if (interaction) interaction = { ...interaction, [field]: dateVal };
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleSaveNotes() {
+    if (!book || !$authStore.token) return;
+    savingNotes = true;
+    try {
+      await booksApi.updateNotes(bookId, notesText || null, $authStore.token);
+      if (interaction) interaction = { ...interaction, notes: notesText || null };
+      else interaction = { rating: null, is_favorite: false, reading_progress: null, reading_status: null, started_at: null, finished_at: null, notes: notesText || null, updated_at: '' };
+      showNotesModal = false;
+      toastStore.success('Notes saved');
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      savingNotes = false;
     }
   }
 
@@ -238,6 +303,58 @@
           </div>
         {/if}
 
+        <!-- Reading Status -->
+        <div class="mt-5">
+          <div class="flex flex-wrap items-center gap-3">
+            <Select.Root
+              type="single"
+              value={interaction?.reading_status ?? undefined}
+              onValueChange={(v) => handleStatusChange(v as ReadingStatus)}
+              disabled={savingStatus}
+            >
+              <Select.Trigger class="rounded-full {interaction?.reading_status === 'read' ? 'text-green-600 border-green-600/30' : ''}">
+                {#if interaction?.reading_status}
+                  {@const current = READING_STATUS_OPTIONS.find(o => o.value === interaction?.reading_status)}
+                  {#if current}
+                    <current.icon size={14} class={interaction?.reading_status === 'read' ? 'text-green-600' : ''} />
+                    {current.label}
+                  {/if}
+                {:else}
+                  Set status
+                {/if}
+              </Select.Trigger>
+              <Select.Content align="start">
+                {#each READING_STATUS_OPTIONS as opt}
+                  <Select.Item value={opt.value}>
+                    {#snippet children({ selected })}
+                      <opt.icon size={14} class={opt.value === 'read' && selected ? 'text-green-600' : 'text-muted-foreground'} />
+                      <span>{opt.label}</span>
+                    {/snippet}
+                  </Select.Item>
+                {/each}
+              </Select.Content>
+            </Select.Root>
+            {#if interaction?.reading_status === 'read' || interaction?.reading_status === 'currently_reading'}
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-muted-foreground">Started</label>
+                <DatePicker
+                  value={interaction?.started_at ?? null}
+                  onchange={(v) => handleDateChange('started_at', v ?? '')}
+                />
+              </div>
+            {/if}
+            {#if interaction?.reading_status === 'read'}
+              <div class="flex items-center gap-2">
+                <label class="text-xs text-muted-foreground">Finished</label>
+                <DatePicker
+                  value={interaction?.finished_at ?? null}
+                  onchange={(v) => handleDateChange('finished_at', v ?? '')}
+                />
+              </div>
+            {/if}
+          </div>
+        </div>
+
         <!-- Action Buttons -->
         <div class="mt-auto pt-6 flex items-center gap-3">
           <a
@@ -261,42 +378,39 @@
           >
             <BookMarked size={16} />
           </button>
+          <button
+            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            onclick={() => { notesText = interaction?.notes ?? ''; showNotesModal = true; }}
+            title="Notes"
+          >
+            <NotebookPen size={16} class={interaction?.notes ? 'text-primary' : ''} />
+          </button>
           {#if isAdmin}
-            <div class="relative">
-              <button
-                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
-                onclick={() => (showAdminMenu = !showAdminMenu)}
-                title="Admin actions"
-              >
-                <EllipsisVertical size={16} />
-              </button>
-              {#if showAdminMenu}
-                <button class="fixed inset-0 z-40" onclick={() => (showAdminMenu = false)} aria-label="Close menu"></button>
-                <div class="absolute left-0 bottom-full mb-2 z-50 bg-card border border-border rounded-xl shadow-lg whitespace-nowrap">
-                  <button
-                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors rounded-t-xl"
-                    onclick={() => { showAdminMenu = false; showEditModal = true; }}
-                  >
-                    <Edit size={14} class="flex-shrink-0" />
-                    Edit metadata
-                  </button>
-                  <button
-                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-foreground hover:bg-secondary transition-colors"
-                    onclick={() => { showAdminMenu = false; handleRefreshMeta(); }}
-                  >
-                    <RefreshCw size={14} class="flex-shrink-0" />
-                    Refresh metadata
-                  </button>
-                  <button
-                    class="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-destructive hover:bg-destructive/10 transition-colors rounded-b-xl"
-                    onclick={() => { showAdminMenu = false; handleDelete(); }}
-                  >
-                    <Trash2 size={14} class="flex-shrink-0" />
-                    Delete book
-                  </button>
-                </div>
-              {/if}
-            </div>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <button
+                  class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
+                  title="Admin actions"
+                >
+                  <EllipsisVertical size={16} />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="start" side="top">
+                <DropdownMenu.Item onclick={() => (showEditModal = true)}>
+                  <Edit size={14} />
+                  Edit metadata
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onclick={handleRefreshMeta}>
+                  <RefreshCw size={14} />
+                  Refresh metadata
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item variant="destructive" onclick={handleDelete}>
+                  <Trash2 size={14} />
+                  Delete book
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           {/if}
         </div>
       </div>
@@ -335,6 +449,23 @@
         </div>
       {/if}
     </div>
+
+    <!-- Notes -->
+    {#if interaction?.notes}
+      <div class="border-t border-border my-8"></div>
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xl font-bold text-foreground">Notes</h2>
+          <button
+            class="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            onclick={() => { notesText = interaction?.notes ?? ''; showNotesModal = true; }}
+          >
+            Edit
+          </button>
+        </div>
+        <div class="bg-card card-soft rounded-2xl p-4 prose-description text-muted-foreground leading-relaxed">{@html marked.parse(interaction.notes)}</div>
+      </div>
+    {/if}
 
     <!-- Highlights -->
     {#if bookHighlights.length > 0}
@@ -389,6 +520,31 @@
       <div class="flex justify-end gap-2 pt-2">
         <button class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground" onclick={() => (showEditModal = false)}>Cancel</button>
         <button class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl" onclick={handleSaveEdit}>Save</button>
+      </div>
+    </div>
+  </Modal>
+
+  <Modal title="Notes" open={showNotesModal} onclose={() => (showNotesModal = false)}>
+    <div class="space-y-4">
+      <div class="space-y-1">
+        <label class="block text-sm text-muted-foreground" for="notes-text">Markdown supported</label>
+        <textarea
+          id="notes-text"
+          bind:value={notesText}
+          rows={10}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none font-mono text-sm"
+          placeholder="Write your notes here..."
+        ></textarea>
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground" onclick={() => (showNotesModal = false)}>Cancel</button>
+        <button
+          class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl disabled:opacity-50"
+          onclick={handleSaveNotes}
+          disabled={savingNotes}
+        >
+          {savingNotes ? 'Saving...' : 'Save'}
+        </button>
       </div>
     </div>
   </Modal>

@@ -94,10 +94,16 @@ export interface ProgressOut {
   last_read_at: string | null;
 }
 
+export type ReadingStatus = 'want_to_read' | 'currently_reading' | 'read' | 'did_not_finish';
+
 export interface InteractionOut {
   rating: number | null;
   is_favorite: boolean;
   reading_progress: ProgressOut | null;
+  reading_status: ReadingStatus | null;
+  started_at: string | null;
+  finished_at: string | null;
+  notes: string | null;
   updated_at: string;
 }
 

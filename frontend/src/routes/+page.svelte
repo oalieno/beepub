@@ -5,6 +5,8 @@
   import { bookshelvesApi } from '$lib/api/bookshelves';
   import { toastStore } from '$lib/stores/toast';
   import BookGrid from '$lib/components/BookGrid.svelte';
+  import ReadingActivityHeatmap from '$lib/components/ReadingActivityHeatmap.svelte';
+  import { booksApi } from '$lib/api/books';
   import type { BookOut, BookshelfOut, LibraryOut } from '$lib/types';
   import { goto } from '$app/navigation';
   import { BookOpen, Library, BookMarked } from '@lucide/svelte';
@@ -12,12 +14,20 @@
   let libraries = $state<LibraryOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let recentBooks = $state<BookOut[]>([]);
+  let readingActivity = $state<{ date: string; seconds: number }[]>([]);
+  let currentYear = new Date().getFullYear();
   let loading = $state(true);
 
   onMount(async () => {
     try {
-      libraries = await librariesApi.list($authStore.token!);
-      bookshelves = await bookshelvesApi.list($authStore.token!);
+      const [libs, shelves, activity] = await Promise.all([
+        librariesApi.list($authStore.token!),
+        bookshelvesApi.list($authStore.token!),
+        booksApi.getReadingActivity(currentYear, $authStore.token!).catch(() => []),
+      ]);
+      libraries = libs;
+      bookshelves = shelves;
+      readingActivity = activity;
 
       // Gather recent books from all libraries
       const allBooks: BookOut[] = [];
@@ -78,6 +88,13 @@
             <p class="text-muted-foreground text-xs mt-0.5">Shelves</p>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- Reading Activity Heatmap -->
+    <section class="mb-12">
+      <div class="inline-block bg-card card-soft rounded-2xl p-6">
+        <ReadingActivityHeatmap data={readingActivity} year={currentYear} />
       </div>
     </section>
 

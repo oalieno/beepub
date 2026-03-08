@@ -67,6 +67,7 @@ beepub/
         │       ├── ui/              # shadcn-svelte 元件
         │       ├── BookCard.svelte, BookGrid.svelte, Toast.svelte
         │       ├── Modal.svelte, StarRating.svelte, Navbar.svelte
+        │       ├── DatePicker.svelte, ReadingActivityHeatmap.svelte
         │       └── reader/ (EpubReader.svelte, Toolbar.svelte, HighlightMenu.svelte)
         └── routes/
             ├── +layout.svelte, +layout.server.ts

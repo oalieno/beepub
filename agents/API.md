@@ -40,12 +40,21 @@ GET    /api/books/{id}/external 取得外部 metadata（評分書評）
 ```
 PUT  /api/books/{id}/rating    body:{rating:1-5|null}
 PUT  /api/books/{id}/favorite  body:{is_favorite:bool}
+PUT  /api/books/{id}/reading-status body:{reading_status:str|null, started_at:date|null, finished_at:date|null}
+PUT  /api/books/{id}/notes     body:{notes:str|null}
+GET  /api/books/{id}/interaction → {rating, is_favorite, reading_progress, reading_status, started_at, finished_at, notes, updated_at}
 GET  /api/books/{id}/progress
 PUT  /api/books/{id}/progress  body:{cfi,percentage,current_page,section_page,...}
+                               （同時累積閱讀秒數到 reading_activity）
 GET  /api/books/{id}/highlights
 POST /api/books/{id}/highlights body:{cfi_range,text,color,note?}
 PUT  /api/books/{id}/highlights/{hid}
 DELETE /api/books/{id}/highlights/{hid}
+```
+
+## 閱讀統計
+```
+GET  /api/books/reading-activity?year=2026  → [{date, seconds}, ...]
 ```
 
 ## Bookshelves

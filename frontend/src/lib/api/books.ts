@@ -1,5 +1,5 @@
 import { get, post, put, del } from './client';
-import type { BookOut, ExternalMetadataOut, HighlightOut, IllustrationOut, InteractionOut, ProgressOut, StylePromptOut } from '$lib/types';
+import type { BookOut, ExternalMetadataOut, HighlightOut, IllustrationOut, InteractionOut, ProgressOut, ReadingStatus, StylePromptOut } from '$lib/types';
 
 export const booksApi = {
   search: (query: string, token: string) =>
@@ -56,6 +56,16 @@ export const booksApi = {
   updateFavorite: (bookId: string, isFavorite: boolean, token: string) =>
     put(`/books/${bookId}/favorite`, { is_favorite: isFavorite }, token),
 
+  updateReadingStatus: (bookId: string, data: {
+    reading_status: ReadingStatus | null;
+    started_at?: string | null;
+    finished_at?: string | null;
+  }, token: string) =>
+    put(`/books/${bookId}/reading-status`, data, token),
+
+  updateNotes: (bookId: string, notes: string | null, token: string) =>
+    put(`/books/${bookId}/notes`, { notes }, token),
+
   getProgress: (bookId: string, token: string) =>
     get(`/books/${bookId}/progress`, token) as Promise<ProgressOut>,
 
@@ -111,4 +121,7 @@ export const booksApi = {
 
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
     `/api/books/${bookId}/illustrations/${illustrationId}/image`,
+
+  getReadingActivity: (year: number, token: string) =>
+    get(`/books/reading-activity?year=${year}`, token) as Promise<{ date: string; seconds: number }[]>,
 };

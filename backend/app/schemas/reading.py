@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from pydantic import BaseModel
 
@@ -61,10 +61,31 @@ class HighlightOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReadingStatusUpdate(BaseModel):
+    reading_status: Optional[str] = None  # want_to_read, currently_reading, read, did_not_finish
+    started_at: Optional[date] = None
+    finished_at: Optional[date] = None
+
+
+class NotesUpdate(BaseModel):
+    notes: Optional[str] = None  # markdown
+
+
+class ReadingActivityOut(BaseModel):
+    date: date
+    seconds: int
+
+    model_config = {"from_attributes": True}
+
+
 class InteractionOut(BaseModel):
     rating: Optional[int]
     is_favorite: bool
     reading_progress: Optional[dict]
+    reading_status: Optional[str]
+    started_at: Optional[date]
+    finished_at: Optional[date]
+    notes: Optional[str]
     updated_at: datetime
 
     model_config = {"from_attributes": True}

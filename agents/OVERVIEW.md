@@ -1,7 +1,7 @@
 # BeePub 專案概述
 
 ## Context
-建立自架電子書管理系統，支援多人使用、多虛擬圖書館、線上閱讀、螢光筆、metadata 爬蟲。
+建立自架電子書管理系統，支援多人使用、多虛擬圖書館、線上閱讀、螢光筆、metadata 爬蟲、閱讀統計。
 部署方式：Docker Compose on NAS。
 
 ## 需求
@@ -9,6 +9,10 @@
 - 多人，管理員控制圖書館存取（public / private + 白名單）
 - 無 DRM epub
 - 新書上傳後自動觸發 metadata 爬取
+- 閱讀狀態追蹤（want_to_read / currently_reading / read / did_not_finish）+ 開始/完成日期
+- 每本書筆記（markdown）
+- 閱讀時間統計（GitHub-style 熱力圖），自動偵測閱讀 session 累積秒數
+- 自動閱讀狀態：讀 2 分鐘後自動設為 currently_reading，讀到最後一頁自動設為 read
 
 ## Tech Stack
 

@@ -13,9 +13,15 @@
   import IllustrationPromptModal from '$lib/components/reader/IllustrationPromptModal.svelte';
   import IllustrationSidebar from '$lib/components/reader/IllustrationSidebar.svelte';
   import IllustrationViewer from '$lib/components/reader/IllustrationViewer.svelte';
-  import type { HighlightOut, IllustrationOut, StylePromptOut } from '$lib/types';
+  import type { HighlightOut, IllustrationOut, InteractionOut, StylePromptOut } from '$lib/types';
 
   let bookId = $derived($page.params.id as string);
+
+  // Auto reading status
+  let interaction: InteractionOut | null = $state(null);
+  let readingTimer: ReturnType<typeof setTimeout> | null = null;
+  const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
+  let autoReadTriggered = false;
 
   let title = $state('');
   let fontFamily = $state('serif');
@@ -56,12 +62,64 @@
     if (savedSize) fontSize = parseInt(savedSize);
     if (savedTheme) darkMode = savedTheme === '1';
     ready = true;
+
+    // Fetch current interaction and start reading timer
+    fetchInteractionAndStartTimer();
   });
 
   onDestroy(() => {
     if (!browser) return;
     document.documentElement.style.overflow = prevHtmlOverflow;
     document.body.style.overflow = prevBodyOverflow;
+    if (readingTimer) clearTimeout(readingTimer);
+  });
+
+  async function fetchInteractionAndStartTimer() {
+    if (!$authStore.token) return;
+    try {
+      interaction = await booksApi.getInteraction(bookId, $authStore.token);
+    } catch { /* ignore */ }
+
+    // Only start timer if status is null or want_to_read
+    if (!interaction?.reading_status || interaction.reading_status === 'want_to_read') {
+      readingTimer = setTimeout(async () => {
+        if (!$authStore.token) return;
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          await booksApi.updateReadingStatus(bookId, {
+            reading_status: 'currently_reading',
+            started_at: today,
+          }, $authStore.token);
+          if (interaction) {
+            interaction.reading_status = 'currently_reading';
+            interaction.started_at = today;
+          }
+        } catch { /* ignore */ }
+      }, READING_DEBOUNCE_MS);
+    }
+  }
+
+  async function autoMarkAsRead() {
+    if (!$authStore.token || !interaction) return;
+    if (interaction.reading_status === 'read' || interaction.reading_status === 'did_not_finish') return;
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      await booksApi.updateReadingStatus(bookId, {
+        reading_status: 'read',
+        started_at: interaction.started_at || today,
+        finished_at: today,
+      }, $authStore.token);
+      interaction.reading_status = 'read';
+      interaction.finished_at = today;
+    } catch { /* ignore */ }
+  }
+
+  $effect(() => {
+    if (percentage >= 99 && !autoReadTriggered && interaction) {
+      autoReadTriggered = true;
+      if (readingTimer) { clearTimeout(readingTimer); readingTimer = null; }
+      autoMarkAsRead();
+    }
   });
 
   function handleFontToggle() {

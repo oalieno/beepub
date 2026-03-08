@@ -64,9 +64,19 @@ PK(bookshelf_id, book_id)
 user_id uuid→users | book_id uuid→books
 rating smallint (1-5, nullable) | is_favorite bool
 reading_progress jsonb {cfi, percentage, current_page, section_page, section_index, total_pages, font_size, ...}
+reading_status varchar(20) (want_to_read, currently_reading, read, did_not_finish, nullable)
+started_at date (nullable) | finished_at date (nullable)
+notes text (markdown, nullable)
 updated_at
 PK(user_id, book_id)
 ```
+
+## reading_activity（閱讀時間統計，每日累積秒數）
+```
+user_id uuid→users | date date | seconds int (default 0)
+PK(user_id, date)
+```
+每次儲存閱讀進度時，計算與上次 last_read_at 的時間差（< 5 分鐘視為同一 session），累加到當天的 seconds。
 
 ## highlights
 ```

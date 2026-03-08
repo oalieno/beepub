@@ -172,3 +172,67 @@
 .prose-description div {
   margin-bottom: 0.5em;
 }
+.prose-description h1,
+.prose-description h2,
+.prose-description h3,
+.prose-description h4 {
+  color: var(--color-foreground);
+  font-weight: 700;
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+.prose-description h1 {
+  font-size: 1.5em;
+}
+.prose-description h2 {
+  font-size: 1.25em;
+}
+.prose-description h3 {
+  font-size: 1.1em;
+}
+.prose-description ul,
+.prose-description ol {
+  padding-left: 1.5em;
+  margin-bottom: 0.75em;
+}
+.prose-description ul {
+  list-style-type: disc;
+}
+.prose-description ol {
+  list-style-type: decimal;
+}
+.prose-description li {
+  margin-bottom: 0.25em;
+}
+.prose-description code {
+  background: var(--color-secondary);
+  padding: 0.15em 0.35em;
+  border-radius: 0.25em;
+  font-size: 0.875em;
+}
+.prose-description pre {
+  background: var(--color-secondary);
+  padding: 0.75em 1em;
+  border-radius: 0.5em;
+  overflow-x: auto;
+  margin-bottom: 0.75em;
+}
+.prose-description pre code {
+  background: none;
+  padding: 0;
+}
+.prose-description blockquote {
+  border-left: 3px solid var(--color-border);
+  padding-left: 1em;
+  margin-bottom: 0.75em;
+  font-style: italic;
+}
+.prose-description hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: 1em 0;
+}
+.prose-description strong {
+  color: var(--color-foreground);
+  font-weight: 600;
+}
