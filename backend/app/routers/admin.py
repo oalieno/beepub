@@ -1,4 +1,5 @@
 import asyncio
+import os
 import uuid
 from typing import Annotated
 
@@ -14,8 +15,8 @@ from app.models.library import Library, LibraryBook
 from app.models.user import User
 from app.schemas.user import UserOut, UserUpdateRole
 from app.services.calibre import (
+    _count_calibre_epubs,
     get_sync_status,
-    read_calibre_books,
     scan_calibre_libraries,
     sync_calibre_library,
 )
@@ -131,7 +132,6 @@ async def link_calibre_library(
         raise HTTPException(status_code=409, detail="Calibre library already linked")
 
     # Verify path exists
-    import os
     db_path = os.path.join(body.calibre_path, "metadata.db")
     if not os.path.isfile(db_path):
         raise HTTPException(status_code=400, detail="No metadata.db found at path")
@@ -208,10 +208,10 @@ async def get_calibre_library_status(
         )
     ).scalar()
 
-    # Count Calibre EPUB books
+    # Count Calibre EPUB books (lightweight count query, not full read)
     try:
-        calibre_books = await asyncio.to_thread(read_calibre_books, library.calibre_path)
-        calibre_count = len(calibre_books)
+        db_path = os.path.join(library.calibre_path, "metadata.db")
+        calibre_count = await asyncio.to_thread(_count_calibre_epubs, db_path)
     except Exception:
         calibre_count = None
 
