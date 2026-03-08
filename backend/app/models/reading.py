@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -17,8 +18,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
+if TYPE_CHECKING:
+    from app.models.book import Book
+    from app.models.user import User
 
-class ReadingStatus(str, enum.Enum):
+
+class ReadingStatus(enum.StrEnum):
     want_to_read = "want_to_read"
     currently_reading = "currently_reading"
     read = "read"

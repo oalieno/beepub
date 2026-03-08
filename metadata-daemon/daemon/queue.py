@@ -56,11 +56,32 @@ async def process_job(book_id: str) -> None:
 
                 # Upsert external_metadata
                 await db.execute(
-                    text("""
+                    text(
+                        """
                         INSERT INTO external_metadata
-                            (id, book_id, source, source_url, rating, rating_count, reviews, raw_data, fetched_at)
+                            (
+                                id,
+                                book_id,
+                                source,
+                                source_url,
+                                rating,
+                                rating_count,
+                                reviews,
+                                raw_data,
+                                fetched_at
+                            )
                         VALUES
-                            (gen_random_uuid(), :book_id, :source, :source_url, :rating, :rating_count, CAST(:reviews AS jsonb), CAST(:raw_data AS jsonb), :fetched_at)
+                            (
+                                gen_random_uuid(),
+                                :book_id,
+                                :source,
+                                :source_url,
+                                :rating,
+                                :rating_count,
+                                CAST(:reviews AS jsonb),
+                                CAST(:raw_data AS jsonb),
+                                :fetched_at
+                            )
                         ON CONFLICT (book_id, source) DO UPDATE SET
                             source_url = EXCLUDED.source_url,
                             rating = EXCLUDED.rating,
@@ -68,7 +89,8 @@ async def process_job(book_id: str) -> None:
                             reviews = EXCLUDED.reviews,
                             raw_data = EXCLUDED.raw_data,
                             fetched_at = EXCLUDED.fetched_at
-                    """),
+                    """
+                    ),
                     {
                         "book_id": book_id,
                         "source": source.source_name,

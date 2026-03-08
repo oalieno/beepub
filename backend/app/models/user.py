@@ -1,5 +1,6 @@
 import enum
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, String
 from sqlalchemy import Enum as SAEnum
@@ -9,8 +10,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.models.base import TimestampMixin
 
+if TYPE_CHECKING:
+    from app.models.bookshelf import Bookshelf
+    from app.models.library import LibraryAccess
+    from app.models.reading import Highlight, UserBookInteraction
 
-class UserRole(str, enum.Enum):
+
+class UserRole(enum.StrEnum):
     admin = "admin"
     user = "user"
 

@@ -27,7 +27,9 @@ class FakeAsyncClient:
         elif query == "極限返航":
             html = """
             <html><body>
-              <a data-testid='bookTitle' href='/book/show/60495597-project-hail-mary'>Project Hail Mary</a>
+              <a data-testid='bookTitle' href='/book/show/60495597-project-hail-mary'>
+                Project Hail Mary
+              </a>
             </body></html>
             """
         else:
@@ -43,7 +45,9 @@ def test_extract_book_links_supports_modern_selector_and_dedup():
     soup = BeautifulSoup(
         """
         <html><body>
-          <a data-testid='bookTitle' href='/book/show/60495597-project-hail-mary'>Project Hail Mary</a>
+          <a data-testid='bookTitle' href='/book/show/60495597-project-hail-mary'>
+            Project Hail Mary
+          </a>
           <a href='/book/show/60495597-project-hail-mary'>Project Hail Mary</a>
         </body></html>
         """,

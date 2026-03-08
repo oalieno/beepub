@@ -16,7 +16,10 @@ class FakeChallengeClient:
         return False
 
     async def get(self, url: str, params: dict | None = None):
-        html = "<html><head><title>Challenged | Kobo.com</title></head><body>bot check</body></html>"
+        html = (
+            "<html><head><title>Challenged | Kobo.com</title></head>"
+            "<body>bot check</body></html>"
+        )
         return httpx.Response(
             403, text=html, request=httpx.Request("GET", url, params=params)
         )

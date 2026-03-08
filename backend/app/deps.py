@@ -40,7 +40,10 @@ async def get_current_user_or_cookie(
     db: Annotated[AsyncSession, Depends(get_db)],
     token: str | None = Cookie(None),
 ) -> User:
-    """Accept auth from Authorization header or 'token' cookie (for browser resource loading)."""
+    """Accept auth from Authorization header or token cookie.
+
+    Cookie auth is used for browser resource loading (e.g., images/fonts).
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Not authenticated",

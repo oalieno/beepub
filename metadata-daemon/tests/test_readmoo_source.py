@@ -96,7 +96,11 @@ def test_extract_book_links_filters_non_book_links_and_dedups():
       <a href='https://readmoo.com/leaderboard/book/instant'>綜合榜</a>
       <h4><a class='product-link' href='https://readmoo.com/book/210217152000101'>極限返航</a></h4>
       <a class='product-link' href='/book/210217152000101'>極限返航</a>
-      <h4><a class='product-link' href='/book/210451960000101'>極限返航（電影書封典藏版）</a></h4>
+      <h4>
+        <a class='product-link' href='/book/210451960000101'>
+          極限返航（電影書封典藏版）
+        </a>
+      </h4>
     </body></html>
     """
 

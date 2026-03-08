@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 import enum
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -21,8 +24,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 from app.models.base import TimestampMixin
 
+if TYPE_CHECKING:
+    from app.models.bookshelf import BookshelfBook
+    from app.models.library import LibraryBook
+    from app.models.reading import Highlight, UserBookInteraction
+    from app.models.user import User
 
-class MetadataSource(str, enum.Enum):
+
+class MetadataSource(enum.StrEnum):
     goodreads = "goodreads"
     readmoo = "readmoo"
     kobo_tw = "kobo_tw"
@@ -58,20 +67,20 @@ class Book(Base, TimestampMixin):
     added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Relationships
-    uploader: Mapped["User"] = relationship("User", foreign_keys=[added_by])
-    library_books: Mapped[list["LibraryBook"]] = relationship(
+    uploader: Mapped[User] = relationship("User", foreign_keys=[added_by])
+    library_books: Mapped[list[LibraryBook]] = relationship(
         "LibraryBook", back_populates="book", cascade="all, delete-orphan"
     )
-    external_metadata: Mapped[list["ExternalMetadata"]] = relationship(
+    external_metadata: Mapped[list[ExternalMetadata]] = relationship(
         "ExternalMetadata", back_populates="book", cascade="all, delete-orphan"
     )
-    interactions: Mapped[list["UserBookInteraction"]] = relationship(
+    interactions: Mapped[list[UserBookInteraction]] = relationship(
         "UserBookInteraction", back_populates="book", cascade="all, delete-orphan"
     )
-    highlights: Mapped[list["Highlight"]] = relationship(
+    highlights: Mapped[list[Highlight]] = relationship(
         "Highlight", back_populates="book", cascade="all, delete-orphan"
     )
-    bookshelf_books: Mapped[list["BookshelfBook"]] = relationship(
+    bookshelf_books: Mapped[list[BookshelfBook]] = relationship(
         "BookshelfBook", back_populates="book", cascade="all, delete-orphan"
     )
 
@@ -106,7 +115,7 @@ class ExternalMetadata(Base):
     )
 
     # Relationships
-    book: Mapped["Book"] = relationship("Book", back_populates="external_metadata")
+    book: Mapped[Book] = relationship("Book", back_populates="external_metadata")
 
     __table_args__ = (
         __import__("sqlalchemy").UniqueConstraint(
