@@ -80,7 +80,7 @@
     --hm-5: var(--primary);
   "
 >
-  <div class="mb-2 flex items-baseline gap-3">
+  <div class="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
     <h3 class="text-lg font-semibold text-foreground">Reading Activity ({year})</h3>
     <span class="text-sm text-muted-foreground">
       {#if totalHours > 0}
@@ -91,17 +91,17 @@
     </span>
   </div>
 
-  <div class="overflow-x-auto pb-2">
-    <div class="inline-grid gap-[3px]" style="grid-template-columns: repeat({weeks.length}, 11px); grid-template-rows: repeat(7, 11px);">
+  <div class="max-w-full overflow-x-auto pb-2">
+    <div class="grid w-full min-w-max gap-[3px]" style="grid-template-columns: repeat({weeks.length}, minmax(11px, 1fr)); grid-template-rows: repeat(7, minmax(11px, 1fr));">
       {#each { length: 7 } as _, dayIndex}
         {#each weeks as week}
           {@const cell = week[dayIndex]}
           {#if cell.seconds === -1}
-            <div class="size-[11px]"></div>
+            <div class="w-full aspect-square"></div>
           {:else}
             {@const level = getLevel(cell.seconds)}
             <div
-              class="size-[11px] rounded-[2px]"
+              class="w-full aspect-square rounded-[2px]"
               style="background: {level >= 0 ? LEVELS[level] : 'var(--muted)'}"
               title={formatTooltip(cell.date, cell.seconds)}
             ></div>
@@ -111,7 +111,7 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 justify-end">
+  <div class="mt-1 flex flex-wrap items-center justify-start gap-1.5 text-xs text-muted-foreground sm:justify-end">
     <span>Less</span>
     <div class="size-[11px] rounded-[2px]" style="background: var(--muted)"></div>
     {#each LEVELS as color}

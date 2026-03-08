@@ -93,7 +93,7 @@
 
     <!-- Reading Activity Heatmap -->
     <section class="mb-12">
-      <div class="inline-block bg-card card-soft rounded-2xl p-6">
+      <div class="w-full max-w-full overflow-hidden bg-card card-soft rounded-2xl p-4 sm:p-6">
         <ReadingActivityHeatmap data={readingActivity} year={currentYear} />
       </div>
     </section>
