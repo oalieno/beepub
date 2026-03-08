@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
@@ -13,7 +14,6 @@ from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
-from app.services.epub_parser import parse_epub_metadata, save_cover_image
 from app.services.storage import get_cover_path
 
 logger = logging.getLogger(__name__)
@@ -65,6 +65,16 @@ def scan_calibre_libraries() -> list[dict]:
                 "book_count": count,
             })
     return results
+
+
+def _copy_cover(src: str, dest: str) -> bool:
+    """Copy a cover file directly without resizing."""
+    try:
+        Path(dest).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dest)
+        return True
+    except Exception:
+        return False
 
 
 def _count_calibre_epubs(db_path: str) -> int:
@@ -244,36 +254,24 @@ async def sync_calibre_library(
 
                         book_id = uuid.uuid4()
 
-                        # Parse EPUB metadata in thread
-                        epub_meta = await asyncio.to_thread(
-                            parse_epub_metadata, cal_book.epub_path
-                        )
+                        # Use Calibre metadata directly (skip EPUB parsing for speed)
+                        epub_meta = {
+                            "epub_title": cal_book.title,
+                            "epub_authors": cal_book.authors,
+                            "epub_publisher": cal_book.publisher,
+                            "epub_description": cal_book.description,
+                            "epub_published_date": cal_book.published_date,
+                            "epub_isbn": cal_book.isbn,
+                        }
 
-                        # Use Calibre metadata as fallback if EPUB parsing fails
-                        if not epub_meta.get("epub_title"):
-                            epub_meta["epub_title"] = cal_book.title
-                        if not epub_meta.get("epub_authors"):
-                            epub_meta["epub_authors"] = cal_book.authors
-                        if not epub_meta.get("epub_publisher"):
-                            epub_meta["epub_publisher"] = cal_book.publisher
-                        if not epub_meta.get("epub_description"):
-                            epub_meta["epub_description"] = cal_book.description
-                        if not epub_meta.get("epub_published_date"):
-                            epub_meta["epub_published_date"] = cal_book.published_date
-                        if not epub_meta.get("epub_isbn"):
-                            epub_meta["epub_isbn"] = cal_book.isbn
-
-                        # Copy cover
+                        # Copy cover directly (skip Pillow resize — Calibre covers are already reasonable)
                         cover_dest = None
                         if cal_book.cover_path and os.path.exists(cal_book.cover_path):
                             dest = get_cover_path(book_id)
-                            cover_data = await asyncio.to_thread(
-                                Path(cal_book.cover_path).read_bytes
+                            copied = await asyncio.to_thread(
+                                _copy_cover, cal_book.cover_path, dest
                             )
-                            saved = await asyncio.to_thread(
-                                save_cover_image, cover_data, dest
-                            )
-                            if saved:
+                            if copied:
                                 cover_dest = dest
 
                         book = Book(
