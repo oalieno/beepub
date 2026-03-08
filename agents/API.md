@@ -76,3 +76,11 @@ PUT    /api/admin/users/{id}/role
 DELETE /api/admin/users/{id}
 GET    /api/admin/stats
 ```
+
+## Admin — Calibre Import
+```
+GET  /api/admin/calibre/libraries                    掃描 /calibre/ 下可用的 Calibre library
+POST /api/admin/calibre/libraries                    連結 Calibre library（建 BeePub library + sync）
+POST /api/admin/calibre/libraries/{library_id}/sync  觸發 re-sync (202)
+GET  /api/admin/calibre/libraries/{library_id}/status sync 進度 + 已匯入書數
+```

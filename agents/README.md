@@ -30,3 +30,4 @@
 | [debug/010-ios-custom-text-selection.md](debug/010-ios-custom-text-selection.md) | iOS PWA 自訂文字選取（取代原生 UI） | ✅ 已修復 |
 | [debug/011-illustration-overlay-and-highlight-rect-dedup.md](debug/011-illustration-overlay-and-highlight-rect-dedup.md) | Illustration 改為文字漸層標記 + getClientRects 矩形去重 | ✅ 已修復 |
 | [debug/012-epub-cover-extraction-broken-import.md](debug/012-epub-cover-extraction-broken-import.md) | ebooklib import 壞掉導致封面抓取失敗 + SVG cover 支援 | ✅ 已修復 |
+| [debug/013-calibre-import.md](debug/013-calibre-import.md) | Calibre library read-only import 整合 | ✅ 已完成 |

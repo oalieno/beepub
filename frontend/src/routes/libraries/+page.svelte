@@ -6,7 +6,7 @@
   import { toastStore } from "$lib/stores/toast";
   import type { LibraryOut } from "$lib/types";
   import { LibraryVisibility } from "$lib/types";
-  import { Library } from "@lucide/svelte";
+  import { Library, HardDrive } from "@lucide/svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
 
   let libraries = $state<LibraryOut[]>([]);
@@ -66,7 +66,11 @@
             : "bg-primary/15 text-primary"}
         >
           {#snippet icon()}
-            <Library class="text-muted-foreground/50 shrink-0" size={16} />
+            {#if lib.calibre_path}
+              <HardDrive class="text-amber-500/70 shrink-0" size={16} />
+            {:else}
+              <Library class="text-muted-foreground/50 shrink-0" size={16} />
+            {/if}
           {/snippet}
         </CollectionCard>
       {/each}

@@ -23,6 +23,7 @@ class BookOut(BaseModel):
     published_date: str | None
     display_title: str | None
     display_authors: list[str] | None
+    calibre_id: int | None = None
     added_by: uuid.UUID
     created_at: datetime
 

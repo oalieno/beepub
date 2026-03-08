@@ -41,7 +41,7 @@ beepub/
 │       ├── vendor/
 │       │   └── ebooklib/  (vendored, 修改版)
 │       └── services/
-│           ├── auth.py, epub_parser.py, storage.py, metadata_queue.py
+│           ├── auth.py, epub_parser.py, storage.py, metadata_queue.py, calibre.py
 ├── metadata-daemon/
 │   ├── Dockerfile
 │   ├── pyproject.toml

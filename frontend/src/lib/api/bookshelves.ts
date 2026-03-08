@@ -46,4 +46,24 @@ export const adminApi = {
 
   getStats: (token: string) =>
     get("/admin/stats", token) as Promise<import("$lib/types").AdminStats>,
+
+  // Calibre integration
+  getCalibreLibraries: (token: string) =>
+    get("/admin/calibre/libraries", token) as Promise<
+      import("$lib/types").CalibreLibraryInfo[]
+    >,
+
+  linkCalibreLibrary: (
+    data: { calibre_path: string; name?: string },
+    token: string,
+  ) => post("/admin/calibre/libraries", data, token),
+
+  syncCalibreLibrary: (libraryId: string, token: string) =>
+    post(`/admin/calibre/libraries/${libraryId}/sync`, {}, token),
+
+  getCalibreLibraryStatus: (libraryId: string, token: string) =>
+    get(
+      `/admin/calibre/libraries/${libraryId}/status`,
+      token,
+    ) as Promise<import("$lib/types").CalibreLibraryStatus>,
 };

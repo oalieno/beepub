@@ -24,6 +24,7 @@ class LibraryOut(BaseModel):
     description: str | None
     cover_image: str | None
     visibility: LibraryVisibility
+    calibre_path: str | None = None
     created_by: uuid.UUID
     created_at: datetime
 

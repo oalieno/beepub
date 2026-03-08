@@ -6,7 +6,13 @@
   import { toastStore } from "$lib/stores/toast";
   import type { AdminStats } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Users, BookOpen, Library, ChevronRight } from "@lucide/svelte";
+  import {
+    Users,
+    BookOpen,
+    Library,
+    ChevronRight,
+    HardDrive,
+  } from "@lucide/svelte";
 
   let stats = $state<AdminStats | null>(null);
   let loading = $state(true);
@@ -122,6 +128,32 @@
             </p>
             <p class="text-muted-foreground text-sm">
               Manage user roles and accounts
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
+          size={20}
+        />
+      </a>
+      <a
+        href="/admin/calibre"
+        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+          >
+            <HardDrive class="text-primary" size={18} />
+          </div>
+          <div>
+            <p
+              class="font-semibold text-foreground group-hover:text-primary transition-colors"
+            >
+              Calibre Import
+            </p>
+            <p class="text-muted-foreground text-sm">
+              Link and sync Calibre libraries
             </p>
           </div>
         </div>

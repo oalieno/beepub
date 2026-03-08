@@ -14,6 +14,7 @@
 /admin         管理儀表板
 /admin/libraries  管理圖書館（visibility、白名單）
 /admin/libraries/[id] 管理特定圖書館
+/admin/calibre Calibre library 連結 / sync 管理
 /admin/users   管理使用者（角色、停用）
 ```
 

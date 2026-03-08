@@ -33,6 +33,9 @@ class Library(Base, TimestampMixin):
     visibility: Mapped[LibraryVisibility] = mapped_column(
         SAEnum(LibraryVisibility), nullable=False, default=LibraryVisibility.public
     )
+    calibre_path: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, unique=True
+    )
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
@@ -40,10 +43,10 @@ class Library(Base, TimestampMixin):
     # Relationships
     creator: Mapped["User"] = relationship("User", foreign_keys=[created_by])
     accesses: Mapped[list["LibraryAccess"]] = relationship(
-        "LibraryAccess", back_populates="library"
+        "LibraryAccess", back_populates="library", passive_deletes=True
     )
     library_books: Mapped[list["LibraryBook"]] = relationship(
-        "LibraryBook", back_populates="library"
+        "LibraryBook", back_populates="library", passive_deletes=True
     )
 
 

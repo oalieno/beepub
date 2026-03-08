@@ -10,6 +10,7 @@ password_hash varchar | role enum(admin,user) | is_active bool | created_at
 ```
 id uuid PK | name varchar | description text | cover_image varchar
 visibility enum(public,private) | created_by uuid→users | created_at
+calibre_path varchar(500) unique nullable  -- 非 null = Calibre synced (read-only)
 ```
 
 ## library_access（private 圖書館白名單）
@@ -36,6 +37,7 @@ title, authors text[], publisher, description, published_date
 -- 計算欄位
 display_title = COALESCE(title, epub_title)
 display_authors = COALESCE(authors, epub_authors)
+calibre_id int nullable indexed  -- Calibre books.id，用於 re-sync 比對
 added_by uuid→users | added_at
 ```
 

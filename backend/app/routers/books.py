@@ -142,6 +142,11 @@ async def upload_book(
 
     if library_id:
         lib_id = uuid.UUID(library_id)
+        # Prevent uploading to Calibre libraries
+        lib_result = await db.execute(select(Library).where(Library.id == lib_id))
+        lib = lib_result.scalar_one_or_none()
+        if lib and lib.calibre_path:
+            raise HTTPException(status_code=403, detail="Cannot upload to a Calibre library")
         lb = LibraryBook(library_id=lib_id, book_id=book_id, added_by=current_user.id)
         db.add(lb)
 
@@ -159,6 +164,15 @@ async def upload_books_bulk(
     files: list[UploadFile] = File(...),
     library_id: str | None = Form(None),
 ):
+    # Prevent uploading to Calibre libraries
+    if library_id:
+        lib_result = await db.execute(
+            select(Library).where(Library.id == uuid.UUID(library_id))
+        )
+        lib = lib_result.scalar_one_or_none()
+        if lib and lib.calibre_path:
+            raise HTTPException(status_code=403, detail="Cannot upload to a Calibre library")
+
     books = []
     for file in files:
         if not file.filename or not file.filename.lower().endswith(".epub"):
@@ -257,7 +271,9 @@ async def delete_book(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    delete_file(book.file_path)
+    # Only delete the EPUB file for non-Calibre books (Calibre files are on read-only mount)
+    if book.calibre_id is None:
+        delete_file(book.file_path)
     if book.cover_path:
         delete_file(book.cover_path)
     await db.delete(book)

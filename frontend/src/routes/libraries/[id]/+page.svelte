@@ -10,11 +10,13 @@
   import Modal from "$lib/components/Modal.svelte";
   import type { LibraryOut, BookOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Upload, Search, X } from "@lucide/svelte";
+  import { Upload, Search, X, HardDrive } from "@lucide/svelte";
 
   let libraryId = $derived($page.params.id as string);
 
   let library = $state<LibraryOut | null>(null);
+  let isCalibre = $derived(!!library?.calibre_path);
+  let canUpload = $derived(isAdmin && !isCalibre);
   let books = $state<BookOut[]>([]);
   let loading = $state(true);
   let searchQuery = $state("");
@@ -114,13 +116,21 @@
           >
             {library.visibility}
           </span>
+          {#if isCalibre}
+            <span
+              class="text-xs px-2.5 py-1 rounded-full font-medium bg-amber-500/15 text-amber-600 flex items-center gap-1"
+            >
+              <HardDrive size={12} />
+              Calibre
+            </span>
+          {/if}
         </div>
         <h1 class="text-3xl font-bold text-foreground">{library.name}</h1>
         {#if library.description}
           <p class="text-muted-foreground mt-1">{library.description}</p>
         {/if}
       </div>
-      {#if isAdmin}
+      {#if canUpload}
         <button
           class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
           onclick={() => (showUploadModal = true)}
@@ -162,31 +172,39 @@
         class="border-2 border-dashed rounded-2xl p-12 text-center transition-colors {dragOver
           ? 'border-primary bg-primary/5'
           : 'border-border'}"
-        ondragover={(e) => {
-          e.preventDefault();
-          dragOver = true;
-        }}
-        ondragleave={() => (dragOver = false)}
-        ondrop={onDrop}
+        ondragover={canUpload
+          ? (e) => {
+              e.preventDefault();
+              dragOver = true;
+            }
+          : undefined}
+        ondragleave={canUpload ? () => (dragOver = false) : undefined}
+        ondrop={canUpload ? onDrop : undefined}
         role="region"
         aria-label="Drop zone"
       >
         <Upload class="mx-auto text-muted-foreground/30 mb-4" size={48} />
         <p class="text-muted-foreground text-lg">No books yet</p>
         <p class="text-muted-foreground/70 text-sm mt-1">
-          {isAdmin
-            ? "Upload EPUBs or drag and drop here."
-            : "No books in this library."}
+          {#if isCalibre}
+            Sync from Calibre to add books.
+          {:else if isAdmin}
+            Upload EPUBs or drag and drop here.
+          {:else}
+            No books in this library.
+          {/if}
         </p>
       </div>
     {:else}
       <div
-        ondragover={(e) => {
-          e.preventDefault();
-          dragOver = true;
-        }}
-        ondragleave={() => (dragOver = false)}
-        ondrop={onDrop}
+        ondragover={canUpload
+          ? (e) => {
+              e.preventDefault();
+              dragOver = true;
+            }
+          : undefined}
+        ondragleave={canUpload ? () => (dragOver = false) : undefined}
+        ondrop={canUpload ? onDrop : undefined}
         role="region"
         aria-label="Books"
       >

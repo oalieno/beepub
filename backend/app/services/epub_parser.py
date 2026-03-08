@@ -209,7 +209,15 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
         if cover_item is None:
             return False
 
-        image_data = cover_item.get_content()
+        return save_cover_image(cover_item.get_content(), cover_path)
+
+    except Exception:
+        return False
+
+
+def save_cover_image(image_data: bytes, cover_path: str) -> bool:
+    """Save and resize image data as a JPEG cover. Returns True if successful."""
+    try:
         img = Image.open(io.BytesIO(image_data))
         img = img.convert("RGB")
 
@@ -222,6 +230,5 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
         Path(cover_path).parent.mkdir(parents=True, exist_ok=True)
         img.save(cover_path, "JPEG", quality=85)
         return True
-
     except Exception:
         return False

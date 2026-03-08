@@ -148,6 +148,21 @@ async def delete_library(
     library = result.scalar_one_or_none()
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
+
+    # For Calibre libraries, also delete the imported Book records
+    if library.calibre_path:
+        from app.services.storage import delete_file
+
+        book_result = await db.execute(
+            select(Book)
+            .join(LibraryBook, LibraryBook.book_id == Book.id)
+            .where(LibraryBook.library_id == library_id)
+        )
+        for book in book_result.scalars().all():
+            if book.cover_path:
+                delete_file(book.cover_path)
+            await db.delete(book)
+
     await db.delete(library)
     await db.commit()
 
@@ -191,8 +206,11 @@ async def add_book_to_library(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     result = await db.execute(select(Library).where(Library.id == library_id))
-    if not result.scalar_one_or_none():
+    library = result.scalar_one_or_none()
+    if not library:
         raise HTTPException(status_code=404, detail="Library not found")
+    if library.calibre_path:
+        raise HTTPException(status_code=403, detail="Cannot add books to a Calibre library")
     existing = await db.execute(
         select(LibraryBook).where(
             LibraryBook.library_id == library_id, LibraryBook.book_id == body.book_id

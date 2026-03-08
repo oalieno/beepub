@@ -1,16 +1,24 @@
+import asyncio
 import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import require_admin
 from app.models.book import Book
-from app.models.library import Library
+from app.models.library import Library, LibraryBook
 from app.models.user import User
 from app.schemas.user import UserOut, UserUpdateRole
+from app.services.calibre import (
+    get_sync_status,
+    read_calibre_books,
+    scan_calibre_libraries,
+    sync_calibre_library,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -69,4 +77,151 @@ async def get_stats(
         "users": user_count,
         "books": book_count,
         "libraries": library_count,
+    }
+
+
+# --- Calibre integration ---
+
+
+class CalibreLibraryCreate(BaseModel):
+    calibre_path: str
+    name: str | None = None
+
+
+@router.get("/calibre/libraries")
+async def list_calibre_libraries(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Scan for available Calibre libraries and show linked status."""
+    available = await asyncio.to_thread(scan_calibre_libraries)
+
+    # Get already-linked libraries
+    result = await db.execute(
+        select(Library).where(Library.calibre_path.isnot(None))
+    )
+    linked = {lib.calibre_path: lib for lib in result.scalars().all()}
+
+    output = []
+    for lib in available:
+        linked_lib = linked.get(lib["path"])
+        output.append({
+            "path": lib["path"],
+            "name": lib["name"],
+            "calibre_book_count": lib["book_count"],
+            "linked": linked_lib is not None,
+            "library_id": str(linked_lib.id) if linked_lib else None,
+            "library_name": linked_lib.name if linked_lib else None,
+        })
+    return output
+
+
+@router.post("/calibre/libraries", status_code=status.HTTP_201_CREATED)
+async def link_calibre_library(
+    body: CalibreLibraryCreate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Create a BeePub library linked to a Calibre library and start initial sync."""
+    # Check if already linked
+    existing = await db.execute(
+        select(Library).where(Library.calibre_path == body.calibre_path)
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Calibre library already linked")
+
+    # Verify path exists
+    import os
+    db_path = os.path.join(body.calibre_path, "metadata.db")
+    if not os.path.isfile(db_path):
+        raise HTTPException(status_code=400, detail="No metadata.db found at path")
+
+    # Create library
+    lib_name = body.name or os.path.basename(body.calibre_path)
+    library = Library(
+        name=lib_name,
+        calibre_path=body.calibre_path,
+        created_by=current_user.id,
+    )
+    db.add(library)
+    await db.commit()
+    await db.refresh(library)
+
+    # Start background sync
+    asyncio.create_task(
+        sync_calibre_library(body.calibre_path, library.id, current_user.id)
+    )
+
+    return {
+        "library_id": str(library.id),
+        "name": library.name,
+        "calibre_path": library.calibre_path,
+        "sync_started": True,
+    }
+
+
+@router.post("/calibre/libraries/{library_id}/sync", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_calibre_sync(
+    library_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Trigger a re-sync for a linked Calibre library."""
+    result = await db.execute(select(Library).where(Library.id == library_id))
+    library = result.scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if not library.calibre_path:
+        raise HTTPException(status_code=400, detail="Not a Calibre library")
+
+    # Check if sync is already running
+    sync_status = await get_sync_status(library_id)
+    if sync_status and sync_status.get("status") == "running":
+        raise HTTPException(status_code=409, detail="Sync already in progress")
+
+    asyncio.create_task(
+        sync_calibre_library(library.calibre_path, library.id, current_user.id)
+    )
+    return {"status": "sync_started"}
+
+
+@router.get("/calibre/libraries/{library_id}/status")
+async def get_calibre_library_status(
+    library_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get sync status and book counts for a linked Calibre library."""
+    result = await db.execute(select(Library).where(Library.id == library_id))
+    library = result.scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if not library.calibre_path:
+        raise HTTPException(status_code=400, detail="Not a Calibre library")
+
+    # Count imported books
+    imported_count = (
+        await db.execute(
+            select(func.count()).select_from(LibraryBook).where(
+                LibraryBook.library_id == library_id
+            )
+        )
+    ).scalar()
+
+    # Count Calibre EPUB books
+    try:
+        calibre_books = await asyncio.to_thread(read_calibre_books, library.calibre_path)
+        calibre_count = len(calibre_books)
+    except Exception:
+        calibre_count = None
+
+    sync = await get_sync_status(library_id)
+
+    return {
+        "library_id": str(library.id),
+        "library_name": library.name,
+        "calibre_path": library.calibre_path,
+        "calibre_book_count": calibre_count,
+        "imported_book_count": imported_count,
+        "sync": sync,
     }

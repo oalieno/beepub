@@ -64,6 +64,8 @@ class Book(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+
     added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Relationships

@@ -11,7 +11,14 @@
   import * as Select from "$lib/components/ui/select";
   import type { LibraryOut } from "$lib/types";
   import { UserRole, LibraryVisibility } from "$lib/types";
-  import { Plus, Trash2, Lock, Globe, Settings } from "@lucide/svelte";
+  import {
+    Plus,
+    Trash2,
+    Lock,
+    Globe,
+    Settings,
+    HardDrive,
+  } from "@lucide/svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -135,7 +142,17 @@
               {/if}
             </div>
             <div>
-              <p class="font-semibold text-foreground">{lib.name}</p>
+              <p class="font-semibold text-foreground">
+                {lib.name}
+                {#if lib.calibre_path}
+                  <span
+                    class="ml-2 text-xs bg-amber-500/15 text-amber-600 px-2 py-0.5 rounded-full inline-flex items-center gap-1"
+                  >
+                    <HardDrive size={10} />
+                    Calibre
+                  </span>
+                {/if}
+              </p>
               {#if lib.description}
                 <p class="text-muted-foreground text-sm">{lib.description}</p>
               {/if}

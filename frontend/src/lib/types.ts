@@ -23,6 +23,7 @@ export interface LibraryOut {
   description: string | null;
   cover_image: string | null;
   visibility: LibraryVisibility;
+  calibre_path: string | null;
   created_by: string;
   created_at: string;
   book_count: number;
@@ -48,6 +49,7 @@ export interface BookOut {
   published_date: string | null;
   display_title: string | null;
   display_authors: string[] | null;
+  calibre_id: number | null;
   added_by: string;
   created_at: string;
 }
@@ -144,4 +146,33 @@ export interface AdminStats {
   users: number;
   books: number;
   libraries: number;
+}
+
+export interface CalibreLibraryInfo {
+  path: string;
+  name: string;
+  calibre_book_count: number | null;
+  linked: boolean;
+  library_id: string | null;
+  library_name: string | null;
+}
+
+export interface CalibreSyncStatus {
+  status: "running" | "completed" | "failed";
+  total: number;
+  processed: number;
+  added: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface CalibreLibraryStatus {
+  library_id: string;
+  library_name: string;
+  calibre_path: string;
+  calibre_book_count: number | null;
+  imported_book_count: number;
+  sync: CalibreSyncStatus | null;
 }
