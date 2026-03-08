@@ -5,6 +5,10 @@
   import { librariesApi } from '$lib/api/libraries';
   import { toastStore } from '$lib/stores/toast';
   import Modal from '$lib/components/Modal.svelte';
+  import { Input } from '$lib/components/ui/input';
+  import { Textarea } from '$lib/components/ui/textarea';
+  import { Button } from '$lib/components/ui/button';
+  import * as Select from '$lib/components/ui/select';
   import type { LibraryOut } from '$lib/types';
   import { UserRole, LibraryVisibility } from '$lib/types';
   import { Plus, Trash2, Lock, Globe, Settings } from '@lucide/svelte';
@@ -14,6 +18,11 @@
   let showCreateModal = $state(false);
   let createForm = $state({ name: '', description: '', visibility: LibraryVisibility.Public as string });
   let creating = $state(false);
+
+  const VISIBILITY_OPTIONS = [
+    { value: LibraryVisibility.Public, label: 'Public' },
+    { value: LibraryVisibility.Private, label: 'Private (whitelist)' },
+  ];
 
   onMount(async () => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
@@ -73,13 +82,10 @@
       <h1 class="text-3xl font-bold text-foreground">Libraries</h1>
       <p class="text-muted-foreground mt-1">Manage libraries, visibility, and access</p>
     </div>
-    <button
-      class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
-      onclick={() => (showCreateModal = true)}
-    >
+    <Button class="rounded-xl" onclick={() => (showCreateModal = true)}>
       <Plus size={16} />
       New Library
-    </button>
+    </Button>
   </div>
 
   {#if loading}
@@ -136,28 +142,39 @@
   <div class="space-y-4">
     <div class="space-y-1">
       <label class="block text-sm font-medium text-foreground" for="lib-name">Name</label>
-      <input id="lib-name" bind:value={createForm.name} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      <Input id="lib-name" bind:value={createForm.name} class="rounded-xl" />
     </div>
     <div class="space-y-1">
       <label class="block text-sm font-medium text-foreground" for="lib-desc">Description</label>
-      <input id="lib-desc" bind:value={createForm.description} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      <Textarea id="lib-desc" bind:value={createForm.description} class="rounded-xl bg-background" rows={3} />
     </div>
     <div class="space-y-1">
-      <label class="block text-sm font-medium text-foreground" for="lib-vis">Visibility</label>
-      <select id="lib-vis" bind:value={createForm.visibility} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
-        <option value={LibraryVisibility.Public}>Public</option>
-        <option value={LibraryVisibility.Private}>Private (whitelist)</option>
-      </select>
+      <span class="block text-sm font-medium text-foreground">Visibility</span>
+      <Select.Root
+        type="single"
+        value={createForm.visibility}
+        onValueChange={(v) => (createForm.visibility = v)}
+      >
+        <Select.Trigger class="w-full rounded-xl bg-background">
+          {@const current = VISIBILITY_OPTIONS.find((o) => o.value === createForm.visibility)}
+          {current?.label ?? 'Select visibility'}
+        </Select.Trigger>
+        <Select.Content align="start">
+          {#each VISIBILITY_OPTIONS as opt}
+            <Select.Item value={opt.value}>{opt.label}</Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
     </div>
     <div class="flex justify-end gap-2 pt-2">
-      <button class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground" onclick={() => (showCreateModal = false)}>Cancel</button>
-      <button
+      <Button variant="ghost" class="rounded-xl" onclick={() => (showCreateModal = false)}>Cancel</Button>
+      <Button
         disabled={!createForm.name || creating}
-        class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold rounded-xl"
+        class="rounded-xl"
         onclick={handleCreate}
       >
         {creating ? 'Creating...' : 'Create'}
-      </button>
+      </Button>
     </div>
   </div>
 </Modal>

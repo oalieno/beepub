@@ -6,6 +6,10 @@
   import { librariesApi } from '$lib/api/libraries';
   import { adminApi } from '$lib/api/bookshelves';
   import { toastStore } from '$lib/stores/toast';
+  import { Input } from '$lib/components/ui/input';
+  import { Textarea } from '$lib/components/ui/textarea';
+  import { Button } from '$lib/components/ui/button';
+  import * as Select from '$lib/components/ui/select';
   import type { LibraryOut, UserOut } from '$lib/types';
   import { UserRole, LibraryVisibility } from '$lib/types';
   import { Trash2, UserPlus, Save } from '@lucide/svelte';
@@ -19,6 +23,11 @@
   let saving = $state(false);
   let editForm = $state({ name: '', description: '', visibility: LibraryVisibility.Public as string });
   let addUserId = $state('');
+
+  const VISIBILITY_OPTIONS = [
+    { value: LibraryVisibility.Public, label: 'Public' },
+    { value: LibraryVisibility.Private, label: 'Private (whitelist)' },
+  ];
 
   onMount(async () => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
@@ -91,6 +100,7 @@
   }
 
   let nonMembers = $derived(allUsers.filter(u => !members.some(m => m.user_id === u.id)));
+  let addUser = $derived(nonMembers.find(u => u.id === addUserId));
 </script>
 
 <svelte:head>
@@ -114,27 +124,38 @@
       <div class="space-y-4">
         <div class="space-y-1">
           <label class="block text-sm font-medium text-foreground" for="adm-lib-name">Name</label>
-          <input id="adm-lib-name" bind:value={editForm.name} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <Input id="adm-lib-name" bind:value={editForm.name} class="rounded-sm" />
         </div>
         <div class="space-y-1">
           <label class="block text-sm font-medium text-foreground" for="adm-lib-desc">Description</label>
-          <input id="adm-lib-desc" bind:value={editForm.description} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <Textarea id="adm-lib-desc" bind:value={editForm.description} class="rounded-sm bg-background" rows={3} />
         </div>
         <div class="space-y-1">
-          <label class="block text-sm font-medium text-foreground" for="adm-lib-vis">Visibility</label>
-          <select id="adm-lib-vis" bind:value={editForm.visibility} class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="public">Public</option>
-            <option value="private">Private (whitelist)</option>
-          </select>
+          <span class="block text-sm font-medium text-foreground">Visibility</span>
+          <Select.Root
+            type="single"
+            value={editForm.visibility}
+            onValueChange={(v) => (editForm.visibility = v)}
+          >
+            <Select.Trigger class="w-full rounded-sm bg-background">
+              {@const current = VISIBILITY_OPTIONS.find((o) => o.value === editForm.visibility)}
+              {current?.label ?? 'Select visibility'}
+            </Select.Trigger>
+            <Select.Content align="start">
+              {#each VISIBILITY_OPTIONS as opt}
+                <Select.Item value={opt.value}>{opt.label}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
         </div>
-        <button
+        <Button
           disabled={saving}
-          class="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
+          class="w-fit rounded-xl"
           onclick={handleSave}
         >
           <Save size={16} />
           {saving ? 'Saving...' : 'Save'}
-        </button>
+        </Button>
       </div>
     </div>
 
@@ -145,19 +166,36 @@
 
         <!-- Add member -->
         <div class="flex gap-2 mb-4">
-          <select bind:value={addUserId} class="flex-1 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30">
-            <option value="">Select user to add...</option>
-            {#each nonMembers as user}
-              <option value={user.id}>{user.username} ({user.email})</option>
-            {/each}
-          </select>
-          <button
+          <Select.Root
+            type="single"
+            value={addUserId || undefined}
+            onValueChange={(v) => (addUserId = v)}
+          >
+            <Select.Trigger class="flex-1 rounded-xl bg-background">
+              {#if addUser}
+                {addUser.username}
+              {:else}
+                Select user to add...
+              {/if}
+            </Select.Trigger>
+            <Select.Content align="start" class="max-h-64">
+              {#if nonMembers.length === 0}
+                <Select.Item value="__no_users__" disabled>All users are already whitelisted</Select.Item>
+              {:else}
+                {#each nonMembers as user}
+                  <Select.Item value={user.id}>{user.username}</Select.Item>
+                {/each}
+              {/if}
+            </Select.Content>
+          </Select.Root>
+          <Button
             disabled={!addUserId}
-            class="flex items-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-medium px-3 py-2.5 rounded-xl transition-colors"
+            size="icon"
+            class="rounded-xl"
             onclick={handleAddMember}
           >
             <UserPlus size={16} />
-          </button>
+          </Button>
         </div>
 
         {#if members.length === 0}
@@ -171,12 +209,14 @@
                   <p class="text-sm font-medium text-foreground">{user?.username ?? member.user_id}</p>
                   <p class="text-xs text-muted-foreground">Added {new Date(member.granted_at).toLocaleDateString()}</p>
                 </div>
-                <button
-                  class="w-7 h-7 rounded-full bg-background/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  class="rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   onclick={() => handleRemoveMember(member.user_id)}
                 >
                   <Trash2 size={14} />
-                </button>
+                </Button>
               </div>
             {/each}
           </div>
