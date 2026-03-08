@@ -1,14 +1,14 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class IllustrationCreate(BaseModel):
     cfi_range: str
     text: str
-    style_prompt: Optional[str] = None
-    custom_prompt: Optional[str] = None
+    style_prompt: str | None = None
+    custom_prompt: str | None = None
 
 
 class IllustrationOut(BaseModel):
@@ -17,10 +17,10 @@ class IllustrationOut(BaseModel):
     book_id: uuid.UUID
     cfi_range: str
     text: str
-    style_prompt: Optional[str]
-    custom_prompt: Optional[str]
+    style_prompt: str | None
+    custom_prompt: str | None
     status: str
-    error_message: Optional[str]
+    error_message: str | None
     created_at: datetime
     updated_at: datetime
 

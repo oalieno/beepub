@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with EbookLib.  If not, see <http://www.gnu.org/licenses/>.
 
-from .base import BasePlugin
 from ..utils import parse_html_string
+from .base import BasePlugin
 
 
 class BooktypeLinks(BasePlugin):
@@ -64,7 +64,13 @@ class BooktypeLinks(BasePlugin):
                         _link.set("href", "{path}.xhtml".format(path=_u.path))  # noqa: UP032
 
                     if _u.fragment != "":
-                        _link.set("href", urljoin(_link.get("href"), "#{fragment}".format(fragment=_u.fragment)))  # noqa: UP032
+                        _link.set(
+                            "href",
+                            urljoin(
+                                _link.get("href"),
+                                f"#{_u.fragment}",
+                            ),
+                        )  # noqa: UP032
 
                     if _link.get("name") is not None:
                         _link.set("id", _link.get("name"))
@@ -112,7 +118,7 @@ class BooktypeFootnotes(BasePlugin):
                 footnote_id = footnote.get("id")[:-8]
                 a = footnote.getchildren()[0].getchildren()[0]
 
-                footnote_text = body.xpath('//li[@id="{footnote_id}"]'.format(footnote_id=footnote_id))[0]  # noqa: UP032
+                footnote_text = body.xpath(f'//li[@id="{footnote_id}"]')[0]  # noqa: UP032
 
                 a.attrib["{%s}type" % epub.NAMESPACES["EPUB"]] = "noteref"  # noqa
                 ftn = etree.SubElement(body, "aside", {"id": footnote_id})

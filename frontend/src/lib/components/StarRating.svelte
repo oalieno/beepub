@@ -1,7 +1,12 @@
 <script lang="ts">
-  import { Star } from '@lucide/svelte';
+  import { Star } from "@lucide/svelte";
 
-  let { value = null, readonly = false, size = 20, onchange }: {
+  let {
+    value = null,
+    readonly = false,
+    size = 20,
+    onchange,
+  }: {
     value?: number | null;
     readonly?: boolean;
     size?: number;
@@ -21,7 +26,9 @@
 <div class="flex items-center gap-0.5">
   {#each [1, 2, 3, 4, 5] as star}
     <button
-      class="transition-transform {readonly ? 'cursor-default' : 'cursor-pointer hover:scale-110'}"
+      class="transition-transform {readonly
+        ? 'cursor-default'
+        : 'cursor-pointer hover:scale-110'}"
       onclick={() => setRating(star)}
       onmouseenter={() => !readonly && (hovered = star)}
       onmouseleave={() => (hovered = null)}
@@ -30,7 +37,9 @@
     >
       <Star
         {size}
-        class="{displayValue >= star ? 'text-primary fill-primary' : 'text-muted-foreground/30'} transition-colors"
+        class="{displayValue >= star
+          ? 'text-primary fill-primary'
+          : 'text-muted-foreground/30'} transition-colors"
       />
     </button>
   {/each}

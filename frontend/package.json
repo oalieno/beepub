@@ -6,7 +6,8 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json"
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "format": "prettier --plugin prettier-plugin-svelte --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
   },
   "devDependencies": {
     "@internationalized/date": "^3.11.0",
@@ -17,6 +18,8 @@
     "@tailwindcss/vite": "^4.2.1",
     "bits-ui": "^2.16.2",
     "clsx": "^2.1.1",
+    "prettier": "^3.8.1",
+    "prettier-plugin-svelte": "^3.5.1",
     "svelte": "^5.1.0",
     "svelte-check": "^4.0.0",
     "tailwind-merge": "^3.5.0",

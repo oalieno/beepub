@@ -33,7 +33,9 @@ class FakeAsyncClient:
         else:
             html = "<html><body></body></html>"
 
-        return httpx.Response(200, text=html, request=httpx.Request("GET", url, params=params))
+        return httpx.Response(
+            200, text=html, request=httpx.Request("GET", url, params=params)
+        )
 
 
 def test_extract_book_links_supports_modern_selector_and_dedup():
@@ -59,7 +61,9 @@ def test_extract_book_links_supports_modern_selector_and_dedup():
 
 
 def test_build_queries_strips_square_bracket_subtitle():
-    queries = GoodreadsSource._build_queries("千年鬼【直木獎得主西條奈加最催淚之作】", [])
+    queries = GoodreadsSource._build_queries(
+        "千年鬼【直木獎得主西條奈加最催淚之作】", []
+    )
 
     assert queries == [
         "千年鬼【直木獎得主西條奈加最催淚之作】",
@@ -75,7 +79,10 @@ def test_search_falls_back_to_title_only(monkeypatch):
     results = asyncio.run(source.search("極限返航", ["安迪．威爾"], None))
 
     assert len(results) == 1
-    assert results[0].url == "https://www.goodreads.com/book/show/60495597-project-hail-mary"
+    assert (
+        results[0].url
+        == "https://www.goodreads.com/book/show/60495597-project-hail-mary"
+    )
     assert FakeAsyncClient.requests == [
         ("https://www.goodreads.com/search", "極限返航 安迪．威爾"),
         ("https://www.goodreads.com/search", "極限返航"),

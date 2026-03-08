@@ -1,8 +1,7 @@
-import uuid
 from datetime import datetime
+
 from sqlalchemy import DateTime, func
-from sqlalchemy.orm import mapped_column, Mapped
-from app.database import Base
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class TimestampMixin:

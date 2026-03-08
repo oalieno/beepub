@@ -1,5 +1,5 @@
-import { get, post, put, del } from './client';
-import type { LibraryOut, BookOut } from '$lib/types';
+import { get, post, put, del } from "./client";
+import type { LibraryOut, BookOut } from "$lib/types";
 
 export interface LibraryMemberOut {
   user_id: string;
@@ -8,27 +8,32 @@ export interface LibraryMemberOut {
 }
 
 export const librariesApi = {
-  list: (token: string) =>
-    get('/libraries', token) as Promise<LibraryOut[]>,
+  list: (token: string) => get("/libraries", token) as Promise<LibraryOut[]>,
 
   get: (id: string, token: string) =>
     get(`/libraries/${id}`, token) as Promise<LibraryOut>,
 
-  create: (data: { name: string; description?: string; visibility?: string }, token: string) =>
-    post('/libraries', data, token) as Promise<LibraryOut>,
+  create: (
+    data: { name: string; description?: string; visibility?: string },
+    token: string,
+  ) => post("/libraries", data, token) as Promise<LibraryOut>,
 
-  update: (id: string, data: { name?: string; description?: string; visibility?: string }, token: string) =>
-    put(`/libraries/${id}`, data, token) as Promise<LibraryOut>,
+  update: (
+    id: string,
+    data: { name?: string; description?: string; visibility?: string },
+    token: string,
+  ) => put(`/libraries/${id}`, data, token) as Promise<LibraryOut>,
 
-  delete: (id: string, token: string) =>
-    del(`/libraries/${id}`, token),
+  delete: (id: string, token: string) => del(`/libraries/${id}`, token),
 
   getBooks: (id: string, token: string, search?: string, sort?: string) => {
     const params = new URLSearchParams();
-    if (search) params.set('search', search);
-    if (sort) params.set('sort', sort);
+    if (search) params.set("search", search);
+    if (sort) params.set("sort", sort);
     const qs = params.toString();
-    return get(`/libraries/${id}/books${qs ? `?${qs}` : ''}`, token) as Promise<BookOut[]>;
+    return get(`/libraries/${id}/books${qs ? `?${qs}` : ""}`, token) as Promise<
+      BookOut[]
+    >;
   },
 
   getMembers: (id: string, token: string) =>

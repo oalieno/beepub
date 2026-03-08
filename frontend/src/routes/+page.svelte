@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { authStore } from '$lib/stores/auth';
-  import { librariesApi } from '$lib/api/libraries';
-  import { bookshelvesApi } from '$lib/api/bookshelves';
-  import { toastStore } from '$lib/stores/toast';
-  import BookGrid from '$lib/components/BookGrid.svelte';
-  import ReadingActivityHeatmap from '$lib/components/ReadingActivityHeatmap.svelte';
-  import CollectionCard from '$lib/components/CollectionCard.svelte';
-  import { booksApi } from '$lib/api/books';
-  import type { BookOut, BookshelfOut, LibraryOut } from '$lib/types';
-  import { goto } from '$app/navigation';
-  import { BookOpen, BookMarked } from '@lucide/svelte';
+  import { onMount } from "svelte";
+  import { authStore } from "$lib/stores/auth";
+  import { librariesApi } from "$lib/api/libraries";
+  import { bookshelvesApi } from "$lib/api/bookshelves";
+  import { toastStore } from "$lib/stores/toast";
+  import BookGrid from "$lib/components/BookGrid.svelte";
+  import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
+  import CollectionCard from "$lib/components/CollectionCard.svelte";
+  import { booksApi } from "$lib/api/books";
+  import type { BookOut, BookshelfOut, LibraryOut } from "$lib/types";
+  import { goto } from "$app/navigation";
+  import { BookOpen, BookMarked } from "@lucide/svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
@@ -24,7 +24,9 @@
       const [libs, shelves, activity] = await Promise.all([
         librariesApi.list($authStore.token!),
         bookshelvesApi.list($authStore.token!),
-        booksApi.getReadingActivity(currentYear, $authStore.token!).catch(() => []),
+        booksApi
+          .getReadingActivity(currentYear, $authStore.token!)
+          .catch(() => []),
       ]);
       libraries = libs;
       bookshelves = shelves;
@@ -35,15 +37,19 @@
       await Promise.all(
         libraries.map(async (lib) => {
           try {
-            const books = await librariesApi.getBooks(lib.id, $authStore.token!);
+            const books = await librariesApi.getBooks(
+              lib.id,
+              $authStore.token!,
+            );
             allBooks.push(...books);
           } catch {
             // skip
           }
-        })
+        }),
       );
       allBooks.sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
       );
       recentBooks = allBooks.slice(0, 12);
     } catch (e) {
@@ -61,17 +67,28 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+      <div
+        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
+      ></div>
     </div>
   {:else}
     <!-- Hero greeting -->
     <section class="mb-12">
-      <div class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2">
+      <div
+        class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2"
+      >
         <div>
-          <h1 class="text-4xl md:text-5xl font-bold leading-tight text-foreground">
-            Happy reading{$authStore.user ? `,\n${$authStore.user.username}` : ''}
+          <h1
+            class="text-4xl md:text-5xl font-bold leading-tight text-foreground"
+          >
+            Happy reading{$authStore.user
+              ? `,\n${$authStore.user.username}`
+              : ""}
           </h1>
-          <p class="text-muted-foreground text-lg mt-3 max-w-md">Explore your personal library. Discover new stories and revisit old favorites.</p>
+          <p class="text-muted-foreground text-lg mt-3 max-w-md">
+            Explore your personal library. Discover new stories and revisit old
+            favorites.
+          </p>
         </div>
         <div class="flex items-center gap-6 text-center">
           <div>
@@ -80,7 +97,9 @@
           </div>
           <div class="w-px h-8 bg-border"></div>
           <div>
-            <p class="text-3xl font-bold text-primary">{recentBooks.length > 0 ? recentBooks.length + '+' : '0'}</p>
+            <p class="text-3xl font-bold text-primary">
+              {recentBooks.length > 0 ? recentBooks.length + "+" : "0"}
+            </p>
             <p class="text-muted-foreground text-xs mt-0.5">Books</p>
           </div>
           <div class="w-px h-8 bg-border"></div>
@@ -94,7 +113,9 @@
 
     <!-- Reading Activity Heatmap -->
     <section class="mb-12">
-      <div class="w-full max-w-full overflow-hidden bg-card card-soft rounded-2xl p-4 sm:p-6">
+      <div
+        class="w-full max-w-full overflow-hidden bg-card card-soft rounded-2xl p-4 sm:p-6"
+      >
         <ReadingActivityHeatmap data={readingActivity} year={currentYear} />
       </div>
     </section>
@@ -104,17 +125,25 @@
       <div class="flex items-end justify-between mb-6">
         <div>
           <h2 class="text-2xl font-bold text-foreground">Recently Added</h2>
-          <p class="text-muted-foreground text-sm mt-1">Fresh additions to your library</p>
+          <p class="text-muted-foreground text-sm mt-1">
+            Fresh additions to your library
+          </p>
         </div>
         {#if libraries.length > 0}
-          <a href="/libraries" class="text-primary hover:text-primary/80 text-sm font-medium">Browse all →</a>
+          <a
+            href="/libraries"
+            class="text-primary hover:text-primary/80 text-sm font-medium"
+            >Browse all →</a
+          >
         {/if}
       </div>
       {#if recentBooks.length === 0}
         <div class="bg-card card-soft rounded-2xl p-12 text-center">
           <BookOpen class="mx-auto text-muted-foreground/30 mb-4" size={48} />
           <p class="text-muted-foreground text-lg">No books yet</p>
-          <p class="text-muted-foreground/70 text-sm mt-1">Upload some EPUBs to get started.</p>
+          <p class="text-muted-foreground/70 text-sm mt-1">
+            Upload some EPUBs to get started.
+          </p>
         </div>
       {:else}
         <BookGrid books={recentBooks} />
@@ -126,15 +155,23 @@
       <div class="flex items-end justify-between mb-6">
         <div>
           <h2 class="text-2xl font-bold text-foreground">My Shelves</h2>
-          <p class="text-muted-foreground text-sm mt-1">Your curated collections</p>
+          <p class="text-muted-foreground text-sm mt-1">
+            Your curated collections
+          </p>
         </div>
-        <a href="/bookshelves" class="text-primary hover:text-primary/80 text-sm font-medium">View all →</a>
+        <a
+          href="/bookshelves"
+          class="text-primary hover:text-primary/80 text-sm font-medium"
+          >View all →</a
+        >
       </div>
       {#if bookshelves.length === 0}
         <div class="bg-card card-soft rounded-2xl p-12 text-center">
           <BookMarked class="mx-auto text-muted-foreground/30 mb-4" size={48} />
           <p class="text-muted-foreground text-lg">No shelves yet</p>
-          <p class="text-muted-foreground/70 text-sm mt-1">Create a bookshelf to organize your reading.</p>
+          <p class="text-muted-foreground/70 text-sm mt-1">
+            Create a bookshelf to organize your reading.
+          </p>
         </div>
       {:else}
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
@@ -144,11 +181,16 @@
               name={shelf.name}
               previewBookIds={shelf.preview_book_ids}
               bookCount={shelf.book_count}
-              badgeLabel={shelf.is_public ? 'Public' : 'Private'}
-              badgeClass={shelf.is_public ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}
+              badgeLabel={shelf.is_public ? "Public" : "Private"}
+              badgeClass={shelf.is_public
+                ? "bg-primary/15 text-primary"
+                : "bg-secondary text-muted-foreground"}
             >
               {#snippet icon()}
-                <BookMarked class="text-muted-foreground/50 shrink-0" size={16} />
+                <BookMarked
+                  class="text-muted-foreground/50 shrink-0"
+                  size={16}
+                />
               {/snippet}
             </CollectionCard>
           {/each}

@@ -1,27 +1,28 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
+
 from app.models.library import LibraryVisibility
 
 
 class LibraryCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     visibility: LibraryVisibility = LibraryVisibility.public
 
 
 class LibraryUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    visibility: Optional[LibraryVisibility] = None
+    name: str | None = None
+    description: str | None = None
+    visibility: LibraryVisibility | None = None
 
 
 class LibraryOut(BaseModel):
     id: uuid.UUID
     name: str
-    description: Optional[str]
-    cover_image: Optional[str]
+    description: str | None
+    cover_image: str | None
     visibility: LibraryVisibility
     created_by: uuid.UUID
     created_at: datetime

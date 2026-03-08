@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with EbookLib.  If not, see <http://www.gnu.org/licenses/>.
 
-from .base import BasePlugin
 from ..utils import parse_html_string
+from .base import BasePlugin
 
 
 class SourceHighlighter(BasePlugin):
@@ -42,7 +42,9 @@ class SourceHighlighter(BasePlugin):
             for source in body.xpath('//pre[contains(@class,"source-")]'):
                 css_class = source.get("class")
 
-                source_text = (source.text or "") + "".join([html.tostring(child) for child in source.iterchildren()])
+                source_text = (source.text or "") + "".join(
+                    [html.tostring(child) for child in source.iterchildren()]
+                )
 
                 if "source-python" in css_class:
                     from pygments.lexers import PythonLexer

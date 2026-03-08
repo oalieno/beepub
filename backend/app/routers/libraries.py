@@ -1,17 +1,25 @@
 import uuid
-from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_, func, case
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.models.user import User, UserRole
-from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.book import Book
-from app.schemas.library import LibraryCreate, LibraryUpdate, LibraryOut, LibraryListOut, LibraryMemberAdd, LibraryMemberOut, LibraryBookAdd
+from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
+from app.models.user import User, UserRole
 from app.schemas.book import BookOut
+from app.schemas.library import (
+    LibraryBookAdd,
+    LibraryCreate,
+    LibraryListOut,
+    LibraryMemberAdd,
+    LibraryMemberOut,
+    LibraryOut,
+    LibraryUpdate,
+)
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -25,8 +33,8 @@ def accessible_libraries_condition(user: User):
             Library.visibility == LibraryVisibility.private,
             Library.id.in_(
                 select(LibraryAccess.library_id).where(LibraryAccess.user_id == user.id)
-            )
-        )
+            ),
+        ),
     )
 
 
@@ -55,15 +63,17 @@ async def list_libraries(
     counts = dict(count_result.all())
 
     # Batch query: top 4 book IDs with covers per library
-    from sqlalchemy import literal_column
+
     ranked = (
         select(
             LibraryBook.library_id,
             LibraryBook.book_id,
-            func.row_number().over(
+            func.row_number()
+            .over(
                 partition_by=LibraryBook.library_id,
-                order_by=LibraryBook.added_at.desc()
-            ).label("rn")
+                order_by=LibraryBook.added_at.desc(),
+            )
+            .label("rn"),
         )
         .join(Book, Book.id == LibraryBook.book_id)
         .where(LibraryBook.library_id.in_(library_ids))
@@ -71,8 +81,7 @@ async def list_libraries(
         .subquery()
     )
     preview_result = await db.execute(
-        select(ranked.c.library_id, ranked.c.book_id)
-        .where(ranked.c.rn <= 4)
+        select(ranked.c.library_id, ranked.c.book_id).where(ranked.c.rn <= 4)
     )
     previews: dict[str, list] = {}
     for lib_id, book_id in preview_result.all():
@@ -148,7 +157,7 @@ async def list_library_books(
     library_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    search: Optional[str] = Query(None),
+    search: str | None = Query(None),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
 ):
@@ -191,7 +200,9 @@ async def add_book_to_library(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Book already in library")
-    lb = LibraryBook(library_id=library_id, book_id=body.book_id, added_by=current_user.id)
+    lb = LibraryBook(
+        library_id=library_id, book_id=body.book_id, added_by=current_user.id
+    )
     db.add(lb)
     await db.commit()
     return {"status": "added"}
@@ -237,7 +248,8 @@ async def add_library_member(
 ):
     existing = await db.execute(
         select(LibraryAccess).where(
-            LibraryAccess.library_id == library_id, LibraryAccess.user_id == body.user_id
+            LibraryAccess.library_id == library_id,
+            LibraryAccess.user_id == body.user_id,
         )
     )
     if existing.scalar_one_or_none():
@@ -252,7 +264,9 @@ async def add_library_member(
     return {"status": "granted"}
 
 
-@router.delete("/{library_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{library_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def remove_library_member(
     library_id: uuid.UUID,
     user_id: uuid.UUID,

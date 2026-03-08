@@ -13,3 +13,15 @@ dependencies = [
     "pydantic-settings>=2.5.2",
     "pytest>=9.0.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+]
+
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

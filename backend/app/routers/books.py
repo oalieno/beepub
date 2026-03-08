@@ -1,31 +1,59 @@
-import uuid
-import os
-from datetime import datetime, timezone
-from typing import Annotated, Optional
-import zipfile
 import mimetypes
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
-from fastapi.responses import FileResponse, Response, StreamingResponse
+import os
+import uuid
+import zipfile
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from fastapi.responses import FileResponse, Response
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
 
 from app.database import get_db
 from app.deps import get_current_user, get_current_user_or_cookie, require_admin
-from app.models.user import User, UserRole
 from app.models.book import Book, ExternalMetadata
-from app.models.library import LibraryBook, LibraryAccess, Library, LibraryVisibility
-from app.schemas.book import BookOut, BookMetadataUpdate, ExternalMetadataOut
-from app.schemas.reading import RatingUpdate, FavoriteUpdate, ProgressUpdate, ProgressOut, HighlightCreate, HighlightUpdate, HighlightOut, InteractionOut, ReadingStatusUpdate, NotesUpdate, ReadingActivityOut
-from app.models.reading import UserBookInteraction, Highlight, ReadingActivity
-from app.services.storage import get_book_path, get_cover_path, save_upload_file, delete_file
-from app.services.epub_parser import parse_epub_metadata, extract_cover
+from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
+from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
+from app.models.user import User, UserRole
+from app.schemas.book import BookMetadataUpdate, BookOut, ExternalMetadataOut
+from app.schemas.reading import (
+    FavoriteUpdate,
+    HighlightCreate,
+    HighlightOut,
+    HighlightUpdate,
+    InteractionOut,
+    NotesUpdate,
+    ProgressOut,
+    ProgressUpdate,
+    RatingUpdate,
+    ReadingActivityOut,
+    ReadingStatusUpdate,
+)
+from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.metadata_queue import push_metadata_job
-from app.config import settings
+from app.services.storage import (
+    delete_file,
+    get_book_path,
+    get_cover_path,
+    save_upload_file,
+)
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 
-async def _user_can_access_book(book_id: uuid.UUID, user: User, db: AsyncSession) -> bool:
+async def _user_can_access_book(
+    book_id: uuid.UUID, user: User, db: AsyncSession
+) -> bool:
     if user.role == UserRole.admin:
         return True
     # Check if book is in any accessible library
@@ -37,9 +65,11 @@ async def _user_can_access_book(book_id: uuid.UUID, user: User, db: AsyncSession
             or_(
                 Library.visibility == LibraryVisibility.public,
                 Library.id.in_(
-                    select(LibraryAccess.library_id).where(LibraryAccess.user_id == user.id)
-                )
-            )
+                    select(LibraryAccess.library_id).where(
+                        LibraryAccess.user_id == user.id
+                    )
+                ),
+            ),
         )
     )
     return result.scalar_one_or_none() is not None
@@ -49,12 +79,14 @@ async def _user_can_access_book(book_id: uuid.UUID, user: User, db: AsyncSession
 async def search_books(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    q: Optional[str] = Query(None),
+    q: str | None = Query(None),
 ):
     if current_user.role == UserRole.admin:
         query = select(Book)
     else:
-        accessible_lib_ids = select(LibraryAccess.library_id).where(LibraryAccess.user_id == current_user.id)
+        accessible_lib_ids = select(LibraryAccess.library_id).where(
+            LibraryAccess.user_id == current_user.id
+        )
         query = (
             select(Book)
             .join(LibraryBook, LibraryBook.book_id == Book.id)
@@ -62,7 +94,7 @@ async def search_books(
             .where(
                 or_(
                     Library.visibility == LibraryVisibility.public,
-                    Library.id.in_(accessible_lib_ids)
+                    Library.id.in_(accessible_lib_ids),
                 )
             )
             .distinct()
@@ -83,7 +115,7 @@ async def upload_book(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
-    library_id: Optional[str] = Form(None),
+    library_id: str | None = Form(None),
 ):
     if not file.filename or not file.filename.lower().endswith(".epub"):
         raise HTTPException(status_code=400, detail="Only EPUB files are supported")
@@ -125,7 +157,7 @@ async def upload_books_bulk(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     files: list[UploadFile] = File(...),
-    library_id: Optional[str] = Form(None),
+    library_id: str | None = Form(None),
 ):
     books = []
     for file in files:
@@ -149,7 +181,11 @@ async def upload_books_bulk(
         db.add(book)
         await db.flush()
         if library_id:
-            lb = LibraryBook(library_id=uuid.UUID(library_id), book_id=book_id, added_by=current_user.id)
+            lb = LibraryBook(
+                library_id=uuid.UUID(library_id),
+                book_id=book_id,
+                added_by=current_user.id,
+            )
             db.add(lb)
         books.append(book)
         await push_metadata_job(book_id, priority="normal")
@@ -167,14 +203,18 @@ async def get_reading_activity(
     year: int = Query(None),
 ):
     from datetime import date as date_type
+
     if year is None:
         year = date_type.today().year
     from sqlalchemy import extract
+
     result = await db.execute(
-        select(ReadingActivity).where(
+        select(ReadingActivity)
+        .where(
             ReadingActivity.user_id == current_user.id,
-            extract('year', ReadingActivity.date) == year,
-        ).order_by(ReadingActivity.date)
+            extract("year", ReadingActivity.date) == year,
+        )
+        .order_by(ReadingActivity.date)
     )
     return result.scalars().all()
 
@@ -296,6 +336,7 @@ async def get_book_external_metadata(
 
 # --- User Interactions ---
 
+
 @router.get("/{book_id}/interaction", response_model=InteractionOut)
 async def get_interaction(
     book_id: uuid.UUID,
@@ -311,7 +352,16 @@ async def get_interaction(
     )
     interaction = result.scalar_one_or_none()
     if not interaction:
-        return InteractionOut(rating=None, is_favorite=False, reading_progress=None, reading_status=None, started_at=None, finished_at=None, notes=None, updated_at=datetime.now(timezone.utc))
+        return InteractionOut(
+            rating=None,
+            is_favorite=False,
+            reading_progress=None,
+            reading_status=None,
+            started_at=None,
+            finished_at=None,
+            notes=None,
+            updated_at=datetime.now(UTC),
+        )
     return interaction
 
 
@@ -353,11 +403,15 @@ async def update_reading_status(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     from app.models.reading import ReadingStatus
+
     await _get_book_with_access(book_id, current_user, db)
     if body.reading_status is not None:
         valid = {s.value for s in ReadingStatus}
         if body.reading_status not in valid:
-            raise HTTPException(status_code=400, detail=f"Invalid reading status. Must be one of: {', '.join(valid)}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid reading status. Must be one of: {', '.join(valid)}",
+            )
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.reading_status = body.reading_status
     interaction.started_at = body.started_at
@@ -406,16 +460,22 @@ async def update_progress(
     current_user: Annotated[User, Depends(get_current_user_or_cookie)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    from datetime import datetime, timezone, date as date_type
+    from datetime import date as date_type
+    from datetime import datetime
+
     await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     # Track reading minutes from time delta
     old_last_read = None
-    if interaction.reading_progress and interaction.reading_progress.get("last_read_at"):
+    if interaction.reading_progress and interaction.reading_progress.get(
+        "last_read_at"
+    ):
         try:
-            old_last_read = datetime.fromisoformat(interaction.reading_progress["last_read_at"])
+            old_last_read = datetime.fromisoformat(
+                interaction.reading_progress["last_read_at"]
+            )
         except (ValueError, TypeError):
             pass
     if old_last_read:
@@ -433,7 +493,11 @@ async def update_progress(
             if activity:
                 activity.seconds = activity.seconds + delta_seconds
             else:
-                db.add(ReadingActivity(user_id=current_user.id, date=today, seconds=delta_seconds))
+                db.add(
+                    ReadingActivity(
+                        user_id=current_user.id, date=today, seconds=delta_seconds
+                    )
+                )
 
     progress: dict = {
         "cfi": body.cfi,
@@ -465,15 +529,21 @@ async def get_highlights(
 ):
     await _get_book_with_access(book_id, current_user, db)
     result = await db.execute(
-        select(Highlight).where(
+        select(Highlight)
+        .where(
             Highlight.user_id == current_user.id,
             Highlight.book_id == book_id,
-        ).order_by(Highlight.created_at.asc())
+        )
+        .order_by(Highlight.created_at.asc())
     )
     return result.scalars().all()
 
 
-@router.post("/{book_id}/highlights", response_model=HighlightOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{book_id}/highlights",
+    response_model=HighlightOut,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_highlight(
     book_id: uuid.UUID,
     body: HighlightCreate,
@@ -517,7 +587,9 @@ async def update_highlight(
     return highlight
 
 
-@router.delete("/{book_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{book_id}/highlights/{highlight_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_highlight(
     book_id: uuid.UUID,
     highlight_id: uuid.UUID,
@@ -538,7 +610,9 @@ async def delete_highlight(
     await db.commit()
 
 
-async def _get_book_with_access(book_id: uuid.UUID, user: User, db: AsyncSession) -> Book:
+async def _get_book_with_access(
+    book_id: uuid.UUID, user: User, db: AsyncSession
+) -> Book:
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:

@@ -1,32 +1,36 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import { authStore } from '$lib/stores/auth';
-  import { librariesApi } from '$lib/api/libraries';
-  import { toastStore } from '$lib/stores/toast';
-  import Modal from '$lib/components/Modal.svelte';
-  import { Input } from '$lib/components/ui/input';
-  import { Textarea } from '$lib/components/ui/textarea';
-  import { Button } from '$lib/components/ui/button';
-  import * as Select from '$lib/components/ui/select';
-  import type { LibraryOut } from '$lib/types';
-  import { UserRole, LibraryVisibility } from '$lib/types';
-  import { Plus, Trash2, Lock, Globe, Settings } from '@lucide/svelte';
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { authStore } from "$lib/stores/auth";
+  import { librariesApi } from "$lib/api/libraries";
+  import { toastStore } from "$lib/stores/toast";
+  import Modal from "$lib/components/Modal.svelte";
+  import { Input } from "$lib/components/ui/input";
+  import { Textarea } from "$lib/components/ui/textarea";
+  import { Button } from "$lib/components/ui/button";
+  import * as Select from "$lib/components/ui/select";
+  import type { LibraryOut } from "$lib/types";
+  import { UserRole, LibraryVisibility } from "$lib/types";
+  import { Plus, Trash2, Lock, Globe, Settings } from "@lucide/svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
-  let createForm = $state({ name: '', description: '', visibility: LibraryVisibility.Public as string });
+  let createForm = $state({
+    name: "",
+    description: "",
+    visibility: LibraryVisibility.Public as string,
+  });
   let creating = $state(false);
 
   const VISIBILITY_OPTIONS = [
-    { value: LibraryVisibility.Public, label: 'Public' },
-    { value: LibraryVisibility.Private, label: 'Private (whitelist)' },
+    { value: LibraryVisibility.Public, label: "Public" },
+    { value: LibraryVisibility.Private, label: "Private (whitelist)" },
   ];
 
   onMount(async () => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto('/');
+      goto("/");
       return;
     }
     await loadData();
@@ -50,8 +54,12 @@
       const lib = await librariesApi.create(createForm, $authStore.token);
       libraries = [...libraries, lib];
       showCreateModal = false;
-      createForm = { name: '', description: '', visibility: LibraryVisibility.Public };
-      toastStore.success('Library created');
+      createForm = {
+        name: "",
+        description: "",
+        visibility: LibraryVisibility.Public,
+      };
+      toastStore.success("Library created");
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -63,8 +71,8 @@
     if (!confirm(`Delete library "${name}"?`) || !$authStore.token) return;
     try {
       await librariesApi.delete(id, $authStore.token);
-      libraries = libraries.filter(l => l.id !== id);
-      toastStore.success('Library deleted');
+      libraries = libraries.filter((l) => l.id !== id);
+      toastStore.success("Library deleted");
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -78,9 +86,15 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   <div class="flex items-end justify-between mb-8">
     <div>
-      <a href="/admin" class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block">← Admin</a>
+      <a
+        href="/admin"
+        class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
+        >← Admin</a
+      >
       <h1 class="text-3xl font-bold text-foreground">Libraries</h1>
-      <p class="text-muted-foreground mt-1">Manage libraries, visibility, and access</p>
+      <p class="text-muted-foreground mt-1">
+        Manage libraries, visibility, and access
+      </p>
     </div>
     <Button class="rounded-xl" onclick={() => (showCreateModal = true)}>
       <Plus size={16} />
@@ -90,19 +104,30 @@
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+      <div
+        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
+      ></div>
     </div>
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
       <p class="text-muted-foreground text-lg">No libraries yet</p>
-      <p class="text-muted-foreground/70 text-sm mt-1">Create one to get started.</p>
+      <p class="text-muted-foreground/70 text-sm mt-1">
+        Create one to get started.
+      </p>
     </div>
   {:else}
     <div class="space-y-3">
       {#each libraries as lib}
-        <div class="bg-card card-soft rounded-2xl p-5 flex items-center justify-between group hover:shadow-md transition-all duration-200">
+        <div
+          class="bg-card card-soft rounded-2xl p-5 flex items-center justify-between group hover:shadow-md transition-all duration-200"
+        >
           <div class="flex items-center gap-3.5">
-            <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.visibility === LibraryVisibility.Private ? 'bg-secondary text-muted-foreground' : 'bg-primary/15 text-primary'}">
+            <div
+              class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.visibility ===
+              LibraryVisibility.Private
+                ? 'bg-secondary text-muted-foreground'
+                : 'bg-primary/15 text-primary'}"
+            >
               {#if lib.visibility === LibraryVisibility.Private}
                 <Lock size={18} />
               {:else}
@@ -138,15 +163,28 @@
   {/if}
 </div>
 
-<Modal title="Create Library" open={showCreateModal} onclose={() => (showCreateModal = false)}>
+<Modal
+  title="Create Library"
+  open={showCreateModal}
+  onclose={() => (showCreateModal = false)}
+>
   <div class="space-y-4">
     <div class="space-y-1">
-      <label class="block text-sm font-medium text-foreground" for="lib-name">Name</label>
+      <label class="block text-sm font-medium text-foreground" for="lib-name"
+        >Name</label
+      >
       <Input id="lib-name" bind:value={createForm.name} class="rounded-xl" />
     </div>
     <div class="space-y-1">
-      <label class="block text-sm font-medium text-foreground" for="lib-desc">Description</label>
-      <Textarea id="lib-desc" bind:value={createForm.description} class="rounded-xl bg-background" rows={3} />
+      <label class="block text-sm font-medium text-foreground" for="lib-desc"
+        >Description</label
+      >
+      <Textarea
+        id="lib-desc"
+        bind:value={createForm.description}
+        class="rounded-xl bg-background"
+        rows={3}
+      />
     </div>
     <div class="space-y-1">
       <span class="block text-sm font-medium text-foreground">Visibility</span>
@@ -156,8 +194,10 @@
         onValueChange={(v) => (createForm.visibility = v)}
       >
         <Select.Trigger class="w-full rounded-xl bg-background">
-          {@const current = VISIBILITY_OPTIONS.find((o) => o.value === createForm.visibility)}
-          {current?.label ?? 'Select visibility'}
+          {@const current = VISIBILITY_OPTIONS.find(
+            (o) => o.value === createForm.visibility,
+          )}
+          {current?.label ?? "Select visibility"}
         </Select.Trigger>
         <Select.Content align="start">
           {#each VISIBILITY_OPTIONS as opt}
@@ -167,13 +207,17 @@
       </Select.Root>
     </div>
     <div class="flex justify-end gap-2 pt-2">
-      <Button variant="ghost" class="rounded-xl" onclick={() => (showCreateModal = false)}>Cancel</Button>
+      <Button
+        variant="ghost"
+        class="rounded-xl"
+        onclick={() => (showCreateModal = false)}>Cancel</Button
+      >
       <Button
         disabled={!createForm.name || creating}
         class="rounded-xl"
         onclick={handleCreate}
       >
-        {creating ? 'Creating...' : 'Create'}
+        {creating ? "Creating..." : "Create"}
       </Button>
     </div>
   </div>

@@ -8,11 +8,11 @@
   } = $props();
 
   const LEVELS = [
-    'var(--hm-1)',
-    'var(--hm-2)',
-    'var(--hm-3)',
-    'var(--hm-4)',
-    'var(--hm-5)',
+    "var(--hm-1)",
+    "var(--hm-2)",
+    "var(--hm-3)",
+    "var(--hm-4)",
+    "var(--hm-5)",
   ];
 
   let secondsMap = $derived.by(() => {
@@ -45,10 +45,10 @@
       for (let d = 0; d < 7; d++) {
         const current = new Date(start);
         current.setDate(start.getDate() + w * 7 + d);
-        const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}-${String(current.getDate()).padStart(2, '0')}`;
+        const dateStr = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, "0")}-${String(current.getDate()).padStart(2, "0")}`;
         const inYear = current.getFullYear() === year;
         week.push({
-          date: inYear ? dateStr : '',
+          date: inYear ? dateStr : "",
           seconds: inYear ? (secondsMap.get(dateStr) ?? 0) : -1,
         });
       }
@@ -62,7 +62,7 @@
   let remainingMinutes = $derived(Math.floor((totalSeconds % 3600) / 60));
 
   function formatTooltip(date: string, seconds: number): string {
-    if (!date) return '';
+    if (!date) return "";
     if (seconds === 0) return `${date}: No reading`;
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -81,7 +81,9 @@
   "
 >
   <div class="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-    <h3 class="text-lg font-semibold text-foreground">Reading Activity ({year})</h3>
+    <h3 class="text-lg font-semibold text-foreground">
+      Reading Activity ({year})
+    </h3>
     <span class="text-sm text-muted-foreground">
       {#if totalHours > 0}
         {totalHours}h {remainingMinutes}m total
@@ -92,7 +94,10 @@
   </div>
 
   <div class="max-w-full overflow-x-auto pb-2">
-    <div class="grid w-full min-w-max gap-[3px]" style="grid-template-columns: repeat({weeks.length}, minmax(11px, 1fr)); grid-template-rows: repeat(7, minmax(11px, 1fr));">
+    <div
+      class="grid w-full min-w-max gap-[3px]"
+      style="grid-template-columns: repeat({weeks.length}, minmax(11px, 1fr)); grid-template-rows: repeat(7, minmax(11px, 1fr));"
+    >
       {#each { length: 7 } as _, dayIndex}
         {#each weeks as week}
           {@const cell = week[dayIndex]}
@@ -111,9 +116,14 @@
     </div>
   </div>
 
-  <div class="mt-1 flex flex-wrap items-center justify-start gap-1.5 text-xs text-muted-foreground sm:justify-end">
+  <div
+    class="mt-1 flex flex-wrap items-center justify-start gap-1.5 text-xs text-muted-foreground sm:justify-end"
+  >
     <span>Less</span>
-    <div class="size-[11px] rounded-[2px]" style="background: var(--muted)"></div>
+    <div
+      class="size-[11px] rounded-[2px]"
+      style="background: var(--muted)"
+    ></div>
     {#each LEVELS as color}
       <div class="size-[11px] rounded-[2px]" style="background: {color}"></div>
     {/each}

@@ -1,14 +1,15 @@
 import uuid
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from app.database import get_db
 from app.deps import require_admin
-from app.models.user import User, UserRole
 from app.models.book import Book
 from app.models.library import Library
+from app.models.user import User
 from app.schemas.user import UserOut, UserUpdateRole
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import ClassVar
 
 
@@ -24,7 +24,9 @@ class AbstractMetadataSource(ABC):
     source_name: ClassVar[str]
 
     @abstractmethod
-    async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
+    async def search(
+        self, title: str, authors: list[str], isbn: str | None
+    ) -> list[SearchResult]:
         pass
 
     @abstractmethod

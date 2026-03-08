@@ -1,11 +1,11 @@
 import uuid
-from datetime import datetime, date
-from typing import Optional
+from datetime import date, datetime
+
 from pydantic import BaseModel
 
 
 class RatingUpdate(BaseModel):
-    rating: Optional[int] = None  # 1-5 or null
+    rating: int | None = None  # 1-5 or null
 
 
 class FavoriteUpdate(BaseModel):
@@ -15,36 +15,36 @@ class FavoriteUpdate(BaseModel):
 class ProgressUpdate(BaseModel):
     cfi: str
     percentage: float
-    current_page: Optional[int] = None
-    font_size: Optional[int] = None
-    section_index: Optional[int] = None
-    section_page: Optional[int] = None
-    section_page_counts: Optional[list[int]] = None
-    total_pages: Optional[int] = None
+    current_page: int | None = None
+    font_size: int | None = None
+    section_index: int | None = None
+    section_page: int | None = None
+    section_page_counts: list[int] | None = None
+    total_pages: int | None = None
 
 
 class ProgressOut(BaseModel):
-    cfi: Optional[str] = None
-    percentage: Optional[float] = None
-    current_page: Optional[int] = None
-    font_size: Optional[int] = None
-    section_index: Optional[int] = None
-    section_page: Optional[int] = None
-    section_page_counts: Optional[list[int]] = None
-    total_pages: Optional[int] = None
-    last_read_at: Optional[str] = None
+    cfi: str | None = None
+    percentage: float | None = None
+    current_page: int | None = None
+    font_size: int | None = None
+    section_index: int | None = None
+    section_page: int | None = None
+    section_page_counts: list[int] | None = None
+    total_pages: int | None = None
+    last_read_at: str | None = None
 
 
 class HighlightCreate(BaseModel):
     cfi_range: str
     text: str
     color: str = "yellow"
-    note: Optional[str] = None
+    note: str | None = None
 
 
 class HighlightUpdate(BaseModel):
-    color: Optional[str] = None
-    note: Optional[str] = None
+    color: str | None = None
+    note: str | None = None
 
 
 class HighlightOut(BaseModel):
@@ -54,7 +54,7 @@ class HighlightOut(BaseModel):
     cfi_range: str
     text: str
     color: str
-    note: Optional[str]
+    note: str | None
     created_at: datetime
     updated_at: datetime
 
@@ -62,13 +62,15 @@ class HighlightOut(BaseModel):
 
 
 class ReadingStatusUpdate(BaseModel):
-    reading_status: Optional[str] = None  # want_to_read, currently_reading, read, did_not_finish
-    started_at: Optional[date] = None
-    finished_at: Optional[date] = None
+    reading_status: str | None = (
+        None  # want_to_read, currently_reading, read, did_not_finish
+    )
+    started_at: date | None = None
+    finished_at: date | None = None
 
 
 class NotesUpdate(BaseModel):
-    notes: Optional[str] = None  # markdown
+    notes: str | None = None  # markdown
 
 
 class ReadingActivityOut(BaseModel):
@@ -79,13 +81,13 @@ class ReadingActivityOut(BaseModel):
 
 
 class InteractionOut(BaseModel):
-    rating: Optional[int]
+    rating: int | None
     is_favorite: bool
-    reading_progress: Optional[dict]
-    reading_status: Optional[str]
-    started_at: Optional[date]
-    finished_at: Optional[date]
-    notes: Optional[str]
+    reading_progress: dict | None
+    reading_status: str | None
+    started_at: date | None
+    finished_at: date | None
+    notes: str | None
     updated_at: datetime
 
     model_config = {"from_attributes": True}

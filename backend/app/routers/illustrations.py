@@ -7,14 +7,14 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db, AsyncSessionLocal
+from app.database import AsyncSessionLocal, get_db
 from app.deps import get_current_user, get_current_user_or_cookie
-from app.models.user import User
 from app.models.illustration import Illustration
-from app.schemas.illustration import IllustrationCreate, IllustrationOut, StylePromptOut
-from app.services.storage import get_illustration_path, delete_file
-from app.services.gemini import generate_illustration, get_style_prompts
+from app.models.user import User
 from app.routers.books import _get_book_with_access
+from app.schemas.illustration import IllustrationCreate, IllustrationOut, StylePromptOut
+from app.services.gemini import generate_illustration, get_style_prompts
+from app.services.storage import delete_file, get_illustration_path
 
 router = APIRouter(prefix="/api/books", tags=["illustrations"])
 
@@ -34,7 +34,11 @@ async def list_illustrations(
     return result.scalars().all()
 
 
-@router.post("/{book_id}/illustrations", response_model=IllustrationOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{book_id}/illustrations",
+    response_model=IllustrationOut,
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_illustration(
     book_id: uuid.UUID,
     body: IllustrationCreate,
@@ -82,7 +86,9 @@ async def list_styles(
     return get_style_prompts()
 
 
-@router.get("/{book_id}/illustrations/{illustration_id}", response_model=IllustrationOut)
+@router.get(
+    "/{book_id}/illustrations/{illustration_id}", response_model=IllustrationOut
+)
 async def get_illustration(
     book_id: uuid.UUID,
     illustration_id: uuid.UUID,
@@ -128,7 +134,9 @@ async def get_illustration_image(
     return FileResponse(illustration.image_path, media_type="image/png")
 
 
-@router.delete("/{book_id}/illustrations/{illustration_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{book_id}/illustrations/{illustration_id}", status_code=status.HTTP_204_NO_CONTENT
+)
 async def delete_illustration(
     book_id: uuid.UUID,
     illustration_id: uuid.UUID,

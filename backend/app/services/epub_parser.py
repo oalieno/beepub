@@ -4,9 +4,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
+
 from app.vendor import ebooklib
 from app.vendor.ebooklib import epub
-from PIL import Image
 
 
 def parse_epub_metadata(file_path: str) -> dict[str, Any]:
@@ -52,7 +53,11 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
             value = ident[0]
             attrs = ident[1] if len(ident) > 1 else {}
             scheme = attrs.get("opf:scheme", "").lower()
-            if "isbn" in scheme or (value and value.replace("-", "").isdigit() and len(value.replace("-", "")) in (10, 13)):
+            if "isbn" in scheme or (
+                value
+                and value.replace("-", "").isdigit()
+                and len(value.replace("-", "")) in (10, 13)
+            ):
                 result["epub_isbn"] = value.replace("-", "")
                 break
 
@@ -78,7 +83,9 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
         if match:
             return match.group(1)
         # Try SVG <image xlink:href="..."> or <image href="...">
-        match = re.search(r"<image[^>]+(?:xlink:)?href=[\"']([^\"']+)[\"']", text, re.IGNORECASE)
+        match = re.search(
+            r"<image[^>]+(?:xlink:)?href=[\"']([^\"']+)[\"']", text, re.IGNORECASE
+        )
         if match:
             return match.group(1)
         return None

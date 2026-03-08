@@ -17,13 +17,13 @@ import ContinuousViewManager from "./managers/continuous";
  * @example ePub("/path/to/book.epub", {})
  */
 function ePub(url, options) {
-	return new Book(url, options);
+  return new Book(url, options);
 }
 
 ePub.VERSION = EPUBJS_VERSION;
 
-if (typeof(global) !== "undefined") {
-	global.EPUBJS_VERSION = EPUBJS_VERSION;
+if (typeof global !== "undefined") {
+  global.EPUBJS_VERSION = EPUBJS_VERSION;
 }
 
 ePub.Book = Book;

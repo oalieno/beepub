@@ -19,3 +19,14 @@ dependencies = [
     "pydantic-settings>=2.5.2",
     "pydantic[email]>=2.9.2",
 ]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]

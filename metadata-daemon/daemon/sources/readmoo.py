@@ -1,11 +1,12 @@
 import logging
 import re
 from urllib.parse import urlparse
+
 import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
-from daemon.sources.base import AbstractMetadataSource, SearchResult, FetchResult
+from daemon.sources.base import AbstractMetadataSource, FetchResult, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -82,11 +83,15 @@ class ReadmooSource(AbstractMetadataSource):
 
         return links
 
-    async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
+    async def search(
+        self, title: str, authors: list[str], isbn: str | None
+    ) -> list[SearchResult]:
         results = []
         try:
             queries = self._build_queries(title, authors)
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 for query in queries:
                     if not query:
                         continue
@@ -102,7 +107,11 @@ class ReadmooSource(AbstractMetadataSource):
                     links = self._extract_book_links(soup, limit=5)
                     for full_url, text in links:
                         score = fuzz.token_set_ratio(title.lower(), text.lower())
-                        results.append(SearchResult(url=full_url, title=text, authors=[], score=score))
+                        results.append(
+                            SearchResult(
+                                url=full_url, title=text, authors=[], score=score
+                            )
+                        )
 
                     if results:
                         results.sort(key=lambda r: r.score, reverse=True)
@@ -113,7 +122,9 @@ class ReadmooSource(AbstractMetadataSource):
 
     async def fetch(self, url: str) -> FetchResult:
         try:
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 resp = await client.get(url)
                 if resp.status_code != 200:
                     return FetchResult(source_url=url)
@@ -126,7 +137,9 @@ class ReadmooSource(AbstractMetadataSource):
                 rating_value_el = soup.select_one("[itemprop='ratingValue']")
                 if rating_value_el:
                     try:
-                        raw = rating_value_el.get("content") or rating_value_el.get_text(strip=True)
+                        raw = rating_value_el.get(
+                            "content"
+                        ) or rating_value_el.get_text(strip=True)
                         rating = float(str(raw).replace(",", ""))
                     except Exception:
                         pass
@@ -134,8 +147,12 @@ class ReadmooSource(AbstractMetadataSource):
                 rating_count_el = soup.select_one("[itemprop='ratingCount']")
                 if rating_count_el:
                     try:
-                        raw = rating_count_el.get("content") or rating_count_el.get_text(strip=True)
-                        rating_count = int("".join(filter(str.isdigit, str(raw)))) or None
+                        raw = rating_count_el.get(
+                            "content"
+                        ) or rating_count_el.get_text(strip=True)
+                        rating_count = (
+                            int("".join(filter(str.isdigit, str(raw)))) or None
+                        )
                     except Exception:
                         pass
 
@@ -150,21 +167,30 @@ class ReadmooSource(AbstractMetadataSource):
                     avg_rating_el = soup.select_one(".avg-rating")
                     if avg_rating_el:
                         try:
-                            rating = float(avg_rating_el.get_text(strip=True).replace(",", ""))
+                            rating = float(
+                                avg_rating_el.get_text(strip=True).replace(",", "")
+                            )
                         except Exception:
                             pass
 
                 count_el = soup.select_one(".rating-count, .review-count")
                 if rating_count is None and count_el:
                     try:
-                        text = count_el.get_text(strip=True).replace(",", "").replace("評分", "").strip()
+                        text = (
+                            count_el.get_text(strip=True)
+                            .replace(",", "")
+                            .replace("評分", "")
+                            .strip()
+                        )
                         rating_count = int("".join(filter(str.isdigit, text))) or None
                     except Exception:
                         pass
 
                 if rating_count is None and rating_value_el and rating_value_el.parent:
                     try:
-                        text = rating_value_el.parent.get_text(" ", strip=True).replace(",", "")
+                        text = rating_value_el.parent.get_text(" ", strip=True).replace(
+                            ",", ""
+                        )
                         rating_count = int("".join(filter(str.isdigit, text))) or None
                     except Exception:
                         pass

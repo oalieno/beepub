@@ -18,32 +18,38 @@ STYLE_PROMPTS = {
     "ink_wash": {
         "label": "Ink Wash",
         "description": "Elegant ink wash, like classic novel illustrations",
-        "prompt": BASE_INSTRUCTION + "Style: Black-and-white ink wash illustration with delicate line work and subtle grey tones, reminiscent of classic literary novel illustrations from the 19th-20th century.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Black-and-white ink wash illustration with delicate line work and subtle grey tones, reminiscent of classic literary novel illustrations from the 19th-20th century.\n\nScene: {text}",
     },
     "watercolor": {
         "label": "Watercolor",
         "description": "Soft watercolor with muted tones",
-        "prompt": BASE_INSTRUCTION + "Style: Soft watercolor painting with muted, natural tones and gentle washes. The feel of a hand-painted book plate illustration.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Soft watercolor painting with muted, natural tones and gentle washes. The feel of a hand-painted book plate illustration.\n\nScene: {text}",
     },
     "pencil_sketch": {
         "label": "Pencil Sketch",
         "description": "Detailed pencil drawing, like a chapter heading",
-        "prompt": BASE_INSTRUCTION + "Style: Detailed pencil or graphite sketch with fine hatching and shading, like a chapter heading illustration in a hardcover novel.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Detailed pencil or graphite sketch with fine hatching and shading, like a chapter heading illustration in a hardcover novel.\n\nScene: {text}",
     },
     "woodcut": {
         "label": "Woodcut",
         "description": "Bold woodcut / linocut print style",
-        "prompt": BASE_INSTRUCTION + "Style: Bold black-and-white woodcut or linocut print illustration with strong contrast, like illustrations found in classic fairy tales and folklore collections.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Bold black-and-white woodcut or linocut print illustration with strong contrast, like illustrations found in classic fairy tales and folklore collections.\n\nScene: {text}",
     },
     "anime": {
         "label": "Light Novel",
         "description": "Japanese light novel illustration style",
-        "prompt": BASE_INSTRUCTION + "Style: Japanese light novel illustration — clean line art with soft cel-shading, a full-color character scene suitable for a light novel insert page.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Japanese light novel illustration — clean line art with soft cel-shading, a full-color character scene suitable for a light novel insert page.\n\nScene: {text}",
     },
     "oil_painting": {
         "label": "Oil Painting",
         "description": "Rich oil painting, like a fantasy novel cover",
-        "prompt": BASE_INSTRUCTION + "Style: Rich oil painting with deep colors, dramatic lighting, and textured brushwork, like a fantasy or historical novel frontispiece illustration.\n\nScene: {text}",
+        "prompt": BASE_INSTRUCTION
+        + "Style: Rich oil painting with deep colors, dramatic lighting, and textured brushwork, like a fantasy or historical novel frontispiece illustration.\n\nScene: {text}",
     },
 }
 
@@ -55,7 +61,9 @@ def get_style_prompts() -> list[dict]:
     ]
 
 
-async def generate_illustration(text: str, style_prompt: str | None, custom_prompt: str | None) -> bytes:
+async def generate_illustration(
+    text: str, style_prompt: str | None, custom_prompt: str | None
+) -> bytes:
     """Call Gemini API to generate an image. Returns resized PNG bytes."""
     if custom_prompt:
         prompt = f"{BASE_INSTRUCTION}{custom_prompt}\n\nScene: {text}"

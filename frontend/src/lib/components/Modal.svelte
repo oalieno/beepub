@@ -1,8 +1,13 @@
 <script lang="ts">
-  import { X } from '@lucide/svelte';
-  import type { Snippet } from 'svelte';
+  import { X } from "@lucide/svelte";
+  import type { Snippet } from "svelte";
 
-  let { title = '', open = false, onclose, children }: {
+  let {
+    title = "",
+    open = false,
+    onclose,
+    children,
+  }: {
     title?: string;
     open?: boolean;
     onclose?: () => void;
@@ -14,14 +19,18 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
+    if (e.key === "Escape") close();
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 {#if open}
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+  <div
+    class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    role="dialog"
+    aria-modal="true"
+  >
     <button
       class="absolute inset-0 bg-black/40 backdrop-blur-sm"
       aria-label="Close modal"

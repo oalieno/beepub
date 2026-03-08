@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import redis.asyncio as redis
 
@@ -46,7 +46,9 @@ async def process_job(book_id: str) -> None:
             try:
                 results = await source.search(display_title, display_authors, isbn)
                 if not results:
-                    logger.info(f"No results from {source.source_name} for book {book_id}")
+                    logger.info(
+                        f"No results from {source.source_name} for book {book_id}"
+                    )
                     continue
 
                 best = results[0]
@@ -73,15 +75,21 @@ async def process_job(book_id: str) -> None:
                         "source_url": fetch_result.source_url,
                         "rating": fetch_result.rating,
                         "rating_count": fetch_result.rating_count,
-                        "reviews": json.dumps(fetch_result.reviews) if fetch_result.reviews else None,
-                        "raw_data": json.dumps(fetch_result.raw_data) if fetch_result.raw_data else None,
-                        "fetched_at": datetime.now(timezone.utc),
+                        "reviews": json.dumps(fetch_result.reviews)
+                        if fetch_result.reviews
+                        else None,
+                        "raw_data": json.dumps(fetch_result.raw_data)
+                        if fetch_result.raw_data
+                        else None,
+                        "fetched_at": datetime.now(UTC),
                     },
                 )
                 await db.commit()
                 logger.info(f"Updated {source.source_name} metadata for book {book_id}")
             except Exception as e:
-                logger.error(f"Error processing {source.source_name} for book {book_id}: {e}")
+                logger.error(
+                    f"Error processing {source.source_name} for book {book_id}: {e}"
+                )
                 await db.rollback()
 
 

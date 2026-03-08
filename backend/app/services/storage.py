@@ -1,7 +1,7 @@
 import os
-import shutil
 import uuid
 from pathlib import Path
+
 from fastapi import UploadFile
 
 from app.config import settings

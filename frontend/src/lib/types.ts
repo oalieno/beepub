@@ -1,11 +1,11 @@
 export enum UserRole {
-  User = 'user',
-  Admin = 'admin',
+  User = "user",
+  Admin = "admin",
 }
 
 export enum LibraryVisibility {
-  Public = 'public',
-  Private = 'private',
+  Public = "public",
+  Private = "private",
 }
 
 export interface UserOut {
@@ -98,7 +98,11 @@ export interface ProgressOut {
   last_read_at: string | null;
 }
 
-export type ReadingStatus = 'want_to_read' | 'currently_reading' | 'read' | 'did_not_finish';
+export type ReadingStatus =
+  | "want_to_read"
+  | "currently_reading"
+  | "read"
+  | "did_not_finish";
 
 export interface InteractionOut {
   rating: number | null;
@@ -124,7 +128,7 @@ export interface IllustrationOut {
   text: string;
   style_prompt: string | null;
   custom_prompt: string | null;
-  status: 'pending' | 'generating' | 'completed' | 'failed';
+  status: "pending" | "generating" | "completed" | "failed";
   error_message: string | null;
   created_at: string;
   updated_at: string;

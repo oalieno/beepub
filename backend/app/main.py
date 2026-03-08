@@ -1,7 +1,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, libraries, books, bookshelves, admin, highlights, illustrations
+from app.routers import (
+    admin,
+    auth,
+    books,
+    bookshelves,
+    highlights,
+    illustrations,
+    libraries,
+)
 
 app = FastAPI(title="BeePub API", version="1.0.0")
 

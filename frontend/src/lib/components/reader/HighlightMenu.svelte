@@ -1,7 +1,14 @@
 <script lang="ts">
-  import { Trash2, X, Sparkles, Copy } from '@lucide/svelte';
+  import { Trash2, X, Sparkles, Copy } from "@lucide/svelte";
 
-  let { hasExisting = false, oncolor, onremove, onillustrate, oncopy, onclose }: {
+  let {
+    hasExisting = false,
+    oncolor,
+    onremove,
+    onillustrate,
+    oncopy,
+    onclose,
+  }: {
     hasExisting?: boolean;
     oncolor?: (detail: { color: string }) => void;
     onremove?: () => void;
@@ -11,15 +18,17 @@
   } = $props();
 
   const colors = [
-    { name: 'yellow', hex: '#fef08a' },
-    { name: 'green', hex: '#bbf7d0' },
-    { name: 'blue', hex: '#bfdbfe' },
-    { name: 'pink', hex: '#fbcfe8' },
-    { name: 'orange', hex: '#fed7aa' },
+    { name: "yellow", hex: "#fef08a" },
+    { name: "green", hex: "#bbf7d0" },
+    { name: "blue", hex: "#bfdbfe" },
+    { name: "pink", hex: "#fbcfe8" },
+    { name: "orange", hex: "#fed7aa" },
   ];
 </script>
 
-<div class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2">
+<div
+  class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2"
+>
   {#each colors as color}
     <button
       class="w-6 h-6 rounded-full border-2 border-border hover:border-foreground transition-colors hover:scale-110 transform"

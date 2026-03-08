@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { authStore } from '$lib/stores/auth';
-  import { librariesApi } from '$lib/api/libraries';
-  import { booksApi } from '$lib/api/books';
-  import { toastStore } from '$lib/stores/toast';
-  import BookGrid from '$lib/components/BookGrid.svelte';
-  import Modal from '$lib/components/Modal.svelte';
-  import type { LibraryOut, BookOut } from '$lib/types';
-  import { UserRole } from '$lib/types';
-  import { Upload, Search, X } from '@lucide/svelte';
+  import { onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
+  import { authStore } from "$lib/stores/auth";
+  import { librariesApi } from "$lib/api/libraries";
+  import { booksApi } from "$lib/api/books";
+  import { toastStore } from "$lib/stores/toast";
+  import BookGrid from "$lib/components/BookGrid.svelte";
+  import Modal from "$lib/components/Modal.svelte";
+  import type { LibraryOut, BookOut } from "$lib/types";
+  import { UserRole } from "$lib/types";
+  import { Upload, Search, X } from "@lucide/svelte";
 
   let libraryId = $derived($page.params.id as string);
 
   let library = $state<LibraryOut | null>(null);
   let books = $state<BookOut[]>([]);
   let loading = $state(true);
-  let searchQuery = $state('');
+  let searchQuery = $state("");
   let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
@@ -26,7 +26,10 @@
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   onMount(async () => {
-    if (!$authStore.token) { goto('/login'); return; }
+    if (!$authStore.token) {
+      goto("/login");
+      return;
+    }
     await loadData();
   });
 
@@ -47,7 +50,11 @@
   async function handleSearch() {
     if (!$authStore.token) return;
     try {
-      books = await librariesApi.getBooks(libraryId, $authStore.token, searchQuery || undefined);
+      books = await librariesApi.getBooks(
+        libraryId,
+        $authStore.token,
+        searchQuery || undefined,
+      );
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -62,7 +69,9 @@
         await booksApi.upload(file, $authStore.token, libraryId);
         successCount++;
       } catch (e) {
-        toastStore.error(`Failed to upload ${file.name}: ${(e as Error).message}`);
+        toastStore.error(
+          `Failed to upload ${file.name}: ${(e as Error).message}`,
+        );
       }
     }
     if (successCount > 0) {
@@ -81,19 +90,28 @@
 </script>
 
 <svelte:head>
-  <title>{library?.name ?? 'Library'} - BeePub</title>
+  <title>{library?.name ?? "Library"} - BeePub</title>
 </svelte:head>
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"></div>
+      <div
+        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
+      ></div>
     </div>
   {:else if library}
-    <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
+    <div
+      class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8"
+    >
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility === 'public' ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}">
+          <span
+            class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility ===
+            'public'
+              ? 'bg-primary/15 text-primary'
+              : 'bg-secondary text-muted-foreground'}"
+          >
             {library.visibility}
           </span>
         </div>
@@ -115,7 +133,10 @@
 
     <!-- Search -->
     <div class="relative mb-8">
-      <Search class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+      <Search
+        class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+        size={16}
+      />
       <input
         type="text"
         bind:value={searchQuery}
@@ -126,7 +147,10 @@
       {#if searchQuery}
         <button
           class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          onclick={() => { searchQuery = ''; handleSearch(); }}
+          onclick={() => {
+            searchQuery = "";
+            handleSearch();
+          }}
         >
           <X size={16} />
         </button>
@@ -135,8 +159,13 @@
 
     {#if books.length === 0}
       <div
-        class="border-2 border-dashed rounded-2xl p-12 text-center transition-colors {dragOver ? 'border-primary bg-primary/5' : 'border-border'}"
-        ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+        class="border-2 border-dashed rounded-2xl p-12 text-center transition-colors {dragOver
+          ? 'border-primary bg-primary/5'
+          : 'border-border'}"
+        ondragover={(e) => {
+          e.preventDefault();
+          dragOver = true;
+        }}
         ondragleave={() => (dragOver = false)}
         ondrop={onDrop}
         role="region"
@@ -144,11 +173,18 @@
       >
         <Upload class="mx-auto text-muted-foreground/30 mb-4" size={48} />
         <p class="text-muted-foreground text-lg">No books yet</p>
-        <p class="text-muted-foreground/70 text-sm mt-1">{isAdmin ? 'Upload EPUBs or drag and drop here.' : 'No books in this library.'}</p>
+        <p class="text-muted-foreground/70 text-sm mt-1">
+          {isAdmin
+            ? "Upload EPUBs or drag and drop here."
+            : "No books in this library."}
+        </p>
       </div>
     {:else}
       <div
-        ondragover={(e) => { e.preventDefault(); dragOver = true; }}
+        ondragover={(e) => {
+          e.preventDefault();
+          dragOver = true;
+        }}
         ondragleave={() => (dragOver = false)}
         ondrop={onDrop}
         role="region"
@@ -160,16 +196,23 @@
   {/if}
 </div>
 
-<Modal title="Upload Books" open={showUploadModal} onclose={() => (showUploadModal = false)}>
+<Modal
+  title="Upload Books"
+  open={showUploadModal}
+  onclose={() => (showUploadModal = false)}
+>
   <div class="space-y-4">
     <div
       class="border-2 border-dashed border-border rounded-2xl p-10 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
       onclick={() => fileInput?.click()}
       ondragover={(e) => e.preventDefault()}
-      ondrop={(e) => { e.preventDefault(); handleUpload(e.dataTransfer?.files ?? null); }}
+      ondrop={(e) => {
+        e.preventDefault();
+        handleUpload(e.dataTransfer?.files ?? null);
+      }}
       role="button"
       tabindex="0"
-      onkeydown={(e) => e.key === 'Enter' && fileInput?.click()}
+      onkeydown={(e) => e.key === "Enter" && fileInput?.click()}
     >
       <Upload class="mx-auto text-muted-foreground/40 mb-3" size={36} />
       <p class="text-foreground font-medium">Click or drag files</p>
@@ -185,7 +228,9 @@
     </div>
     {#if uploading}
       <div class="flex items-center gap-2 text-primary text-sm">
-        <div class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"></div>
+        <div
+          class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"
+        ></div>
         Uploading...
       </div>
     {/if}

@@ -1,16 +1,17 @@
 from typing import Annotated
+
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-import sqlalchemy as sa
-from sqlalchemy import select, func
 
 from app.database import get_db
+from app.deps import get_current_user
 from app.models.user import User, UserRole
 from app.schemas.auth import RegisterRequest, TokenResponse
 from app.schemas.user import UserOut
-from app.services.auth import hash_password, verify_password, create_access_token
-from app.deps import get_current_user
+from app.services.auth import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

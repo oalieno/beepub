@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { BookOpen } from '@lucide/svelte';
-  import type { Snippet } from 'svelte';
+  import { BookOpen } from "@lucide/svelte";
+  import type { Snippet } from "svelte";
 
   interface Props {
     href: string;
@@ -13,10 +13,21 @@
     overlay?: Snippet;
   }
 
-  let { href, name, previewBookIds, bookCount, badgeLabel, badgeClass, icon, overlay }: Props = $props();
+  let {
+    href,
+    name,
+    previewBookIds,
+    bookCount,
+    badgeLabel,
+    badgeClass,
+    icon,
+    overlay,
+  }: Props = $props();
 </script>
 
-<div class="bg-card card-soft rounded-2xl overflow-hidden group hover:shadow-lg transition-all duration-200 relative">
+<div
+  class="bg-card card-soft rounded-2xl overflow-hidden group hover:shadow-lg transition-all duration-200 relative"
+>
   {#if overlay}
     {@render overlay()}
   {/if}
@@ -60,14 +71,19 @@
         {#if icon}
           {@render icon()}
         {/if}
-        <h2 class="font-semibold text-foreground group-hover:text-primary transition-colors truncate">{name}</h2>
+        <h2
+          class="font-semibold text-foreground group-hover:text-primary transition-colors truncate"
+        >
+          {name}
+        </h2>
       </div>
       <div class="flex items-center gap-2 shrink-0 ml-3">
         <span class="text-xs px-2.5 py-1 rounded-full font-medium {badgeClass}">
           {badgeLabel}
         </span>
         <span class="text-xs text-muted-foreground">
-          {bookCount} {bookCount === 1 ? 'book' : 'books'}
+          {bookCount}
+          {bookCount === 1 ? "book" : "books"}
         </span>
       </div>
     </div>

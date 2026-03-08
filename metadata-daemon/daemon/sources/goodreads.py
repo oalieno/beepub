@@ -1,11 +1,12 @@
 import json
 import logging
 import re
+
 import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
-from daemon.sources.base import AbstractMetadataSource, SearchResult, FetchResult
+from daemon.sources.base import AbstractMetadataSource, FetchResult, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,11 @@ class GoodreadsSource(AbstractMetadataSource):
         links: list[tuple[str, str]] = []
         seen: set[str] = set()
 
-        selectors = ["a.bookTitle", "a[data-testid='bookTitle']", "a[href^='/book/show/']"]
+        selectors = [
+            "a.bookTitle",
+            "a[data-testid='bookTitle']",
+            "a[href^='/book/show/']",
+        ]
         for selector in selectors:
             for link in soup.select(selector):
                 href = link.get("href", "")
@@ -70,18 +75,26 @@ class GoodreadsSource(AbstractMetadataSource):
 
         return links
 
-    async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
+    async def search(
+        self, title: str, authors: list[str], isbn: str | None
+    ) -> list[SearchResult]:
         results = []
 
         # Try ISBN first
         if isbn:
             try:
-                async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
-                    resp = await client.get("https://www.goodreads.com/search", params={"q": isbn})
+                async with httpx.AsyncClient(
+                    headers=HEADERS, follow_redirects=True, timeout=15
+                ) as client:
+                    resp = await client.get(
+                        "https://www.goodreads.com/search", params={"q": isbn}
+                    )
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
                         for full_url, text in self._extract_book_links(soup, limit=3):
-                            results.append(SearchResult(url=full_url, title=text, authors=[]))
+                            results.append(
+                                SearchResult(url=full_url, title=text, authors=[])
+                            )
             except Exception as e:
                 logger.warning(f"Goodreads ISBN search failed: {e}")
 
@@ -91,12 +104,16 @@ class GoodreadsSource(AbstractMetadataSource):
         # Fallback: title+author search
         try:
             queries = self._build_queries(title, authors)
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 for query in queries:
                     if not query:
                         continue
 
-                    resp = await client.get("https://www.goodreads.com/search", params={"q": query})
+                    resp = await client.get(
+                        "https://www.goodreads.com/search", params={"q": query}
+                    )
                     if resp.status_code != 200:
                         continue
 
@@ -106,7 +123,11 @@ class GoodreadsSource(AbstractMetadataSource):
                     if links:
                         for full_url, text in links:
                             score = fuzz.token_set_ratio(title.lower(), text.lower())
-                            results.append(SearchResult(url=full_url, title=text, authors=[], score=score))
+                            results.append(
+                                SearchResult(
+                                    url=full_url, title=text, authors=[], score=score
+                                )
+                            )
                         results.sort(key=lambda r: r.score, reverse=True)
                         break
         except Exception as e:
@@ -116,7 +137,9 @@ class GoodreadsSource(AbstractMetadataSource):
 
     async def fetch(self, url: str) -> FetchResult:
         try:
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 resp = await client.get(url)
                 if resp.status_code != 200:
                     return FetchResult(source_url=url)
@@ -141,7 +164,9 @@ class GoodreadsSource(AbstractMetadataSource):
 
                 # Fallback: scrape rating display
                 if rating is None:
-                    rating_el = soup.select_one("[data-testid='ratingsCount']") or soup.select_one(".RatingStatistics__rating")
+                    rating_el = soup.select_one(
+                        "[data-testid='ratingsCount']"
+                    ) or soup.select_one(".RatingStatistics__rating")
                     if rating_el:
                         try:
                             rating = float(rating_el.get_text(strip=True).split()[0])

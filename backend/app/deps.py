@@ -1,12 +1,13 @@
-from typing import Annotated, Optional
+from typing import Annotated
+
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services.auth import decode_token
 from app.models.user import User, UserRole
+from app.services.auth import decode_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
@@ -37,7 +38,7 @@ async def get_current_user(
 async def get_current_user_or_cookie(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
-    token: Optional[str] = Cookie(None),
+    token: str | None = Cookie(None),
 ) -> User:
     """Accept auth from Authorization header or 'token' cookie (for browser resource loading)."""
     credentials_exception = HTTPException(
@@ -66,7 +67,11 @@ async def get_current_user_or_cookie(
     return user
 
 
-async def require_admin(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+async def require_admin(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> User:
     if current_user.role != UserRole.admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+        )
     return current_user

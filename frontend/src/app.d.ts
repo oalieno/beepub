@@ -1,4 +1,4 @@
-import type { UserOut } from '$lib/types';
+import type { UserOut } from "$lib/types";
 declare global {
   namespace App {
     interface Locals {

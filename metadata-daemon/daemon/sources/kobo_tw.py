@@ -1,10 +1,11 @@
 import json
 import logging
+
 import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
-from daemon.sources.base import AbstractMetadataSource, SearchResult, FetchResult
+from daemon.sources.base import AbstractMetadataSource, FetchResult, SearchResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,19 +25,25 @@ class KoboTWSource(AbstractMetadataSource):
         lowered = body.lower()
         return "challenged | kobo.com" in lowered or "captcha" in lowered
 
-    async def search(self, title: str, authors: list[str], isbn: str | None) -> list[SearchResult]:
+    async def search(
+        self, title: str, authors: list[str], isbn: str | None
+    ) -> list[SearchResult]:
         results = []
 
         # Try ISBN search first
         if isbn:
             try:
-                async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+                async with httpx.AsyncClient(
+                    headers=HEADERS, follow_redirects=True, timeout=15
+                ) as client:
                     resp = await client.get(
                         "https://www.kobo.com/tw/zh/search",
                         params={"query": isbn},
                     )
                     if self._is_challenged_response(resp.status_code, resp.text):
-                        logger.warning("Kobo TW search blocked by anti-bot challenge (ISBN)")
+                        logger.warning(
+                            "Kobo TW search blocked by anti-bot challenge (ISBN)"
+                        )
                         return []
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
@@ -49,7 +56,9 @@ class KoboTWSource(AbstractMetadataSource):
                                 text = title_el.get_text(strip=True)
                                 if not href.startswith("http"):
                                     href = f"https://www.kobo.com{href}"
-                                results.append(SearchResult(url=href, title=text, authors=[]))
+                                results.append(
+                                    SearchResult(url=href, title=text, authors=[])
+                                )
             except Exception as e:
                 logger.warning(f"Kobo TW ISBN search failed: {e}")
 
@@ -59,13 +68,17 @@ class KoboTWSource(AbstractMetadataSource):
         # Fallback: title+author search
         try:
             query = f"{title} {' '.join(authors[:1])}"
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 resp = await client.get(
                     "https://www.kobo.com/tw/zh/search",
                     params={"query": query},
                 )
                 if self._is_challenged_response(resp.status_code, resp.text):
-                    logger.warning("Kobo TW search blocked by anti-bot challenge (title)")
+                    logger.warning(
+                        "Kobo TW search blocked by anti-bot challenge (title)"
+                    )
                     return []
                 if resp.status_code == 200:
                     soup = BeautifulSoup(resp.text, "html.parser")
@@ -79,7 +92,11 @@ class KoboTWSource(AbstractMetadataSource):
                             score = fuzz.token_set_ratio(title.lower(), text.lower())
                             if not href.startswith("http"):
                                 href = f"https://www.kobo.com{href}"
-                            results.append(SearchResult(url=href, title=text, authors=[], score=score))
+                            results.append(
+                                SearchResult(
+                                    url=href, title=text, authors=[], score=score
+                                )
+                            )
                     results.sort(key=lambda r: r.score, reverse=True)
         except Exception as e:
             logger.warning(f"Kobo TW title search failed: {e}")
@@ -88,7 +105,9 @@ class KoboTWSource(AbstractMetadataSource):
 
     async def fetch(self, url: str) -> FetchResult:
         try:
-            async with httpx.AsyncClient(headers=HEADERS, follow_redirects=True, timeout=15) as client:
+            async with httpx.AsyncClient(
+                headers=HEADERS, follow_redirects=True, timeout=15
+            ) as client:
                 resp = await client.get(url)
                 if self._is_challenged_response(resp.status_code, resp.text):
                     logger.warning("Kobo TW fetch blocked by anti-bot challenge")

@@ -1,19 +1,24 @@
 <script lang="ts">
-  import { onDestroy, onMount } from 'svelte';
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
-  import { goto } from '$app/navigation';
-  import { authStore } from '$lib/stores/auth';
-  import EpubReader from '$lib/components/reader/EpubReader.svelte';
-  import Toolbar from '$lib/components/reader/Toolbar.svelte';
-  import HighlightSidebar from '$lib/components/reader/HighlightSidebar.svelte';
-  import TocSidebar from '$lib/components/reader/TocSidebar.svelte';
-  import { booksApi } from '$lib/api/books';
-  import { toastStore } from '$lib/stores/toast';
-  import IllustrationPromptModal from '$lib/components/reader/IllustrationPromptModal.svelte';
-  import IllustrationSidebar from '$lib/components/reader/IllustrationSidebar.svelte';
-  import IllustrationViewer from '$lib/components/reader/IllustrationViewer.svelte';
-  import type { HighlightOut, IllustrationOut, InteractionOut, StylePromptOut } from '$lib/types';
+  import { onDestroy, onMount } from "svelte";
+  import { browser } from "$app/environment";
+  import { page } from "$app/stores";
+  import { goto } from "$app/navigation";
+  import { authStore } from "$lib/stores/auth";
+  import EpubReader from "$lib/components/reader/EpubReader.svelte";
+  import Toolbar from "$lib/components/reader/Toolbar.svelte";
+  import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
+  import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
+  import { booksApi } from "$lib/api/books";
+  import { toastStore } from "$lib/stores/toast";
+  import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
+  import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
+  import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
+  import type {
+    HighlightOut,
+    IllustrationOut,
+    InteractionOut,
+    StylePromptOut,
+  } from "$lib/types";
 
   let bookId = $derived($page.params.id as string);
 
@@ -23,8 +28,8 @@
   const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
   let autoReadTriggered = false;
 
-  let title = $state('');
-  let fontFamily = $state('serif');
+  let title = $state("");
+  let fontFamily = $state("serif");
   let fontSize = $state(16);
   let darkMode = $state(false);
   let percentage = $state(0);
@@ -39,28 +44,28 @@
   let showTocSidebar = $state(false);
   let showIllustrationSidebar = $state(false);
   let showIllustrationModal = $state(false);
-  let illustrationModalCfi = $state('');
-  let illustrationModalText = $state('');
+  let illustrationModalCfi = $state("");
+  let illustrationModalText = $state("");
   let viewingIllustration = $state<IllustrationOut | null>(null);
-  let prevHtmlOverflow = '';
-  let prevBodyOverflow = '';
+  let prevHtmlOverflow = "";
+  let prevBodyOverflow = "";
 
   onMount(() => {
     prevHtmlOverflow = document.documentElement.style.overflow;
     prevBodyOverflow = document.body.style.overflow;
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
 
     if (!$authStore.token) {
-      goto('/login');
+      goto("/login");
       return;
     }
-    const savedFont = localStorage.getItem('reader-font');
-    const savedSize = localStorage.getItem('reader-size');
-    const savedTheme = localStorage.getItem('reader-dark');
+    const savedFont = localStorage.getItem("reader-font");
+    const savedSize = localStorage.getItem("reader-size");
+    const savedTheme = localStorage.getItem("reader-dark");
     if (savedFont) fontFamily = savedFont;
     if (savedSize) fontSize = parseInt(savedSize);
-    if (savedTheme) darkMode = savedTheme === '1';
+    if (savedTheme) darkMode = savedTheme === "1";
     ready = true;
 
     // Fetch current interaction and start reading timer
@@ -78,72 +83,96 @@
     if (!$authStore.token) return;
     try {
       interaction = await booksApi.getInteraction(bookId, $authStore.token);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     // Only start timer if status is null or want_to_read
-    if (!interaction?.reading_status || interaction.reading_status === 'want_to_read') {
+    if (
+      !interaction?.reading_status ||
+      interaction.reading_status === "want_to_read"
+    ) {
       readingTimer = setTimeout(async () => {
         if (!$authStore.token) return;
         const today = new Date().toISOString().slice(0, 10);
         try {
-          await booksApi.updateReadingStatus(bookId, {
-            reading_status: 'currently_reading',
-            started_at: today,
-          }, $authStore.token);
+          await booksApi.updateReadingStatus(
+            bookId,
+            {
+              reading_status: "currently_reading",
+              started_at: today,
+            },
+            $authStore.token,
+          );
           if (interaction) {
-            interaction.reading_status = 'currently_reading';
+            interaction.reading_status = "currently_reading";
             interaction.started_at = today;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }, READING_DEBOUNCE_MS);
     }
   }
 
   async function autoMarkAsRead() {
     if (!$authStore.token || !interaction) return;
-    if (interaction.reading_status === 'read' || interaction.reading_status === 'did_not_finish') return;
+    if (
+      interaction.reading_status === "read" ||
+      interaction.reading_status === "did_not_finish"
+    )
+      return;
     const today = new Date().toISOString().slice(0, 10);
     try {
-      await booksApi.updateReadingStatus(bookId, {
-        reading_status: 'read',
-        started_at: interaction.started_at || today,
-        finished_at: today,
-      }, $authStore.token);
-      interaction.reading_status = 'read';
+      await booksApi.updateReadingStatus(
+        bookId,
+        {
+          reading_status: "read",
+          started_at: interaction.started_at || today,
+          finished_at: today,
+        },
+        $authStore.token,
+      );
+      interaction.reading_status = "read";
       interaction.finished_at = today;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   $effect(() => {
     if (percentage >= 99 && !autoReadTriggered && interaction) {
       autoReadTriggered = true;
-      if (readingTimer) { clearTimeout(readingTimer); readingTimer = null; }
+      if (readingTimer) {
+        clearTimeout(readingTimer);
+        readingTimer = null;
+      }
       autoMarkAsRead();
     }
   });
 
   function handleFontToggle() {
-    fontFamily = fontFamily === 'serif' ? 'sans-serif' : 'serif';
-    localStorage.setItem('reader-font', fontFamily);
+    fontFamily = fontFamily === "serif" ? "sans-serif" : "serif";
+    localStorage.setItem("reader-font", fontFamily);
   }
 
   function handleFontIncrease() {
     if (fontSize < 32) {
       fontSize += 2;
-      localStorage.setItem('reader-size', String(fontSize));
+      localStorage.setItem("reader-size", String(fontSize));
     }
   }
 
   function handleFontDecrease() {
     if (fontSize > 10) {
       fontSize -= 2;
-      localStorage.setItem('reader-size', String(fontSize));
+      localStorage.setItem("reader-size", String(fontSize));
     }
   }
 
   function handleThemeToggle() {
     darkMode = !darkMode;
-    localStorage.setItem('reader-dark', darkMode ? '1' : '0');
+    localStorage.setItem("reader-dark", darkMode ? "1" : "0");
   }
 
   async function handleIllustrate(detail: { cfiRange: string; text: string }) {
@@ -153,22 +182,31 @@
     if (stylePrompts.length === 0 && $authStore.token) {
       try {
         stylePrompts = await booksApi.getStylePrompts(bookId, $authStore.token);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
     showIllustrationModal = true;
   }
 
-  async function handleCreateIllustration(detail: { style_prompt?: string; custom_prompt?: string }) {
+  async function handleCreateIllustration(detail: {
+    style_prompt?: string;
+    custom_prompt?: string;
+  }) {
     showIllustrationModal = false;
     if (!$authStore.token) return;
     try {
-      const ill = await booksApi.createIllustration(bookId, {
-        cfi_range: illustrationModalCfi,
-        text: illustrationModalText,
-        ...detail,
-      }, $authStore.token);
+      const ill = await booksApi.createIllustration(
+        bookId,
+        {
+          cfi_range: illustrationModalCfi,
+          text: illustrationModalText,
+          ...detail,
+        },
+        $authStore.token,
+      );
       illustrations = [...illustrations, ill];
-      toastStore.success('Generating illustration...');
+      toastStore.success("Generating illustration...");
       pollIllustration(ill.id);
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -181,23 +219,29 @@
       await new Promise((r) => setTimeout(r, 3000));
       if (!$authStore.token) return;
       try {
-        const ill = await booksApi.getIllustration(bookId, illustrationId, $authStore.token);
-        if (ill.status === 'completed') {
+        const ill = await booksApi.getIllustration(
+          bookId,
+          illustrationId,
+          $authStore.token,
+        );
+        if (ill.status === "completed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           reader?.addIllustrationAnnotation(ill);
-          toastStore.success('Illustration ready!');
+          toastStore.success("Illustration ready!");
           return;
         }
-        if (ill.status === 'failed') {
+        if (ill.status === "failed") {
           illustrations = illustrations.filter((x) => x.id !== ill.id);
-          toastStore.error(`Generation failed: ${ill.error_message ?? 'unknown error'}`);
+          toastStore.error(
+            `Generation failed: ${ill.error_message ?? "unknown error"}`,
+          );
           return;
         }
       } catch {
         return;
       }
     }
-    toastStore.error('Generation timed out');
+    toastStore.error("Generation timed out");
   }
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
@@ -206,7 +250,7 @@
       await booksApi.deleteIllustration(bookId, ill.id, $authStore.token);
       illustrations = illustrations.filter((x) => x.id !== ill.id);
       reader?.removeIllustrationAnnotation(ill.cfi_range);
-      toastStore.success('Illustration deleted');
+      toastStore.success("Illustration deleted");
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -220,10 +264,14 @@
 </script>
 
 <svelte:head>
-  <title>{title || 'Reading'} - BeePub</title>
+  <title>{title || "Reading"} - BeePub</title>
 </svelte:head>
 
-<div class="flex flex-col h-[100dvh] min-h-0 {darkMode ? 'bg-gray-900' : 'bg-background'}">
+<div
+  class="flex flex-col h-[100dvh] min-h-0 {darkMode
+    ? 'bg-gray-900'
+    : 'bg-background'}"
+>
   <Toolbar
     {bookId}
     {title}
@@ -242,9 +290,21 @@
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}
     onchapter={(href) => reader?.displayChapter(href)}
-    onhighlights={() => { showHighlightSidebar = !showHighlightSidebar; showTocSidebar = false; showIllustrationSidebar = false; }}
-    onillustrations={() => { showIllustrationSidebar = !showIllustrationSidebar; showHighlightSidebar = false; showTocSidebar = false; }}
-    ontoc_toggle={() => { showTocSidebar = !showTocSidebar; showHighlightSidebar = false; showIllustrationSidebar = false; }}
+    onhighlights={() => {
+      showHighlightSidebar = !showHighlightSidebar;
+      showTocSidebar = false;
+      showIllustrationSidebar = false;
+    }}
+    onillustrations={() => {
+      showIllustrationSidebar = !showIllustrationSidebar;
+      showHighlightSidebar = false;
+      showTocSidebar = false;
+    }}
+    ontoc_toggle={() => {
+      showTocSidebar = !showTocSidebar;
+      showHighlightSidebar = false;
+      showIllustrationSidebar = false;
+    }}
   />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
@@ -257,7 +317,9 @@
         {fontSize}
         {darkMode}
         ontitle={(t) => (title = t)}
-        onprogress={(p) => { percentage = p.percentage; }}
+        onprogress={(p) => {
+          percentage = p.percentage;
+        }}
         ontoc={(t) => (toc = t)}
         ondirection={(rtl) => (isRtl = rtl)}
         onhighlightschange={(h) => (highlights = h)}
@@ -268,8 +330,14 @@
     {/if}
 
     <!-- Bottom percentage indicator -->
-    <div class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none">
-      <span class="text-xs px-3 py-1 rounded-full {darkMode ? 'bg-gray-800/80 text-gray-400' : 'bg-black/5 text-muted-foreground'}">
+    <div
+      class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none"
+    >
+      <span
+        class="text-xs px-3 py-1 rounded-full {darkMode
+          ? 'bg-gray-800/80 text-gray-400'
+          : 'bg-black/5 text-muted-foreground'}"
+      >
         {percentage}%
       </span>
     </div>
@@ -278,7 +346,10 @@
       <TocSidebar
         {toc}
         {darkMode}
-        onchapter={(href) => { reader?.displayChapter(href); showTocSidebar = false; }}
+        onchapter={(href) => {
+          reader?.displayChapter(href);
+          showTocSidebar = false;
+        }}
         onclose={() => (showTocSidebar = false)}
       />
     {/if}
@@ -287,14 +358,17 @@
       <HighlightSidebar
         {highlights}
         {darkMode}
-        onselect={(hl) => { reader?.displayCfi(hl.cfi_range); showHighlightSidebar = false; }}
+        onselect={(hl) => {
+          reader?.displayCfi(hl.cfi_range);
+          showHighlightSidebar = false;
+        }}
         ondelete={async (hl) => {
           if (!$authStore.token) return;
           try {
             await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
             highlights = highlights.filter((h) => h.id !== hl.id);
             reader?.removeHighlightAnnotation(hl.cfi_range);
-            toastStore.success('Highlight removed');
+            toastStore.success("Highlight removed");
           } catch (e) {
             toastStore.error((e as Error).message);
           }

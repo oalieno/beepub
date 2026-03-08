@@ -70,7 +70,9 @@ def create_pagebreak(pageref, label=None, html=True):
         "id": "{pageref}".format(pageref=pageref),  # noqa: UP032
     }
 
-    pageref_elem = etree.Element("span", pageref_attributes, nsmap={"epub": NAMESPACES["EPUB"]})
+    pageref_elem = etree.Element(
+        "span", pageref_attributes, nsmap={"epub": NAMESPACES["EPUB"]}
+    )
 
     if label:
         pageref_elem.text = label

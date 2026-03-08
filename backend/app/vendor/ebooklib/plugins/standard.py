@@ -16,8 +16,8 @@
 
 import six
 
-from .base import BasePlugin
 from ..utils import parse_html_string
+from .base import BasePlugin
 
 # TODO:
 #   - should also look for the _required_ elements
@@ -99,17 +99,35 @@ class SyntaxPlugin(BasePlugin):
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["href", "target"])
                 elif _item.tag == "link":
                     leave_only(
-                        _item, ATTRIBUTES_GLOBAL + ["href", "crossorigin", "rel", "media", "hreflang", "type", "sizes"]
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + [
+                            "href",
+                            "crossorigin",
+                            "rel",
+                            "media",
+                            "hreflang",
+                            "type",
+                            "sizes",
+                        ],
                     )
                 elif _item.tag == "title":
                     if _item.text == "":
                         head.remove(_item)
                 elif _item.tag == "meta":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["name", "http-equiv", "content", "charset"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + ["name", "http-equiv", "content", "charset"],
+                    )
                     # just remove for now, but really should not be like this
                     head.remove(_item)
                 elif _item.tag == "script":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["src", "type", "charset", "async", "defer", "crossorigin"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + ["src", "type", "charset", "async", "defer", "crossorigin"],
+                    )
                 elif _item.tag == "source":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["src", "type", "media"])
                 elif _item.tag == "style":
@@ -125,18 +143,41 @@ class SyntaxPlugin(BasePlugin):
                 # <a class="indexterm" href="ch05.html#ix_epub:trigger_element">
 
                 if _item.tag == "a":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["href", "target", "download", "rel", "hreflang", "type"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + ["href", "target", "download", "rel", "hreflang", "type"],
+                    )
                 elif _item.tag == "area":
                     leave_only(
                         _item,
                         ATTRIBUTES_GLOBAL
-                        + ["alt", "coords", "shape", "href", "target", "download", "rel", "hreflang", "type"],
+                        + [
+                            "alt",
+                            "coords",
+                            "shape",
+                            "href",
+                            "target",
+                            "download",
+                            "rel",
+                            "hreflang",
+                            "type",
+                        ],
                     )
                 elif _item.tag == "audio":
                     leave_only(
                         _item,
                         ATTRIBUTES_GLOBAL
-                        + ["src", "crossorigin", "preload", "autoplay", "mediagroup", "loop", "muted", "controls"],
+                        + [
+                            "src",
+                            "crossorigin",
+                            "preload",
+                            "autoplay",
+                            "mediagroup",
+                            "loop",
+                            "muted",
+                            "controls",
+                        ],
                     )
                 elif _item.tag == "blockquote":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["cite"])
@@ -168,7 +209,9 @@ class SyntaxPlugin(BasePlugin):
                 elif _item.tag == "details":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["open"])
                 elif _item.tag == "embed":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["src", "type", "width", "height"])
+                    leave_only(
+                        _item, ATTRIBUTES_GLOBAL + ["src", "type", "width", "height"]
+                    )
                 elif _item.tag == "fieldset":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["disable", "form", "name"])
                 elif _item.tag == "details":
@@ -190,7 +233,16 @@ class SyntaxPlugin(BasePlugin):
                     leave_only(
                         _item,
                         ATTRIBUTES_GLOBAL
-                        + ["src", "srcdoc", "name", "sandbox", "seamless", "allowfullscreen", "width", "height"],
+                        + [
+                            "src",
+                            "srcdoc",
+                            "name",
+                            "sandbox",
+                            "seamless",
+                            "allowfullscreen",
+                            "width",
+                            "height",
+                        ],
                     )
                 elif _item.tag == "img":
                     _src = _item.get("src", "").lower()
@@ -204,7 +256,17 @@ class SyntaxPlugin(BasePlugin):
                             _img = epub.EpubImage(file_name=_item.get("src"))
                             book.add_item(_img)
                     leave_only(
-                        _item, ATTRIBUTES_GLOBAL + ["alt", "src", "crossorigin", "usemap", "ismap", "width", "height"]
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + [
+                            "alt",
+                            "src",
+                            "crossorigin",
+                            "usemap",
+                            "ismap",
+                            "width",
+                            "height",
+                        ],
                     )
                 elif _item.tag == "input":
                     leave_only(
@@ -247,7 +309,16 @@ class SyntaxPlugin(BasePlugin):
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["cite", "datetime"])
                 elif _item.tag == "keygen":
                     leave_only(
-                        _item, ATTRIBUTES_GLOBAL + ["autofocus", "challenge", "disabled", "form", "keytype", "name"]
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + [
+                            "autofocus",
+                            "challenge",
+                            "disabled",
+                            "form",
+                            "keytype",
+                            "name",
+                        ],
                     )
                 elif _item.tag == "label":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["form", "for"])
@@ -261,14 +332,26 @@ class SyntaxPlugin(BasePlugin):
                     leave_only(
                         _item,
                         ATTRIBUTES_GLOBAL
-                        + ["data", "type", "typemustmatch", "name", "usemap", "form", "width", "height"],
+                        + [
+                            "data",
+                            "type",
+                            "typemustmatch",
+                            "name",
+                            "usemap",
+                            "form",
+                            "width",
+                            "height",
+                        ],
                     )
                 elif _item.tag == "ol":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["reversed", "start", "type"])
                 elif _item.tag == "optgroup":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["disabled", "label"])
                 elif _item.tag == "option":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["disabled", "label", "selected", "value"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL + ["disabled", "label", "selected", "value"],
+                    )
                 elif _item.tag == "output":
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["for", "form", "name"])
                 elif _item.tag == "param":
@@ -280,7 +363,16 @@ class SyntaxPlugin(BasePlugin):
                 elif _item.tag == "select":
                     leave_only(
                         _item,
-                        ATTRIBUTES_GLOBAL + ["autofocus", "disabled", "form", "multiple", "name", "required", "size"],
+                        ATTRIBUTES_GLOBAL
+                        + [
+                            "autofocus",
+                            "disabled",
+                            "form",
+                            "multiple",
+                            "name",
+                            "required",
+                            "size",
+                        ],
                     )
 
                 elif _item.tag == "table":
@@ -311,7 +403,9 @@ class SyntaxPlugin(BasePlugin):
                         #   dt
                         #   dd
                 elif _item.tag == "td":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["colspan", "rowspan", "headers"])
+                    leave_only(
+                        _item, ATTRIBUTES_GLOBAL + ["colspan", "rowspan", "headers"]
+                    )
                 elif _item.tag == "textarea":
                     leave_only(
                         _item,
@@ -337,11 +431,19 @@ class SyntaxPlugin(BasePlugin):
                 elif _item.tag in ["col", "colgroup"]:
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["span"])
                 elif _item.tag == "th":
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["colspan", "rowspan", "headers", "scope", "abbr", "sorted"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + ["colspan", "rowspan", "headers", "scope", "abbr", "sorted"],
+                    )
                 elif _item.tag in ["time"]:
                     leave_only(_item, ATTRIBUTES_GLOBAL + ["datetime"])
                 elif _item.tag in ["track"]:
-                    leave_only(_item, ATTRIBUTES_GLOBAL + ["kind", "src", "srclang", "label", "default"])
+                    leave_only(
+                        _item,
+                        ATTRIBUTES_GLOBAL
+                        + ["kind", "src", "srclang", "label", "default"],
+                    )
                 elif _item.tag == "video":
                     leave_only(
                         _item,
@@ -375,6 +477,8 @@ class SyntaxPlugin(BasePlugin):
                         if _attr not in ATTRIBUTES_GLOBAL:
                             del _item.attrib[_attr]
 
-        chapter.content = etree.tostring(tree, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        chapter.content = etree.tostring(
+            tree, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
         return chapter.content

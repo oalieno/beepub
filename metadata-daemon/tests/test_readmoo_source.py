@@ -39,7 +39,9 @@ class FakeAsyncClient:
         else:
             html = "<html><body></body></html>"
 
-        return httpx.Response(200, text=html, request=httpx.Request("GET", url, params=params))
+        return httpx.Response(
+            200, text=html, request=httpx.Request("GET", url, params=params)
+        )
 
 
 class FakeFetchClient:
@@ -61,11 +63,15 @@ class FakeFetchClient:
           </div>
         </body></html>
         """
-        return httpx.Response(200, text=html, request=httpx.Request("GET", url, params=params))
+        return httpx.Response(
+            200, text=html, request=httpx.Request("GET", url, params=params)
+        )
 
 
 def test_build_queries_normalizes_and_deduplicates():
-    queries = ReadmooSource._build_queries("極限返航（電影書衣典藏版）", ["安迪．威爾（Andy Weir）"])
+    queries = ReadmooSource._build_queries(
+        "極限返航（電影書衣典藏版）", ["安迪．威爾（Andy Weir）"]
+    )
 
     assert queries == [
         "極限返航（電影書衣典藏版） 安迪．威爾（Andy Weir）",
@@ -116,7 +122,10 @@ def test_search_falls_back_to_normalized_query(monkeypatch):
     assert results[0].title == "極限返航"
     assert results[0].url == "https://readmoo.com/book/210290289000101"
     assert FakeAsyncClient.requests == [
-        ("https://readmoo.com/search/keyword", "極限返航（電影書衣典藏版） 安迪．威爾（Andy Weir）"),
+        (
+            "https://readmoo.com/search/keyword",
+            "極限返航（電影書衣典藏版） 安迪．威爾（Andy Weir）",
+        ),
         ("https://readmoo.com/search/keyword", "極限返航（電影書衣典藏版）"),
         ("https://readmoo.com/search/keyword", "極限返航 安迪．威爾（Andy Weir）"),
     ]

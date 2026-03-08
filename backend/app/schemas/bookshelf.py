@@ -1,26 +1,26 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
 
 class BookshelfCreate(BaseModel):
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_public: bool = False
 
 
 class BookshelfUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    is_public: Optional[bool] = None
+    name: str | None = None
+    description: str | None = None
+    is_public: bool | None = None
 
 
 class BookshelfOut(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     name: str
-    description: Optional[str]
+    description: str | None
     is_public: bool
     created_at: datetime
 

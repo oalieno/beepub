@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with EbookLib.  If not, see <http://www.gnu.org/licenses/>.
 
+import datetime
 import logging
 import os.path
 import posixpath as zip_path
@@ -22,7 +23,6 @@ import uuid
 import warnings
 import zipfile
 from collections import OrderedDict
-import datetime
 
 import six
 
@@ -31,11 +31,18 @@ try:
 except ImportError:
     from urllib import unquote
 
+import sys as _sys
+
 from lxml import etree
 
-import sys as _sys
 ebooklib = _sys.modules[__package__]  # reference package __init__ for ITEM_* constants
-from .utils import Directory, get_pages_for_items, guess_type, parse_html_string, parse_string
+from .utils import (
+    Directory,
+    get_pages_for_items,
+    guess_type,
+    parse_html_string,
+    parse_string,
+)
 
 # Version of EPUB library
 VERSION = (0, 20, 0)
@@ -125,7 +132,9 @@ class EpubItem(object):  # noqa: UP004
     Base class for the items in a book.
     """
 
-    def __init__(self, uid=None, file_name="", media_type="", content=None, manifest=True):
+    def __init__(
+        self, uid=None, file_name="", media_type="", content=None, manifest=True
+    ):
         """
         :Args:
           - uid: Unique identifier for this item (optional)
@@ -223,7 +232,9 @@ class EpubNcx(EpubItem):
     "Represents Navigation Control File (NCX) in the EPUB."
 
     def __init__(self, uid="ncx", file_name="toc.ncx"):
-        super(EpubNcx, self).__init__(uid=uid, file_name=file_name, media_type="application/x-dtbncx+xml")  # noqa: UP008
+        super().__init__(
+            uid=uid, file_name=file_name, media_type="application/x-dtbncx+xml"
+        )  # noqa: UP008
 
     def __str__(self):
         return "<EpubNcx:{id}>".format(id=self.id)  # noqa: UP032
@@ -241,7 +252,7 @@ class EpubCover(EpubItem):
         return ebooklib.ITEM_COVER
 
     def __str__(self):
-        return "<EpubCover:{id}:{file_name}>".format(id=self.id, file_name=self.file_name)  # noqa: UP032
+        return f"<EpubCover:{self.id}:{self.file_name}>"  # noqa: UP032
 
 
 class EpubHtml(EpubItem):
@@ -391,7 +402,9 @@ class EpubHtml(EpubItem):
         if len(html_root.find("body")) != 0:
             body = html_tree.find("body")
 
-            tree_str = etree.tostring(body, pretty_print=True, encoding="utf-8", xml_declaration=False)
+            tree_str = etree.tostring(
+                body, pretty_print=True, encoding="utf-8", xml_declaration=False
+            )
 
             # this is so stupid
             if tree_str.startswith(six.b("<body>")):
@@ -419,7 +432,9 @@ class EpubHtml(EpubItem):
         tree_root = tree.getroot()
 
         tree_root.set("lang", self.lang or self.book.language)
-        tree_root.attrib["{%s}lang" % NAMESPACES["XML"]] = self.lang or self.book.language  # noqa
+        tree_root.attrib["{%s}lang" % NAMESPACES["XML"]] = (
+            self.lang or self.book.language
+        )  # noqa
 
         # add to the head also
         #  <meta charset="utf-8" />
@@ -470,12 +485,14 @@ class EpubHtml(EpubItem):
             for i in body.getchildren():
                 _body.append(i)
 
-        tree_str = etree.tostring(tree, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        tree_str = etree.tostring(
+            tree, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
         return tree_str
 
     def __str__(self):
-        return "<EpubHtml:{id}:{file_name}>".format(id=self.id, file_name=self.file_name)  # noqa: UP032
+        return f"<EpubHtml:{self.id}:{self.file_name}>"  # noqa: UP032
 
 
 class EpubCoverHtml(EpubHtml):
@@ -483,7 +500,9 @@ class EpubCoverHtml(EpubHtml):
     Represents Cover page in the EPUB file.
     """
 
-    def __init__(self, uid="cover", file_name="cover.xhtml", image_name="", title="Cover"):
+    def __init__(
+        self, uid="cover", file_name="cover.xhtml", image_name="", title="Cover"
+    ):
         super(EpubCoverHtml, self).__init__(uid=uid, file_name=file_name, title=title)  # noqa: UP008
 
         self.image_name = image_name
@@ -512,17 +531,21 @@ class EpubCoverHtml(EpubHtml):
         tree = parse_string(super(EpubCoverHtml, self).get_content())  # noqa: UP008
         tree_root = tree.getroot()
 
-        images = tree_root.xpath("//xhtml:img", namespaces={"xhtml": NAMESPACES["XHTML"]})
+        images = tree_root.xpath(
+            "//xhtml:img", namespaces={"xhtml": NAMESPACES["XHTML"]}
+        )
 
         images[0].set("src", self.image_name)
         images[0].set("alt", self.title)
 
-        tree_str = etree.tostring(tree, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        tree_str = etree.tostring(
+            tree, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
         return tree_str
 
     def __str__(self):
-        return "<EpubCoverHtml:{id}:{file_name}>".format(id=self.id, file_name=self.file_name)  # noqa: UP032
+        return f"<EpubCoverHtml:{self.id}:{self.file_name}>"  # noqa: UP032
 
 
 class EpubNav(EpubHtml):
@@ -530,9 +553,20 @@ class EpubNav(EpubHtml):
     Represents Navigation Document in the EPUB file.
     """
 
-    def __init__(self, uid="nav", file_name="nav.xhtml", media_type="application/xhtml+xml", title="", direction=None):
+    def __init__(
+        self,
+        uid="nav",
+        file_name="nav.xhtml",
+        media_type="application/xhtml+xml",
+        title="",
+        direction=None,
+    ):
         super(EpubNav, self).__init__(  # noqa: UP008
-            uid=uid, file_name=file_name, media_type=media_type, title=title, direction=direction
+            uid=uid,
+            file_name=file_name,
+            media_type=media_type,
+            title=title,
+            direction=direction,
         )
 
     def is_chapter(self):
@@ -561,18 +595,23 @@ class EpubImage(EpubItem):
         return ebooklib.ITEM_IMAGE
 
     def __str__(self):
-        return "<EpubImage:{id}:{file_name}>".format(id=self.id, file_name=self.file_name)  # noqa: UP032
+        return f"<EpubImage:{self.id}:{self.file_name}>"  # noqa: UP032
 
 
 class EpubSMIL(EpubItem):
     def __init__(self, uid=None, file_name="", content=None):
-        super(EpubSMIL, self).__init__(uid=uid, file_name=file_name, media_type="application/smil+xml", content=content)  # noqa: UP008
+        super().__init__(
+            uid=uid,
+            file_name=file_name,
+            media_type="application/smil+xml",
+            content=content,
+        )  # noqa: UP008
 
     def get_type(self):
         return ebooklib.ITEM_SMIL
 
     def __str__(self):
-        return "<EpubSMIL:{id}:{file_name}>".format(id=self.id, file_name=self.file_name)  # noqa: UP032
+        return f"<EpubSMIL:{self.id}:{self.file_name}>"  # noqa: UP032
 
 
 # EpubBook
@@ -608,13 +647,21 @@ class EpubBook(object):  # noqa: UP004
         self.language = "en"
         self.direction = None
 
-        self.templates = {"ncx": NCX_XML, "nav": NAV_XML, "chapter": CHAPTER_XML, "cover": COVER_XML}
+        self.templates = {
+            "ncx": NCX_XML,
+            "nav": NAV_XML,
+            "chapter": CHAPTER_XML,
+            "cover": COVER_XML,
+        }
 
         self.add_metadata(
             "OPF",
             "generator",
             "",
-            {"name": "generator", "content": "Ebook-lib {}".format(".".join([str(s) for s in VERSION]))},
+            {
+                "name": "generator",
+                "content": "Ebook-lib {}".format(".".join([str(s) for s in VERSION])),
+            },
         )
 
         # default to using a randomly-unique identifier if one is not specified manually
@@ -634,7 +681,9 @@ class EpubBook(object):  # noqa: UP004
 
         self.uid = uid
 
-        self.set_unique_metadata("DC", "identifier", self.uid, {"id": self.IDENTIFIER_ID})
+        self.set_unique_metadata(
+            "DC", "identifier", self.uid, {"id": self.IDENTIFIER_ID}
+        )
 
     def set_title(self, title):
         """
@@ -688,7 +737,9 @@ class EpubBook(object):  # noqa: UP004
             c1 = EpubCoverHtml(image_name=file_name)
             self.add_item(c1)
 
-        self.add_metadata(None, "meta", "", OrderedDict([("name", "cover"), ("content", "cover-img")]))
+        self.add_metadata(
+            None, "meta", "", OrderedDict([("name", "cover"), ("content", "cover-img")])
+        )
 
     def add_author(self, author, file_as=None, role=None, uid="creator"):
         "Add author for this document"
@@ -697,10 +748,22 @@ class EpubBook(object):  # noqa: UP004
 
         if file_as:
             self.add_metadata(
-                None, "meta", file_as, {"refines": "#" + uid, "property": "file-as", "scheme": "marc:relators"}
+                None,
+                "meta",
+                file_as,
+                {
+                    "refines": "#" + uid,
+                    "property": "file-as",
+                    "scheme": "marc:relators",
+                },
             )
         if role:
-            self.add_metadata(None, "meta", role, {"refines": "#" + uid, "property": "role", "scheme": "marc:relators"})
+            self.add_metadata(
+                None,
+                "meta",
+                role,
+                {"refines": "#" + uid, "property": "role", "scheme": "marc:relators"},
+            )
 
     def add_metadata(self, namespace, name, value, others=None):
         "Add metadata"
@@ -922,7 +985,9 @@ class EpubWriter(object):  # noqa: UP004
         return (dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
 
     def zipinfo(self, name):
-        return zipfile.ZipInfo(name, self.datetime_to_zipinfo_datetime(self.options["mtime"]))
+        return zipfile.ZipInfo(
+            name, self.datetime_to_zipinfo_datetime(self.options["mtime"])
+        )
 
     def __init__(self, name, book, options=None):
         self.file_name = name
@@ -980,7 +1045,10 @@ class EpubWriter(object):  # noqa: UP004
             if ns_name == NAMESPACES["OPF"]:
                 for values2 in values.values():
                     for v in values2:
-                        if "property" in v[1] and v[1]["property"] == "dcterms:modified":
+                        if (
+                            "property" in v[1]
+                            and v[1]["property"] == "dcterms:modified"
+                        ):
                             continue
                         try:
                             el = etree.SubElement(metadata, "meta", v[1])
@@ -993,13 +1061,15 @@ class EpubWriter(object):  # noqa: UP004
                     for v in values2:
                         try:
                             if ns_name:
-                                el = etree.SubElement(metadata, "{%s}%s" % (ns_name, name), v[1])  # noqa: UP031
+                                el = etree.SubElement(
+                                    metadata, "{%s}%s" % (ns_name, name), v[1]
+                                )  # noqa: UP031
                             else:
-                                el = etree.SubElement(metadata, "{name}".format(name=name), v[1])  # noqa: UP032
+                                el = etree.SubElement(metadata, f"{name}", v[1])  # noqa: UP032
 
                             el.text = v[0]
                         except ValueError:
-                            logging.info('Could not create metadata "{name}".'.format(name=name))  # noqa: UP032
+                            logging.info(f'Could not create metadata "{name}".')  # noqa: UP032
 
     def _write_opf_manifest(self, root):
         manifest = etree.SubElement(root, "manifest")
@@ -1017,22 +1087,42 @@ class EpubWriter(object):  # noqa: UP004
                 etree.SubElement(
                     manifest,
                     "item",
-                    {"href": item.get_name(), "id": item.id, "media-type": item.media_type, "properties": "nav"},
+                    {
+                        "href": item.get_name(),
+                        "id": item.id,
+                        "media-type": item.media_type,
+                        "properties": "nav",
+                    },
                 )
             elif isinstance(item, EpubNcx):
                 _ncx_id = item.id
                 etree.SubElement(
-                    manifest, "item", {"href": item.file_name, "id": item.id, "media-type": item.media_type}
+                    manifest,
+                    "item",
+                    {
+                        "href": item.file_name,
+                        "id": item.id,
+                        "media-type": item.media_type,
+                    },
                 )
 
             elif isinstance(item, EpubCover):
                 etree.SubElement(
                     manifest,
                     "item",
-                    {"href": item.file_name, "id": item.id, "media-type": item.media_type, "properties": "cover-image"},
+                    {
+                        "href": item.file_name,
+                        "id": item.id,
+                        "media-type": item.media_type,
+                        "properties": "cover-image",
+                    },
                 )
             else:
-                opts = {"href": item.file_name, "id": item.id, "media-type": item.media_type}
+                opts = {
+                    "href": item.file_name,
+                    "id": item.id,
+                    "media-type": item.media_type,
+                }
 
                 if hasattr(item, "properties") and len(item.properties) > 0:
                     opts["properties"] = " ".join(item.properties)
@@ -1111,7 +1201,9 @@ class EpubWriter(object):  # noqa: UP004
                 if _title is None:
                     _title = ""
                 _ref = etree.SubElement(
-                    guide, "reference", {"type": item.get("type", ""), "title": _title, "href": _href}
+                    guide,
+                    "reference",
+                    {"type": item.get("type", ""), "title": _title, "href": _href},
                 )
 
     def _write_opf_bindings(self, root):
@@ -1121,9 +1213,14 @@ class EpubWriter(object):  # noqa: UP004
                 etree.SubElement(bindings, "mediaType", item)
 
     def _write_opf_file(self, root):
-        tree_str = etree.tostring(root, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        tree_str = etree.tostring(
+            root, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
-        self.out.writestr(self.zipinfo("{FOLDER_NAME}/content.opf".format(FOLDER_NAME=self.book.FOLDER_NAME)), tree_str)
+        self.out.writestr(
+            self.zipinfo(f"{self.book.FOLDER_NAME}/content.opf"),
+            tree_str,
+        )
 
     def _write_opf(self):
         package_attributes = {
@@ -1136,7 +1233,9 @@ class EpubWriter(object):  # noqa: UP004
 
         root = etree.Element("package", package_attributes)
 
-        prefixes = ["rendition: http://www.idpf.org/vocab/rendition/#"] + self.book.prefixes
+        prefixes = [
+            "rendition: http://www.idpf.org/vocab/rendition/#"
+        ] + self.book.prefixes
         root.attrib["prefix"] = " ".join(prefixes)
 
         # METADATA
@@ -1174,7 +1273,13 @@ class EpubWriter(object):  # noqa: UP004
         # for now this just handles css files and ignores others
         for _link in item.links:
             _lnk = etree.SubElement(
-                head, "link", {"href": _link.get("href", ""), "rel": "stylesheet", "type": "text/css"}
+                head,
+                "link",
+                {
+                    "href": _link.get("href", ""),
+                    "rel": "stylesheet",
+                    "type": "text/css",
+                },
             )
 
         body = etree.SubElement(root, "body")
@@ -1199,11 +1304,23 @@ class EpubWriter(object):  # noqa: UP004
                 if isinstance(item, tuple) or isinstance(item, list):
                     li = etree.SubElement(ol, "li")
                     if isinstance(item[0], EpubHtml):
-                        a = etree.SubElement(li, "a", {"href": zip_path.relpath(item[0].file_name, nav_dir_name)})
+                        a = etree.SubElement(
+                            li,
+                            "a",
+                            {"href": zip_path.relpath(item[0].file_name, nav_dir_name)},
+                        )
                     elif isinstance(item[0], Section) and item[0].href != "":
-                        a = etree.SubElement(li, "a", {"href": zip_path.relpath(item[0].href, nav_dir_name)})
+                        a = etree.SubElement(
+                            li,
+                            "a",
+                            {"href": zip_path.relpath(item[0].href, nav_dir_name)},
+                        )
                     elif isinstance(item[0], Link):
-                        a = etree.SubElement(li, "a", {"href": zip_path.relpath(item[0].href, nav_dir_name)})
+                        a = etree.SubElement(
+                            li,
+                            "a",
+                            {"href": zip_path.relpath(item[0].href, nav_dir_name)},
+                        )
                     else:
                         a = etree.SubElement(li, "span")
                     a.text = item[0].title
@@ -1212,11 +1329,17 @@ class EpubWriter(object):  # noqa: UP004
 
                 elif isinstance(item, Link):
                     li = etree.SubElement(ol, "li")
-                    a = etree.SubElement(li, "a", {"href": zip_path.relpath(item.href, nav_dir_name)})
+                    a = etree.SubElement(
+                        li, "a", {"href": zip_path.relpath(item.href, nav_dir_name)}
+                    )
                     a.text = item.title
                 elif isinstance(item, EpubHtml):
                     li = etree.SubElement(ol, "li")
-                    a = etree.SubElement(li, "a", {"href": zip_path.relpath(item.file_name, nav_dir_name)})
+                    a = etree.SubElement(
+                        li,
+                        "a",
+                        {"href": zip_path.relpath(item.file_name, nav_dir_name)},
+                    )
                     a.text = item.title
 
         _create_section(nav, self.book.toc)
@@ -1228,7 +1351,9 @@ class EpubWriter(object):  # noqa: UP004
             # Epub2 guide types do not map completely to epub3 landmark types.
             guide_to_landscape_map = {"notes": "rearnotes", "text": "bodymatter"}
 
-            guide_nav = etree.SubElement(body, "nav", {"{%s}type" % NAMESPACES["EPUB"]: "landmarks"})  # noqa: UP031
+            guide_nav = etree.SubElement(
+                body, "nav", {"{%s}type" % NAMESPACES["EPUB"]: "landmarks"}
+            )  # noqa: UP031
 
             guide_content_title = etree.SubElement(guide_nav, "h2")
             guide_content_title.text = self.options.get("landmark_title", "Guide")
@@ -1252,7 +1377,9 @@ class EpubWriter(object):  # noqa: UP004
                     li_item,
                     "a",
                     {
-                        "{%s}type" % NAMESPACES["EPUB"]: guide_to_landscape_map.get(guide_type, guide_type),  # noqa: UP031
+                        "{%s}type" % NAMESPACES["EPUB"]: guide_to_landscape_map.get(
+                            guide_type, guide_type
+                        ),  # noqa: UP031
                         "href": zip_path.relpath(_href, nav_dir_name),
                     },
                 )
@@ -1261,7 +1388,11 @@ class EpubWriter(object):  # noqa: UP004
         # PAGE-LIST
         if self.options.get("epub3_pages"):
             inserted_pages = get_pages_for_items(
-                [item for item in self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT) if not isinstance(item, EpubNav)]
+                [
+                    item
+                    for item in self.book.get_items_of_type(ebooklib.ITEM_DOCUMENT)
+                    if not isinstance(item, EpubNav)
+                ]
             )
 
             if len(inserted_pages) > 0:
@@ -1282,7 +1413,7 @@ class EpubWriter(object):  # noqa: UP004
                 for filename, pageref, label in inserted_pages:
                     li_item = etree.SubElement(pages_ol, "li")
 
-                    _href = "{filename}#{pageref}".format(filename=filename, pageref=pageref)  # noqa: UP032
+                    _href = f"{filename}#{pageref}"  # noqa: UP032
                     _title = label
 
                     a_item = etree.SubElement(
@@ -1294,7 +1425,9 @@ class EpubWriter(object):  # noqa: UP004
                     )
                     a_item.text = _title
 
-        tree_str = etree.tostring(nav_xml, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        tree_str = etree.tostring(
+            nav_xml, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
         return tree_str
 
@@ -1306,10 +1439,16 @@ class EpubWriter(object):  # noqa: UP004
         head = etree.SubElement(root, "head")
 
         # get this id
-        _uid = etree.SubElement(head, "meta", {"content": self.book.uid, "name": "dtb:uid"})
+        _uid = etree.SubElement(
+            head, "meta", {"content": self.book.uid, "name": "dtb:uid"}
+        )
         _uid = etree.SubElement(head, "meta", {"content": "0", "name": "dtb:depth"})
-        _uid = etree.SubElement(head, "meta", {"content": "0", "name": "dtb:totalPageCount"})
-        _uid = etree.SubElement(head, "meta", {"content": "0", "name": "dtb:maxPageNumber"})
+        _uid = etree.SubElement(
+            head, "meta", {"content": "0", "name": "dtb:totalPageCount"}
+        )
+        _uid = etree.SubElement(
+            head, "meta", {"content": "0", "name": "dtb:maxPageNumber"}
+        )
 
         doc_title = etree.SubElement(root, "docTitle")
         title = etree.SubElement(doc_title, "text")
@@ -1335,7 +1474,9 @@ class EpubWriter(object):  # noqa: UP004
                         itm,
                         "navPoint",
                         {
-                            "id": section.get_id() if isinstance(section, EpubHtml) else "sep_{uid}".format(uid=uid)  # noqa: UP032
+                            "id": section.get_id()
+                            if isinstance(section, EpubHtml)
+                            else "sep_{uid}".format(uid=uid)  # noqa: UP032
                         },
                     )
 
@@ -1399,7 +1540,9 @@ class EpubWriter(object):  # noqa: UP004
 
         _create_section(nav_map, self.book.toc, 0)
 
-        tree_str = etree.tostring(root, pretty_print=True, encoding="utf-8", xml_declaration=True)
+        tree_str = etree.tostring(
+            root, pretty_print=True, encoding="utf-8", xml_declaration=True
+        )
 
         return tree_str
 
@@ -1408,35 +1551,41 @@ class EpubWriter(object):  # noqa: UP004
             if isinstance(item, EpubNcx):
                 self.out.writestr(
                     self.zipinfo(
-                        "{FOLDER_NAME}/{file_name}".format(FOLDER_NAME=self.book.FOLDER_NAME, file_name=item.file_name)  # noqa: UP032
+                        f"{self.book.FOLDER_NAME}/{item.file_name}"  # noqa: UP032
                     ),
                     self._get_ncx(),
                 )
             elif isinstance(item, EpubNav):
                 self.out.writestr(
                     self.zipinfo(
-                        "{FOLDER_NAME}/{file_name}".format(FOLDER_NAME=self.book.FOLDER_NAME, file_name=item.file_name)  # noqa: UP032
+                        f"{self.book.FOLDER_NAME}/{item.file_name}"  # noqa: UP032
                     ),
                     self._get_nav(item),
                 )
             elif item.manifest:
                 self.out.writestr(
-                    self.zipinfo(
-                        "{FOLDER_NAME}/{file_name}".format(FOLDER_NAME=self.book.FOLDER_NAME, file_name=item.file_name)
-                    ),  # noqa: UP032
+                    self.zipinfo(f"{self.book.FOLDER_NAME}/{item.file_name}"),  # noqa: UP032
                     item.get_content(),
                 )
             else:
-                self.out.writestr(self.zipinfo("{file_name}".format(file_name=item.file_name)), item.get_content())
+                self.out.writestr(
+                    self.zipinfo(f"{item.file_name}"),
+                    item.get_content(),
+                )
 
     def write(self):
         if six.PY2:
             self.out = zipfile.ZipFile(self.file_name, "w", zipfile.ZIP_DEFLATED)
         else:
             self.out = zipfile.ZipFile(
-                self.file_name, "w", zipfile.ZIP_DEFLATED, compresslevel=self.options["compresslevel"]
+                self.file_name,
+                "w",
+                zipfile.ZIP_DEFLATED,
+                compresslevel=self.options["compresslevel"],
             )
-        self.out.writestr("mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED)
+        self.out.writestr(
+            "mimetype", "application/epub+zip", compress_type=zipfile.ZIP_STORED
+        )
 
         self._write_container()
         self._write_opf()
@@ -1464,7 +1613,10 @@ class EpubReader(object):  # noqa: UP004
 
     def _check_deprecated(self):
         if self.options.get("ignore_ncx") is None:
-            warnings.warn("In the future version we will turn default option ignore_ncx to True.", stacklevel=2)
+            warnings.warn(
+                "In the future version we will turn default option ignore_ncx to True.",
+                stacklevel=2,
+            )
 
     def process(self):
         # should cache this html parsing so we don't do it for every plugin
@@ -1493,7 +1645,8 @@ class EpubReader(object):  # noqa: UP004
         tree = parse_string(meta_inf)
 
         for root_file in tree.findall(
-            ".//xmlns:rootfile[@media-type]", namespaces={"xmlns": NAMESPACES["CONTAINERNS"]}
+            ".//xmlns:rootfile[@media-type]",
+            namespaces={"xmlns": NAMESPACES["CONTAINERNS"]},
         ):
             if root_file.get("media-type") == "application/oebps-package+xml":
                 self.opf_file = root_file.get("full-path")
@@ -1590,11 +1743,15 @@ class EpubReader(object):  # noqa: UP004
                 if "nav" in properties:
                     ei = EpubNav(uid=r.get("id"), file_name=unquote(r.get("href")))
 
-                    ei.content = self.read_file(zip_path.join(self.opf_dir, r.get("href")))
+                    ei.content = self.read_file(
+                        zip_path.join(self.opf_dir, r.get("href"))
+                    )
                 elif "cover" in properties:
                     ei = EpubCoverHtml()
 
-                    ei.content = self.read_file(zip_path.join(self.opf_dir, unquote(r.get("href"))))
+                    ei.content = self.read_file(
+                        zip_path.join(self.opf_dir, unquote(r.get("href")))
+                    )
                 else:
                     ei = EpubHtml()
 
@@ -1603,21 +1760,27 @@ class EpubReader(object):  # noqa: UP004
                     ei.media_type = media_type
                     ei.media_overlay = r.get("media-overlay", None)
                     ei.media_duration = r.get("duration", None)
-                    ei.content = self.read_file(zip_path.join(self.opf_dir, ei.get_name()))
+                    ei.content = self.read_file(
+                        zip_path.join(self.opf_dir, ei.get_name())
+                    )
                     ei.properties = properties
             elif media_type in IMAGE_MEDIA_TYPES:
                 if "cover-image" in properties:
                     ei = EpubCover(uid=r.get("id"), file_name=unquote(r.get("href")))
 
                     ei.media_type = media_type
-                    ei.content = self.read_file(zip_path.join(self.opf_dir, ei.get_name()))
+                    ei.content = self.read_file(
+                        zip_path.join(self.opf_dir, ei.get_name())
+                    )
                 else:
                     ei = EpubImage()
 
                     ei.id = r.get("id")
                     ei.file_name = unquote(r.get("href"))
                     ei.media_type = media_type
-                    ei.content = self.read_file(zip_path.join(self.opf_dir, ei.get_name()))
+                    ei.content = self.read_file(
+                        zip_path.join(self.opf_dir, ei.get_name())
+                    )
                 ei.properties = properties
             else:
                 # different types
@@ -1683,13 +1846,17 @@ class EpubReader(object):  # noqa: UP004
                     children = parse_list(sublist_node)
 
                     if link_node is not None and link_node.get("href"):
-                        href = zip_path.normpath(zip_path.join(base_path, link_node.get("href")))
+                        href = zip_path.normpath(
+                            zip_path.join(base_path, link_node.get("href"))
+                        )
                         items.append((Section(title, href=href), children))
                     else:
                         items.append((Section(title), children))
                 elif link_node is not None and link_node.get("href"):
                     title = link_node.text_content()
-                    href = zip_path.normpath(zip_path.join(base_path, link_node.get("href")))
+                    href = zip_path.normpath(
+                        zip_path.join(base_path, link_node.get("href"))
+                    )
 
                     items.append(Link(href, title))
 
@@ -1725,11 +1892,17 @@ class EpubReader(object):  # noqa: UP004
         self.book.set_direction(spine.get("page-progression-direction", None))
 
         # should read ncx or nav file
-        nav_item = next((item for item in self.book.items if isinstance(item, EpubNav)), None)
+        nav_item = next(
+            (item for item in self.book.items if isinstance(item, EpubNav)), None
+        )
         if toc:
             if not self.options.get("ignore_ncx") or not nav_item:
                 try:
-                    ncxFile = self.read_file(zip_path.join(self.opf_dir, self.book.get_item_with_id(toc).get_name()))
+                    ncxFile = self.read_file(
+                        zip_path.join(
+                            self.opf_dir, self.book.get_item_with_id(toc).get_name()
+                        )
+                    )
                 except KeyError:
                     raise EpubException(-1, "Can not find ncx file.")  # noqa: B904
 
@@ -1738,7 +1911,10 @@ class EpubReader(object):  # noqa: UP004
     def _load_guide(self):
         guide = self.container.find("{%s}%s" % (NAMESPACES["OPF"], "guide"))  # noqa: UP031
         if guide is not None:
-            self.book.guide = [{"href": t.get("href"), "title": t.get("title"), "type": t.get("type")} for t in guide]
+            self.book.guide = [
+                {"href": t.get("href"), "title": t.get("title"), "type": t.get("type")}
+                for t in guide
+            ]
 
     def _load_opf_file(self):
         try:
@@ -1755,11 +1931,19 @@ class EpubReader(object):  # noqa: UP004
 
         # read nav file if found
         #
-        nav_item = next((item for item in self.book.items if isinstance(item, EpubNav)), None)
+        nav_item = next(
+            (item for item in self.book.items if isinstance(item, EpubNav)), None
+        )
         if nav_item:
             if self.options.get("ignore_ncx") or not self.book.toc:
-                self._parse_nav(nav_item.content, zip_path.dirname(nav_item.file_name), navtype="toc")
-            self._parse_nav(nav_item.content, zip_path.dirname(nav_item.file_name), navtype="pages")
+                self._parse_nav(
+                    nav_item.content,
+                    zip_path.dirname(nav_item.file_name),
+                    navtype="toc",
+                )
+            self._parse_nav(
+                nav_item.content, zip_path.dirname(nav_item.file_name), navtype="pages"
+            )
 
     def _load(self):
         self.zf = None
@@ -1772,7 +1956,12 @@ class EpubReader(object):  # noqa: UP004
 
         if self.zf is None:
             try:
-                self.zf = zipfile.ZipFile(self.file_name, "r", compression=zipfile.ZIP_DEFLATED, allowZip64=True)
+                self.zf = zipfile.ZipFile(
+                    self.file_name,
+                    "r",
+                    compression=zipfile.ZIP_DEFLATED,
+                    allowZip64=True,
+                )
             except zipfile.BadZipfile:
                 raise EpubException(0, "Bad Zip file")  # noqa: B904
             except zipfile.LargeZipFile:
@@ -1806,7 +1995,10 @@ def write_epub(name, book, options=None):
     try:
         epub.write()
     except OSError:
-        warnings.warn("In the future throwing exceptions while writing will be default behavior.", stacklevel=2)
+        warnings.warn(
+            "In the future throwing exceptions while writing will be default behavior.",
+            stacklevel=2,
+        )
         t, v, tb = sys.exc_info()
         if options and options.get("raise_exceptions"):
             six.reraise(t, v, tb)

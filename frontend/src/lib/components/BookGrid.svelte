@@ -1,8 +1,11 @@
 <script lang="ts">
-  import type { BookOut } from '$lib/types';
-  import BookCard from './BookCard.svelte';
+  import type { BookOut } from "$lib/types";
+  import BookCard from "./BookCard.svelte";
 
-  let { books = [], columns = 'default' }: { books?: BookOut[]; columns?: string } = $props();
+  let {
+    books = [],
+    columns = "default",
+  }: { books?: BookOut[]; columns?: string } = $props();
 </script>
 
 <div

@@ -1,21 +1,25 @@
-import { get, post, put, del } from './client';
-import type { BookshelfOut, BookOut } from '$lib/types';
+import { get, post, put, del } from "./client";
+import type { BookshelfOut, BookOut } from "$lib/types";
 
 export const bookshelvesApi = {
   list: (token: string) =>
-    get('/bookshelves', token) as Promise<BookshelfOut[]>,
+    get("/bookshelves", token) as Promise<BookshelfOut[]>,
 
   get: (id: string, token: string) =>
     get(`/bookshelves/${id}`, token) as Promise<BookshelfOut>,
 
-  create: (data: { name: string; description?: string; is_public?: boolean }, token: string) =>
-    post('/bookshelves', data, token) as Promise<BookshelfOut>,
+  create: (
+    data: { name: string; description?: string; is_public?: boolean },
+    token: string,
+  ) => post("/bookshelves", data, token) as Promise<BookshelfOut>,
 
-  update: (id: string, data: { name?: string; description?: string; is_public?: boolean }, token: string) =>
-    put(`/bookshelves/${id}`, data, token) as Promise<BookshelfOut>,
+  update: (
+    id: string,
+    data: { name?: string; description?: string; is_public?: boolean },
+    token: string,
+  ) => put(`/bookshelves/${id}`, data, token) as Promise<BookshelfOut>,
 
-  delete: (id: string, token: string) =>
-    del(`/bookshelves/${id}`, token),
+  delete: (id: string, token: string) => del(`/bookshelves/${id}`, token),
 
   getBooks: (id: string, token: string) =>
     get(`/bookshelves/${id}/books`, token) as Promise<BookOut[]>,
@@ -32,7 +36,7 @@ export const bookshelvesApi = {
 
 export const adminApi = {
   getUsers: (token: string) =>
-    get('/admin/users', token) as Promise<import('$lib/types').UserOut[]>,
+    get("/admin/users", token) as Promise<import("$lib/types").UserOut[]>,
 
   updateRole: (userId: string, role: string, token: string) =>
     put(`/admin/users/${userId}/role`, { role }, token),
@@ -41,5 +45,5 @@ export const adminApi = {
     del(`/admin/users/${userId}`, token),
 
   getStats: (token: string) =>
-    get('/admin/stats', token) as Promise<import('$lib/types').AdminStats>,
+    get("/admin/stats", token) as Promise<import("$lib/types").AdminStats>,
 };

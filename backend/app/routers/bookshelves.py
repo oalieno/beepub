@@ -1,17 +1,24 @@
 import uuid
 from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
-from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.deps import get_current_user
-from app.models.user import User
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
+from app.models.user import User
 from app.schemas.book import BookOut
-from app.schemas.bookshelf import BookshelfCreate, BookshelfUpdate, BookshelfOut, BookshelfListOut, BookshelfBookAdd, BookshelfReorder
+from app.schemas.bookshelf import (
+    BookshelfBookAdd,
+    BookshelfCreate,
+    BookshelfListOut,
+    BookshelfOut,
+    BookshelfReorder,
+    BookshelfUpdate,
+)
 
 router = APIRouter(prefix="/api/bookshelves", tags=["bookshelves"])
 
@@ -22,7 +29,9 @@ async def list_bookshelves(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     result = await db.execute(
-        select(Bookshelf).where(Bookshelf.user_id == current_user.id).order_by(Bookshelf.created_at.desc())
+        select(Bookshelf)
+        .where(Bookshelf.user_id == current_user.id)
+        .order_by(Bookshelf.created_at.desc())
     )
     shelves = result.scalars().all()
 
@@ -44,10 +53,12 @@ async def list_bookshelves(
         select(
             BookshelfBook.bookshelf_id,
             BookshelfBook.book_id,
-            func.row_number().over(
+            func.row_number()
+            .over(
                 partition_by=BookshelfBook.bookshelf_id,
-                order_by=BookshelfBook.sort_order.asc()
-            ).label("rn")
+                order_by=BookshelfBook.sort_order.asc(),
+            )
+            .label("rn"),
         )
         .join(Book, Book.id == BookshelfBook.book_id)
         .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
@@ -55,8 +66,7 @@ async def list_bookshelves(
         .subquery()
     )
     preview_result = await db.execute(
-        select(ranked.c.bookshelf_id, ranked.c.book_id)
-        .where(ranked.c.rn <= 4)
+        select(ranked.c.bookshelf_id, ranked.c.book_id).where(ranked.c.rn <= 4)
     )
     previews: dict[str, list] = {}
     for shelf_id, book_id in preview_result.all():
@@ -154,11 +164,15 @@ async def add_book_to_shelf(
         raise HTTPException(status_code=409, detail="Book already in shelf")
     # Get max sort order
     result = await db.execute(
-        select(BookshelfBook).where(BookshelfBook.bookshelf_id == shelf_id).order_by(BookshelfBook.sort_order.desc())
+        select(BookshelfBook)
+        .where(BookshelfBook.bookshelf_id == shelf_id)
+        .order_by(BookshelfBook.sort_order.desc())
     )
     last = result.scalars().first()
     sort_order = (last.sort_order + 1) if last else 0
-    bb = BookshelfBook(bookshelf_id=shelf_id, book_id=body.book_id, sort_order=sort_order)
+    bb = BookshelfBook(
+        bookshelf_id=shelf_id, book_id=body.book_id, sort_order=sort_order
+    )
     db.add(bb)
     await db.commit()
     return {"status": "added"}
@@ -207,7 +221,9 @@ async def reorder_shelf_books(
     return {"status": "reordered"}
 
 
-async def _get_owned_shelf(shelf_id: uuid.UUID, user: User, db: AsyncSession) -> Bookshelf:
+async def _get_owned_shelf(
+    shelf_id: uuid.UUID, user: User, db: AsyncSession
+) -> Bookshelf:
     result = await db.execute(
         select(Bookshelf).where(Bookshelf.id == shelf_id, Bookshelf.user_id == user.id)
     )
