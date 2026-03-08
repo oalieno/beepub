@@ -30,6 +30,13 @@ class BookOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PaginatedBooks(BaseModel):
+    items: list[BookOut]
+    total: int
+
+    model_config = {"from_attributes": True}
+
+
 class BookMetadataUpdate(BaseModel):
     title: str | None = None
     authors: list[str] | None = None

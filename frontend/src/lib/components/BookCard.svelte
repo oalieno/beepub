@@ -18,7 +18,7 @@
       <img
         src="/covers/{book.id}.jpg"
         alt="{book.display_title} cover"
-        class="h-full w-auto max-w-full rounded-sm book-shadow book-shadow-hover transition-all duration-300"
+        class="max-h-full w-auto max-w-full rounded-sm book-shadow book-shadow-hover transition-all duration-300"
         loading="lazy"
       />
     {:else}

@@ -65,6 +65,9 @@ class Book(Base, TimestampMixin):
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    calibre_added_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 

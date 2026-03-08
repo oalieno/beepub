@@ -2,7 +2,9 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.sql.functions import coalesce
+from sqlalchemy.types import String as SAString
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,7 +12,7 @@ from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.user import User, UserRole
-from app.schemas.book import BookOut
+from app.schemas.book import BookOut, PaginatedBooks
 from app.schemas.library import (
     LibraryBookAdd,
     LibraryCreate,
@@ -167,7 +169,7 @@ async def delete_library(
     await db.commit()
 
 
-@router.get("/{library_id}/books", response_model=list[BookOut])
+@router.get("/{library_id}/books", response_model=PaginatedBooks)
 async def list_library_books(
     library_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -175,27 +177,44 @@ async def list_library_books(
     search: str | None = Query(None),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
+    limit: int = Query(60, ge=1, le=200),
+    offset: int = Query(0, ge=0),
 ):
     await _get_accessible_library(library_id, current_user, db)
-    query = (
+    base_query = (
         select(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .where(LibraryBook.library_id == library_id)
     )
     if search:
-        query = query.where(
+        pattern = f"%{search}%"
+        base_query = base_query.where(
             or_(
-                Book.title.ilike(f"%{search}%"),
-                Book.epub_title.ilike(f"%{search}%"),
+                Book.title.ilike(pattern),
+                Book.epub_title.ilike(pattern),
+                cast(Book.authors, SAString).ilike(pattern),
+                cast(Book.epub_authors, SAString).ilike(pattern),
             )
         )
-    sort_col = getattr(Book, sort, Book.created_at)
+
+    # Count total
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Apply sorting and pagination (secondary sort on id for deterministic offset/limit)
+    sort_map = {
+        "display_title": coalesce(Book.title, Book.epub_title),
+        "added_at": coalesce(Book.calibre_added_at, Book.created_at),
+    }
+    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
     if order == "desc":
-        query = query.order_by(sort_col.desc())
+        base_query = base_query.order_by(sort_col.desc(), Book.id)
     else:
-        query = query.order_by(sort_col.asc())
-    result = await db.execute(query)
-    return result.scalars().all()
+        base_query = base_query.order_by(sort_col.asc(), Book.id)
+    base_query = base_query.offset(offset).limit(limit)
+
+    result = await db.execute(base_query)
+    return PaginatedBooks(items=result.scalars().all(), total=total)
 
 
 @router.post("/{library_id}/books", status_code=status.HTTP_201_CREATED)

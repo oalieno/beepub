@@ -32,16 +32,17 @@
       bookshelves = shelves;
       readingActivity = activity;
 
-      // Gather recent books from all libraries
+      // Gather recent books from all libraries (only fetch top 12 each)
       const allBooks: BookOut[] = [];
       await Promise.all(
         libraries.map(async (lib) => {
           try {
-            const books = await librariesApi.getBooks(
+            const result = await librariesApi.getBooks(
               lib.id,
               $authStore.token!,
+              { sort: "created_at", limit: 12 },
             );
-            allBooks.push(...books);
+            allBooks.push(...result.items);
           } catch {
             // skip
           }
@@ -98,7 +99,7 @@
           <div class="w-px h-8 bg-border"></div>
           <div>
             <p class="text-3xl font-bold text-primary">
-              {recentBooks.length > 0 ? recentBooks.length + "+" : "0"}
+              {libraries.reduce((sum, lib) => sum + (lib.book_count ?? 0), 0).toLocaleString()}
             </p>
             <p class="text-muted-foreground text-xs mt-0.5">Books</p>
           </div>

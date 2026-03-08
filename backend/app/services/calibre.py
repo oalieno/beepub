@@ -6,6 +6,7 @@ import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import redis.asyncio as aioredis
@@ -34,6 +35,7 @@ class CalibreBookInfo:
     epub_path: str  # full path to .epub file
     cover_path: str | None  # full path to cover.jpg or None
     file_size: int
+    added_at: str | None  # Calibre timestamp (when added to Calibre)
 
 
 @dataclass
@@ -104,6 +106,7 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 b.path AS book_path,
                 b.has_cover,
                 b.pubdate,
+                b.timestamp AS added_at,
                 d.name AS file_name,
                 d.uncompressed_size AS file_size,
                 GROUP_CONCAT(DISTINCT a.name) AS authors,
@@ -140,6 +143,10 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 if not pd.startswith("0101"):
                     pub_date = pd[:10] if len(pd) >= 10 else pd
 
+            added_at_str = None
+            if row["added_at"]:
+                added_at_str = str(row["added_at"])
+
             results.append(CalibreBookInfo(
                 calibre_id=row["calibre_id"],
                 title=row["title"],
@@ -151,10 +158,21 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 epub_path=epub_path,
                 cover_path=cover,
                 file_size=row["file_size"] or 0,
+                added_at=added_at_str,
             ))
         return results
     finally:
         conn.close()
+
+
+def _parse_calibre_timestamp(ts: str | None) -> datetime | None:
+    """Parse a Calibre timestamp string into a datetime object."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts)
+    except (ValueError, TypeError):
+        return None
 
 
 def _sync_key(library_id: uuid.UUID) -> str:
@@ -238,6 +256,10 @@ async def sync_calibre_library(
                         if book.epub_authors != cal_book.authors:
                             book.epub_authors = cal_book.authors
                             changed = True
+                        calibre_added = _parse_calibre_timestamp(cal_book.added_at)
+                        if book.calibre_added_at != calibre_added:
+                            book.calibre_added_at = calibre_added
+                            changed = True
                         if changed:
                             result.updated += 1
                         else:
@@ -274,6 +296,8 @@ async def sync_calibre_library(
                             if copied:
                                 cover_dest = dest
 
+                        calibre_added = _parse_calibre_timestamp(cal_book.added_at)
+
                         book = Book(
                             id=book_id,
                             file_path=cal_book.epub_path,
@@ -281,6 +305,7 @@ async def sync_calibre_library(
                             format="epub",
                             cover_path=cover_dest,
                             calibre_id=cal_book.calibre_id,
+                            calibre_added_at=calibre_added,
                             added_by=admin_user_id,
                             **epub_meta,
                         )

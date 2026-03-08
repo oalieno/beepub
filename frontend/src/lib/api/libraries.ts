@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { LibraryOut, BookOut } from "$lib/types";
+import type { LibraryOut, PaginatedBooks } from "$lib/types";
 
 export interface LibraryMemberOut {
   user_id: string;
@@ -26,14 +26,22 @@ export const librariesApi = {
 
   delete: (id: string, token: string) => del(`/libraries/${id}`, token),
 
-  getBooks: (id: string, token: string, search?: string, sort?: string) => {
+  getBooks: (
+    id: string,
+    token: string,
+    options?: { search?: string; sort?: string; order?: string; limit?: number; offset?: number },
+  ) => {
     const params = new URLSearchParams();
-    if (search) params.set("search", search);
-    if (sort) params.set("sort", sort);
+    if (options?.search) params.set("search", options.search);
+    if (options?.sort) params.set("sort", options.sort);
+    if (options?.order) params.set("order", options.order);
+    if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.offset != null) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return get(`/libraries/${id}/books${qs ? `?${qs}` : ""}`, token) as Promise<
-      BookOut[]
-    >;
+    return get(
+      `/libraries/${id}/books${qs ? `?${qs}` : ""}`,
+      token,
+    ) as Promise<PaginatedBooks>;
   },
 
   getMembers: (id: string, token: string) =>

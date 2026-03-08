@@ -54,6 +54,11 @@ export interface BookOut {
   created_at: string;
 }
 
+export interface PaginatedBooks {
+  items: BookOut[];
+  total: number;
+}
+
 export interface BookshelfOut {
   id: string;
   user_id: string;

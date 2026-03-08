@@ -11,21 +11,39 @@
   import type { LibraryOut, BookOut } from "$lib/types";
   import { UserRole } from "$lib/types";
   import { Upload, Search, X, HardDrive } from "@lucide/svelte";
+  import * as Select from "$lib/components/ui/select";
+
+  const SORT_OPTIONS = [
+    { value: "added_at:desc", label: "Newest added" },
+    { value: "added_at:asc", label: "Oldest added" },
+    { value: "display_title:asc", label: "Title A \u2192 Z" },
+    { value: "display_title:desc", label: "Title Z \u2192 A" },
+  ] as const;
+
+  const PAGE_SIZE = 60;
 
   let libraryId = $derived($page.params.id as string);
 
   let library = $state<LibraryOut | null>(null);
+  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let isCalibre = $derived(!!library?.calibre_path);
   let canUpload = $derived(isAdmin && !isCalibre);
   let books = $state<BookOut[]>([]);
+  let totalBooks = $state(0);
+  let hasMore = $derived(books.length < totalBooks);
   let loading = $state(true);
+  let loadingMore = $state(false);
   let searchQuery = $state("");
+  let sortValue = $state("added_at:desc");
+  let sortBy = $derived(sortValue.split(":")[0]);
+  let sortOrder = $derived(sortValue.split(":")[1]);
+  let sortLabel = $derived(
+    SORT_OPTIONS.find((o) => o.value === sortValue)?.label ?? "Newest added",
+  );
   let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
   let dragOver = $state(false);
-
-  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   onMount(async () => {
     if (!$authStore.token) {
@@ -38,10 +56,19 @@
   async function loadData() {
     loading = true;
     try {
-      [library, books] = await Promise.all([
+      const [lib, result] = await Promise.all([
         librariesApi.get(libraryId, $authStore.token!),
-        librariesApi.getBooks(libraryId, $authStore.token!),
+        librariesApi.getBooks(libraryId, $authStore.token!, {
+          search: searchQuery || undefined,
+          sort: sortBy,
+          order: sortOrder,
+          limit: PAGE_SIZE,
+          offset: 0,
+        }),
       ]);
+      library = lib;
+      books = result.items;
+      totalBooks = result.total;
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -49,14 +76,40 @@
     }
   }
 
+  async function loadMore() {
+    if (!$authStore.token || loadingMore || !hasMore) return;
+    loadingMore = true;
+    try {
+      const result = await librariesApi.getBooks(
+        libraryId,
+        $authStore.token,
+        {
+          search: searchQuery || undefined,
+          sort: sortBy,
+          order: sortOrder,
+          limit: PAGE_SIZE,
+          offset: books.length,
+        },
+      );
+      books = [...books, ...result.items];
+      totalBooks = result.total;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      loadingMore = false;
+    }
+  }
+
   async function handleSearch() {
     if (!$authStore.token) return;
     try {
-      books = await librariesApi.getBooks(
+      const result = await librariesApi.getBooks(
         libraryId,
         $authStore.token,
-        searchQuery || undefined,
+        { search: searchQuery || undefined, sort: sortBy, order: sortOrder, limit: PAGE_SIZE, offset: 0 },
       );
+      books = result.items;
+      totalBooks = result.total;
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -167,7 +220,30 @@
       {/if}
     </div>
 
-    {#if books.length === 0}
+    <!-- Sort -->
+    <div class="flex items-center gap-2 mb-4">
+      <Select.Root
+        type="single"
+        value={sortValue}
+        onValueChange={(v) => {
+          if (v) {
+            sortValue = v;
+            handleSearch();
+          }
+        }}
+      >
+        <Select.Trigger class="w-auto rounded-lg">
+          {sortLabel}
+        </Select.Trigger>
+        <Select.Content>
+          {#each SORT_OPTIONS as opt}
+            <Select.Item value={opt.value}>{opt.label}</Select.Item>
+          {/each}
+        </Select.Content>
+      </Select.Root>
+    </div>
+
+    {#if books.length === 0 && !loading}
       <div
         class="border-2 border-dashed rounded-2xl p-12 text-center transition-colors {dragOver
           ? 'border-primary bg-primary/5'
@@ -195,7 +271,10 @@
           {/if}
         </p>
       </div>
-    {:else}
+    {:else if books.length > 0}
+      <p class="text-muted-foreground text-sm mb-4">
+        Showing {books.length} of {totalBooks.toLocaleString()} books
+      </p>
       <div
         ondragover={canUpload
           ? (e) => {
@@ -210,6 +289,26 @@
       >
         <BookGrid {books} />
       </div>
+      {#if hasMore}
+        <div class="flex justify-center mt-8">
+          <button
+            class="px-6 py-2.5 bg-secondary hover:bg-secondary/80 text-foreground font-medium rounded-xl transition-colors disabled:opacity-50"
+            onclick={loadMore}
+            disabled={loadingMore}
+          >
+            {#if loadingMore}
+              <span class="flex items-center gap-2">
+                <span
+                  class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-foreground"
+                ></span>
+                Loading...
+              </span>
+            {:else}
+              Load more
+            {/if}
+          </button>
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>
