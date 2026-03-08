@@ -10,20 +10,20 @@
   class="text-left w-full group"
   onclick={() => goto(`/books/${book.id}`)}
 >
-  <!-- Cover with book shadow -->
+  <!-- Cover -->
   <div
-    class="aspect-[2/3] rounded-sm overflow-hidden book-shadow book-shadow-hover transition-all duration-300 mb-3"
+    class="h-56 sm:h-64 mb-3 flex items-end justify-center"
   >
     {#if book.cover_path}
       <img
         src="/covers/{book.id}.jpg"
         alt="{book.display_title} cover"
-        class="w-full h-full object-cover"
+        class="h-full w-auto max-w-full rounded-sm book-shadow book-shadow-hover transition-all duration-300"
         loading="lazy"
       />
     {:else}
       <div
-        class="w-full h-full bg-secondary flex flex-col items-center justify-center gap-2 p-4"
+        class="h-full aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
       >
         <BookOpen class="text-muted-foreground/30" size={36} />
         <span class="text-muted-foreground/60 text-xs text-center line-clamp-3"

@@ -375,22 +375,20 @@
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->
-      <div class="flex-shrink-0 w-64 mx-auto md:mx-0">
-        <div class="aspect-[2/3] rounded-sm overflow-hidden book-shadow">
-          {#if book.cover_path}
-            <img
-              src="/covers/{book.id}.jpg"
-              alt="{book.display_title} cover"
-              class="w-full h-full object-cover"
-            />
-          {:else}
-            <div
-              class="w-full h-full bg-secondary flex items-center justify-center"
-            >
-              <BookOpen class="text-muted-foreground/30" size={48} />
-            </div>
-          {/if}
-        </div>
+      <div class="flex-shrink-0 w-64 mx-auto md:mx-0 flex justify-center">
+        {#if book.cover_path}
+          <img
+            src="/covers/{book.id}.jpg"
+            alt="{book.display_title} cover"
+            class="max-w-full h-auto rounded-sm book-shadow"
+          />
+        {:else}
+          <div
+            class="w-full aspect-[2/3] rounded-sm bg-secondary flex items-center justify-center book-shadow"
+          >
+            <BookOpen class="text-muted-foreground/30" size={48} />
+          </div>
+        {/if}
       </div>
 
       <!-- Info -->
