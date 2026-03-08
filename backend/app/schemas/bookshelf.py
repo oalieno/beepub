@@ -27,6 +27,11 @@ class BookshelfOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookshelfListOut(BookshelfOut):
+    book_count: int = 0
+    preview_book_ids: list[uuid.UUID] = []
+
+
 class BookshelfBookAdd(BaseModel):
     book_id: uuid.UUID
 

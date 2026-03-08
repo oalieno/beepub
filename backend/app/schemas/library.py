@@ -29,6 +29,11 @@ class LibraryOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class LibraryListOut(LibraryOut):
+    book_count: int = 0
+    preview_book_ids: list[uuid.UUID] = []
+
+
 class LibraryMemberAdd(BaseModel):
     user_id: uuid.UUID
 

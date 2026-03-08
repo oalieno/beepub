@@ -5,6 +5,7 @@
   import { bookshelvesApi } from '$lib/api/bookshelves';
   import { toastStore } from '$lib/stores/toast';
   import Modal from '$lib/components/Modal.svelte';
+  import CollectionCard from '$lib/components/CollectionCard.svelte';
   import type { BookshelfOut } from '$lib/types';
   import { Plus, BookMarked, Trash2 } from '@lucide/svelte';
 
@@ -92,27 +93,28 @@
       <p class="text-muted-foreground/70 text-sm mt-1">Create one to organize your reading.</p>
     </div>
   {:else}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
       {#each bookshelves as shelf}
-        <div class="bg-card card-soft rounded-2xl p-5 flex items-start justify-between group hover:shadow-md transition-all duration-200">
-          <a href="/bookshelves/{shelf.id}" class="flex-1 min-w-0">
-            <h2 class="font-semibold text-lg text-foreground group-hover:text-primary transition-colors truncate">{shelf.name}</h2>
-            {#if shelf.description}
-              <p class="text-muted-foreground text-sm mt-1 line-clamp-2">{shelf.description}</p>
-            {/if}
-            <div class="flex items-center gap-2 mt-2.5">
-              <span class="text-xs px-2.5 py-1 rounded-full font-medium {shelf.is_public ? 'bg-emerald-100 text-emerald-700' : 'bg-secondary text-muted-foreground'}">
-                {shelf.is_public ? 'Public' : 'Private'}
-              </span>
-            </div>
-          </a>
-          <button
-            class="ml-3 w-7 h-7 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
-            onclick={() => handleDelete(shelf.id, shelf.name)}
-          >
-            <Trash2 size={13} />
-          </button>
-        </div>
+        <CollectionCard
+          href="/bookshelves/{shelf.id}"
+          name={shelf.name}
+          previewBookIds={shelf.preview_book_ids}
+          bookCount={shelf.book_count}
+          badgeLabel={shelf.is_public ? 'Public' : 'Private'}
+          badgeClass={shelf.is_public ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}
+        >
+          {#snippet icon()}
+            <BookMarked class="text-muted-foreground/50 shrink-0" size={16} />
+          {/snippet}
+          {#snippet overlay()}
+            <button
+              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-all"
+              onclick={() => handleDelete(shelf.id, shelf.name)}
+            >
+              <Trash2 size={13} />
+            </button>
+          {/snippet}
+        </CollectionCard>
       {/each}
     </div>
   {/if}

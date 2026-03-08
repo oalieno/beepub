@@ -96,7 +96,7 @@
       {#each libraries as lib}
         <div class="bg-card card-soft rounded-2xl p-5 flex items-center justify-between group hover:shadow-md transition-all duration-200">
           <div class="flex items-center gap-3.5">
-            <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.visibility === LibraryVisibility.Private ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}">
+            <div class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.visibility === LibraryVisibility.Private ? 'bg-secondary text-muted-foreground' : 'bg-primary/15 text-primary'}">
               {#if lib.visibility === LibraryVisibility.Private}
                 <Lock size={18} />
               {:else}

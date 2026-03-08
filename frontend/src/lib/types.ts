@@ -25,6 +25,8 @@ export interface LibraryOut {
   visibility: LibraryVisibility;
   created_by: string;
   created_at: string;
+  book_count: number;
+  preview_book_ids: string[];
 }
 
 export interface BookOut {
@@ -57,6 +59,8 @@ export interface BookshelfOut {
   description: string | null;
   is_public: boolean;
   created_at: string;
+  book_count: number;
+  preview_book_ids: string[];
 }
 
 export interface ExternalMetadataOut {

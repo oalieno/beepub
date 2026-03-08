@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
@@ -11,12 +11,12 @@ from app.models.user import User
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.schemas.book import BookOut
-from app.schemas.bookshelf import BookshelfCreate, BookshelfUpdate, BookshelfOut, BookshelfBookAdd, BookshelfReorder
+from app.schemas.bookshelf import BookshelfCreate, BookshelfUpdate, BookshelfOut, BookshelfListOut, BookshelfBookAdd, BookshelfReorder
 
 router = APIRouter(prefix="/api/bookshelves", tags=["bookshelves"])
 
 
-@router.get("", response_model=list[BookshelfOut])
+@router.get("", response_model=list[BookshelfListOut])
 async def list_bookshelves(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -24,7 +24,52 @@ async def list_bookshelves(
     result = await db.execute(
         select(Bookshelf).where(Bookshelf.user_id == current_user.id).order_by(Bookshelf.created_at.desc())
     )
-    return result.scalars().all()
+    shelves = result.scalars().all()
+
+    if not shelves:
+        return []
+
+    shelf_ids = [s.id for s in shelves]
+
+    # Batch query: book counts per shelf
+    count_result = await db.execute(
+        select(BookshelfBook.bookshelf_id, func.count())
+        .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
+        .group_by(BookshelfBook.bookshelf_id)
+    )
+    counts = dict(count_result.all())
+
+    # Batch query: top 4 book IDs with covers per shelf
+    ranked = (
+        select(
+            BookshelfBook.bookshelf_id,
+            BookshelfBook.book_id,
+            func.row_number().over(
+                partition_by=BookshelfBook.bookshelf_id,
+                order_by=BookshelfBook.sort_order.asc()
+            ).label("rn")
+        )
+        .join(Book, Book.id == BookshelfBook.book_id)
+        .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
+        .where(Book.cover_path.isnot(None))
+        .subquery()
+    )
+    preview_result = await db.execute(
+        select(ranked.c.bookshelf_id, ranked.c.book_id)
+        .where(ranked.c.rn <= 4)
+    )
+    previews: dict[str, list] = {}
+    for shelf_id, book_id in preview_result.all():
+        previews.setdefault(shelf_id, []).append(book_id)
+
+    return [
+        BookshelfListOut(
+            **{c.key: getattr(s, c.key) for c in s.__table__.columns},
+            book_count=counts.get(s.id, 0),
+            preview_book_ids=previews.get(s.id, []),
+        )
+        for s in shelves
+    ]
 
 
 @router.post("", response_model=BookshelfOut, status_code=status.HTTP_201_CREATED)

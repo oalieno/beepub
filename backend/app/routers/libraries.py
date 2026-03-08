@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, func, case
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
@@ -10,7 +10,7 @@ from app.deps import get_current_user, require_admin
 from app.models.user import User, UserRole
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.book import Book
-from app.schemas.library import LibraryCreate, LibraryUpdate, LibraryOut, LibraryMemberAdd, LibraryMemberOut, LibraryBookAdd
+from app.schemas.library import LibraryCreate, LibraryUpdate, LibraryOut, LibraryListOut, LibraryMemberAdd, LibraryMemberOut, LibraryBookAdd
 from app.schemas.book import BookOut
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
@@ -30,7 +30,7 @@ def accessible_libraries_condition(user: User):
     )
 
 
-@router.get("", response_model=list[LibraryOut])
+@router.get("", response_model=list[LibraryListOut])
 async def list_libraries(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -39,7 +39,53 @@ async def list_libraries(
     if current_user.role != UserRole.admin:
         query = query.where(accessible_libraries_condition(current_user))
     result = await db.execute(query.order_by(Library.created_at.desc()))
-    return result.scalars().all()
+    libraries = result.scalars().all()
+
+    if not libraries:
+        return []
+
+    library_ids = [lib.id for lib in libraries]
+
+    # Batch query: book counts per library
+    count_result = await db.execute(
+        select(LibraryBook.library_id, func.count())
+        .where(LibraryBook.library_id.in_(library_ids))
+        .group_by(LibraryBook.library_id)
+    )
+    counts = dict(count_result.all())
+
+    # Batch query: top 4 book IDs with covers per library
+    from sqlalchemy import literal_column
+    ranked = (
+        select(
+            LibraryBook.library_id,
+            LibraryBook.book_id,
+            func.row_number().over(
+                partition_by=LibraryBook.library_id,
+                order_by=LibraryBook.added_at.desc()
+            ).label("rn")
+        )
+        .join(Book, Book.id == LibraryBook.book_id)
+        .where(LibraryBook.library_id.in_(library_ids))
+        .where(Book.cover_path.isnot(None))
+        .subquery()
+    )
+    preview_result = await db.execute(
+        select(ranked.c.library_id, ranked.c.book_id)
+        .where(ranked.c.rn <= 4)
+    )
+    previews: dict[str, list] = {}
+    for lib_id, book_id in preview_result.all():
+        previews.setdefault(lib_id, []).append(book_id)
+
+    return [
+        LibraryListOut(
+            **{c.key: getattr(lib, c.key) for c in lib.__table__.columns},
+            book_count=counts.get(lib.id, 0),
+            preview_book_ids=previews.get(lib.id, []),
+        )
+        for lib in libraries
+    ]
 
 
 @router.post("", response_model=LibraryOut, status_code=status.HTTP_201_CREATED)

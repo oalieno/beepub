@@ -93,7 +93,7 @@
     <div class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8">
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility === 'public' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}">
+          <span class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility === 'public' ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}">
             {library.visibility}
           </span>
         </div>

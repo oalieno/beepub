@@ -6,7 +6,8 @@
   import { toastStore } from '$lib/stores/toast';
   import type { LibraryOut } from '$lib/types';
   import { LibraryVisibility } from '$lib/types';
-  import { Library, ChevronRight } from '@lucide/svelte';
+  import { Library } from '@lucide/svelte';
+  import CollectionCard from '$lib/components/CollectionCard.svelte';
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -43,23 +44,20 @@
       <p class="text-muted-foreground text-lg">No libraries available</p>
     </div>
   {:else}
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
       {#each libraries as lib}
-        <a
+        <CollectionCard
           href="/libraries/{lib.id}"
-          class="bg-card card-soft rounded-2xl p-5 hover:shadow-md transition-all duration-200 group flex flex-col"
+          name={lib.name}
+          previewBookIds={lib.preview_book_ids}
+          bookCount={lib.book_count}
+          badgeLabel={lib.visibility === LibraryVisibility.Private ? 'Private' : 'Public'}
+          badgeClass={lib.visibility === LibraryVisibility.Private ? 'bg-secondary text-muted-foreground' : 'bg-primary/15 text-primary'}
         >
-          <div class="flex items-center justify-between mb-3">
-            <span class="text-xs px-2.5 py-1 rounded-full font-medium {lib.visibility === LibraryVisibility.Private ? 'bg-orange-100 text-orange-600' : 'bg-emerald-100 text-emerald-600'}">
-              {lib.visibility === LibraryVisibility.Private ? 'Private' : 'Public'}
-            </span>
-            <ChevronRight class="text-muted-foreground/30 group-hover:text-primary transition-colors" size={16} />
-          </div>
-          <h2 class="font-bold text-lg text-foreground group-hover:text-primary transition-colors leading-tight">{lib.name}</h2>
-          {#if lib.description}
-            <p class="text-muted-foreground text-sm mt-1.5 line-clamp-2">{lib.description}</p>
-          {/if}
-        </a>
+          {#snippet icon()}
+            <Library class="text-muted-foreground/50 shrink-0" size={16} />
+          {/snippet}
+        </CollectionCard>
       {/each}
     </div>
   {/if}
