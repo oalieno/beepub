@@ -50,6 +50,7 @@
       ? 'bg-gray-900'
       : 'bg-card'}"
     onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
   >
     <!-- Close button -->
     <button
@@ -80,7 +81,7 @@
         >
           {getStyleLabel(illustration)}
         </span>
-        <div class="flex-1" />
+        <div class="flex-1"></div>
         <button
           class="flex items-center gap-1 text-xs transition-colors {darkMode
             ? 'text-gray-500 hover:text-gray-300'

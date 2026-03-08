@@ -65,6 +65,7 @@
       ? 'bg-gray-900 border border-gray-700'
       : 'bg-card border border-border'}"
     onclick={(e) => e.stopPropagation()}
+    onkeydown={(e) => e.stopPropagation()}
   >
     <!-- Header -->
     <div

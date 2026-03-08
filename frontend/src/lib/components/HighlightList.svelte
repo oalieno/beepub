@@ -55,11 +55,19 @@
 {:else}
   <div class="flex flex-col gap-1">
     {#each highlights as hl (hl.id)}
-      <button
+      <div
         class="w-full text-left px-3 py-2.5 rounded-lg transition-colors group flex gap-2.5 items-start {darkMode
           ? 'hover:bg-gray-800'
           : 'hover:bg-accent'}"
+        role="button"
+        tabindex="0"
         onclick={() => onselect?.(hl)}
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onselect?.(hl);
+          }
+        }}
       >
         <span
           class="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10"
@@ -114,7 +122,7 @@
             <Trash2 size={13} />
           </button>
         {/if}
-      </button>
+      </div>
     {/each}
   </div>
 {/if}

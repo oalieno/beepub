@@ -260,14 +260,18 @@
         // Selection overlay: draw blue rectangles over selected text
         let overlayContainer: HTMLDivElement | null = null;
         function updateSelectionOverlay(range: Range | null) {
+          let overlay: HTMLDivElement;
           if (!overlayContainer) {
-            overlayContainer = doc.createElement("div");
-            overlayContainer.id = "beepub-sel-overlay";
-            overlayContainer.style.cssText =
+            overlay = doc.createElement("div");
+            overlay.id = "beepub-sel-overlay";
+            overlay.style.cssText =
               "position:absolute;top:0;left:0;pointer-events:none;z-index:9999;";
-            doc.body.appendChild(overlayContainer);
+            doc.body.appendChild(overlay);
+            overlayContainer = overlay;
+          } else {
+            overlay = overlayContainer;
           }
-          overlayContainer.innerHTML = "";
+          overlay.innerHTML = "";
           if (!range) return;
           const rects = range.getClientRects();
           const scrollX = contents.window.scrollX || 0;
@@ -276,7 +280,7 @@
             const r = rects[i];
             const div = doc.createElement("div");
             div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgba(59,130,246,0.3);border-radius:2px;`;
-            overlayContainer.appendChild(div);
+            overlay.appendChild(div);
           }
         }
         function clearSelectionOverlay() {
@@ -1207,6 +1211,9 @@
     <div
       class="absolute inset-0 z-50 flex items-center justify-center"
       onclick={() => (showFootnote = false)}
+      onkeydown={(e) => {
+        if (e.key === "Escape") showFootnote = false;
+      }}
     >
       <div
         class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode
@@ -1219,6 +1226,7 @@
           e.stopPropagation();
           await handleFootnoteContentClick(e);
         }}
+        onkeydown={(e) => e.stopPropagation()}
       >
         {@html footnoteContent}
       </div>

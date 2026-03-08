@@ -1,0 +1,339 @@
+
+> beepub-frontend@1.0.0 check /home/oalieno/work/beepub/frontend
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /home/oalieno/work/beepub/frontend
+Getting Svelte diagnostics...
+
+/home/oalieno/work/beepub/frontend/vite.config.ts:4:31
+Error: Cannot find module 'url' or its corresponding type declarations. 
+import { defineConfig } from "vite";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
+
+/home/oalieno/work/beepub/frontend/vite.config.ts:5:34
+Error: Cannot find module 'path' or its corresponding type declarations. 
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
+
+/home/oalieno/work/beepub/frontend/src/lib/components/HighlightList.svelte:104:11
+Warn: `<button>` cannot be a child of `<button>`. When rendering this component on the server, the resulting HTML will be modified by the browser (by moving, removing, or inserting elements), likely resulting in a `hydration_mismatch` warning
+https://svelte.dev/e/node_invalid_placement_ssr (svelte)
+        {#if ondelete}
+          <button
+            class="self-center opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode
+              ? 'text-gray-500 hover:text-red-400'
+              : 'text-muted-foreground hover:text-destructive'}"
+            title="Delete highlight"
+            onclick={(e) => {
+              e.stopPropagation();
+              ondelete?.(hl);
+            }}
+          >
+            <Trash2 size={13} />
+          </button>
+        {/if}
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:1207:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="absolute inset-0 z-50 flex items-center justify-center"
+      onclick={() => (showFootnote = false)}
+    >
+      <div
+        class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode
+          ? 'bg-gray-800 text-gray-200 border-2 border-gray-500'
+          : 'bg-white text-gray-900 border-2 border-black'}"
+        style="width: 50%; height: 50%; overflow-y: auto; font-size: {fontSize}px;{isRtl
+          ? ' writing-mode: vertical-rl; max-height: none; overflow-x: auto; overflow-y: hidden;'
+          : ''}"
+        onclick={async (e: MouseEvent) => {
+          e.stopPropagation();
+          await handleFootnoteContentClick(e);
+        }}
+      >
+        {@html footnoteContent}
+      </div>
+    </div>
+  {/if}
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:1211:7
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+    >
+      <div
+        class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode
+          ? 'bg-gray-800 text-gray-200 border-2 border-gray-500'
+          : 'bg-white text-gray-900 border-2 border-black'}"
+        style="width: 50%; height: 50%; overflow-y: auto; font-size: {fontSize}px;{isRtl
+          ? ' writing-mode: vertical-rl; max-height: none; overflow-x: auto; overflow-y: hidden;'
+          : ''}"
+        onclick={async (e: MouseEvent) => {
+          e.stopPropagation();
+          await handleFootnoteContentClick(e);
+        }}
+      >
+        {@html footnoteContent}
+      </div>
+    </div>
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:265:13
+Error: 'overlayContainer' is possibly 'null'. (ts)
+            overlayContainer = doc.createElement("div");
+            overlayContainer.id = "beepub-sel-overlay";
+            overlayContainer.style.cssText =
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:266:13
+Error: 'overlayContainer' is possibly 'null'. (ts)
+            overlayContainer.id = "beepub-sel-overlay";
+            overlayContainer.style.cssText =
+              "position:absolute;top:0;left:0;pointer-events:none;z-index:9999;";
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:270:11
+Error: 'overlayContainer' is possibly 'null'. (ts)
+          }
+          overlayContainer.innerHTML = "";
+          if (!range) return;
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/EpubReader.svelte:279:13
+Error: 'overlayContainer' is possibly 'null'. (ts)
+            div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgba(59,130,246,0.3);border-radius:2px;`;
+            overlayContainer.appendChild(div);
+          }
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/IllustrationPromptModal.svelte:63:3
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
+      ? 'bg-gray-900 border border-gray-700'
+      : 'bg-card border border-border'}"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <!-- Header -->
+    <div
+      class="flex items-center justify-between px-5 py-4 border-b {darkMode
+        ? 'border-gray-800'
+        : 'border-border'}"
+    >
+      <div class="flex items-center gap-2">
+        <Sparkles
+          size={18}
+          class={darkMode ? "text-purple-400" : "text-purple-500"}
+        />
+        <h2
+          class="text-sm font-semibold {darkMode
+            ? 'text-gray-200'
+            : 'text-foreground'}"
+        >
+          AI Illustration
+        </h2>
+      </div>
+      <button
+        class="p-1 rounded-md transition-colors {darkMode
+          ? 'text-gray-400 hover:bg-gray-800'
+          : 'text-muted-foreground hover:bg-accent'}"
+        onclick={() => onclose?.()}
+      >
+        <X size={16} />
+      </button>
+    </div>
+
+    <div class="px-5 py-4 space-y-4">
+      <!-- Selected text preview -->
+      <div class="rounded-lg p-3 {darkMode ? 'bg-gray-800' : 'bg-muted'}">
+        <p
+          class="text-[10px] uppercase tracking-wider mb-1 {darkMode
+            ? 'text-gray-500'
+            : 'text-muted-foreground'}"
+        >
+          Selected text
+        </p>
+        <p
+          class="text-sm leading-relaxed {darkMode
+            ? 'text-gray-300'
+            : 'text-foreground'} line-clamp-4"
+        >
+          {text}
+        </p>
+      </div>
+
+      <!-- Style presets -->
+      <div>
+        <p
+          class="text-xs font-medium mb-2 {darkMode
+            ? 'text-gray-400'
+            : 'text-muted-foreground'}"
+        >
+          Choose a style
+        </p>
+        <div class="grid grid-cols-2 gap-2">
+          {#each styles as style}
+            <button
+              class="text-left px-3 py-2.5 rounded-lg border transition-all text-sm {selectedStyle ===
+                style.key && !useCustom
+                ? darkMode
+                  ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                  : 'border-purple-500 bg-purple-50 text-purple-700'
+                : darkMode
+                  ? 'border-gray-700 hover:border-gray-600 text-gray-300'
+                  : 'border-border hover:border-foreground/20 text-foreground'}"
+              onclick={() => selectStyle(style.key)}
+            >
+              <span class="font-medium">{style.label}</span>
+              <span class="block text-[11px] mt-0.5 opacity-60"
+                >{style.description}</span
+              >
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Custom prompt -->
+      <div>
+        <button
+          class="text-xs font-medium mb-2 transition-colors {useCustom
+            ? darkMode
+              ? 'text-purple-400'
+              : 'text-purple-600'
+            : darkMode
+              ? 'text-gray-500 hover:text-gray-400'
+              : 'text-muted-foreground hover:text-foreground'}"
+          onclick={toggleCustom}
+        >
+          {useCustom ? "- Custom prompt" : "+ Custom prompt"}
+        </button>
+        {#if useCustom}
+          <textarea
+            bind:value={customPrompt}
+            placeholder="Describe the illustration style you want..."
+            rows={3}
+            class="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 {darkMode
+              ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600'
+              : 'bg-background border-border text-foreground placeholder-muted-foreground'}"
+          ></textarea>
+        {/if}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div
+      class="px-5 py-4 border-t flex justify-end gap-2 {darkMode
+        ? 'border-gray-800'
+        : 'border-border'}"
+    >
+      <button
+        class="px-4 py-2 text-sm rounded-lg transition-colors {darkMode
+          ? 'text-gray-400 hover:bg-gray-800'
+          : 'text-muted-foreground hover:bg-accent'}"
+        onclick={() => onclose?.()}
+      >
+        Cancel
+      </button>
+      <button
+        class="px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 {canGenerate
+          ? 'bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:opacity-90 shadow-md'
+          : darkMode
+            ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+            : 'bg-muted text-muted-foreground cursor-not-allowed'}"
+        disabled={!canGenerate}
+        onclick={handleGenerate}
+      >
+        <Sparkles size={14} />
+        Generate
+      </button>
+    </div>
+  </div>
+</div>
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/IllustrationViewer.svelte:48:3
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
+      ? 'bg-gray-900'
+      : 'bg-card'}"
+    onclick={(e) => e.stopPropagation()}
+  >
+    <!-- Close button -->
+    <button
+      class="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-colors {darkMode
+        ? 'bg-gray-800/80 text-gray-400 hover:text-gray-200'
+        : 'bg-white/80 text-muted-foreground hover:text-foreground'}"
+      onclick={() => onclose?.()}
+    >
+      <X size={18} />
+    </button>
+
+    <!-- Image -->
+    <div class="w-full aspect-square bg-black/10 rounded-t-xl overflow-hidden">
+      <img
+        src={booksApi.getIllustrationImageUrl(bookId, illustration.id)}
+        alt="AI Generated Illustration"
+        class="w-full h-full object-contain"
+      />
+    </div>
+
+    <!-- Info -->
+    <div class="px-5 py-4 space-y-2">
+      <div class="flex items-center gap-2">
+        <span
+          class="text-[11px] px-2 py-0.5 rounded-full font-medium bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-pink-500/20 {darkMode
+            ? 'text-purple-300'
+            : 'text-purple-600'}"
+        >
+          {getStyleLabel(illustration)}
+        </span>
+        <div class="flex-1" />
+        <button
+          class="flex items-center gap-1 text-xs transition-colors {darkMode
+            ? 'text-gray-500 hover:text-gray-300'
+            : 'text-muted-foreground hover:text-foreground'}"
+          onclick={() => (showText = !showText)}
+        >
+          {#if showText}
+            <ChevronUp size={14} />
+            Hide source text
+          {:else}
+            <ChevronDown size={14} />
+            Show source text
+          {/if}
+        </button>
+      </div>
+
+      {#if showText}
+        <p
+          class="text-sm leading-relaxed {darkMode
+            ? 'text-gray-300'
+            : 'text-foreground'}"
+        >
+          {illustration.text}
+        </p>
+        {#if illustration.custom_prompt}
+          <p
+            class="text-xs italic {darkMode
+              ? 'text-gray-500'
+              : 'text-muted-foreground'}"
+          >
+            Prompt: {illustration.custom_prompt}
+          </p>
+        {/if}
+      {/if}
+    </div>
+  </div>
+</div>
+
+/home/oalieno/work/beepub/frontend/src/lib/components/reader/IllustrationViewer.svelte:83:9
+Warn: Self-closing HTML tags for non-void elements are ambiguous — use `<div ...></div>` rather than `<div ... />`
+https://svelte.dev/e/element_invalid_self_closing_tag (svelte)
+        </span>
+        <div class="flex-1" />
+        <button
+
+====================================
+svelte-check found 6 errors and 6 warnings in 5 files
+ ELIFECYCLE  Command failed with exit code 1.
