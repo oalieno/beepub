@@ -10,7 +10,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import type { LibraryOut, BookOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Upload, Search, X, HardDrive } from "@lucide/svelte";
+  import { Upload, Search, X, HardDrive, ArrowUpDown } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
 
   const SORT_OPTIONS = [
@@ -220,6 +220,7 @@
 
     <!-- Sort -->
     <div class="flex items-center gap-2 mb-4">
+      <ArrowUpDown class="text-muted-foreground" size={16} />
       <Select.Root
         type="single"
         value={sortValue}
@@ -230,7 +231,7 @@
           }
         }}
       >
-        <Select.Trigger class="w-auto rounded-lg">
+        <Select.Trigger class="w-auto rounded-lg bg-white">
           {sortLabel}
         </Select.Trigger>
         <Select.Content>
