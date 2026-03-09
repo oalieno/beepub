@@ -432,7 +432,7 @@
               } else {
                 touchState = "idle";
               }
-            }, 500);
+            }, 300);
           },
           { passive: true },
         );
@@ -1237,13 +1237,13 @@
 
   <button
     type="button"
-    class="absolute inset-y-0 left-0 z-10 w-8"
+    class="absolute inset-y-0 left-0 z-10 w-12"
     aria-label="Previous page"
     onclick={handleLeftTapNav}
   ></button>
   <button
     type="button"
-    class="absolute inset-y-0 right-0 z-10 w-8"
+    class="absolute inset-y-0 right-0 z-10 w-12"
     aria-label="Next page"
     onclick={handleRightTapNav}
   ></button>

@@ -129,6 +129,8 @@ class Layout {
       !(_gap >= 0)
     ) {
       gap = section % 2 === 0 ? section : section - 1;
+      // Ensure minimum padding of 48px per side (gap/2) for comfortable tap zones on mobile
+      gap = Math.max(gap, 96);
     }
 
     if (this.name === "pre-paginated") {
