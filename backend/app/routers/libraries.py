@@ -151,19 +151,21 @@ async def delete_library(
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
 
-    # For Calibre libraries, also delete the imported Book records
-    if library.calibre_path:
-        from app.services.storage import delete_file
+    # Delete all books in this library (and their files)
+    from app.services.storage import delete_file
 
-        book_result = await db.execute(
-            select(Book)
-            .join(LibraryBook, LibraryBook.book_id == Book.id)
-            .where(LibraryBook.library_id == library_id)
-        )
-        for book in book_result.scalars().all():
-            if book.cover_path:
-                delete_file(book.cover_path)
-            await db.delete(book)
+    book_result = await db.execute(
+        select(Book)
+        .join(LibraryBook, LibraryBook.book_id == Book.id)
+        .where(LibraryBook.library_id == library_id)
+    )
+    for book in book_result.scalars().all():
+        # Only delete EPUB file for non-Calibre books (Calibre files are on read-only mount)
+        if book.calibre_id is None:
+            delete_file(book.file_path)
+        if book.cover_path:
+            delete_file(book.cover_path)
+        await db.delete(book)
 
     await db.delete(library)
     await db.commit()
