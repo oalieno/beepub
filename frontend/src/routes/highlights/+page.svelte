@@ -68,17 +68,10 @@
 </svelte:head>
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-  <div class="flex items-center gap-3 mb-6">
-    <div
-      class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
-    >
-      <Highlighter size={20} class="text-primary" />
-    </div>
+  <div class="flex items-center gap-3 mb-8">
     <div>
-      <h1 class="text-2xl font-bold text-foreground">Highlights</h1>
-      <p class="text-sm text-muted-foreground">
-        All your highlights across books
-      </p>
+      <h1 class="text-3xl font-bold text-foreground">Highlights</h1>
+      <p class="text-muted-foreground mt-1">All your highlights across books</p>
     </div>
   </div>
 

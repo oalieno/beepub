@@ -77,41 +77,6 @@ async def _user_can_access_book(
     return result.scalar_one_or_none() is not None
 
 
-@router.get("", response_model=list[BookOut])
-async def search_books(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    q: str | None = Query(None),
-):
-    if current_user.role == UserRole.admin:
-        query = select(Book)
-    else:
-        accessible_lib_ids = select(LibraryAccess.library_id).where(
-            LibraryAccess.user_id == current_user.id
-        )
-        query = (
-            select(Book)
-            .join(LibraryBook, LibraryBook.book_id == Book.id)
-            .join(Library, Library.id == LibraryBook.library_id)
-            .where(
-                or_(
-                    Library.visibility == LibraryVisibility.public,
-                    Library.id.in_(accessible_lib_ids),
-                )
-            )
-            .distinct()
-        )
-    if q:
-        query = query.where(
-            or_(
-                Book.title.ilike(f"%{q}%"),
-                Book.epub_title.ilike(f"%{q}%"),
-            )
-        )
-    result = await db.execute(query.order_by(Book.created_at.desc()))
-    return result.scalars().all()
-
-
 @router.post("", response_model=BookOut, status_code=status.HTTP_201_CREATED)
 async def upload_book(
     current_user: Annotated[User, Depends(get_current_user)],

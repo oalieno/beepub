@@ -11,9 +11,6 @@ import type {
 } from "$lib/types";
 
 export const booksApi = {
-  search: (query: string, token: string) =>
-    get(`/books?q=${encodeURIComponent(query)}`, token) as Promise<BookOut[]>,
-
   upload: (file: File, token: string, libraryId?: string) => {
     const formData = new FormData();
     formData.append("file", file);
