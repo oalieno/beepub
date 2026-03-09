@@ -545,7 +545,7 @@
         <div class="mt-auto pt-6 flex items-center gap-3">
           <a
             href="/books/{book.id}/read"
-            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-6 py-3 rounded-full transition-colors"
+            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 sm:px-6 py-3 rounded-full transition-colors whitespace-nowrap text-sm sm:text-base"
           >
             <BookOpen size={16} />
             Start Reading
@@ -621,7 +621,7 @@
     <!-- Description + Metadata -->
     <div class="flex flex-col md:flex-row gap-10">
       {#if book.description ?? book.epub_description}
-        <div class="flex-1 min-w-0">
+        <div class="flex-1 min-w-0 order-last md:order-none">
           <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
           <div class="text-muted-foreground leading-relaxed prose-description">
             {@html book.description ?? book.epub_description}
@@ -630,7 +630,7 @@
       {/if}
 
       {#if (book.publisher ?? book.epub_publisher) || (book.published_date ?? book.epub_published_date) || book.epub_language || book.epub_isbn}
-        <div class="flex-shrink-0 w-full md:w-64">
+        <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
           <div class="flex flex-col gap-4 text-sm">
             {#if book.publisher ?? book.epub_publisher}
               <div>

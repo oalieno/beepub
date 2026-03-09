@@ -80,8 +80,8 @@
       ></div>
     </div>
   {:else}
-    <div class="bg-card card-soft rounded-2xl overflow-hidden">
-      <table class="w-full">
+    <div class="bg-card card-soft rounded-2xl overflow-hidden overflow-x-auto">
+      <table class="w-full min-w-[600px]">
         <thead class="border-b border-border/50">
           <tr>
             <th
