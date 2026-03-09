@@ -66,4 +66,17 @@ export const adminApi = {
       `/admin/calibre/libraries/${libraryId}/status`,
       token,
     ) as Promise<import("$lib/types").CalibreLibraryStatus>,
+
+  // App Settings
+  getSettings: (token: string) =>
+    get("/admin/settings", token) as Promise<
+      import("$lib/types").AdminSettings
+    >,
+
+  updateSettings: (
+    data: Partial<import("$lib/types").AdminSettings>,
+    token: string,
+  ) => put("/admin/settings", data, token) as Promise<
+    import("$lib/types").AdminSettings
+  >,
 };

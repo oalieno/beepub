@@ -151,6 +151,15 @@ export interface AdminStats {
   users: number;
   books: number;
   libraries: number;
+  metadata_queue: number;
+}
+
+export interface AdminSettings {
+  timezone: string;
+  metadata_refresh_enabled: string;
+  metadata_refresh_hour: string;
+  metadata_refresh_interval_days: string;
+  metadata_refresh_cooldown_days: string;
 }
 
 export interface CalibreLibraryInfo {

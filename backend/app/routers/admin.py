@@ -14,6 +14,8 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.models.user import User
 from app.schemas.user import UserOut, UserUpdateRole
+from app.services.metadata_queue import get_queue_length
+from app.services.settings import get_all_settings, update_settings
 from app.services.calibre import (
     _count_calibre_epubs,
     get_sync_status,
@@ -74,10 +76,12 @@ async def get_stats(
     user_count = (await db.execute(select(func.count(User.id)))).scalar()
     book_count = (await db.execute(select(func.count(Book.id)))).scalar()
     library_count = (await db.execute(select(func.count(Library.id)))).scalar()
+    queue_length = await get_queue_length()
     return {
         "users": user_count,
         "books": book_count,
         "libraries": library_count,
+        "metadata_queue": queue_length,
     }
 
 
@@ -225,3 +229,23 @@ async def get_calibre_library_status(
         "imported_book_count": imported_count,
         "sync": sync,
     }
+
+
+# --- App Settings ---
+
+
+@router.get("/settings")
+async def get_settings(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await get_all_settings(db)
+
+
+@router.put("/settings")
+async def put_settings(
+    body: dict[str, str],
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    return await update_settings(db, body)

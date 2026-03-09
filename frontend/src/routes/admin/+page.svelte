@@ -12,6 +12,8 @@
     Library,
     ChevronRight,
     HardDrive,
+    Settings,
+    ListTodo,
   } from "@lucide/svelte";
 
   let stats = $state<AdminStats | null>(null);
@@ -50,7 +52,7 @@
     </div>
   {:else}
     <!-- Stats -->
-    <div class="grid grid-cols-3 gap-4 mb-10">
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
       <div class="bg-card card-soft rounded-2xl p-6 text-center">
         <div
           class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
@@ -79,6 +81,17 @@
           {stats?.libraries ?? 0}
         </p>
         <p class="text-muted-foreground text-sm mt-0.5">Libraries</p>
+      </div>
+      <div class="bg-card card-soft rounded-2xl p-6 text-center">
+        <div
+          class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
+        >
+          <ListTodo class="text-primary" size={22} />
+        </div>
+        <p class="text-3xl font-bold text-foreground">
+          {stats?.metadata_queue ?? 0}
+        </p>
+        <p class="text-muted-foreground text-sm mt-0.5">Job Queue</p>
       </div>
     </div>
 
@@ -154,6 +167,32 @@
             </p>
             <p class="text-muted-foreground text-sm">
               Link and sync Calibre libraries
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
+          size={20}
+        />
+      </a>
+      <a
+        href="/admin/settings"
+        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+          >
+            <Settings class="text-primary" size={18} />
+          </div>
+          <div>
+            <p
+              class="font-semibold text-foreground group-hover:text-primary transition-colors"
+            >
+              Settings
+            </p>
+            <p class="text-muted-foreground text-sm">
+              Timezone, metadata refresh schedule
             </p>
           </div>
         </div>

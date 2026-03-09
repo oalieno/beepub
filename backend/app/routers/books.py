@@ -4,6 +4,7 @@ import uuid
 import zipfile
 from datetime import UTC, datetime
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import (
     APIRouter,
@@ -41,6 +42,7 @@ from app.schemas.reading import (
 )
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.metadata_queue import push_metadata_job
+from app.services.settings import get_setting
 from app.services.storage import (
     delete_file,
     get_book_path,
@@ -476,9 +478,6 @@ async def update_progress(
     current_user: Annotated[User, Depends(get_current_user_or_cookie)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    from datetime import date as date_type
-    from datetime import datetime
-
     await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
 
@@ -498,7 +497,8 @@ async def update_progress(
         delta = (now - old_last_read).total_seconds()
         if 0 < delta < 300:  # < 5 minutes = same session
             delta_seconds = int(delta)
-            today = date_type.today()
+            tz_name = await get_setting(db, "timezone")
+            today = datetime.now(ZoneInfo(tz_name)).date()
             result = await db.execute(
                 select(ReadingActivity).where(
                     ReadingActivity.user_id == current_user.id,
