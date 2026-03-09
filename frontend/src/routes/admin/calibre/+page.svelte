@@ -26,12 +26,14 @@
     {},
   );
 
-  onMount(async () => {
+  onMount(() => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
       goto("/");
       return;
     }
-    await loadLibraries();
+
+    void loadLibraries();
+
     return () => {
       // Cleanup polling intervals
       Object.values(pollingIntervals).forEach(clearInterval);
@@ -160,9 +162,7 @@
   {:else}
     <div class="space-y-4">
       {#each libraries as lib}
-        {@const status = lib.library_id
-          ? syncStatuses[lib.library_id]
-          : null}
+        {@const status = lib.library_id ? syncStatuses[lib.library_id] : null}
         {@const syncInfo = status?.sync}
         <div class="bg-card card-soft rounded-2xl p-5">
           <div class="flex items-center justify-between">
@@ -208,9 +208,7 @@
                 >
                   <RefreshCw
                     size={14}
-                    class={syncInfo?.status === "running"
-                      ? "animate-spin"
-                      : ""}
+                    class={syncInfo?.status === "running" ? "animate-spin" : ""}
                   />
                   Re-sync
                 </Button>
@@ -234,7 +232,9 @@
           {#if syncInfo}
             <div class="mt-4 pt-4 border-t border-border">
               {#if syncInfo.status === "running"}
-                <div class="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                <div
+                  class="flex items-center gap-2 text-sm text-muted-foreground mb-2"
+                >
                   <Loader2 size={14} class="animate-spin" />
                   Syncing... {syncInfo.processed} / {syncInfo.total}
                 </div>
@@ -281,6 +281,7 @@
   <div
     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
     role="dialog"
+    tabindex="-1"
     aria-modal="true"
     onclick={(e) => {
       if (e.target === e.currentTarget) {

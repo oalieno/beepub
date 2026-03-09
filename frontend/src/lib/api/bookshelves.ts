@@ -56,16 +56,18 @@ export const adminApi = {
   linkCalibreLibrary: (
     data: { calibre_path: string; name?: string },
     token: string,
-  ) => post("/admin/calibre/libraries", data, token),
+  ) =>
+    post("/admin/calibre/libraries", data, token) as Promise<{
+      library_id: string;
+    }>,
 
   syncCalibreLibrary: (libraryId: string, token: string) =>
     post(`/admin/calibre/libraries/${libraryId}/sync`, {}, token),
 
   getCalibreLibraryStatus: (libraryId: string, token: string) =>
-    get(
-      `/admin/calibre/libraries/${libraryId}/status`,
-      token,
-    ) as Promise<import("$lib/types").CalibreLibraryStatus>,
+    get(`/admin/calibre/libraries/${libraryId}/status`, token) as Promise<
+      import("$lib/types").CalibreLibraryStatus
+    >,
 
   // App Settings
   getSettings: (token: string) =>
@@ -76,7 +78,8 @@ export const adminApi = {
   updateSettings: (
     data: Partial<import("$lib/types").AdminSettings>,
     token: string,
-  ) => put("/admin/settings", data, token) as Promise<
-    import("$lib/types").AdminSettings
-  >,
+  ) =>
+    put("/admin/settings", data, token) as Promise<
+      import("$lib/types").AdminSettings
+    >,
 };
