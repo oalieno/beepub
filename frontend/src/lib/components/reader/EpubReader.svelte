@@ -1223,7 +1223,7 @@
 </script>
 
 <div
-  class="relative w-full h-full overflow-hidden touch-pan-x {darkMode
+  class="relative w-full h-full overflow-hidden touch-manipulation {darkMode
     ? 'bg-gray-900'
     : 'bg-white'}"
   style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"

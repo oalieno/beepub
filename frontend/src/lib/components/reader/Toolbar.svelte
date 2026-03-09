@@ -64,7 +64,7 @@
 </script>
 
 <div
-  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-2 sm:gap-3 py-2 z-10 relative {darkMode
+  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-2 sm:gap-3 py-2 z-10 relative touch-manipulation {darkMode
     ? 'bg-gray-900 border-gray-800 text-gray-200'
     : 'bg-background border-border text-foreground'}"
 >

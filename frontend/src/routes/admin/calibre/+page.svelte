@@ -165,8 +165,10 @@
         {@const status = lib.library_id ? syncStatuses[lib.library_id] : null}
         {@const syncInfo = status?.sync}
         <div class="bg-card card-soft rounded-2xl p-5">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3.5">
+          <div
+            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+          >
+            <div class="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
               <div
                 class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.linked
                   ? 'bg-primary/15 text-primary'
@@ -174,7 +176,7 @@
               >
                 <HardDrive size={18} />
               </div>
-              <div>
+              <div class="min-w-0">
                 <p class="font-semibold text-foreground">
                   {lib.library_name || lib.name}
                   {#if lib.linked}
@@ -185,7 +187,7 @@
                     </span>
                   {/if}
                 </p>
-                <p class="text-muted-foreground text-sm">
+                <p class="text-muted-foreground text-sm break-words">
                   {lib.path}
                   {#if lib.calibre_book_count !== null}
                     &middot; {lib.calibre_book_count} EPUBs in Calibre
@@ -197,12 +199,14 @@
               </div>
             </div>
 
-            <div class="flex items-center gap-2">
+            <div
+              class="flex items-center gap-2 w-full sm:w-auto sm:justify-end"
+            >
               {#if lib.linked && lib.library_id}
                 <Button
                   variant="outline"
                   size="sm"
-                  class="rounded-xl"
+                  class="rounded-xl whitespace-nowrap"
                   disabled={syncInfo?.status === "running"}
                   onclick={() => handleSync(lib.library_id!)}
                 >
@@ -215,7 +219,7 @@
               {:else}
                 <Button
                   size="sm"
-                  class="rounded-xl"
+                  class="rounded-xl whitespace-nowrap"
                   onclick={() => {
                     linkingPath = lib.path;
                     linkName = lib.name;

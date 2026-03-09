@@ -24,30 +24,60 @@
   let metadataIntervalDays = $state(7);
   let metadataCooldownDays = $state(30);
 
-  const commonTimezones = [
-    "Asia/Taipei",
-    "Asia/Tokyo",
-    "Asia/Shanghai",
-    "Asia/Hong_Kong",
-    "Asia/Seoul",
-    "Asia/Singapore",
-    "Asia/Kolkata",
-    "Asia/Dubai",
-    "Europe/London",
-    "Europe/Paris",
-    "Europe/Berlin",
-    "Europe/Moscow",
-    "America/New_York",
-    "America/Chicago",
-    "America/Denver",
-    "America/Los_Angeles",
-    "America/Toronto",
-    "America/Sao_Paulo",
-    "Australia/Sydney",
-    "Australia/Melbourne",
-    "Pacific/Auckland",
-    "UTC",
-  ];
+  const allTimezones = Intl.supportedValuesOf("timeZone");
+
+  function formatUtcOffset(timeZone: string): string {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        timeZoneName: "shortOffset",
+        hour: "2-digit",
+      }).formatToParts(new Date());
+
+      const rawOffset =
+        parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+0";
+      const match = rawOffset.match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/i);
+
+      if (!match) return "UTC+00:00";
+
+      const sign = match[1];
+      const hour = String(parseInt(match[2], 10)).padStart(2, "0");
+      const minute = String(parseInt(match[3] ?? "0", 10)).padStart(2, "0");
+
+      return `UTC${sign}${hour}:${minute}`;
+    } catch {
+      return "UTC+00:00";
+    }
+  }
+
+  function getUtcOffsetMinutes(timeZone: string): number {
+    const offset = formatUtcOffset(timeZone);
+    const match = offset.match(/UTC([+-])(\d{2}):(\d{2})/);
+    if (!match) return 0;
+
+    const sign = match[1] === "+" ? 1 : -1;
+    const hour = parseInt(match[2], 10);
+    const minute = parseInt(match[3], 10);
+    return sign * (hour * 60 + minute);
+  }
+
+  const timezoneOptions = allTimezones
+    .map((tz) => ({
+      value: tz,
+      label: `${tz} (${formatUtcOffset(tz)})`,
+      offsetMinutes: getUtcOffsetMinutes(tz),
+    }))
+    .sort(
+      (a, b) =>
+        a.offsetMinutes - b.offsetMinutes || a.label.localeCompare(b.label),
+    );
+
+  function getTimezoneLabel(timeZone: string): string {
+    return (
+      timezoneOptions.find((option) => option.value === timeZone)?.label ??
+      `${timeZone} (UTC+00:00)`
+    );
+  }
 
   const hourOptions = Array.from({ length: 24 }, (_, i) => ({
     value: String(i),
@@ -143,11 +173,11 @@
               onValueChange={(v) => (timezone = v)}
             >
               <Select.Trigger id="timezone" class="w-full bg-background">
-                {timezone}
+                {getTimezoneLabel(timezone)}
               </Select.Trigger>
               <Select.Content align="start" class="max-h-64">
-                {#each commonTimezones as tz}
-                  <Select.Item value={tz}>{tz}</Select.Item>
+                {#each timezoneOptions as option}
+                  <Select.Item value={option.value}>{option.label}</Select.Item>
                 {/each}
               </Select.Content>
             </Select.Root>
@@ -160,8 +190,7 @@
         <Card.Header>
           <Card.Title>Metadata Auto-Refresh</Card.Title>
           <Card.Description
-            >Automatically fetch book metadata from Goodreads and
-            Readmoo</Card.Description
+            >Automatically fetch book metadata from Goodreads and Readmoo</Card.Description
           >
         </Card.Header>
         <Card.Content class="space-y-5">

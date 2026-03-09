@@ -33,7 +33,7 @@
   let hasMore = $derived(books.length < totalBooks);
   let loading = $state(true);
   let loadingMore = $state(false);
-  let searchQuery = $state("");
+  let searchQuery = $state(($page.url.searchParams.get("search") ?? "").trim());
   let sortValue = $state("added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -80,17 +80,13 @@
     if (!$authStore.token || loadingMore || !hasMore) return;
     loadingMore = true;
     try {
-      const result = await librariesApi.getBooks(
-        libraryId,
-        $authStore.token,
-        {
-          search: searchQuery || undefined,
-          sort: sortBy,
-          order: sortOrder,
-          limit: PAGE_SIZE,
-          offset: books.length,
-        },
-      );
+      const result = await librariesApi.getBooks(libraryId, $authStore.token, {
+        search: searchQuery || undefined,
+        sort: sortBy,
+        order: sortOrder,
+        limit: PAGE_SIZE,
+        offset: books.length,
+      });
       books = [...books, ...result.items];
       totalBooks = result.total;
     } catch (e) {
@@ -103,11 +99,13 @@
   async function handleSearch() {
     if (!$authStore.token) return;
     try {
-      const result = await librariesApi.getBooks(
-        libraryId,
-        $authStore.token,
-        { search: searchQuery || undefined, sort: sortBy, order: sortOrder, limit: PAGE_SIZE, offset: 0 },
-      );
+      const result = await librariesApi.getBooks(libraryId, $authStore.token, {
+        search: searchQuery || undefined,
+        sort: sortBy,
+        order: sortOrder,
+        limit: PAGE_SIZE,
+        offset: 0,
+      });
       books = result.items;
       totalBooks = result.total;
     } catch (e) {

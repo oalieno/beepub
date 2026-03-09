@@ -58,6 +58,27 @@ epub.js 的 `Snap` 模組只在 `continuous` manager 中使用（`managers/conti
 - iOS：state machine 保護（swiping 和 selecting 是互斥狀態）
 - 非 iOS：翻頁前檢查 `selection.isCollapsed`，有選取就不翻頁
 
+### 6. Reader 左右留白與 tap zone 對齊（gap 機制修正）
+
+#### 問題
+- 嘗試在 `EpubReader.svelte` theme 裡改 `body.padding`（例如 `2rem 3rem`）後，手機實機看起來留白沒有變大。
+
+#### 根本原因
+- epub.js 在 `contents.js -> columns()` 會再次設定 body padding：
+  - 水平排版：`padding-left/right = gap / 2`（含 `!important`）
+  - 垂直排版：`padding-top/bottom = gap / 2`
+- 因為是 runtime 寫入且使用 `!important`，theme 的 `body.padding` 會被覆蓋。
+- 在 paginated 模式下，**視覺留白與分頁幾何（column width / page delta）是同一套 gap 計算**，不能只改 CSS padding。
+
+#### 正確修復方式
+- 改 `layout.js` 的 gap 計算，而不是只改 theme padding。
+- 在 `reflowable + paginated + auto gap` 路徑加下限：`gap = Math.max(gap, 96)`。
+- 這樣在手機上會得到每側 `48px` 留白（`gap/2`），並與 reader tap zone `w-12` 對齊。
+
+#### 結果
+- 手機：左右留白實際變大，tap zone 擴大後仍主要落在留白區域，不遮文字。
+- 桌面：原本自動 gap 足夠時不受影響。
+
 ---
 
 ## 修改的檔案
@@ -65,3 +86,4 @@ epub.js 的 `Snap` 模組只在 `continuous` manager 中使用（`managers/conti
 - `frontend/src/routes/books/[id]/+page.svelte`
 - `frontend/src/routes/admin/users/+page.svelte`
 - `frontend/src/lib/components/reader/EpubReader.svelte`
+- `frontend/src/lib/epubjs/layout.js`

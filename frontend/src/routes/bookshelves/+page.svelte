@@ -74,7 +74,7 @@
 </svelte:head>
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
-  <div class="flex items-end justify-between mb-8">
+  <div class="flex items-start sm:items-end justify-between gap-4 mb-8">
     <div>
       <h1 class="text-3xl font-bold text-foreground">My Shelves</h1>
       <p class="text-muted-foreground mt-1">
@@ -82,7 +82,7 @@
       </p>
     </div>
     <button
-      class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors"
+      class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 sm:px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap text-sm sm:text-base shrink-0"
       onclick={() => (showCreateModal = true)}
     >
       <Plus size={16} />

@@ -4,6 +4,7 @@
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
+  import { librariesApi } from "$lib/api/libraries";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import StarRating from "$lib/components/StarRating.svelte";
@@ -77,6 +78,25 @@
     const totalFull = full + extra;
     const empty = 5 - totalFull - (half ? 1 : 0);
     return { full: totalFull, half, empty };
+  }
+
+  async function handleAuthorSearch(author: string) {
+    const q = author.trim();
+    if (!q || !$authStore.token) return;
+
+    try {
+      const libraries = await librariesApi.list($authStore.token);
+      const targetLibrary = libraries[0];
+      if (!targetLibrary) {
+        toastStore.error("No library available to search");
+        return;
+      }
+
+      const params = new URLSearchParams({ search: q });
+      goto(`/libraries/${targetLibrary.id}?${params.toString()}`);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
   }
 
   function handleStatusSelectChange(value: string) {
@@ -399,7 +419,17 @@
           </h1>
           {#if (book.display_authors ?? []).length > 0}
             <p class="text-muted-foreground text-lg mt-2">
-              {(book.display_authors ?? []).join(", ")}
+              {#each book.display_authors ?? [] as author, idx}
+                <button
+                  type="button"
+                  class="hover:text-foreground hover:underline transition-colors"
+                  onclick={() => handleAuthorSearch(author)}
+                >
+                  {author}
+                </button>{idx < (book.display_authors ?? []).length - 1
+                  ? ", "
+                  : ""}
+              {/each}
             </p>
           {/if}
         </div>
