@@ -481,12 +481,22 @@
               // Only update menu position if user actually dragged to extend
               if (didDragSelect && currentRange && currentRangeText)
                 showMenuForRange(currentRange, currentRangeText);
+            } else if (touchState === "swiping") {
+              // Swipe to turn page (min 50px horizontal distance)
+              const SWIPE_THRESHOLD = 50;
+              if (Math.abs(dx) > SWIPE_THRESHOLD) {
+                const swipeLeft = dx < 0;
+                if (swipeLeft) {
+                  isRtl ? rendition?.prev() : rendition?.next();
+                } else {
+                  isRtl ? rendition?.next() : rendition?.prev();
+                }
+              }
             } else if (touchState === "waiting" && showHighlightMenu) {
               // Quick tap to dismiss menu
               showHighlightMenu = false;
               clearIOSSelection();
             }
-            // Note: swipe/tap page navigation is handled by epub.js snap module
             touchState = "idle";
             anchorNode = null;
           },
@@ -500,9 +510,61 @@
           selChangeTimer = setTimeout(tryShowMenuFromSelection, 500);
         });
 
-        doc.addEventListener("touchend", () => {
-          setTimeout(tryShowMenuFromSelection, 300);
-        });
+        // Swipe-to-turn-page for non-iOS touch devices
+        let swipeStartX = 0;
+        let swipeStartY = 0;
+        let swiping = false;
+        const SWIPE_THRESHOLD = 50;
+
+        doc.addEventListener(
+          "touchstart",
+          (e: TouchEvent) => {
+            if (e.touches.length !== 1) return;
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+            swiping = false;
+          },
+          { passive: true },
+        );
+
+        doc.addEventListener(
+          "touchmove",
+          (e: TouchEvent) => {
+            const t = e.touches[0];
+            if (
+              Math.abs(t.clientX - swipeStartX) > 10 ||
+              Math.abs(t.clientY - swipeStartY) > 10
+            ) {
+              swiping = true;
+            }
+          },
+          { passive: true },
+        );
+
+        doc.addEventListener(
+          "touchend",
+          (e: TouchEvent) => {
+            const endX = e.changedTouches[0]?.clientX ?? swipeStartX;
+            const dx = endX - swipeStartX;
+
+            if (swiping && Math.abs(dx) > SWIPE_THRESHOLD) {
+              // Don't turn page if text is selected
+              const sel = contents.window?.getSelection();
+              if (sel && !sel.isCollapsed && sel.toString().trim()) return;
+
+              const swipeLeft = dx < 0;
+              if (swipeLeft) {
+                isRtl ? rendition?.prev() : rendition?.next();
+              } else {
+                isRtl ? rendition?.next() : rendition?.prev();
+              }
+            } else if (!swiping) {
+              // Tap (not swipe) — show highlight menu if text selected
+              setTimeout(tryShowMenuFromSelection, 300);
+            }
+          },
+          { passive: true },
+        );
       }
     });
     container.addEventListener("wheel", handleWheel, { passive: false });

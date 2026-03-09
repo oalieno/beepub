@@ -97,11 +97,13 @@ IDLE → touchstart → WAITING (500ms timer)
 - 設定 >15px 門檻才算拖曳延伸
 - 只有實際拖曳才在 touchend 重新計算 menu 位置
 
-### 與 epub.js snap 模組的共存
-- epub.js 的 snap 模組（`managers/helpers/snap.js`）自己處理觸控翻頁
-- snap 監聽 scroller 的 touchstart/touchmove/touchend + iframe 的 contents 事件
-- **不能** 在我們的 touch handler 呼叫 `rendition.next()/prev()`，否則會 double navigation（oscillation：page 4→3→4→3）
-- 翻頁完全交給 snap；我們只處理長按選取和 menu 互動
+### 與翻頁的共存
+- ~~epub.js 的 snap 模組（`managers/helpers/snap.js`）自己處理觸控翻頁~~
+- ~~snap 監聯 scroller 的 touchstart/touchmove/touchend + iframe 的 contents 事件~~
+- ~~**不能** 在我們的 touch handler 呼叫 `rendition.next()/prev()`，否則會 double navigation~~
+- ~~翻頁完全交給 snap；我們只處理長按選取和 menu 互動~~
+
+> **⚠️ 修正（log 014）**：上面關於 snap 模組的描述是錯誤的。`Snap` 只在 `continuous` manager 中使用（`managers/continuous/index.js`），我們用的 `default` manager 從未啟用 snap。實際上滑動翻頁需要自己實作。已在 touchend 的 `swiping` 狀態中加入 `rendition.next()/prev()` 呼叫，不會有 double navigation 問題。詳見 `agents/log/014-mobile-responsive-and-swipe.md`。
 
 ### 父容器 CSS
 ```html
@@ -117,7 +119,7 @@ IDLE → touchstart → WAITING (500ms timer)
 
 1. **iframe sandbox 是最大的坑**：沒有 `allow-scripts` 就沒有任何事件處理器能執行，所有 addEventListener 都是死的
 2. **`user-select: none` 是雙面刃**：能擋住原生 UI，但也讓 `caretRangeFromPoint` 和 `getSelection` 失效，必須精確控制啟用/停用時機
-3. **不要同時處理翻頁**：epub.js snap 已經在處理了，重複處理 = 翻頁混亂
+3. ~~**不要同時處理翻頁**：epub.js snap 已經在處理了，重複處理 = 翻頁混亂~~ （已修正，見上方修正 note）
 4. **`preventDefault` on touchstart 會搞壞一切**：連結點不了、click 事件不觸發、epub.js 內部機制壞掉
 5. **iOS magnifier 只要 `user-select: text` 就會出現**：即使只是暫時啟用，如果沒有在同一個 tick 內關閉，iOS 就會偵測到並顯示 magnifier
 6. **`::selection` CSS 在程式化選取 + `user-select` toggle 下不可靠**：必須自己畫 overlay
