@@ -20,6 +20,11 @@
   const navLinks = $derived([
     { href: "/", label: "Home", active: $page.url.pathname === "/" },
     {
+      href: "/my-books",
+      label: "My Books",
+      active: $page.url.pathname.startsWith("/my-books"),
+    },
+    {
       href: "/libraries",
       label: "Libraries",
       active: $page.url.pathname.startsWith("/libraries"),

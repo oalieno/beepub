@@ -24,6 +24,7 @@ class BookOut(BaseModel):
     display_title: str | None
     display_authors: list[str] | None
     calibre_id: int | None = None
+    calibre_added_at: datetime | None = None
     added_by: uuid.UUID
     created_at: datetime
     library_id: uuid.UUID | None = None
@@ -33,6 +34,20 @@ class BookOut(BaseModel):
 
 class PaginatedBooks(BaseModel):
     items: list[BookOut]
+    total: int
+
+    model_config = {"from_attributes": True}
+
+
+class BookWithInteractionOut(BookOut):
+    reading_status: str | None = None
+    is_favorite: bool = False
+    reading_percentage: float | None = None
+    last_read_at: str | None = None
+
+
+class PaginatedBooksWithInteraction(BaseModel):
+    items: list[BookWithInteractionOut]
     total: int
 
     model_config = {"from_attributes": True}

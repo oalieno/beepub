@@ -8,29 +8,43 @@
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { booksApi } from "$lib/api/books";
-  import type { BookOut, BookshelfOut, LibraryOut } from "$lib/types";
+  import type {
+    BookOut,
+    BookshelfOut,
+    BookWithInteractionOut,
+    LibraryOut,
+  } from "$lib/types";
   import { goto } from "$app/navigation";
   import { BookOpen, BookMarked } from "@lucide/svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let recentBooks = $state<BookOut[]>([]);
+  let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
   let currentYear = new Date().getFullYear();
   let loading = $state(true);
 
   onMount(async () => {
     try {
-      const [libs, shelves, activity] = await Promise.all([
+      const [libs, shelves, activity, currentlyReading] = await Promise.all([
         librariesApi.list($authStore.token!),
         bookshelvesApi.list($authStore.token!),
         booksApi
           .getReadingActivity(currentYear, $authStore.token!)
           .catch(() => []),
+        booksApi
+          .getMyBooks($authStore.token!, {
+            status: "currently_reading",
+            sort: "last_read_at",
+            limit: 12,
+          })
+          .catch(() => ({ items: [], total: 0 })),
       ]);
       libraries = libs;
       bookshelves = shelves;
       readingActivity = activity;
+      continueReadingBooks = currentlyReading.items;
 
       // Gather recent books from all libraries (only fetch top 12 each)
       const allBooks: BookOut[] = [];
@@ -40,7 +54,7 @@
             const result = await librariesApi.getBooks(
               lib.id,
               $authStore.token!,
-              { sort: "created_at", limit: 12 },
+              { sort: "added_at", limit: 12 },
             );
             allBooks.push(...result.items);
           } catch {
@@ -48,10 +62,11 @@
           }
         }),
       );
-      allBooks.sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-      );
+      allBooks.sort((a, b) => {
+        const aDate = a.calibre_added_at ?? a.created_at;
+        const bDate = b.calibre_added_at ?? b.created_at;
+        return new Date(bDate).getTime() - new Date(aDate).getTime();
+      });
       recentBooks = allBooks.slice(0, 12);
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -111,6 +126,69 @@
         </div>
       </div>
     </section>
+
+    <!-- Continue Reading -->
+    {#if continueReadingBooks.length > 0}
+      <section class="mb-12">
+        <div class="flex items-end justify-between mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-foreground">Continue Reading</h2>
+            <p class="text-muted-foreground text-sm mt-1">
+              Pick up where you left off
+            </p>
+          </div>
+          <a
+            href="/my-books?tab=currently_reading"
+            class="text-primary hover:text-primary/80 text-sm font-medium"
+            >See all →</a
+          >
+        </div>
+        <div class="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+          {#each continueReadingBooks as book}
+            <a
+              href="/books/{book.id}/read"
+              class="shrink-0 snap-start w-[140px] group"
+            >
+              <div
+                class="aspect-[2/3] rounded-xl overflow-hidden bg-muted mb-2 relative"
+              >
+                {#if book.cover_path}
+                  <img
+                    src="/covers/{book.id}.jpg"
+                    alt={book.display_title ?? "Book cover"}
+                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                {:else}
+                  <div
+                    class="w-full h-full flex items-center justify-center text-muted-foreground/30"
+                  >
+                    <BookOpen size={32} />
+                  </div>
+                {/if}
+                {#if book.reading_percentage != null}
+                  <div class="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
+                    <div
+                      class="h-full bg-primary transition-all"
+                      style="width: {Math.round(book.reading_percentage)}%"
+                    ></div>
+                  </div>
+                {/if}
+              </div>
+              <p
+                class="text-sm font-medium text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors"
+              >
+                {book.display_title ?? "Untitled"}
+              </p>
+              {#if book.reading_percentage != null}
+                <p class="text-xs text-muted-foreground mt-0.5">
+                  {Math.round(book.reading_percentage)}%
+                </p>
+              {/if}
+            </a>
+          {/each}
+        </div>
+      </section>
+    {/if}
 
     <!-- Reading Activity Heatmap -->
     <section class="mb-12">

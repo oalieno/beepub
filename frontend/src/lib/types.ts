@@ -50,6 +50,7 @@ export interface BookOut {
   display_title: string | null;
   display_authors: string[] | null;
   calibre_id: number | null;
+  calibre_added_at: string | null;
   added_by: string;
   created_at: string;
   library_id: string | null;
@@ -57,6 +58,18 @@ export interface BookOut {
 
 export interface PaginatedBooks {
   items: BookOut[];
+  total: number;
+}
+
+export interface BookWithInteractionOut extends BookOut {
+  reading_status: ReadingStatus | null;
+  is_favorite: boolean;
+  reading_percentage: number | null;
+  last_read_at: string | null;
+}
+
+export interface PaginatedBooksWithInteraction {
+  items: BookWithInteractionOut[];
   total: number;
 }
 

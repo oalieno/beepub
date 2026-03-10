@@ -17,8 +17,9 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
 from app.deps import get_current_user, get_current_user_or_cookie, require_admin
@@ -26,7 +27,13 @@ from app.models.book import Book, ExternalMetadata
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
 from app.models.user import User, UserRole
-from app.schemas.book import BookMetadataUpdate, BookOut, ExternalMetadataOut
+from app.schemas.book import (
+    BookMetadataUpdate,
+    BookOut,
+    BookWithInteractionOut,
+    ExternalMetadataOut,
+    PaginatedBooksWithInteraction,
+)
 from app.schemas.reading import (
     FavoriteUpdate,
     HighlightCreate,
@@ -198,6 +205,81 @@ async def get_reading_activity(
         .order_by(ReadingActivity.date)
     )
     return result.scalars().all()
+
+
+@router.get("/me", response_model=PaginatedBooksWithInteraction)
+async def list_my_books(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    reading_status: str | None = Query(None, alias="status"),
+    favorite: bool | None = Query(None),
+    sort: str = Query("last_read_at"),
+    order: str = Query("desc"),
+    limit: int = Query(60, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    from app.routers.libraries import accessible_libraries_condition
+
+    # Subquery: book IDs the user can access (deduplicated)
+    accessible_books = (
+        select(LibraryBook.book_id)
+        .join(Library, Library.id == LibraryBook.library_id)
+    )
+    cond = accessible_libraries_condition(current_user)
+    if cond is not True:
+        accessible_books = accessible_books.where(cond)
+    accessible_book_ids = accessible_books.subquery()
+
+    # Main query: join Book + UserBookInteraction, filter by accessible books
+    base_query = (
+        select(Book, UserBookInteraction)
+        .join(UserBookInteraction, UserBookInteraction.book_id == Book.id)
+        .where(
+            UserBookInteraction.user_id == current_user.id,
+            Book.id.in_(select(accessible_book_ids.c.book_id)),
+        )
+    )
+
+    if reading_status is not None:
+        base_query = base_query.where(
+            UserBookInteraction.reading_status == reading_status
+        )
+    if favorite is not None:
+        base_query = base_query.where(UserBookInteraction.is_favorite == favorite)
+
+    # Count
+    count_sub = base_query.with_only_columns(Book.id).subquery()
+    count_query = select(func.count()).select_from(count_sub)
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Sorting
+    last_read_col = UserBookInteraction.reading_progress["last_read_at"].astext
+    sort_map = {
+        "last_read_at": last_read_col,
+        "updated_at": UserBookInteraction.updated_at,
+        "display_title": coalesce(Book.title, Book.epub_title),
+    }
+    sort_col = sort_map.get(sort, last_read_col)
+    if order == "desc":
+        base_query = base_query.order_by(sort_col.desc(), Book.id)
+    else:
+        base_query = base_query.order_by(sort_col.asc(), Book.id)
+
+    base_query = base_query.offset(offset).limit(limit)
+    result = await db.execute(base_query)
+    rows = result.all()
+
+    items = []
+    for book, interaction in rows:
+        progress = interaction.reading_progress or {}
+        item = BookWithInteractionOut.model_validate(book)
+        item.reading_status = interaction.reading_status
+        item.is_favorite = interaction.is_favorite
+        item.reading_percentage = progress.get("percentage")
+        item.last_read_at = progress.get("last_read_at")
+        items.append(item)
+
+    return PaginatedBooksWithInteraction(items=items, total=total)
 
 
 @router.get("/{book_id}", response_model=BookOut)

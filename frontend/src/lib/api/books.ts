@@ -1,10 +1,12 @@
 import { get, post, put, del } from "./client";
 import type {
   BookOut,
+  BookWithInteractionOut,
   ExternalMetadataOut,
   HighlightOut,
   IllustrationOut,
   InteractionOut,
+  PaginatedBooksWithInteraction,
   ProgressOut,
   ReadingStatus,
   StylePromptOut,
@@ -156,6 +158,29 @@ export const booksApi = {
 
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
     `/api/books/${bookId}/illustrations/${illustrationId}/image`,
+
+  getMyBooks: (
+    token: string,
+    options?: {
+      status?: ReadingStatus;
+      favorite?: boolean;
+      sort?: string;
+      order?: string;
+      limit?: number;
+      offset?: number;
+    },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.status) params.set("status", options.status);
+    if (options?.favorite !== undefined)
+      params.set("favorite", String(options.favorite));
+    if (options?.sort) params.set("sort", options.sort);
+    if (options?.order) params.set("order", options.order);
+    if (options?.limit) params.set("limit", String(options.limit));
+    if (options?.offset) params.set("offset", String(options.offset));
+    const qs = params.toString();
+    return get(`/books/me${qs ? `?${qs}` : ""}`, token) as Promise<PaginatedBooksWithInteraction>;
+  },
 
   getReadingActivity: (year: number, token: string) =>
     get(`/books/reading-activity?year=${year}`, token) as Promise<
