@@ -11,9 +11,7 @@
   onclick={() => goto(`/books/${book.id}`)}
 >
   <!-- Cover -->
-  <div
-    class="h-56 sm:h-64 mb-3 flex items-end justify-center"
-  >
+  <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
     {#if book.cover_path}
       <img
         src="/covers/{book.id}.jpg"

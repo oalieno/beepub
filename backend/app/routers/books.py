@@ -207,7 +207,16 @@ async def get_book(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     book = await _get_book_with_access(book_id, current_user, db)
-    return book
+    # Find the first library this book belongs to
+    lb_result = await db.execute(
+        select(LibraryBook.library_id)
+        .where(LibraryBook.book_id == book_id)
+        .limit(1)
+    )
+    library_id = lb_result.scalar_one_or_none()
+    out = BookOut.model_validate(book)
+    out.library_id = library_id
+    return out
 
 
 @router.put("/{book_id}/metadata", response_model=BookOut)

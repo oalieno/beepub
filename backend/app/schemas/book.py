@@ -26,6 +26,7 @@ class BookOut(BaseModel):
     calibre_id: int | None = None
     added_by: uuid.UUID
     created_at: datetime
+    library_id: uuid.UUID | None = None
 
     model_config = {"from_attributes": True}
 

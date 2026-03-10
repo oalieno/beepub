@@ -4,7 +4,6 @@
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
-  import { librariesApi } from "$lib/api/libraries";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import StarRating from "$lib/components/StarRating.svelte";
@@ -80,23 +79,12 @@
     return { full: totalFull, half, empty };
   }
 
-  async function handleAuthorSearch(author: string) {
+  function handleAuthorSearch(author: string) {
     const q = author.trim();
-    if (!q || !$authStore.token) return;
+    if (!q || !book?.library_id) return;
 
-    try {
-      const libraries = await librariesApi.list($authStore.token);
-      const targetLibrary = libraries[0];
-      if (!targetLibrary) {
-        toastStore.error("No library available to search");
-        return;
-      }
-
-      const params = new URLSearchParams({ search: q });
-      goto(`/libraries/${targetLibrary.id}?${params.toString()}`);
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
+    const params = new URLSearchParams({ search: q });
+    goto(`/libraries/${book.library_id}?${params.toString()}`);
   }
 
   function handleStatusSelectChange(value: string) {

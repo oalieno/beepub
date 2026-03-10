@@ -52,6 +52,7 @@ export interface BookOut {
   calibre_id: number | null;
   added_by: string;
   created_at: string;
+  library_id: string | null;
 }
 
 export interface PaginatedBooks {
