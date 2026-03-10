@@ -90,6 +90,7 @@ export const booksApi = {
       font_size?: number;
       section_index?: number;
       section_page?: number;
+      track_activity?: boolean;
     },
     token: string,
   ) => put(`/books/${bookId}/progress`, data, token),

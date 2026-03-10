@@ -812,8 +812,8 @@
       },
     );
 
-    // Save progress every 30s as backup
-    progressTimer = setInterval(saveProgress, 30000);
+    // Save progress every 30s as backup (without tracking reading activity)
+    progressTimer = setInterval(() => saveProgress(false), 30000);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Fix layout offset when returning to the app (e.g. iOS task switcher)
@@ -831,7 +831,7 @@
   onDestroy(() => {
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
-    saveProgress();
+    saveProgress(false);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     document.removeEventListener("keyup", handleKeyboard);
     rendition?.destroy();
@@ -846,6 +846,7 @@
       font_size: fontSize,
       section_index: currentSectionIndex,
       section_page: currentSectionPage,
+      track_activity: false,
     };
     fetch(`/api/books/${bookId}/progress`, {
       method: "PUT",
@@ -897,7 +898,7 @@
     saveDebounceTimer = setTimeout(saveProgress, 2000);
   }
 
-  async function saveProgress() {
+  async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
     try {
       await booksApi.updateProgress(
@@ -908,6 +909,7 @@
           font_size: fontSize,
           section_index: currentSectionIndex,
           section_page: currentSectionPage,
+          track_activity: trackActivity,
         },
         token,
       );

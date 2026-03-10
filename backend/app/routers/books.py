@@ -538,38 +538,41 @@ async def update_progress(
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
 
     now = datetime.now(UTC)
-    # Track reading minutes from time delta
-    old_last_read = None
-    if interaction.reading_progress and interaction.reading_progress.get(
-        "last_read_at"
-    ):
-        try:
-            old_last_read = datetime.fromisoformat(
-                interaction.reading_progress["last_read_at"]
-            )
-        except (ValueError, TypeError):
-            pass
-    if old_last_read:
-        delta = (now - old_last_read).total_seconds()
-        if 0 < delta < 300:  # < 5 minutes = same session
-            delta_seconds = int(delta)
-            tz_name = await get_setting(db, "timezone")
-            today = datetime.now(ZoneInfo(tz_name)).date()
-            result = await db.execute(
-                select(ReadingActivity).where(
-                    ReadingActivity.user_id == current_user.id,
-                    ReadingActivity.date == today,
+    # Track reading minutes from time delta (only when triggered by user action)
+    if body.track_activity:
+        old_last_read = None
+        if interaction.reading_progress and interaction.reading_progress.get(
+            "last_read_at"
+        ):
+            try:
+                old_last_read = datetime.fromisoformat(
+                    interaction.reading_progress["last_read_at"]
                 )
-            )
-            activity = result.scalar_one_or_none()
-            if activity:
-                activity.seconds = activity.seconds + delta_seconds
-            else:
-                db.add(
-                    ReadingActivity(
-                        user_id=current_user.id, date=today, seconds=delta_seconds
+            except (ValueError, TypeError):
+                pass
+        if old_last_read:
+            delta = (now - old_last_read).total_seconds()
+            if 0 < delta < 300:  # < 5 minutes = same session
+                delta_seconds = int(delta)
+                tz_name = await get_setting(db, "timezone")
+                today = datetime.now(ZoneInfo(tz_name)).date()
+                result = await db.execute(
+                    select(ReadingActivity).where(
+                        ReadingActivity.user_id == current_user.id,
+                        ReadingActivity.date == today,
                     )
                 )
+                activity = result.scalar_one_or_none()
+                if activity:
+                    activity.seconds = activity.seconds + delta_seconds
+                else:
+                    db.add(
+                        ReadingActivity(
+                            user_id=current_user.id,
+                            date=today,
+                            seconds=delta_seconds,
+                        )
+                    )
 
     progress: dict = {
         "cfi": body.cfi,

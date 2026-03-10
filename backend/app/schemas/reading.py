@@ -21,6 +21,7 @@ class ProgressUpdate(BaseModel):
     section_page: int | None = None
     section_page_counts: list[int] | None = None
     total_pages: int | None = None
+    track_activity: bool = True
 
 
 class ProgressOut(BaseModel):
