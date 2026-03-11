@@ -44,7 +44,10 @@
         { name: createName, description: createDesc, is_public: isPublic },
         $authStore.token,
       );
-      bookshelves = [...bookshelves, { ...shelf, book_count: 0, preview_book_ids: [] }];
+      bookshelves = [
+        ...bookshelves,
+        { ...shelf, book_count: 0, preview_book_ids: [] },
+      ];
       showCreateModal = false;
       createName = "";
       createDesc = "";

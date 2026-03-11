@@ -1,11 +1,11 @@
 import json
 import logging
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 import redis.asyncio as redis
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy import text
-from zoneinfo import ZoneInfo
 
 from daemon.config import settings
 from daemon.database import AsyncSessionLocal

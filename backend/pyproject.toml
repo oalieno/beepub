@@ -31,3 +31,4 @@ extend-exclude = ["app/vendor/ebooklib"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+ignore = ["E501"]

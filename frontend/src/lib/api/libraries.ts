@@ -29,7 +29,13 @@ export const librariesApi = {
   getBooks: (
     id: string,
     token: string,
-    options?: { search?: string; sort?: string; order?: string; limit?: number; offset?: number },
+    options?: {
+      search?: string;
+      sort?: string;
+      order?: string;
+      limit?: number;
+      offset?: number;
+    },
   ) => {
     const params = new URLSearchParams();
     if (options?.search) params.set("search", options.search);

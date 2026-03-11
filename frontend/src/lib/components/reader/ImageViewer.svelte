@@ -164,6 +164,9 @@
 <div
   class="fixed inset-0 z-[70] flex items-center justify-center"
   onclick={handleBackdropClick}
+  onkeydown={(e) => {
+    if (e.key === "Escape") onclose?.();
+  }}
 >
   <div class="absolute inset-0 bg-black/85"></div>
 
@@ -179,7 +182,11 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="relative w-full h-full flex items-center justify-center overflow-hidden"
-    style="cursor: {scale > 1 ? (isPanning ? 'grabbing' : 'grab') : 'zoom-in'}; touch-action: none;"
+    style="cursor: {scale > 1
+      ? isPanning
+        ? 'grabbing'
+        : 'grab'
+      : 'zoom-in'}; touch-action: none;"
     onwheel={handleWheel}
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
@@ -193,7 +200,9 @@
       {src}
       alt=""
       class="max-w-full max-h-full object-contain select-none pointer-events-none"
-      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning ? 'none' : 'transform 0.2s ease'};"
+      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning
+        ? 'none'
+        : 'transform 0.2s ease'};"
       draggable="false"
     />
   </div>

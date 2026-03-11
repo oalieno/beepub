@@ -115,7 +115,9 @@
           <div class="w-px h-8 bg-border"></div>
           <div>
             <p class="text-3xl font-bold text-primary">
-              {libraries.reduce((sum, lib) => sum + (lib.book_count ?? 0), 0).toLocaleString()}
+              {libraries
+                .reduce((sum, lib) => sum + (lib.book_count ?? 0), 0)
+                .toLocaleString()}
             </p>
             <p class="text-muted-foreground text-xs mt-0.5">Books</p>
           </div>
@@ -144,7 +146,9 @@
             >See all →</a
           >
         </div>
-        <div class="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide">
+        <div
+          class="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide"
+        >
           {#each continueReadingBooks as book}
             <a
               href="/books/{book.id}/read"
@@ -167,7 +171,9 @@
                   </div>
                 {/if}
                 {#if book.reading_percentage != null}
-                  <div class="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20">
+                  <div
+                    class="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20"
+                  >
                     <div
                       class="h-full bg-primary transition-all"
                       style="width: {Math.round(book.reading_percentage)}%"

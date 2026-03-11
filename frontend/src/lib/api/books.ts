@@ -63,9 +63,13 @@ export const booksApi = {
     sourceUrl: string | null,
     token: string,
   ) =>
-    put(`/books/${bookId}/external/${source}/url`, {
-      source_url: sourceUrl,
-    }, token) as Promise<ExternalMetadataOut>,
+    put(
+      `/books/${bookId}/external/${source}/url`,
+      {
+        source_url: sourceUrl,
+      },
+      token,
+    ) as Promise<ExternalMetadataOut>,
 
   getInteraction: (bookId: string, token: string) =>
     get(`/books/${bookId}/interaction`, token) as Promise<InteractionOut>,
@@ -190,7 +194,10 @@ export const booksApi = {
     if (options?.limit) params.set("limit", String(options.limit));
     if (options?.offset) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return get(`/books/me${qs ? `?${qs}` : ""}`, token) as Promise<PaginatedBooksWithInteraction>;
+    return get(
+      `/books/me${qs ? `?${qs}` : ""}`,
+      token,
+    ) as Promise<PaginatedBooksWithInteraction>;
   },
 
   getReadingActivity: (year: number, token: string) =>

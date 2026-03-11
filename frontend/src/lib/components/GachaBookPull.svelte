@@ -191,7 +191,9 @@
           抽書
         </button>
       {:else if phase === "spinning" || phase === "slowing"}
-        <div class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2">
+        <div
+          class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
+        >
           <div
             class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"
           ></div>
@@ -206,7 +208,10 @@
           去看看
         </a>
         <button
-          onclick={() => { reset(); pull(); }}
+          onclick={() => {
+            reset();
+            pull();
+          }}
           class="px-4 py-3 bg-secondary text-foreground rounded-xl font-medium text-sm hover:bg-secondary/80 transition-all duration-200 flex items-center gap-2 active:scale-95"
         >
           <RotateCcw size={16} />

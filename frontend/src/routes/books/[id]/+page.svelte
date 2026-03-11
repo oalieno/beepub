@@ -321,11 +321,17 @@
         const prefix = meta?.urlPrefix ?? "";
         const fullUrl = prefix + id;
         await booksApi.updateExternalUrl(
-          bookId, editingUrlSource, fullUrl, $authStore.token,
+          bookId,
+          editingUrlSource,
+          fullUrl,
+          $authStore.token,
         );
       } else {
         await booksApi.updateExternalUrl(
-          bookId, editingUrlSource, null, $authStore.token,
+          bookId,
+          editingUrlSource,
+          null,
+          $authStore.token,
         );
       }
       // Reload external metadata after a short delay for the refresh
@@ -333,7 +339,9 @@
         .getExternal(bookId, $authStore.token)
         .catch(() => [] as ExternalMetadataOut[]);
       editingUrlSource = null;
-      toastStore.success(id ? "Source URL updated, fetching metadata..." : "Source URL removed");
+      toastStore.success(
+        id ? "Source URL updated, fetching metadata..." : "Source URL removed",
+      );
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -534,7 +542,9 @@
                   <span class="text-muted-foreground text-sm font-medium"
                     >{src.label}</span
                   >
-                  <span class="text-xs text-muted-foreground">{src.urlPrefix}</span>
+                  <span class="text-xs text-muted-foreground"
+                    >{src.urlPrefix}</span
+                  >
                   <input
                     bind:value={editingUrlValue}
                     placeholder={src.idHint}
@@ -599,7 +609,9 @@
               {/if}
             {/each}
             {#if isAdmin}
-              {@const existingSources = new Set(externalMeta.map((m) => m.source))}
+              {@const existingSources = new Set(
+                externalMeta.map((m) => m.source),
+              )}
               {#each Object.entries(SOURCE_META) as [key, src]}
                 {#if !existingSources.has(key)}
                   {#if editingUrlSource === key}
@@ -607,7 +619,9 @@
                       <span class="text-muted-foreground text-sm font-medium"
                         >{src.label}</span
                       >
-                      <span class="text-xs text-muted-foreground">{src.urlPrefix}</span>
+                      <span class="text-xs text-muted-foreground"
+                        >{src.urlPrefix}</span
+                      >
                       <input
                         bind:value={editingUrlValue}
                         placeholder={src.idHint}
@@ -928,7 +942,9 @@
           class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         {#if editForm.title && book.epub_title && editForm.title !== book.epub_title}
-          <p class="text-xs text-muted-foreground">Original: {book.epub_title}</p>
+          <p class="text-xs text-muted-foreground">
+            Original: {book.epub_title}
+          </p>
         {/if}
       </div>
       <div class="space-y-1">
@@ -954,7 +970,9 @@
           class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         {#if editForm.authors && book.epub_authors?.length && editForm.authors !== (book.epub_authors ?? []).join(", ")}
-          <p class="text-xs text-muted-foreground">Original: {(book.epub_authors ?? []).join(", ")}</p>
+          <p class="text-xs text-muted-foreground">
+            Original: {(book.epub_authors ?? []).join(", ")}
+          </p>
         {/if}
       </div>
       <div class="space-y-1">
@@ -980,13 +998,16 @@
           class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         {#if editForm.publisher && book.epub_publisher && editForm.publisher !== book.epub_publisher}
-          <p class="text-xs text-muted-foreground">Original: {book.epub_publisher}</p>
+          <p class="text-xs text-muted-foreground">
+            Original: {book.epub_publisher}
+          </p>
         {/if}
       </div>
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <label class="block text-sm font-medium text-foreground" for="edit-date"
-            >Published Date</label
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-date">Published Date</label
           >
           {#if editForm.published_date && book.epub_published_date}
             <button
@@ -1005,13 +1026,16 @@
           class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
         {#if editForm.published_date && book.epub_published_date && editForm.published_date !== book.epub_published_date}
-          <p class="text-xs text-muted-foreground">Original: {book.epub_published_date}</p>
+          <p class="text-xs text-muted-foreground">
+            Original: {book.epub_published_date}
+          </p>
         {/if}
       </div>
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <label class="block text-sm font-medium text-foreground" for="edit-desc"
-            >Description</label
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-desc">Description</label
           >
           {#if editForm.description && book.epub_description}
             <button
@@ -1031,7 +1055,9 @@
           class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
         ></textarea>
         {#if editForm.description && book.epub_description && editForm.description !== book.epub_description}
-          <p class="text-xs text-muted-foreground">Original: {book.epub_description.slice(0, 100)}...</p>
+          <p class="text-xs text-muted-foreground">
+            Original: {book.epub_description.slice(0, 100)}...
+          </p>
         {/if}
       </div>
       <div class="flex justify-end gap-2 pt-2">

@@ -14,14 +14,14 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.models.user import User
 from app.schemas.user import UserOut, UserUpdateRole
-from app.services.metadata_queue import get_queue_length
-from app.services.settings import get_all_settings, update_settings
 from app.services.calibre import (
     _count_calibre_epubs,
     get_sync_status,
     scan_calibre_libraries,
     sync_calibre_library,
 )
+from app.services.metadata_queue import get_queue_length
+from app.services.settings import get_all_settings, update_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

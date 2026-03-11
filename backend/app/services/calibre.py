@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import redis.asyncio as aioredis

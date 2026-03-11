@@ -3,16 +3,16 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.types import String as SAString
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.user import User, UserRole
-from app.schemas.book import BookOut, PaginatedBooks
+from app.schemas.book import PaginatedBooks
 from app.schemas.library import (
     LibraryBookAdd,
     LibraryCreate,

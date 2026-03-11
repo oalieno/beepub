@@ -57,9 +57,7 @@
     try {
       const isFavoriteTab = activeTab === "favorites";
       const result = await booksApi.getMyBooks($authStore.token!, {
-        status: isFavoriteTab
-          ? undefined
-          : (activeTab as ReadingStatus),
+        status: isFavoriteTab ? undefined : (activeTab as ReadingStatus),
         favorite: isFavoriteTab ? true : undefined,
         sort: activeTab === "currently_reading" ? "last_read_at" : "updated_at",
         limit: 60,
@@ -89,9 +87,7 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   <div class="mb-8">
     <h1 class="text-3xl font-bold text-foreground">My Books</h1>
-    <p class="text-muted-foreground mt-1">
-      Your reading lists and favorites
-    </p>
+    <p class="text-muted-foreground mt-1">Your reading lists and favorites</p>
   </div>
 
   <!-- Tabs -->
@@ -130,8 +126,9 @@
     </div>
   {:else}
     <p class="text-sm text-muted-foreground mb-4">
-      {total} {total === 1 ? "book" : "books"}
+      {total}
+      {total === 1 ? "book" : "books"}
     </p>
-    <BookGrid books={books} />
+    <BookGrid {books} />
   {/if}
 </div>

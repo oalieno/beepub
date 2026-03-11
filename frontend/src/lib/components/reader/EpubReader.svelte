@@ -236,8 +236,12 @@
         }
         // Case 2: <image> inside <svg> (common in manga)
         else if (target.tagName === "image" || target.closest?.("image")) {
-          const imageEl = target.tagName === "image" ? target : target.closest("image");
-          imageSrc = imageEl?.getAttribute("href") || imageEl?.getAttributeNS("http://www.w3.org/1999/xlink", "href") || null;
+          const imageEl =
+            target.tagName === "image" ? target : target.closest("image");
+          imageSrc =
+            imageEl?.getAttribute("href") ||
+            imageEl?.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+            null;
           // Resolve relative URL
           if (imageSrc && !imageSrc.startsWith("http")) {
             imageSrc = new URL(imageSrc, contents.document.baseURI).href;
@@ -248,7 +252,10 @@
           const svg = target.tagName === "svg" ? target : target.closest("svg");
           const imageEl = svg?.querySelector("image");
           if (imageEl) {
-            imageSrc = imageEl.getAttribute("href") || imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href") || null;
+            imageSrc =
+              imageEl.getAttribute("href") ||
+              imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+              null;
             if (imageSrc && !imageSrc.startsWith("http")) {
               imageSrc = new URL(imageSrc, contents.document.baseURI).href;
             }
