@@ -34,6 +34,7 @@
     BookOpenCheck,
     CircleCheck,
     CircleX,
+    ArrowLeft,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -380,6 +381,15 @@
       ></div>
     </div>
   {:else if book}
+    <!-- Back Button -->
+    <button
+      class="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors mb-6 -ml-1"
+      onclick={() => history.back()}
+    >
+      <ArrowLeft size={18} />
+      <span class="text-sm">Back</span>
+    </button>
+
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->

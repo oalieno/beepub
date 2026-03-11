@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/stores";
-  import { goto } from "$app/navigation";
+  import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
@@ -34,7 +34,7 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let searchQuery = $state(($page.url.searchParams.get("search") ?? "").trim());
-  let sortValue = $state("added_at:desc");
+  let sortValue = $state($page.url.searchParams.get("sort") || "added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
   let sortLabel = $derived(
@@ -45,23 +45,36 @@
   let showUploadModal = $state(false);
   let dragOver = $state(false);
 
-  onMount(async () => {
+  onMount(() => {
     if (!$authStore.token) {
       goto("/login");
       return;
     }
-    await loadData();
   });
 
-  async function loadData() {
+  afterNavigate(() => {
+    const params = new URLSearchParams(window.location.search);
+    const search = (params.get("search") ?? "").trim();
+    const sort = params.get("sort") || "added_at:desc";
+    searchQuery = search;
+    sortValue = sort;
+    const [s, o] = sort.split(":");
+    loadData(search, s, o);
+  });
+
+  async function loadData(
+    search = searchQuery,
+    sort = sortBy,
+    order = sortOrder,
+  ) {
     loading = true;
     try {
       const [lib, result] = await Promise.all([
         librariesApi.get(libraryId, $authStore.token!),
         librariesApi.getBooks(libraryId, $authStore.token!, {
-          search: searchQuery || undefined,
-          sort: sortBy,
-          order: sortOrder,
+          search: search || undefined,
+          sort,
+          order,
           limit: PAGE_SIZE,
           offset: 0,
         }),
@@ -96,8 +109,18 @@
     }
   }
 
+  function syncUrlParams() {
+    const url = new URL($page.url);
+    if (searchQuery) url.searchParams.set("search", searchQuery);
+    else url.searchParams.delete("search");
+    if (sortValue !== "added_at:desc") url.searchParams.set("sort", sortValue);
+    else url.searchParams.delete("sort");
+    replaceState(url, {});
+  }
+
   async function handleSearch() {
     if (!$authStore.token) return;
+    syncUrlParams();
     try {
       const result = await librariesApi.getBooks(libraryId, $authStore.token, {
         search: searchQuery || undefined,
