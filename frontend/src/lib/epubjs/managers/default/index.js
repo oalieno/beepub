@@ -610,6 +610,18 @@ class DefaultViewManager {
   }
 
   counter(bounds) {
+    // If we're waiting to show after a backward navigation, reset the
+    // debounce timer on every resize so we only show once settled.
+    if (this._pendingShowTimer != null) {
+      this._scrollToEnd();
+      clearTimeout(this._pendingShowTimer);
+      this._pendingShowTimer = setTimeout(() => {
+        this._scrollToEnd();
+        this.views.show();
+        this._pendingShowTimer = null;
+      }, 50);
+    }
+
     if (this.settings.axis === "vertical") {
       if (this.isPaginated) {
         const pageStep = this.getPageStep();
@@ -626,27 +638,47 @@ class DefaultViewManager {
         const targetPage = Math.max(0, Math.floor((targetTop + 1) / pageStep));
         const snappedTop = targetPage * pageStep;
 
-        console.log("[split-diag][counter:vertical]", {
-          heightDelta: bounds?.heightDelta,
-          scrollTopBefore: topBefore,
-          scrollHeightBefore: this.container.scrollHeight,
-          pageStep,
-          targetTop,
-          targetPage,
-          snappedTop,
-        });
-
         this.scrollTo(0, snappedTop, true);
-        console.log("[split-diag][counter:vertical:after]", {
-          scrollTopAfter: this.container.scrollTop,
-          scrollHeightAfter: this.container.scrollHeight,
-        });
       } else {
         this.scrollBy(0, bounds.heightDelta, true);
       }
     } else {
       this.scrollBy(bounds.widthDelta, 0, true);
     }
+  }
+
+  _scrollToEnd() {
+    if (this.isPaginated && this.settings.axis === "horizontal") {
+      if (this.settings.direction === "rtl") {
+        if (this.settings.rtlScrollType === "default") {
+          this.scrollTo(0, 0, true);
+        } else {
+          this.scrollTo(
+            this.container.scrollWidth * -1 + this.layout.delta,
+            0,
+            true,
+          );
+        }
+      } else {
+        this.scrollTo(this.container.scrollWidth - this.layout.delta, 0, true);
+      }
+    } else if (this.isPaginated && this.settings.axis === "vertical") {
+      var pageStep = this.getPageStep();
+      var maxScroll = this.container.scrollHeight - pageStep;
+      var lastPage = Math.max(0, Math.floor((maxScroll + 1) / pageStep));
+      this.scrollToPageIndex(lastPage);
+    }
+  }
+
+  _scrollToEndAndShow() {
+    this._scrollToEnd();
+    // Don't show immediately — expansion may still be in progress,
+    // causing a flash of the wrong page. Wait for resizes to settle.
+    this._pendingShowTimer = setTimeout(() => {
+      this._scrollToEnd();
+      this.views.show();
+      this._pendingShowTimer = null;
+    }, 50);
   }
 
   // resizeView(view) {
@@ -889,43 +921,7 @@ class DefaultViewManager {
         )
         .then(
           function () {
-            if (this.isPaginated && this.settings.axis === "horizontal") {
-              if (this.settings.direction === "rtl") {
-                if (this.settings.rtlScrollType === "default") {
-                  this.scrollTo(0, 0, true);
-                } else {
-                  this.scrollTo(
-                    this.container.scrollWidth * -1 + this.layout.delta,
-                    0,
-                    true,
-                  );
-                }
-              } else {
-                this.scrollTo(
-                  this.container.scrollWidth - this.layout.delta,
-                  0,
-                  true,
-                );
-              }
-            } else if (this.isPaginated && this.settings.axis === "vertical") {
-              // Scroll to last page of the prepended chapter, mirroring
-              // horizontal's scroll-to-end above.
-              const pageStep = this.getPageStep();
-              const maxScroll = this.container.scrollHeight - pageStep;
-              const lastPage = Math.max(
-                0,
-                Math.floor((maxScroll + 1) / pageStep),
-              );
-              this.scrollToPageIndex(lastPage);
-              console.log("[split-diag][prev-scroll-to-last]", {
-                scrollHeight: this.container.scrollHeight,
-                pageStep,
-                maxScroll,
-                lastPage,
-                scrollTopAfter: this.container.scrollTop,
-              });
-            }
-            this.views.show();
+            this._scrollToEndAndShow();
           }.bind(this),
         );
     }
@@ -942,6 +938,11 @@ class DefaultViewManager {
 
   clear() {
     // this.q.clear();
+
+    if (this._pendingShowTimer != null) {
+      clearTimeout(this._pendingShowTimer);
+      this._pendingShowTimer = null;
+    }
 
     if (this.views) {
       this.views.hide();
