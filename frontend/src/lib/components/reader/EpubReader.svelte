@@ -3,6 +3,7 @@
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import HighlightMenu from "./HighlightMenu.svelte";
+  import ImageViewer from "./ImageViewer.svelte";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
 
   let {
@@ -71,6 +72,9 @@
     // If above viewport, show below selection
     highlightMenuY = y < MENU_H + 8 ? y + MENU_H + 16 : y;
   }
+
+  // Image zoom viewer
+  let zoomImageSrc: string | null = $state(null);
 
   // Footnote popup
   let showFootnote = $state(false);
@@ -205,6 +209,58 @@
     rendition.hooks.content.register((contents: any) => {
       const doc = contents.document;
       doc.addEventListener("wheel", handleWheel, { passive: false });
+
+      // Image zoom: click/tap on images opens full-screen viewer
+      // Style all images (including SVG <image>) with zoom-in cursor
+      doc.querySelectorAll("img").forEach((img: HTMLElement) => {
+        img.style.cursor = "zoom-in";
+      });
+      doc.querySelectorAll("svg image").forEach((img: Element) => {
+        (img as HTMLElement).style.cursor = "zoom-in";
+        // SVG <image> elements don't receive clicks easily; style parent SVG too
+        const svg = img.closest("svg");
+        if (svg) (svg as unknown as HTMLElement).style.cursor = "zoom-in";
+      });
+
+      // Use document-level click delegation to catch all image clicks
+      // (works even with iOS touch state machine since click fires after touchend)
+      doc.addEventListener("click", (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+
+        let imageSrc: string | null = null;
+
+        // Case 1: <img> element
+        if (target.tagName === "IMG") {
+          imageSrc = (target as HTMLImageElement).src;
+        }
+        // Case 2: <image> inside <svg> (common in manga)
+        else if (target.tagName === "image" || target.closest?.("image")) {
+          const imageEl = target.tagName === "image" ? target : target.closest("image");
+          imageSrc = imageEl?.getAttribute("href") || imageEl?.getAttributeNS("http://www.w3.org/1999/xlink", "href") || null;
+          // Resolve relative URL
+          if (imageSrc && !imageSrc.startsWith("http")) {
+            imageSrc = new URL(imageSrc, contents.document.baseURI).href;
+          }
+        }
+        // Case 3: <svg> that wraps an <image> (click lands on svg, not on image)
+        else if (target.tagName === "svg" || target.closest?.("svg")) {
+          const svg = target.tagName === "svg" ? target : target.closest("svg");
+          const imageEl = svg?.querySelector("image");
+          if (imageEl) {
+            imageSrc = imageEl.getAttribute("href") || imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href") || null;
+            if (imageSrc && !imageSrc.startsWith("http")) {
+              imageSrc = new URL(imageSrc, contents.document.baseURI).href;
+            }
+          }
+        }
+
+        if (imageSrc) {
+          e.preventDefault();
+          e.stopPropagation();
+          zoomImageSrc = imageSrc;
+        }
+      });
 
       // Detect iOS (iPhone/iPad/iPod or desktop iPad with touch)
       const isIOS =
@@ -1268,6 +1324,14 @@
         }}
       />
     </div>
+  {/if}
+
+  {#if zoomImageSrc}
+    <ImageViewer
+      src={zoomImageSrc}
+      {darkMode}
+      onclose={() => (zoomImageSrc = null)}
+    />
   {/if}
 
   {#if showFootnote}
