@@ -197,4 +197,7 @@ export const booksApi = {
     get(`/books/reading-activity?year=${year}`, token) as Promise<
       { date: string; seconds: number }[]
     >,
+
+  getRandomBooks: (token: string, count: number = 8) =>
+    get(`/books/random?count=${count}`, token) as Promise<BookOut[]>,
 };

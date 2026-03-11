@@ -284,6 +284,37 @@ async def list_my_books(
     return PaginatedBooksWithInteraction(items=items, total=total)
 
 
+@router.get("/random", response_model=list[BookOut])
+async def get_random_books(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    count: int = Query(8, ge=1, le=20),
+):
+    from app.routers.libraries import accessible_libraries_condition
+
+    accessible_books = select(LibraryBook.book_id).join(
+        Library, Library.id == LibraryBook.library_id
+    )
+    cond = accessible_libraries_condition(current_user)
+    if cond is not True:
+        accessible_books = accessible_books.where(cond)
+    accessible_book_ids = accessible_books.subquery()
+
+    result = await db.execute(
+        select(Book)
+        .where(
+            Book.id.in_(select(accessible_book_ids.c.book_id)),
+            Book.cover_path.isnot(None),
+        )
+        .order_by(func.random())
+        .limit(count)
+    )
+    books = result.scalars().all()
+    if not books:
+        raise HTTPException(status_code=404, detail="No accessible books found")
+    return books
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,

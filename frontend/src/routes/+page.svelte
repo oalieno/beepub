@@ -6,6 +6,7 @@
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
+  import GachaBookPull from "$lib/components/GachaBookPull.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { booksApi } from "$lib/api/books";
   import type {
@@ -198,6 +199,11 @@
         <ReadingActivityHeatmap data={readingActivity} year={currentYear} />
       </div>
     </section>
+
+    <!-- Gacha Book Pull -->
+    {#if libraries.reduce((sum, lib) => sum + (lib.book_count ?? 0), 0) > 0}
+      <GachaBookPull />
+    {/if}
 
     <!-- Recent Books -->
     <section class="mb-12">
