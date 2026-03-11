@@ -679,7 +679,12 @@ class DefaultViewManager {
       left = Math.round(this.container.scrollLeft) + this.container.offsetWidth;
 
       if (left < this.container.scrollWidth) {
+        let before = this.container.scrollLeft;
         this.scrollBy(this.layout.delta, 0, true);
+        // If scroll didn't move, we're at the real boundary (view may be bloated)
+        if (this.container.scrollLeft === before) {
+          next = this.views.last().section.next();
+        }
       } else {
         next = this.views.last().section.next();
       }
@@ -694,7 +699,11 @@ class DefaultViewManager {
         left = this.container.scrollLeft;
 
         if (left >= this.layout.delta / 2) {
+          let before = this.container.scrollLeft;
           this.scrollBy(this.layout.delta, 0, true);
+          if (this.container.scrollLeft === before) {
+            next = this.views.last().section.next();
+          }
         } else {
           next = this.views.last().section.next();
         }
@@ -703,7 +712,11 @@ class DefaultViewManager {
           Math.round(this.container.scrollLeft) - this.container.offsetWidth;
 
         if (left > this.container.scrollWidth * -1) {
+          let before = this.container.scrollLeft;
           this.scrollBy(this.layout.delta, 0, true);
+          if (this.container.scrollLeft === before) {
+            next = this.views.last().section.next();
+          }
         } else {
           next = this.views.last().section.next();
         }
