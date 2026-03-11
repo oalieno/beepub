@@ -35,6 +35,7 @@
     CircleCheck,
     CircleX,
     ArrowLeft,
+    Undo2,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -60,11 +61,31 @@
 
   const SOURCE_META: Record<
     string,
-    { label: string; color: string; logo: string }
+    {
+      label: string;
+      color: string;
+      logo: string;
+      urlPrefix: string;
+      idPattern: RegExp;
+      idHint: string;
+    }
   > = {
-    goodreads: { label: "Goodreads", color: "#5C4B3A", logo: "g" },
-    readmoo: { label: "Readmoo", color: "#2E7D32", logo: "R" },
-    kobo_tw: { label: "Kobo", color: "#BF360C", logo: "K" },
+    goodreads: {
+      label: "Goodreads",
+      color: "#5C4B3A",
+      logo: "g",
+      urlPrefix: "https://www.goodreads.com/book/show/",
+      idPattern: /^\d+[\w-]*$/,
+      idHint: "e.g. 33017208",
+    },
+    readmoo: {
+      label: "Readmoo",
+      color: "#2E7D32",
+      logo: "R",
+      urlPrefix: "https://readmoo.com/book/",
+      idPattern: /^\d+$/,
+      idHint: "e.g. 210227953000101",
+    },
   };
 
   function renderStars(rating: number): {
@@ -117,6 +138,8 @@
   let notesText = $state("");
   let savingNotes = $state(false);
   let savingStatus = $state(false);
+  let editingUrlSource = $state<string | null>(null);
+  let editingUrlValue = $state("");
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
@@ -143,8 +166,8 @@
       bookshelves = shelves;
       if (book) {
         editForm = {
-          title: book.display_title ?? "",
-          authors: (book.display_authors ?? []).join(", "),
+          title: book.title ?? "",
+          authors: (book.authors ?? []).join(", "),
           description: book.description ?? "",
           publisher: book.publisher ?? "",
           published_date: book.published_date ?? "",
@@ -226,10 +249,16 @@
         bookId,
         {
           title: editForm.title || null,
-          authors: editForm.authors
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean),
+          authors:
+            editForm.authors
+              .split(",")
+              .map((a) => a.trim())
+              .filter(Boolean).length > 0
+              ? editForm.authors
+                  .split(",")
+                  .map((a) => a.trim())
+                  .filter(Boolean)
+              : null,
           description: editForm.description || null,
           publisher: editForm.publisher || null,
           published_date: editForm.published_date || null,
@@ -260,6 +289,51 @@
     try {
       await booksApi.refreshMetadata(bookId, $authStore.token);
       toastStore.success("Metadata refresh queued");
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function extractSourceId(source: string, url: string | null): string {
+    if (!url) return "";
+    const prefix = SOURCE_META[source]?.urlPrefix ?? "";
+    if (prefix && url.startsWith(prefix)) {
+      return url.slice(prefix.length);
+    }
+    return url;
+  }
+
+  function startEditUrl(source: string, currentUrl: string | null) {
+    editingUrlSource = source;
+    editingUrlValue = extractSourceId(source, currentUrl);
+  }
+
+  async function saveExternalUrl() {
+    if (!editingUrlSource || !$authStore.token) return;
+    try {
+      const id = editingUrlValue.trim();
+      if (id) {
+        const meta = SOURCE_META[editingUrlSource];
+        if (meta && !meta.idPattern.test(id)) {
+          toastStore.error(`Invalid ID format. ${meta.idHint}`);
+          return;
+        }
+        const prefix = meta?.urlPrefix ?? "";
+        const fullUrl = prefix + id;
+        await booksApi.updateExternalUrl(
+          bookId, editingUrlSource, fullUrl, $authStore.token,
+        );
+      } else {
+        await booksApi.updateExternalUrl(
+          bookId, editingUrlSource, null, $authStore.token,
+        );
+      }
+      // Reload external metadata after a short delay for the refresh
+      externalMeta = await booksApi
+        .getExternal(bookId, $authStore.token)
+        .catch(() => [] as ExternalMetadataOut[]);
+      editingUrlSource = null;
+      toastStore.success(id ? "Source URL updated, fetching metadata..." : "Source URL removed");
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -442,54 +516,123 @@
         </div>
 
         <!-- External Ratings (compact inline) -->
-        {#if externalMeta.length > 0}
+        {#if externalMeta.length > 0 || isAdmin}
           <div class="mt-4 flex flex-wrap items-center gap-4">
             {#each externalMeta as meta}
               {@const src = SOURCE_META[meta.source] ?? {
                 label: meta.source,
                 color: "#666",
                 logo: "?",
+                urlPrefix: "",
+                idPattern: /^.+$/,
+                idHint: "ID",
               }}
               {@const stars =
                 meta.rating != null ? renderStars(meta.rating) : null}
-              <a
-                href={meta.source_url ?? "#"}
-                target={meta.source_url ? "_blank" : undefined}
-                rel={meta.source_url ? "noopener" : undefined}
-                class="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                onclick={meta.source_url
-                  ? undefined
-                  : (e) => e.preventDefault()}
-              >
-                <span class="text-muted-foreground text-sm font-medium"
-                  >{src.label}</span
-                >
-                {#if meta.rating != null && stars}
-                  <span class="text-lg font-bold text-foreground"
-                    >{meta.rating.toFixed(1)}</span
+              {#if editingUrlSource === meta.source}
+                <div class="flex items-center gap-2">
+                  <span class="text-muted-foreground text-sm font-medium"
+                    >{src.label}</span
                   >
-                  <div class="flex items-center gap-px">
-                    {#each Array(stars.full) as _}
-                      <Star
-                        size={12}
-                        class="fill-muted-foreground text-muted-foreground"
-                      />
-                    {/each}
-                    {#if stars.half}
-                      <StarHalf
-                        size={12}
-                        class="fill-muted-foreground text-muted-foreground"
-                      />
-                    {/if}
-                    {#each Array(stars.empty) as _}
-                      <Star size={12} class="text-muted-foreground/30" />
-                    {/each}
-                  </div>
-                {:else}
-                  <span class="text-muted-foreground text-sm">-</span>
+                  <span class="text-xs text-muted-foreground">{src.urlPrefix}</span>
+                  <input
+                    bind:value={editingUrlValue}
+                    placeholder={src.idHint}
+                    class="border border-input bg-background rounded-lg px-2 py-1 text-sm text-foreground w-40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                  <button
+                    class="text-xs text-primary hover:text-primary/80 font-medium"
+                    onclick={saveExternalUrl}>Save</button
+                  >
+                  <button
+                    class="text-xs text-muted-foreground hover:text-foreground"
+                    onclick={() => (editingUrlSource = null)}>Cancel</button
+                  >
+                </div>
+              {:else}
+                <a
+                  href={meta.source_url ?? "#"}
+                  target={meta.source_url ? "_blank" : undefined}
+                  rel={meta.source_url ? "noopener" : undefined}
+                  class="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  onclick={meta.source_url
+                    ? undefined
+                    : (e: MouseEvent) => e.preventDefault()}
+                >
+                  <span class="text-muted-foreground text-sm font-medium"
+                    >{src.label}</span
+                  >
+                  {#if meta.rating != null && stars}
+                    <span class="text-lg font-bold text-foreground"
+                      >{meta.rating.toFixed(1)}</span
+                    >
+                    <div class="flex items-center gap-px">
+                      {#each Array(stars.full) as _}
+                        <Star
+                          size={12}
+                          class="fill-muted-foreground text-muted-foreground"
+                        />
+                      {/each}
+                      {#if stars.half}
+                        <StarHalf
+                          size={12}
+                          class="fill-muted-foreground text-muted-foreground"
+                        />
+                      {/if}
+                      {#each Array(stars.empty) as _}
+                        <Star size={12} class="text-muted-foreground/30" />
+                      {/each}
+                    </div>
+                  {:else}
+                    <span class="text-muted-foreground text-sm">-</span>
+                  {/if}
+                </a>
+                {#if isAdmin}
+                  <button
+                    class="text-muted-foreground hover:text-foreground"
+                    onclick={() => startEditUrl(meta.source, meta.source_url)}
+                    title="Edit source URL"
+                  >
+                    <Edit size={12} />
+                  </button>
                 {/if}
-              </a>
+              {/if}
             {/each}
+            {#if isAdmin}
+              {@const existingSources = new Set(externalMeta.map((m) => m.source))}
+              {#each Object.entries(SOURCE_META) as [key, src]}
+                {#if !existingSources.has(key)}
+                  {#if editingUrlSource === key}
+                    <div class="flex items-center gap-2">
+                      <span class="text-muted-foreground text-sm font-medium"
+                        >{src.label}</span
+                      >
+                      <span class="text-xs text-muted-foreground">{src.urlPrefix}</span>
+                      <input
+                        bind:value={editingUrlValue}
+                        placeholder={src.idHint}
+                        class="border border-input bg-background rounded-lg px-2 py-1 text-sm text-foreground w-40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                      <button
+                        class="text-xs text-primary hover:text-primary/80 font-medium"
+                        onclick={saveExternalUrl}>Save</button
+                      >
+                      <button
+                        class="text-xs text-muted-foreground hover:text-foreground"
+                        onclick={() => (editingUrlSource = null)}>Cancel</button
+                      >
+                    </div>
+                  {:else}
+                    <button
+                      class="flex items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground text-sm"
+                      onclick={() => startEditUrl(key, null)}
+                    >
+                      + {src.label}
+                    </button>
+                  {/if}
+                {/if}
+              {/each}
+            {/if}
           </div>
         {/if}
 
@@ -763,58 +906,133 @@
   >
     <div class="space-y-4">
       <div class="space-y-1">
-        <label
-          class="block text-sm font-medium text-foreground"
-          for="edit-title">Title</label
-        >
+        <div class="flex items-center justify-between">
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-title">Title</label
+          >
+          {#if editForm.title && book.epub_title}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.title = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
         <input
           id="edit-title"
           bind:value={editForm.title}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder={book.epub_title ?? ""}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+        {#if editForm.title && book.epub_title && editForm.title !== book.epub_title}
+          <p class="text-xs text-muted-foreground">Original: {book.epub_title}</p>
+        {/if}
       </div>
       <div class="space-y-1">
-        <label
-          class="block text-sm font-medium text-foreground"
-          for="edit-authors">Authors (comma-separated)</label
-        >
+        <div class="flex items-center justify-between">
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-authors">Authors (comma-separated)</label
+          >
+          {#if editForm.authors && book.epub_authors?.length}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.authors = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
         <input
           id="edit-authors"
           bind:value={editForm.authors}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder={(book.epub_authors ?? []).join(", ")}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+        {#if editForm.authors && book.epub_authors?.length && editForm.authors !== (book.epub_authors ?? []).join(", ")}
+          <p class="text-xs text-muted-foreground">Original: {(book.epub_authors ?? []).join(", ")}</p>
+        {/if}
       </div>
       <div class="space-y-1">
-        <label
-          class="block text-sm font-medium text-foreground"
-          for="edit-publisher">Publisher</label
-        >
+        <div class="flex items-center justify-between">
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-publisher">Publisher</label
+          >
+          {#if editForm.publisher && book.epub_publisher}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.publisher = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
         <input
           id="edit-publisher"
           bind:value={editForm.publisher}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder={book.epub_publisher ?? ""}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+        {#if editForm.publisher && book.epub_publisher && editForm.publisher !== book.epub_publisher}
+          <p class="text-xs text-muted-foreground">Original: {book.epub_publisher}</p>
+        {/if}
       </div>
       <div class="space-y-1">
-        <label class="block text-sm font-medium text-foreground" for="edit-date"
-          >Published Date</label
-        >
+        <div class="flex items-center justify-between">
+          <label class="block text-sm font-medium text-foreground" for="edit-date"
+            >Published Date</label
+          >
+          {#if editForm.published_date && book.epub_published_date}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.published_date = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
         <input
           id="edit-date"
           bind:value={editForm.published_date}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          placeholder={book.epub_published_date ?? ""}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
+        {#if editForm.published_date && book.epub_published_date && editForm.published_date !== book.epub_published_date}
+          <p class="text-xs text-muted-foreground">Original: {book.epub_published_date}</p>
+        {/if}
       </div>
       <div class="space-y-1">
-        <label class="block text-sm font-medium text-foreground" for="edit-desc"
-          >Description</label
-        >
+        <div class="flex items-center justify-between">
+          <label class="block text-sm font-medium text-foreground" for="edit-desc"
+            >Description</label
+          >
+          {#if editForm.description && book.epub_description}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.description = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
         <textarea
           id="edit-desc"
           bind:value={editForm.description}
+          placeholder={book.epub_description ?? ""}
           rows={4}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
         ></textarea>
+        {#if editForm.description && book.epub_description && editForm.description !== book.epub_description}
+          <p class="text-xs text-muted-foreground">Original: {book.epub_description.slice(0, 100)}...</p>
+        {/if}
       </div>
       <div class="flex justify-end gap-2 pt-2">
         <button

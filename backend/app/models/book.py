@@ -34,7 +34,6 @@ if TYPE_CHECKING:
 class MetadataSource(enum.StrEnum):
     goodreads = "goodreads"
     readmoo = "readmoo"
-    kobo_tw = "kobo_tw"
 
 
 class Book(Base, TimestampMixin):

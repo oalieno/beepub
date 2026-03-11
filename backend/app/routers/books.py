@@ -1,5 +1,6 @@
 import mimetypes
 import os
+import re
 import uuid
 import zipfile
 from datetime import UTC, datetime
@@ -23,7 +24,7 @@ from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
 from app.deps import get_current_user, get_current_user_or_cookie, require_admin
-from app.models.book import Book, ExternalMetadata
+from app.models.book import Book, ExternalMetadata, MetadataSource
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
 from app.models.user import User, UserRole
@@ -32,6 +33,7 @@ from app.schemas.book import (
     BookOut,
     BookWithInteractionOut,
     ExternalMetadataOut,
+    ExternalMetadataUrlUpdate,
     PaginatedBooksWithInteraction,
 )
 from app.schemas.reading import (
@@ -312,8 +314,9 @@ async def update_book_metadata(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    for field, value in body.model_dump(exclude_none=True).items():
-        setattr(book, field, value)
+    data = body.model_dump()
+    for field in body.model_fields_set:
+        setattr(book, field, data[field])
     await db.commit()
     await db.refresh(book)
     return book
@@ -406,6 +409,87 @@ async def get_book_external_metadata(
         select(ExternalMetadata).where(ExternalMetadata.book_id == book_id)
     )
     return result.scalars().all()
+
+
+@router.put(
+    "/{book_id}/external/{source}/url", response_model=ExternalMetadataOut
+)
+async def update_external_metadata_url(
+    book_id: uuid.UUID,
+    source: str,
+    body: ExternalMetadataUrlUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    # Validate source
+    try:
+        validated_source = MetadataSource(source)
+    except ValueError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid source. Must be one of: "
+            f"{', '.join(s.value for s in MetadataSource)}",
+        )
+
+    # Validate source URL format
+    _SOURCE_URL_PATTERNS: dict[MetadataSource, re.Pattern[str]] = {
+        MetadataSource.goodreads: re.compile(
+            r"^https://www\.goodreads\.com/book/show/\d+[\w-]*$"
+        ),
+        MetadataSource.readmoo: re.compile(
+            r"^https://readmoo\.com/book/\d+$"
+        ),
+    }
+    if body.source_url is not None:
+        pattern = _SOURCE_URL_PATTERNS.get(validated_source)
+        if pattern and not pattern.match(body.source_url):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid URL format for {source}",
+            )
+
+    # Check book exists
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    if body.source_url is None:
+        # Delete the external metadata row for this source
+        result = await db.execute(
+            select(ExternalMetadata).where(
+                ExternalMetadata.book_id == book_id,
+                ExternalMetadata.source == validated_source,
+            )
+        )
+        meta = result.scalar_one_or_none()
+        if not meta:
+            raise HTTPException(status_code=404, detail="External metadata not found")
+        await db.delete(meta)
+        await db.commit()
+        return meta
+    else:
+        # Upsert: update existing or create new row with just the URL
+        result = await db.execute(
+            select(ExternalMetadata).where(
+                ExternalMetadata.book_id == book_id,
+                ExternalMetadata.source == validated_source,
+            )
+        )
+        meta = result.scalar_one_or_none()
+        if meta:
+            meta.source_url = body.source_url
+        else:
+            meta = ExternalMetadata(
+                book_id=book_id,
+                source=validated_source,
+                source_url=body.source_url,
+            )
+            db.add(meta)
+        await db.commit()
+        await db.refresh(meta)
+        # Auto-trigger metadata refresh to fetch from the new URL
+        await push_metadata_job(book_id, priority="high")
+        return meta
 
 
 # --- User Interactions ---

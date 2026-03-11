@@ -57,6 +57,16 @@ export const booksApi = {
   getExternal: (bookId: string, token: string) =>
     get(`/books/${bookId}/external`, token) as Promise<ExternalMetadataOut[]>,
 
+  updateExternalUrl: (
+    bookId: string,
+    source: string,
+    sourceUrl: string | null,
+    token: string,
+  ) =>
+    put(`/books/${bookId}/external/${source}/url`, {
+      source_url: sourceUrl,
+    }, token) as Promise<ExternalMetadataOut>,
+
   getInteraction: (bookId: string, token: string) =>
     get(`/books/${bookId}/interaction`, token) as Promise<InteractionOut>,
 

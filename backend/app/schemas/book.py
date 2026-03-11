@@ -61,6 +61,10 @@ class BookMetadataUpdate(BaseModel):
     published_date: str | None = None
 
 
+class ExternalMetadataUrlUpdate(BaseModel):
+    source_url: str | None = None
+
+
 class ExternalMetadataOut(BaseModel):
     id: uuid.UUID
     book_id: uuid.UUID

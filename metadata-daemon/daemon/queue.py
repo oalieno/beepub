@@ -44,15 +44,38 @@ async def process_job(book_id: str) -> None:
 
         for source in SOURCES:
             try:
-                results = await source.search(display_title, display_authors, isbn)
-                if not results:
-                    logger.info(
-                        f"No results from {source.source_name} for book {book_id}"
-                    )
-                    continue
+                # Check for manually pinned URL
+                existing = await db.execute(
+                    text(
+                        "SELECT source_url FROM external_metadata "
+                        "WHERE book_id = :book_id AND source = :source"
+                    ),
+                    {"book_id": book_id, "source": source.source_name},
+                )
+                existing_row = existing.mappings().one_or_none()
+                pinned_url = existing_row["source_url"] if existing_row else None
 
-                best = results[0]
-                fetch_result = await source.fetch(best.url)
+                if pinned_url:
+                    # Skip search, fetch directly from pinned URL
+                    logger.info(
+                        "Using pinned URL for %s book %s: %s",
+                        source.source_name, book_id, pinned_url,
+                    )
+                    fetch_result = await source.fetch(pinned_url)
+                    source_url = pinned_url
+                else:
+                    results = await source.search(
+                        display_title, display_authors, isbn
+                    )
+                    if not results:
+                        logger.info(
+                            f"No results from {source.source_name} for book {book_id}"
+                        )
+                        continue
+
+                    best = results[0]
+                    fetch_result = await source.fetch(best.url)
+                    source_url = fetch_result.source_url
 
                 # Upsert external_metadata
                 await db.execute(
@@ -94,7 +117,7 @@ async def process_job(book_id: str) -> None:
                     {
                         "book_id": book_id,
                         "source": source.source_name,
-                        "source_url": fetch_result.source_url,
+                        "source_url": source_url,
                         "rating": fetch_result.rating,
                         "rating_count": fetch_result.rating_count,
                         "reviews": json.dumps(fetch_result.reviews)

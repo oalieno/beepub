@@ -64,6 +64,9 @@ class GoodreadsSource(AbstractMetadataSource):
                 else:
                     full_url = f"https://www.goodreads.com{href}"
 
+                # Strip query params to get clean URL
+                full_url = full_url.split("?")[0]
+
                 if full_url in seen:
                     continue
 
