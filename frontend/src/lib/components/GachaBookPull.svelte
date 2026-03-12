@@ -5,7 +5,7 @@
   import type { BookOut } from "$lib/types";
   import { Dices, BookOpen, RotateCcw } from "@lucide/svelte";
 
-  type Phase = "idle" | "spinning" | "slowing" | "revealed";
+  type Phase = "idle" | "loading" | "spinning" | "slowing" | "revealed";
 
   let phase = $state<Phase>("idle");
   let winnerBook = $state<BookOut | null>(null);
@@ -13,10 +13,25 @@
   let allBooks = $state<BookOut[]>([]);
   let pulling = $state(false);
 
+  function preloadCovers(books: BookOut[]): Promise<void> {
+    const promises = books
+      .filter((b) => b.cover_path)
+      .map(
+        (b) =>
+          new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+            img.src = `/covers/${b.id}.jpg`;
+          }),
+      );
+    return Promise.all(promises).then(() => {});
+  }
+
   async function pull() {
     if (pulling) return;
     pulling = true;
-    phase = "spinning";
+    phase = "loading";
     winnerBook = null;
     displayBook = null;
 
@@ -29,11 +44,12 @@
         return;
       }
 
+      await preloadCovers(books);
+
       winnerBook = books[0];
       allBooks = books;
 
       if (books.length < 2) {
-        // Not enough for animation, reveal directly
         displayBook = winnerBook;
         phase = "revealed";
         pulling = false;
@@ -41,6 +57,7 @@
       }
 
       // Phase 1: Fast cycling
+      phase = "spinning";
       let index = 0;
       const decoys = books.slice(1);
       displayBook = decoys[0];
@@ -119,6 +136,15 @@
           <Dices class="text-primary/50" size={48} />
           <span class="text-primary/60 text-sm font-medium">???</span>
         </div>
+      {:else if phase === "loading"}
+        <!-- Loading covers -->
+        <div
+          class="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-3"
+        >
+          <div
+            class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"
+          ></div>
+        </div>
       {:else if phase === "spinning" || phase === "slowing"}
         <!-- Cycling covers -->
         <div
@@ -190,7 +216,7 @@
           <Dices size={18} />
           抽書
         </button>
-      {:else if phase === "spinning" || phase === "slowing"}
+      {:else if phase === "loading" || phase === "spinning" || phase === "slowing"}
         <div
           class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
         >
