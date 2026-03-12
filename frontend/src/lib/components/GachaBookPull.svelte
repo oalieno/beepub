@@ -3,40 +3,40 @@
   import { toastStore } from "$lib/stores/toast";
   import { booksApi } from "$lib/api/books";
   import type { BookOut } from "$lib/types";
-  import { Dices, BookOpen, RotateCcw } from "@lucide/svelte";
+  import { BookOpen, RotateCcw } from "@lucide/svelte";
 
-  type Phase = "idle" | "loading" | "spinning" | "slowing" | "revealed";
+  type Phase = "idle" | "loading" | "tearing" | "revealed";
 
   let phase = $state<Phase>("idle");
-  let winnerBook = $state<BookOut | null>(null);
-  let displayBook = $state<BookOut | null>(null);
-  let allBooks = $state<BookOut[]>([]);
+  let book = $state<BookOut | null>(null);
   let pulling = $state(false);
 
-  function preloadCovers(books: BookOut[]): Promise<void> {
-    const promises = books
-      .filter((b) => b.cover_path)
-      .map(
-        (b) =>
-          new Promise<void>((resolve) => {
-            const img = new Image();
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-            img.src = `/covers/${b.id}.jpg`;
-          }),
-      );
-    return Promise.all(promises).then(() => {});
+  // 3D tilt state
+  let tiltX = $state(0);
+  let tiltY = $state(0);
+  let shineX = $state(50);
+  let shineY = $state(50);
+  let isHovering = $state(false);
+  let cardEl: HTMLDivElement | undefined = $state();
+
+  function preloadCover(b: BookOut): Promise<void> {
+    if (!b.cover_path) return Promise.resolve();
+    return new Promise<void>((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = `/covers/${b.id}.jpg`;
+    });
   }
 
   async function pull() {
     if (pulling) return;
     pulling = true;
     phase = "loading";
-    winnerBook = null;
-    displayBook = null;
+    book = null;
 
     try {
-      const books = await booksApi.getRandomBooks($authStore.token!, 8);
+      const books = await booksApi.getRandomBooks($authStore.token!, 1);
       if (books.length === 0) {
         toastStore.error("No books available");
         phase = "idle";
@@ -44,37 +44,14 @@
         return;
       }
 
-      await preloadCovers(books);
+      book = books[0];
+      await preloadCover(book);
 
-      winnerBook = books[0];
-      allBooks = books;
-
-      if (books.length < 2) {
-        displayBook = winnerBook;
+      phase = "tearing";
+      setTimeout(() => {
         phase = "revealed";
         pulling = false;
-        return;
-      }
-
-      // Phase 1: Fast cycling
-      phase = "spinning";
-      let index = 0;
-      const decoys = books.slice(1);
-      displayBook = decoys[0];
-
-      const spinDuration = 1500;
-      const spinInterval = 80;
-      let elapsed = 0;
-
-      const spinTimer = setInterval(() => {
-        elapsed += spinInterval;
-        index = (index + 1) % decoys.length;
-        displayBook = decoys[index];
-        if (elapsed >= spinDuration) {
-          clearInterval(spinTimer);
-          slowDown(decoys, index);
-        }
-      }, spinInterval);
+      }, 1800);
     } catch (e) {
       toastStore.error((e as Error).message);
       phase = "idle";
@@ -82,227 +59,366 @@
     }
   }
 
-  function slowDown(decoys: BookOut[], startIndex: number) {
-    phase = "slowing";
-    const delays = [120, 160, 200, 260, 340, 440, 560];
-    let step = 0;
-    let index = startIndex;
-
-    function tick() {
-      if (step < delays.length) {
-        index = (index + 1) % decoys.length;
-        displayBook = decoys[index];
-        step++;
-        setTimeout(tick, delays[step - 1]);
-      } else {
-        // Reveal the winner
-        displayBook = winnerBook;
-        phase = "revealed";
-        pulling = false;
-      }
-    }
-    tick();
+  function repull() {
+    phase = "idle";
+    book = null;
+    pulling = false;
+    tiltX = 0;
+    tiltY = 0;
+    isHovering = false;
   }
 
-  function reset() {
-    phase = "idle";
-    winnerBook = null;
-    displayBook = null;
-    allBooks = [];
-    pulling = false;
+  function handleMouseMove(e: MouseEvent) {
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    // Tilt: max 25 degrees
+    tiltY = ((x - centerX) / centerX) * 25;
+    tiltX = ((centerY - y) / centerY) * 25;
+
+    // Shine position (percentage)
+    shineX = (x / rect.width) * 100;
+    shineY = (y / rect.height) * 100;
+    isHovering = true;
+  }
+
+  function handleMouseLeave() {
+    tiltX = 0;
+    tiltY = 0;
+    shineX = 50;
+    shineY = 50;
+    isHovering = false;
+  }
+
+  // Touch support for mobile
+  function handleTouchStart(e: TouchEvent) {
+    e.preventDefault();
+    applyTouch(e.touches[0]);
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    e.preventDefault();
+    applyTouch(e.touches[0]);
+  }
+
+  function handleTouchEnd() {
+    tiltX = 0;
+    tiltY = 0;
+    shineX = 50;
+    shineY = 50;
+    isHovering = false;
+  }
+
+  function applyTouch(touch: Touch) {
+    if (!cardEl) return;
+    const rect = cardEl.getBoundingClientRect();
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+
+    tiltY = ((x - centerX) / centerX) * 25;
+    tiltX = ((centerY - y) / centerY) * 25;
+
+    shineX = (x / rect.width) * 100;
+    shineY = (y / rect.height) * 100;
+    isHovering = true;
   }
 </script>
 
-<section class="mb-12">
-  <div class="flex items-end justify-between mb-6">
-    <div>
-      <h2 class="text-2xl font-bold text-foreground">Feeling Lucky?</h2>
-      <p class="text-muted-foreground text-sm mt-1">
-        Pull a random book from your library
-      </p>
-    </div>
-  </div>
-
-  <div
-    class="bg-card card-soft rounded-2xl p-6 sm:p-8 flex flex-col items-center"
-  >
-    <!-- Cover display area -->
-    <div class="relative h-56 sm:h-64 aspect-[2/3] mb-6">
-      {#if phase === "idle"}
-        <!-- Mystery card -->
+<div class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] gap-8 overflow-hidden">
+  <!-- Pack / Card area -->
+  <div class="relative w-64 sm:w-80">
+    {#if phase === "idle"}
+      <!-- Card pack using bookpack.png -->
+      <button class="w-full pack-idle cursor-pointer" onclick={pull}>
+        <img
+          src="/bookpack.png"
+          alt="BeePub Book Pack"
+          class="w-full h-auto drop-shadow-xl"
+          draggable="false"
+        />
+      </button>
+    {:else if phase === "loading"}
+      <!-- Loading state with pack image -->
+      <div class="relative w-full">
+        <img
+          src="/bookpack.png"
+          alt="BeePub Book Pack"
+          class="w-full h-auto"
+          draggable="false"
+        />
         <div
-          class="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-3 transition-all duration-300 hover:border-primary/50 hover:from-primary/25"
-        >
-          <Dices class="text-primary/50" size={48} />
-          <span class="text-primary/60 text-sm font-medium">???</span>
-        </div>
-      {:else if phase === "loading"}
-        <!-- Loading covers -->
-        <div
-          class="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-3"
+          class="absolute inset-0 flex items-center justify-center"
         >
           <div
-            class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"
+            class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white"
           ></div>
         </div>
-      {:else if phase === "spinning" || phase === "slowing"}
-        <!-- Cycling covers -->
-        <div
-          class="w-full h-full relative overflow-hidden rounded-lg"
-          class:gacha-spinning={phase === "spinning"}
-          class:gacha-slowing={phase === "slowing"}
-        >
-          {#if displayBook?.cover_path}
-            <img
-              src="/covers/{displayBook.id}.jpg"
-              alt="cycling"
-              class="w-full h-full object-cover rounded-lg"
-            />
-          {:else}
-            <div
-              class="w-full h-full bg-secondary rounded-lg flex items-center justify-center"
-            >
-              <BookOpen class="text-muted-foreground/30" size={36} />
-            </div>
-          {/if}
-          <!-- Scan line overlay -->
-          <div class="absolute inset-0 gacha-scanline rounded-lg"></div>
+      </div>
+    {:else if phase === "tearing"}
+      <!-- Tear animation — top cut -->
+      <div class="relative w-full">
+        <!-- Top strip (peels away) -->
+        <div class="absolute inset-0 pack-tear-top overflow-hidden">
+          <img
+            src="/bookpack.png"
+            alt=""
+            class="w-full h-auto"
+            draggable="false"
+          />
         </div>
-      {:else if phase === "revealed" && displayBook}
-        <!-- Revealed book -->
-        <div class="w-full h-full gacha-reveal">
-          <div class="relative w-full h-full gacha-glow">
-            {#if displayBook.cover_path}
+        <!-- Bottom body (stays then fades) -->
+        <div class="absolute inset-0 pack-tear-body overflow-hidden">
+          <img
+            src="/bookpack.png"
+            alt=""
+            class="w-full h-auto"
+            draggable="false"
+          />
+        </div>
+        <!-- Invisible spacer to maintain height -->
+        <img
+          src="/bookpack.png"
+          alt=""
+          class="w-full h-auto invisible"
+          draggable="false"
+        />
+        <!-- Book rising from inside -->
+        {#if book}
+          <div
+            class="absolute inset-0 flex items-center justify-center pack-book-rise"
+          >
+            <div class="w-[70%] aspect-[2/3]">
+              {#if book.cover_path}
+                <img
+                  src="/covers/{book.id}.jpg"
+                  alt={book.display_title ?? "Book cover"}
+                  class="w-full h-full object-cover rounded-lg book-shadow"
+                />
+              {:else}
+                <div
+                  class="w-full h-full bg-secondary rounded-lg flex flex-col items-center justify-center gap-2 p-4 book-shadow"
+                >
+                  <BookOpen class="text-muted-foreground/30" size={36} />
+                  <span
+                    class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+                  >
+                    {book.display_title ?? "Untitled"}
+                  </span>
+                </div>
+              {/if}
+            </div>
+          </div>
+        {/if}
+      </div>
+    {:else if phase === "revealed" && book}
+      <!-- Revealed book — 3D tilt card -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="w-full aspect-[2/3] reveal-pop card-perspective"
+        bind:this={cardEl}
+        onmousemove={handleMouseMove}
+        onmouseleave={handleMouseLeave}
+        ontouchstart={handleTouchStart}
+        ontouchmove={handleTouchMove}
+        ontouchend={handleTouchEnd}
+      >
+        <div
+          class="w-full h-full rounded-xl overflow-hidden card-tilt book-shadow"
+          style="transform: rotateX({tiltX}deg) rotateY({tiltY}deg); transition: transform {isHovering
+            ? '0.1s'
+            : '0.4s'} ease-out;"
+        >
+          <div class="relative w-full h-full">
+            {#if book.cover_path}
               <img
-                src="/covers/{displayBook.id}.jpg"
-                alt="{displayBook.display_title} cover"
-                class="w-full h-full object-cover rounded-lg book-shadow"
+                src="/covers/{book.id}.jpg"
+                alt={book.display_title ?? "Book cover"}
+                class="w-full h-full object-cover"
               />
             {:else}
               <div
-                class="w-full h-full bg-secondary rounded-lg flex flex-col items-center justify-center gap-2 p-4 book-shadow"
+                class="w-full h-full bg-secondary flex flex-col items-center justify-center gap-2 p-4"
               >
                 <BookOpen class="text-muted-foreground/30" size={36} />
                 <span
                   class="text-muted-foreground/60 text-xs text-center line-clamp-3"
-                  >{displayBook.display_title ?? "Untitled"}</span
                 >
+                  {book.display_title ?? "Untitled"}
+                </span>
               </div>
             {/if}
+            <!-- Shine/glare overlay -->
+            <div
+              class="absolute inset-0 pointer-events-none card-shine"
+              style="background: radial-gradient(circle at {shineX}% {shineY}%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 30%, transparent 60%); opacity: {isHovering
+                ? 1
+                : 0};"
+            ></div>
           </div>
         </div>
-      {/if}
-    </div>
-
-    <!-- Book info (revealed state) -->
-    {#if phase === "revealed" && winnerBook}
-      <div class="text-center mb-5 gacha-fade-in">
-        <h3 class="font-semibold text-lg text-foreground line-clamp-2">
-          {winnerBook.display_title ?? "Untitled"}
-        </h3>
-        <p class="text-muted-foreground text-sm mt-1 line-clamp-1">
-          {(winnerBook.display_authors ?? []).join(", ") || "\u00A0"}
-        </p>
       </div>
     {/if}
+  </div>
 
-    <!-- Buttons -->
-    <div class="flex items-center gap-3">
-      {#if phase === "idle"}
-        <button
-          onclick={pull}
-          class="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all duration-200 flex items-center gap-2 active:scale-95"
-        >
-          <Dices size={18} />
-          抽書
-        </button>
-      {:else if phase === "loading" || phase === "spinning" || phase === "slowing"}
-        <div
-          class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
-        >
+  <!-- Book info (revealed) -->
+  {#if phase === "revealed" && book}
+    <div class="text-center reveal-fade-in max-w-xs">
+      <h3 class="font-semibold text-lg text-foreground line-clamp-2">
+        {book.display_title ?? "Untitled"}
+      </h3>
+      <p class="text-muted-foreground text-sm mt-1 line-clamp-1">
+        {(book.display_authors ?? []).join(", ") || "\u00A0"}
+      </p>
+    </div>
+  {/if}
+
+  <!-- Buttons -->
+  <div class="flex items-center gap-3">
+    {#if phase === "idle"}
+      <div class="text-muted-foreground/50 text-sm">
+        從你的書庫中隨機抽出一本書
+      </div>
+    {:else if phase === "loading" || phase === "tearing"}
+      <div
+        class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
+      >
+        {#if phase === "loading"}
           <div
             class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"
           ></div>
-          抽取中...
-        </div>
-      {:else if phase === "revealed" && winnerBook}
-        <a
-          href="/books/{winnerBook.id}"
-          class="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all duration-200 flex items-center gap-2 active:scale-95"
-        >
-          <BookOpen size={18} />
-          去看看
-        </a>
-        <button
-          onclick={() => {
-            reset();
-            pull();
-          }}
-          class="px-4 py-3 bg-secondary text-foreground rounded-xl font-medium text-sm hover:bg-secondary/80 transition-all duration-200 flex items-center gap-2 active:scale-95"
-        >
-          <RotateCcw size={16} />
-          再抽一次
-        </button>
-      {/if}
-    </div>
+        {/if}
+        開包中...
+      </div>
+    {:else if phase === "revealed" && book}
+      <a
+        href="/books/{book.id}"
+        class="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all duration-200 flex items-center gap-2 active:scale-95"
+      >
+        <BookOpen size={18} />
+        去看看
+      </a>
+      <button
+        onclick={repull}
+        class="px-4 py-3 bg-secondary text-foreground rounded-xl font-medium text-sm hover:bg-secondary/80 transition-all duration-200 flex items-center gap-2 active:scale-95"
+      >
+        <RotateCcw size={16} />
+        再開一包
+      </button>
+    {/if}
   </div>
-</section>
+</div>
 
 <style>
-  .gacha-spinning {
-    animation: gacha-shake 0.08s linear infinite;
+  /* Idle pack hover */
+  .pack-idle {
+    transition: transform 0.3s ease;
+  }
+  .pack-idle:hover {
+    transform: scale(1.04) rotate(0.8deg);
+  }
+  .pack-idle:active {
+    transform: scale(0.97);
   }
 
-  .gacha-slowing {
-    animation: gacha-shake 0.15s linear infinite;
+  /* Tear — top strip peels up and away */
+  .pack-tear-top {
+    clip-path: polygon(0 0, 100% 0, 100% 20%, 0 22%);
+    animation: tear-top 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: center top;
   }
 
-  @keyframes gacha-shake {
+  @keyframes tear-top {
     0% {
-      transform: translateY(-1px);
+      transform: translateY(0) rotate(0deg);
+      opacity: 1;
+    }
+    30% {
+      transform: translateY(-8%) rotate(2deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(-60%) rotate(12deg);
+      opacity: 0;
+    }
+  }
+
+  /* Tear — body stays then fades */
+  .pack-tear-body {
+    clip-path: polygon(0 20%, 100% 18%, 100% 100%, 0 100%);
+    animation: tear-body 1.6s ease-out forwards;
+  }
+
+  @keyframes tear-body {
+    0% {
+      opacity: 1;
+      transform: translateY(0);
     }
     50% {
-      transform: translateY(1px);
+      opacity: 1;
+      transform: translateY(0);
     }
     100% {
-      transform: translateY(-1px);
+      opacity: 0;
+      transform: translateY(8%);
     }
   }
 
-  .gacha-scanline {
-    background: linear-gradient(
-      to bottom,
-      transparent 0%,
-      transparent 48%,
-      rgba(255, 255, 255, 0.08) 49%,
-      rgba(255, 255, 255, 0.08) 51%,
-      transparent 52%,
-      transparent 100%
-    );
-    animation: scanline-move 0.4s linear infinite;
-    pointer-events: none;
+  /* Book rising from pack */
+  .pack-book-rise {
+    animation: book-rise 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
-  @keyframes scanline-move {
+  @keyframes book-rise {
     0% {
-      background-position: 0 -100%;
+      transform: translateY(40%) scale(0.7);
+      opacity: 0;
+    }
+    25% {
+      opacity: 0;
+    }
+    45% {
+      opacity: 1;
     }
     100% {
-      background-position: 0 200%;
+      transform: translateY(0) scale(1);
+      opacity: 1;
     }
   }
 
-  .gacha-reveal {
-    animation: gacha-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  /* 3D card perspective container */
+  .card-perspective {
+    perspective: 800px;
+    touch-action: none;
   }
 
-  @keyframes gacha-pop {
+  .card-tilt {
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  /* Shine overlay */
+  .card-shine {
+    transition: opacity 0.3s ease;
+  }
+
+  /* Revealed pop */
+  .reveal-pop {
+    animation: reveal-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  }
+
+  @keyframes reveal-pop {
     0% {
       transform: scale(0.9);
       opacity: 0.5;
     }
     50% {
-      transform: scale(1.06);
+      transform: scale(1.05);
     }
     100% {
       transform: scale(1);
@@ -310,36 +426,8 @@
     }
   }
 
-  .gacha-glow::after {
-    content: "";
-    position: absolute;
-    inset: -30%;
-    background: radial-gradient(
-      circle,
-      rgba(var(--primary-rgb, 99, 102, 241), 0.25) 0%,
-      transparent 70%
-    );
-    animation: glow-fade 1s ease-out forwards;
-    pointer-events: none;
-    border-radius: 50%;
-  }
-
-  @keyframes glow-fade {
-    0% {
-      opacity: 1;
-      transform: scale(0.3);
-    }
-    40% {
-      opacity: 0.8;
-      transform: scale(1);
-    }
-    100% {
-      opacity: 0;
-      transform: scale(1.3);
-    }
-  }
-
-  .gacha-fade-in {
+  /* Fade in for book info */
+  .reveal-fade-in {
     animation: fade-in 0.4s ease-out 0.2s both;
   }
 

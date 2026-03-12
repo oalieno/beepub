@@ -3,7 +3,7 @@
   import { page } from "$app/stores";
   import { authStore } from "$lib/stores/auth";
   import { UserRole } from "$lib/types";
-  import { BookOpen, LogOut, Menu, X, Bookmark } from "@lucide/svelte";
+  import { LogOut, Menu, X, Dices } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
@@ -58,12 +58,8 @@
     class="max-w-6xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between"
   >
     <!-- Logo -->
-    <a href="/" class="flex items-center gap-2.5 group">
-      <div
-        class="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center"
-      >
-        <BookOpen size={18} class="text-primary" />
-      </div>
+    <a href="/" class="flex items-center gap-2 group">
+      <img src="/logo.png" alt="BeePub" class="h-9 w-9 object-contain" />
       <span
         class="text-xl font-bold tracking-tight"
         style="font-family: var(--font-heading)">BeePub</span
@@ -88,6 +84,15 @@
 
     <!-- Right side -->
     <div class="hidden md:flex items-center gap-3">
+      <a
+        href="/gacha"
+        class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        title="抽書"
+      >
+        <Dices size={20} />
+      </a>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
           <button
@@ -117,17 +122,27 @@
       </DropdownMenu.Root>
     </div>
 
-    <!-- Mobile hamburger -->
-    <button
-      class="md:hidden p-2 text-foreground rounded-lg hover:bg-secondary transition-colors"
-      onclick={() => (menuOpen = !menuOpen)}
-    >
-      {#if menuOpen}
-        <X size={22} />
-      {:else}
-        <Menu size={22} />
-      {/if}
-    </button>
+    <!-- Mobile right side -->
+    <div class="md:hidden flex items-center gap-1">
+      <a
+        href="/gacha"
+        class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+      >
+        <Dices size={20} />
+      </a>
+      <button
+        class="p-2 text-foreground rounded-lg hover:bg-secondary transition-colors"
+        onclick={() => (menuOpen = !menuOpen)}
+      >
+        {#if menuOpen}
+          <X size={22} />
+        {:else}
+          <Menu size={22} />
+        {/if}
+      </button>
+    </div>
   </div>
 
   <!-- Mobile menu -->
