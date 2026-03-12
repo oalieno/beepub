@@ -1,15 +1,18 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { booksApi } from "$lib/api/books";
   import type { BookOut } from "$lib/types";
   import { BookOpen, RotateCcw } from "@lucide/svelte";
 
-  type Phase = "idle" | "loading" | "tearing" | "revealed";
+  type Phase = "idle" | "tearing" | "revealed";
 
   let phase = $state<Phase>("idle");
   let book = $state<BookOut | null>(null);
+  let nextBook = $state<BookOut | null>(null);
   let pulling = $state(false);
+  let ready = $state(false);
 
   // 3D tilt state
   let tiltX = $state(0);
@@ -29,34 +32,40 @@
     });
   }
 
-  async function pull() {
-    if (pulling) return;
-    pulling = true;
-    phase = "loading";
-    book = null;
-
+  async function prefetch() {
     try {
       const books = await booksApi.getRandomBooks($authStore.token!, 1);
       if (books.length === 0) {
-        toastStore.error("No books available");
-        phase = "idle";
-        pulling = false;
+        nextBook = null;
         return;
       }
-
-      book = books[0];
-      await preloadCover(book);
-
-      phase = "tearing";
-      setTimeout(() => {
-        phase = "revealed";
-        pulling = false;
-      }, 1800);
-    } catch (e) {
-      toastStore.error((e as Error).message);
-      phase = "idle";
-      pulling = false;
+      nextBook = books[0];
+      await preloadCover(nextBook);
+      ready = true;
+    } catch {
+      nextBook = null;
     }
+  }
+
+  onMount(() => {
+    prefetch();
+  });
+
+  function pull() {
+    if (pulling || !ready || !nextBook) return;
+    pulling = true;
+    book = nextBook;
+    nextBook = null;
+    ready = false;
+
+    phase = "tearing";
+    setTimeout(() => {
+      phase = "revealed";
+      pulling = false;
+    }, 2600);
+
+    // Prefetch next book in background
+    prefetch();
   }
 
   function repull() {
@@ -130,7 +139,9 @@
   }
 </script>
 
-<div class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] gap-8 overflow-hidden">
+<div
+  class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] gap-8 overflow-hidden"
+>
   <!-- Pack / Card area -->
   <div class="relative w-64 sm:w-80">
     {#if phase === "idle"}
@@ -143,23 +154,6 @@
           draggable="false"
         />
       </button>
-    {:else if phase === "loading"}
-      <!-- Loading state with pack image -->
-      <div class="relative w-full">
-        <img
-          src="/bookpack.png"
-          alt="BeePub Book Pack"
-          class="w-full h-auto"
-          draggable="false"
-        />
-        <div
-          class="absolute inset-0 flex items-center justify-center"
-        >
-          <div
-            class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-white"
-          ></div>
-        </div>
-      </div>
     {:else if phase === "tearing"}
       <!-- Tear animation — top cut -->
       <div class="relative w-full">
@@ -188,36 +182,44 @@
           class="w-full h-auto invisible"
           draggable="false"
         />
-        <!-- Book rising from inside -->
+        <!-- Book rising from inside (3D) -->
         {#if book}
           <div
             class="absolute inset-0 flex items-center justify-center pack-book-rise"
+            style="perspective: 800px;"
           >
-            <div class="w-[70%] aspect-[2/3]">
-              {#if book.cover_path}
-                <img
-                  src="/covers/{book.id}.jpg"
-                  alt={book.display_title ?? "Book cover"}
-                  class="w-full h-full object-cover rounded-lg book-shadow"
-                />
-              {:else}
-                <div
-                  class="w-full h-full bg-secondary rounded-lg flex flex-col items-center justify-center gap-2 p-4 book-shadow"
-                >
-                  <BookOpen class="text-muted-foreground/30" size={36} />
-                  <span
-                    class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+            <div class="w-[70%] aspect-[2/3] book-3d book-rise-tilt">
+              <div class="book-face book-front">
+                {#if book.cover_path}
+                  <img
+                    src="/covers/{book.id}.jpg"
+                    alt={book.display_title ?? "Book cover"}
+                    class="w-full h-full object-cover"
+                  />
+                {:else}
+                  <div
+                    class="w-full h-full bg-secondary flex flex-col items-center justify-center gap-2 p-4"
                   >
-                    {book.display_title ?? "Untitled"}
-                  </span>
-                </div>
-              {/if}
+                    <BookOpen class="text-muted-foreground/30" size={36} />
+                    <span
+                      class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+                    >
+                      {book.display_title ?? "Untitled"}
+                    </span>
+                  </div>
+                {/if}
+              </div>
+
+              <div class="book-face book-spine"></div>
+              <div class="book-face book-pages-right"></div>
+              <div class="book-face book-pages-top"></div>
+              <div class="book-face book-pages-bottom"></div>
             </div>
           </div>
         {/if}
       </div>
     {:else if phase === "revealed" && book}
-      <!-- Revealed book — 3D tilt card -->
+      <!-- Revealed book — 3D book -->
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="w-full aspect-[2/3] reveal-pop card-perspective"
@@ -229,38 +231,49 @@
         ontouchend={handleTouchEnd}
       >
         <div
-          class="w-full h-full rounded-xl overflow-hidden card-tilt book-shadow"
+          class="book-3d w-full h-full"
           style="transform: rotateX({tiltX}deg) rotateY({tiltY}deg); transition: transform {isHovering
-            ? '0.1s'
+            ? '0s'
             : '0.4s'} ease-out;"
         >
-          <div class="relative w-full h-full">
-            {#if book.cover_path}
-              <img
-                src="/covers/{book.id}.jpg"
-                alt={book.display_title ?? "Book cover"}
-                class="w-full h-full object-cover"
-              />
-            {:else}
-              <div
-                class="w-full h-full bg-secondary flex flex-col items-center justify-center gap-2 p-4"
-              >
-                <BookOpen class="text-muted-foreground/30" size={36} />
-                <span
-                  class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+          <!-- Front cover -->
+          <div class="book-face book-front">
+            <div class="relative w-full h-full">
+              {#if book.cover_path}
+                <img
+                  src="/covers/{book.id}.jpg"
+                  alt={book.display_title ?? "Book cover"}
+                  class="w-full h-full object-cover"
+                />
+              {:else}
+                <div
+                  class="w-full h-full bg-secondary flex flex-col items-center justify-center gap-2 p-4"
                 >
-                  {book.display_title ?? "Untitled"}
-                </span>
-              </div>
-            {/if}
-            <!-- Shine/glare overlay -->
-            <div
-              class="absolute inset-0 pointer-events-none card-shine"
-              style="background: radial-gradient(circle at {shineX}% {shineY}%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 30%, transparent 60%); opacity: {isHovering
-                ? 1
-                : 0};"
-            ></div>
+                  <BookOpen class="text-muted-foreground/30" size={36} />
+                  <span
+                    class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+                  >
+                    {book.display_title ?? "Untitled"}
+                  </span>
+                </div>
+              {/if}
+              <!-- Shine/glare overlay -->
+              <div
+                class="absolute inset-0 pointer-events-none card-shine"
+                style="background: radial-gradient(circle at {shineX}% {shineY}%, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.08) 30%, transparent 60%); opacity: {isHovering
+                  ? 1
+                  : 0};"
+              ></div>
+            </div>
           </div>
+          <!-- Spine (left edge) -->
+          <div class="book-face book-spine"></div>
+          <!-- Page edges (right) -->
+          <div class="book-face book-pages-right"></div>
+          <!-- Page edges (top) -->
+          <div class="book-face book-pages-top"></div>
+          <!-- Page edges (bottom) -->
+          <div class="book-face book-pages-bottom"></div>
         </div>
       </div>
     {/if}
@@ -284,15 +297,10 @@
       <div class="text-muted-foreground/50 text-sm">
         從你的書庫中隨機抽出一本書
       </div>
-    {:else if phase === "loading" || phase === "tearing"}
+    {:else if phase === "tearing"}
       <div
         class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
       >
-        {#if phase === "loading"}
-          <div
-            class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"
-          ></div>
-        {/if}
         開包中...
       </div>
     {:else if phase === "revealed" && book}
@@ -329,7 +337,7 @@
   /* Tear — top strip peels up and away */
   .pack-tear-top {
     clip-path: polygon(0 0, 100% 0, 100% 20%, 0 22%);
-    animation: tear-top 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: tear-top 1.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
     transform-origin: center top;
   }
 
@@ -339,11 +347,11 @@
       opacity: 1;
     }
     30% {
-      transform: translateY(-8%) rotate(2deg);
+      transform: translateY(-5px) rotate(4deg);
       opacity: 1;
     }
     100% {
-      transform: translateY(-60%) rotate(12deg);
+      transform: translateY(-60px) rotate(12deg);
       opacity: 0;
     }
   }
@@ -351,7 +359,7 @@
   /* Tear — body stays then fades */
   .pack-tear-body {
     clip-path: polygon(0 20%, 100% 18%, 100% 100%, 0 100%);
-    animation: tear-body 1.6s ease-out forwards;
+    animation: tear-body 2.4s ease-out forwards;
   }
 
   @keyframes tear-body {
@@ -371,7 +379,7 @@
 
   /* Book rising from pack */
   .pack-book-rise {
-    animation: book-rise 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: book-rise 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
 
   @keyframes book-rise {
@@ -391,15 +399,99 @@
     }
   }
 
-  /* 3D card perspective container */
+  /* 3D perspective container */
   .card-perspective {
     perspective: 800px;
     touch-action: none;
   }
 
-  .card-tilt {
+  /* 3D book */
+  .book-3d {
+    --book-depth: 30px;
     transform-style: preserve-3d;
-    will-change: transform;
+    position: relative;
+  }
+
+  .book-face {
+    position: absolute;
+  }
+
+  /* Front cover — at z=0, thickness extends backward */
+  .book-front {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Spine (left edge) — hinges on left, extends backward */
+  .book-spine {
+    width: var(--book-depth);
+    height: 100%;
+    left: 0;
+    background: linear-gradient(to right, #3a3a3a, #2a2a2a);
+    transform-origin: left center;
+    transform: rotateY(90deg);
+  }
+
+  /* Page edges (right side) — hinges on right, extends backward */
+  .book-pages-right {
+    width: var(--book-depth);
+    height: 100%;
+    right: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      #f5f0e8 0px,
+      #f5f0e8 1px,
+      #ebe6dc 1px,
+      #ebe6dc 2px
+    );
+    transform-origin: right center;
+    transform: rotateY(-90deg);
+  }
+
+  /* Page edges (top) — hinges on top, extends backward */
+  .book-pages-top {
+    width: 100%;
+    height: var(--book-depth);
+    top: 0;
+    background: repeating-linear-gradient(
+      to right,
+      #f5f0e8 0px,
+      #f5f0e8 1px,
+      #ebe6dc 1px,
+      #ebe6dc 2px
+    );
+    transform-origin: center top;
+    transform: rotateX(-90deg);
+  }
+
+  /* Page edges (bottom) — hinges on bottom, extends backward */
+  .book-pages-bottom {
+    width: 100%;
+    height: var(--book-depth);
+    bottom: 0;
+    background: repeating-linear-gradient(
+      to right,
+      #f5f0e8 0px,
+      #f5f0e8 1px,
+      #ebe6dc 1px,
+      #ebe6dc 2px
+    );
+    transform-origin: center bottom;
+    transform: rotateX(90deg);
+  }
+
+  /* Slight tilt during book rise for 3D effect */
+  .book-rise-tilt {
+    animation: book-rise-tilt 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  @keyframes book-rise-tilt {
+    0% {
+      transform: rotateY(-15deg) rotateX(5deg);
+    }
+    100% {
+      transform: rotateY(-5deg) rotateX(2deg);
+    }
   }
 
   /* Shine overlay */
@@ -409,16 +501,16 @@
 
   /* Revealed pop */
   .reveal-pop {
-    animation: reveal-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    animation: reveal-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   }
 
   @keyframes reveal-pop {
     0% {
-      transform: scale(0.9);
-      opacity: 0.5;
+      transform: scale(0.97);
+      opacity: 0.8;
     }
     50% {
-      transform: scale(1.05);
+      transform: scale(1.03);
     }
     100% {
       transform: scale(1);
