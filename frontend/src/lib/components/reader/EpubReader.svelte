@@ -92,6 +92,7 @@
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let prevFontSize = 0;
   let initialized = false;
+  let handleVisibility: (() => void) | null = null;
 
   const HIGHLIGHT_COLORS: Record<string, string> = {
     yellow: "#fef08a",
@@ -112,6 +113,20 @@
 
   function emitProgress() {
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
+  }
+
+  async function displayWithRetry(cfi?: string, retries = 3, delay = 1500) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        await rendition.display(cfi);
+        return;
+      } catch {
+        if (i < retries - 1)
+          await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    // Final attempt — let it throw
+    await rendition.display(cfi);
   }
 
   function normalizeFootnoteHref(rawHref: string): string | null {
@@ -200,6 +215,22 @@
       emitProgress();
       debouncedSave();
       updateIllustrationOverlays();
+
+      // Cache progress in localStorage for offline/resume fallback
+      try {
+        localStorage.setItem(
+          `reader-progress-${bookId}`,
+          JSON.stringify({
+            cfi: currentCfi,
+            percentage: currentPercentage,
+            sectionIndex: currentSectionIndex,
+            sectionPage: currentSectionPage,
+            fontSize,
+          }),
+        );
+      } catch {
+        // localStorage full or unavailable
+      }
     });
 
     rendition.on("keyup", handleKeyboard);
@@ -786,6 +817,25 @@
     let savedProgress: any = null;
     try {
       savedProgress = await booksApi.getProgress(bookId, token);
+    } catch {
+      // API unreachable (e.g. iOS PWA resume with no network) — try localStorage
+      try {
+        const cached = localStorage.getItem(`reader-progress-${bookId}`);
+        if (cached) {
+          const p = JSON.parse(cached);
+          savedProgress = {
+            cfi: p.cfi,
+            percentage: p.percentage,
+            section_page: p.sectionPage,
+            section_index: p.sectionIndex,
+            font_size: p.fontSize,
+          };
+        }
+      } catch {
+        // ignore
+      }
+    }
+    try {
       console.log("[split-diag][restore-progress]", {
         cfi: savedProgress?.cfi,
         section_page: savedProgress?.section_page,
@@ -798,7 +848,7 @@
           currentPercentage = savedProgress.percentage;
         emitProgress();
 
-        await rendition.display(savedProgress.cfi);
+        await displayWithRetry(savedProgress.cfi);
 
         // Page-based scroll correction: CFI-based restore loses character offset precision
         // causing off-by-one page errors. After display resolves (manager now exists),
@@ -826,10 +876,10 @@
           // else: afterResized will handle when scrollWidth/scrollHeight expands
         }
       } else {
-        await rendition.display();
+        await displayWithRetry();
       }
     } catch {
-      await rendition.display();
+      await displayWithRetry();
     }
 
     // Fix half-page offset on re-enter: snap scroll position after layout settles.
@@ -879,9 +929,34 @@
     progressTimer = setInterval(() => saveProgress(false), 30000);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Fix layout offset when returning to the app (e.g. iOS task switcher)
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible" && rendition) {
+    // Handle app resume (e.g. iOS PWA returning from background)
+    handleVisibility = async () => {
+      if (document.visibilityState !== "visible" || !rendition) return;
+
+      // Check if iOS WebKit purged iframe content while backgrounded
+      let contentPurged = false;
+      try {
+        const contents = rendition.manager?.getContents?.();
+        contentPurged =
+          !contents?.length || !contents[0]?.document?.body?.innerHTML;
+      } catch {
+        contentPurged = true;
+      }
+
+      if (contentPurged && currentCfi) {
+        // Content was purged — re-display at saved position
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            await rendition.display(currentCfi);
+            applyAllHighlights();
+            applyAllIllustrations();
+            break;
+          } catch {
+            if (attempt < 2)
+              await new Promise((r) => setTimeout(r, 1500));
+          }
+        }
+      } else {
         rendition.resize();
       }
     };
@@ -897,6 +972,8 @@
     saveProgress(false);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     document.removeEventListener("keyup", handleKeyboard);
+    if (handleVisibility)
+      document.removeEventListener("visibilitychange", handleVisibility);
     rendition?.destroy();
     epubBook?.destroy();
   });
