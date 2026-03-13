@@ -20,6 +20,7 @@
     onillustrate,
     onillustrationschange,
     onillustrationclick,
+    onshare,
   }: {
     bookId: string;
     token: string;
@@ -34,6 +35,7 @@
     onillustrate?: (detail: { cfiRange: string; text: string }) => void;
     onillustrationschange?: (illustrations: IllustrationOut[]) => void;
     onillustrationclick?: (illustration: IllustrationOut) => void;
+    onshare?: (highlight: HighlightOut) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -1288,38 +1290,21 @@
     }
   });
 
-  async function handleHighlightColor(detail: { color: string }) {
-    const color = detail.color;
+  async function handleHighlight() {
     showHighlightMenu = false;
     clearIOSSelection();
     if (!selectedCfi || !selectedText) return;
 
-    const colorKey =
-      Object.entries(HIGHLIGHT_COLORS).find(([, v]) => v === color)?.[0] ??
-      color;
-
     try {
-      if (existingHighlight) {
-        const updated = await booksApi.updateHighlight(
-          bookId,
-          existingHighlight.id,
-          { color: colorKey },
-          token,
-        );
-        highlights = highlights.map((h) => (h.id === updated.id ? updated : h));
-        rendition?.annotations.remove(selectedCfi, "highlight");
-      } else {
-        const created = await booksApi.createHighlight(
-          bookId,
-          { cfi_range: selectedCfi, text: selectedText, color: colorKey },
-          token,
-        );
-        highlights = [...highlights, created];
-      }
+      const created = await booksApi.createHighlight(
+        bookId,
+        { cfi_range: selectedCfi, text: selectedText, color: "yellow" },
+        token,
+      );
+      highlights = [...highlights, created];
 
-      const fill = HIGHLIGHT_COLORS[colorKey] ?? HIGHLIGHT_COLORS.yellow;
       rendition?.annotations.highlight(selectedCfi, {}, () => {}, "hl", {
-        fill,
+        fill: HIGHLIGHT_COLORS.yellow,
         "fill-opacity": "0.5",
       });
       onhighlightschange?.(highlights);
@@ -1327,6 +1312,13 @@
     } catch (e) {
       toastStore.error((e as Error).message);
     }
+  }
+
+  function handleShare() {
+    showHighlightMenu = false;
+    clearIOSSelection();
+    if (!existingHighlight) return;
+    onshare?.(existingHighlight);
   }
 
   async function handleCopy() {
@@ -1398,10 +1390,11 @@
     >
       <HighlightMenu
         hasExisting={!!existingHighlight}
-        oncolor={handleHighlightColor}
+        onhighlight={handleHighlight}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
         oncopy={handleCopy}
+        onshare={handleShare}
         onclose={() => {
           showHighlightMenu = false;
           clearIOSSelection();

@@ -1,14 +1,6 @@
 <script lang="ts">
-  import { Trash2 } from "@lucide/svelte";
+  import { Trash2, Share2 } from "@lucide/svelte";
   import type { HighlightOut } from "$lib/types";
-
-  const HIGHLIGHT_COLORS: Record<string, string> = {
-    yellow: "#fef08a",
-    green: "#bbf7d0",
-    blue: "#bfdbfe",
-    pink: "#fbcfe8",
-    orange: "#fed7aa",
-  };
 
   let {
     highlights = [],
@@ -17,6 +9,7 @@
     darkMode = false,
     onselect,
     ondelete,
+    onshare,
   }: {
     highlights?: HighlightOut[];
     showBookTitle?: boolean;
@@ -24,6 +17,7 @@
     darkMode?: boolean;
     onselect?: (highlight: HighlightOut) => void;
     ondelete?: (highlight: HighlightOut) => void;
+    onshare?: (highlight: HighlightOut) => void;
   } = $props();
 
   function formatDate(iso: string): string {
@@ -56,7 +50,7 @@
   <div class="flex flex-col gap-1">
     {#each highlights as hl (hl.id)}
       <div
-        class="w-full text-left px-3 py-2.5 rounded-lg transition-colors group flex gap-2.5 items-start {darkMode
+        class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start {darkMode
           ? 'hover:bg-gray-800'
           : 'hover:bg-accent'}"
         role="button"
@@ -69,11 +63,6 @@
           }
         }}
       >
-        <span
-          class="mt-1 w-2.5 h-2.5 rounded-full flex-shrink-0 ring-1 ring-black/10"
-          style="background-color: {HIGHLIGHT_COLORS[hl.color] ??
-            HIGHLIGHT_COLORS.yellow}"
-        ></span>
         <div class="flex-1 min-w-0">
           {#if showBookTitle && bookTitles[hl.book_id]}
             <p
@@ -108,20 +97,36 @@
             {formatDate(hl.created_at)}
           </p>
         </div>
-        {#if ondelete}
-          <button
-            class="self-center opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode
-              ? 'text-gray-500 hover:text-red-400'
-              : 'text-muted-foreground hover:text-destructive'}"
-            title="Delete highlight"
-            onclick={(e) => {
-              e.stopPropagation();
-              ondelete?.(hl);
-            }}
-          >
-            <Trash2 size={13} />
-          </button>
-        {/if}
+        <div class="self-center flex items-center gap-0.5 flex-shrink-0">
+          {#if onshare}
+            <button
+              class="p-1 rounded transition-all {darkMode
+                ? 'text-gray-500 hover:text-gray-300'
+                : 'text-muted-foreground hover:text-foreground'}"
+              title="Share as card"
+              onclick={(e) => {
+                e.stopPropagation();
+                onshare?.(hl);
+              }}
+            >
+              <Share2 size={13} />
+            </button>
+          {/if}
+          {#if ondelete}
+            <button
+              class="p-1 rounded transition-all {darkMode
+                ? 'text-gray-500 hover:text-red-400'
+                : 'text-muted-foreground hover:text-destructive'}"
+              title="Delete highlight"
+              onclick={(e) => {
+                e.stopPropagation();
+                ondelete?.(hl);
+              }}
+            >
+              <Trash2 size={13} />
+            </button>
+          {/if}
+        </div>
       </div>
     {/each}
   </div>

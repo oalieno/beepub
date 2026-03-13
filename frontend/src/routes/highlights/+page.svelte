@@ -5,12 +5,28 @@
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import HighlightList from "$lib/components/HighlightList.svelte";
+  import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import type { HighlightOut, BookOut } from "$lib/types";
   import { Highlighter } from "@lucide/svelte";
 
   let highlights = $state<HighlightOut[]>([]);
-  let bookTitles = $state<Record<string, string>>({});
+  let bookData = $state<
+    Record<string, { title: string; authors: string[] }>
+  >({});
   let loading = $state(true);
+
+  // Share modal state
+  let shareHighlight = $state<HighlightOut | null>(null);
+  let shareModalOpen = $state(false);
+
+  // Derived: book titles for HighlightList
+  let bookTitles = $derived(() => {
+    const titles: Record<string, string> = {};
+    for (const [id, data] of Object.entries(bookData)) {
+      titles[id] = data.title;
+    }
+    return titles;
+  });
 
   // Group highlights by book_id
   let groupedHighlights = $derived(() => {
@@ -30,20 +46,25 @@
     try {
       highlights = await booksApi.getAllHighlights($authStore.token);
 
-      // Fetch book titles for all unique book IDs
+      // Fetch book data for all unique book IDs
       const bookIds = [...new Set(highlights.map((h) => h.book_id))];
-      const titles: Record<string, string> = {};
+      const data: Record<string, { title: string; authors: string[] }> = {};
       await Promise.all(
         bookIds.map(async (id) => {
           try {
             const book = await booksApi.get(id, $authStore.token!);
-            titles[id] = book.display_title ?? book.epub_title ?? "Untitled";
+            data[id] = {
+              title:
+                book.display_title ?? book.epub_title ?? "Untitled",
+              authors:
+                book.display_authors ?? book.epub_authors ?? [],
+            };
           } catch {
-            titles[id] = "Unknown Book";
+            data[id] = { title: "Unknown Book", authors: [] };
           }
         }),
       );
-      bookTitles = titles;
+      bookData = data;
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -60,6 +81,11 @@
     } catch (e) {
       toastStore.error((e as Error).message);
     }
+  }
+
+  function handleShare(hl: HighlightOut) {
+    shareHighlight = hl;
+    shareModalOpen = true;
   }
 </script>
 
@@ -96,16 +122,28 @@
           href="/books/{bookId}"
           class="text-sm font-semibold text-foreground hover:text-primary transition-colors mb-2 block"
         >
-          {bookTitles[bookId] ?? "Unknown Book"}
+          {bookTitles()[bookId] ?? "Unknown Book"}
         </a>
         <div class="bg-card card-soft rounded-2xl p-3">
           <HighlightList
             highlights={bookHighlights}
             onselect={(hl) => goto(`/books/${hl.book_id}/read`)}
             ondelete={handleDelete}
+            onshare={handleShare}
           />
         </div>
       </div>
     {/each}
   {/if}
 </div>
+
+<ShareHighlightModal
+  open={shareModalOpen}
+  highlight={shareHighlight}
+  bookTitle={shareHighlight ? (bookData[shareHighlight.book_id]?.title ?? "") : ""}
+  bookAuthors={shareHighlight ? (bookData[shareHighlight.book_id]?.authors ?? []) : []}
+  onclose={() => {
+    shareModalOpen = false;
+    shareHighlight = null;
+  }}
+/>

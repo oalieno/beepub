@@ -1,44 +1,39 @@
 <script lang="ts">
-  import { Trash2, X, Sparkles, Copy } from "@lucide/svelte";
+  import { Trash2, X, Sparkles, Copy, Share2, Highlighter } from "@lucide/svelte";
 
   let {
     hasExisting = false,
-    oncolor,
+    onhighlight,
     onremove,
     onillustrate,
     oncopy,
+    onshare,
     onclose,
   }: {
     hasExisting?: boolean;
-    oncolor?: (detail: { color: string }) => void;
+    onhighlight?: () => void;
     onremove?: () => void;
     onillustrate?: () => void;
     oncopy?: () => void;
+    onshare?: () => void;
     onclose?: () => void;
   } = $props();
-
-  const colors = [
-    { name: "yellow", hex: "#fef08a" },
-    { name: "green", hex: "#bbf7d0" },
-    { name: "blue", hex: "#bfdbfe" },
-    { name: "pink", hex: "#fbcfe8" },
-    { name: "orange", hex: "#fed7aa" },
-  ];
 </script>
 
 <div
   class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2"
 >
-  {#each colors as color}
+  {#if !hasExisting}
     <button
-      class="w-6 h-6 rounded-full border-2 border-border hover:border-foreground transition-colors hover:scale-110 transform"
-      style="background-color: {color.hex}"
-      title="Highlight {color.name}"
-      onclick={() => oncolor?.({ color: color.name })}
-    ></button>
-  {/each}
+      class="p-0.5 transition-colors hover:scale-110 transform text-yellow-500 hover:text-yellow-400"
+      title="Highlight"
+      onclick={() => onhighlight?.()}
+    >
+      <Highlighter size={14} />
+    </button>
+    <div class="w-px h-4 bg-border"></div>
+  {/if}
 
-  <div class="w-px h-4 bg-border"></div>
   <button
     class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
     title="Copy"
@@ -46,6 +41,17 @@
   >
     <Copy size={14} />
   </button>
+
+  {#if hasExisting}
+    <div class="w-px h-4 bg-border"></div>
+    <button
+      class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
+      title="Share as card"
+      onclick={() => onshare?.()}
+    >
+      <Share2 size={14} />
+    </button>
+  {/if}
 
   <div class="w-px h-4 bg-border"></div>
   <button

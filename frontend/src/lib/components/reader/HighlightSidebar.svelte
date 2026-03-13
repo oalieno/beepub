@@ -8,12 +8,14 @@
     darkMode = false,
     onselect,
     ondelete,
+    onshare,
     onclose,
   }: {
     highlights?: HighlightOut[];
     darkMode?: boolean;
     onselect?: (highlight: HighlightOut) => void;
     ondelete?: (highlight: HighlightOut) => void;
+    onshare?: (highlight: HighlightOut) => void;
     onclose?: () => void;
   } = $props();
 </script>
@@ -63,6 +65,6 @@
     </button>
   </div>
   <div class="flex-1 overflow-y-auto p-2">
-    <HighlightList {highlights} {darkMode} {onselect} {ondelete} />
+    <HighlightList {highlights} {darkMode} {onselect} {ondelete} {onshare} />
   </div>
 </div>

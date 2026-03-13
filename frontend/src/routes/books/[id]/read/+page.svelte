@@ -13,6 +13,7 @@
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
+  import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import type {
     HighlightOut,
     IllustrationOut,
@@ -47,6 +48,9 @@
   let illustrationModalCfi = $state("");
   let illustrationModalText = $state("");
   let viewingIllustration = $state<IllustrationOut | null>(null);
+  let shareHighlight = $state<HighlightOut | null>(null);
+  let shareModalOpen = $state(false);
+  let bookAuthors = $state<string[]>([]);
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
 
@@ -70,6 +74,13 @@
 
     // Fetch current interaction and start reading timer
     fetchInteractionAndStartTimer();
+
+    // Fetch book authors for share card
+    if ($authStore.token) {
+      booksApi.get(bookId, $authStore.token).then((book) => {
+        bookAuthors = book.display_authors ?? book.epub_authors ?? [];
+      }).catch(() => {});
+    }
   });
 
   onDestroy(() => {
@@ -256,6 +267,11 @@
     }
   }
 
+  function handleShareHighlight(hl: HighlightOut) {
+    shareHighlight = hl;
+    shareModalOpen = true;
+  }
+
   function handleSelectIllustration(ill: IllustrationOut) {
     reader?.displayCfi(ill.cfi_range);
     showIllustrationSidebar = false;
@@ -326,6 +342,7 @@
         onillustrate={handleIllustrate}
         onillustrationschange={(ills) => (illustrations = ills)}
         onillustrationclick={(ill) => (viewingIllustration = ill)}
+        onshare={handleShareHighlight}
       />
     {/if}
 
@@ -373,6 +390,7 @@
             toastStore.error((e as Error).message);
           }
         }}
+        onshare={handleShareHighlight}
         onclose={() => (showHighlightSidebar = false)}
       />
     {/if}
@@ -407,4 +425,15 @@
       onclose={() => (viewingIllustration = null)}
     />
   {/if}
+
+  <ShareHighlightModal
+    open={shareModalOpen}
+    highlight={shareHighlight}
+    bookTitle={title}
+    {bookAuthors}
+    onclose={() => {
+      shareModalOpen = false;
+      shareHighlight = null;
+    }}
+  />
 </div>
