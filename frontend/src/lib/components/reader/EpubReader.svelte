@@ -1134,7 +1134,7 @@
     rendition.themes.default({
       body: {
         "font-family": fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS,
-        "font-size": `${fontSize}px`,
+        "font-size": `${fontSize}px !important`,
         "line-height": "1.8",
         "-webkit-text-size-adjust": "100%",
         "text-size-adjust": "100%",
