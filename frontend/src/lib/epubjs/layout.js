@@ -197,8 +197,41 @@ class Layout {
   format(contents, section, axis) {
     var formating;
 
+    // Per-section layout override: some EPUBs mark individual spine items
+    // as pre-paginated while the book is globally reflowable (mixed layout).
+    var isPrePaginated = this.name === "pre-paginated" ||
+      (section && section.properties &&
+       section.properties.includes("rendition:layout-pre-paginated"));
+
     if (this.name === "pre-paginated") {
       formating = contents.fit(this.columnWidth, this.height, section);
+    } else if (isPrePaginated) {
+      // Per-item pre-paginated in a reflowable book: don't use fit() (which
+      // scales based on viewport meta) or columns() (which causes expand loop).
+      // Use a class + injected stylesheet so our styles survive theme overrides
+      // (theme sets body { padding: 2rem !important } after format() runs).
+      contents.layoutStyle("paginated");
+      contents.width(this.width);
+      contents.height(this.height);
+      contents.overflow("hidden");
+      contents.addClass("beepub-pre-paginated");
+      contents.addStylesheetCss(
+        "body.beepub-pre-paginated { " +
+          "margin: 0 !important; " +
+          "padding: 32px !important; " +
+          "display: flex !important; " +
+          "justify-content: center !important; " +
+          "align-items: center !important; " +
+          "box-sizing: border-box !important; " +
+        "} " +
+        "body.beepub-pre-paginated svg, " +
+        "body.beepub-pre-paginated img { " +
+          "max-width: 100% !important; " +
+          "max-height: 100% !important; " +
+          "object-fit: contain !important; " +
+        "}",
+        "beepub-pre-paginated"
+      );
     } else if (this._flow === "paginated") {
       formating = contents.columns(
         this.width,

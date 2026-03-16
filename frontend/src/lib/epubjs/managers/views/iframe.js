@@ -189,6 +189,10 @@ class IframeView {
     // view.onLayout = this.layout.format.bind(this.layout);
     this.create();
 
+    // Reset expand divergence tracking for new render
+    this._prevExpandWidth = undefined;
+    this._divergeCount = 0;
+
     // Fit to size of the container, apply padding
     this.size();
 
@@ -280,7 +284,11 @@ class IframeView {
     var width = _width || this.settings.width;
     var height = _height || this.settings.height;
 
-    if (this.layout.name === "pre-paginated") {
+    var isPrePaginated = this.layout.name === "pre-paginated" ||
+      (this.section && this.section.properties &&
+       this.section.properties.includes("rendition:layout-pre-paginated"));
+
+    if (isPrePaginated) {
       this.lock("both", width, height);
     } else if (this.settings.axis === "horizontal") {
       this.lock("height", width, height);
@@ -337,7 +345,11 @@ class IframeView {
 
     this._expanding = true;
 
-    if (this.layout.name === "pre-paginated") {
+    var isPrePaginated = this.layout.name === "pre-paginated" ||
+      (this.section && this.section.properties &&
+       this.section.properties.includes("rendition:layout-pre-paginated"));
+
+    if (isPrePaginated) {
       width = this.layout.columnWidth;
       height = this.layout.height;
     }
@@ -350,6 +362,25 @@ class IframeView {
         width =
           Math.ceil(width / this.layout.pageWidth) * this.layout.pageWidth;
       }
+
+      // Detect diverging expand loop: CSS columns cause textWidth to grow
+      // by exactly 1 pageWidth per cycle, never converging. This happens
+      // with certain content (e.g. hltr pages in RTL books with vertical-rl CSS).
+      // Only stop when we see this specific pattern 2+ times consecutively.
+      if (this._prevExpandWidth !== undefined) {
+        var growth = width - this._prevExpandWidth;
+        if (growth >= this.layout.pageWidth * 0.9 &&
+            growth <= this.layout.pageWidth * 1.1) {
+          this._divergeCount = (this._divergeCount || 0) + 1;
+          if (this._divergeCount >= 2) {
+            // Diverging — use the previous stable width
+            width = this._prevExpandWidth;
+          }
+        } else {
+          this._divergeCount = 0;
+        }
+      }
+      this._prevExpandWidth = width;
 
       if (this.settings.forceEvenPages) {
         columns = width / this.layout.pageWidth;
@@ -503,7 +534,7 @@ class IframeView {
       if (this.displayed && this.iframe) {
         this.expand();
         if (this.contents) {
-          this.layout.format(this.contents);
+          this.layout.format(this.contents, this.section, this.axis);
         }
       }
     });
@@ -512,7 +543,7 @@ class IframeView {
       if (this.displayed && this.iframe) {
         this.expand();
         if (this.contents) {
-          this.layout.format(this.contents);
+          this.layout.format(this.contents, this.section, this.axis);
         }
       }
     });
@@ -524,7 +555,7 @@ class IframeView {
     this.layout = layout;
 
     if (this.contents) {
-      this.layout.format(this.contents);
+      this.layout.format(this.contents, this.section, this.axis);
       this.expand();
     }
   }
