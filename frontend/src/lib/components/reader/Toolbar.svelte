@@ -11,6 +11,7 @@
     Highlighter,
     Sparkles,
   } from "@lucide/svelte";
+  import { goto } from "$app/navigation";
 
   let {
     bookId = "",
@@ -68,13 +69,13 @@
     ? 'bg-gray-900 border-gray-800 text-gray-200'
     : 'bg-background border-border text-foreground'}"
 >
-  <a
-    href="/books/{bookId}"
+  <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
     aria-label="Go back"
+    onclick={() => goto(`/books/${bookId}`, { replaceState: true })}
   >
     <ArrowLeft size={20} />
-  </a>
+  </button>
 
   <!-- TOC button -->
   <button

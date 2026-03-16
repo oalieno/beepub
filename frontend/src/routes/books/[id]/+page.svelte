@@ -278,7 +278,7 @@
     try {
       await booksApi.delete(bookId, $authStore.token);
       toastStore.success("Book deleted");
-      history.back();
+      goto("/");
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -728,13 +728,13 @@
 
         <!-- Action Buttons -->
         <div class="mt-auto pt-6 flex items-center gap-3">
-          <a
-            href="/books/{book.id}/read"
+          <button
+            onclick={() => goto(`/books/${book.id}/read`, { replaceState: true })}
             class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 sm:px-6 py-3 rounded-full transition-colors whitespace-nowrap text-sm sm:text-base"
           >
             <BookOpen size={16} />
             Start Reading
-          </a>
+          </button>
           <button
             class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={toggleFavorite}
