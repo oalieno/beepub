@@ -9,6 +9,16 @@
   import { Separator } from "$lib/components/ui/separator";
 
   let menuOpen = $state(false);
+  let mobileMenuEl: HTMLElement | undefined = $state();
+  let hamburgerEl: HTMLElement | undefined = $state();
+
+  function handleClickOutside(e: PointerEvent) {
+    if (!menuOpen) return;
+    const target = e.target as Node;
+    if (mobileMenuEl?.contains(target)) return;
+    if (hamburgerEl?.contains(target)) return;
+    menuOpen = false;
+  }
 
   function logout() {
     authStore.logout();
@@ -50,6 +60,8 @@
       : []),
   ]);
 </script>
+
+<svelte:window onpointerdown={handleClickOutside} />
 
 <nav
   class="fixed top-0 left-0 right-0 z-50 h-16 bg-background/80 backdrop-blur-md border-b border-border/50"
@@ -133,6 +145,7 @@
         <Dices size={20} />
       </a>
       <button
+        bind:this={hamburgerEl}
         class="p-2 text-foreground rounded-lg hover:bg-secondary transition-colors"
         onclick={() => (menuOpen = !menuOpen)}
       >
@@ -148,6 +161,7 @@
   <!-- Mobile menu -->
   {#if menuOpen}
     <div
+      bind:this={mobileMenuEl}
       class="md:hidden bg-card card-soft mx-4 mt-2 rounded-2xl px-3 py-3 flex flex-col gap-1"
     >
       {#each navLinks as link}
