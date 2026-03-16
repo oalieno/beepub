@@ -1103,7 +1103,16 @@ class Contents {
     this.layoutStyle("paginated");
 
     if (dir === "rtl" && axis === "horizontal") {
-      this.direction(dir);
+      // Also check body's writing-mode: some EPUBs set vertical-rl on body
+      // via CSS (not on html), so writingMode() reads html as horizontal-tb.
+      // Setting direction:rtl on vertical-rl content flips inline direction
+      // (bottom-to-top), causing text misalignment.
+      let bodyWM = this.content
+        ? this.window.getComputedStyle(this.content)[prefixed("writing-mode")] || ""
+        : "";
+      if (bodyWM.indexOf("vertical") !== 0) {
+        this.direction(dir);
+      }
     }
 
     this.width(width);
