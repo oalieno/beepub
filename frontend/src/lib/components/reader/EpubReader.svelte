@@ -117,20 +117,6 @@
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
   }
 
-  async function displayWithRetry(cfi?: string, retries = 3, delay = 1500) {
-    for (let i = 0; i < retries; i++) {
-      try {
-        await rendition.display(cfi);
-        return;
-      } catch {
-        if (i < retries - 1)
-          await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-    // Final attempt — let it throw
-    await rendition.display(cfi);
-  }
-
   function normalizeFootnoteHref(rawHref: string): string | null {
     const href = (rawHref ?? "").trim();
     if (!href || href.startsWith("javascript:")) return null;
@@ -850,7 +836,7 @@
           currentPercentage = savedProgress.percentage;
         emitProgress();
 
-        await displayWithRetry(savedProgress.cfi);
+        await rendition.display(savedProgress.cfi);
 
         // Page-based scroll correction: CFI-based restore loses character offset precision
         // causing off-by-one page errors. After display resolves (manager now exists),
@@ -878,10 +864,10 @@
           // else: afterResized will handle when scrollWidth/scrollHeight expands
         }
       } else {
-        await displayWithRetry();
+        await rendition.display();
       }
     } catch {
-      await displayWithRetry();
+      await rendition.display();
     }
 
     // Fix half-page offset on re-enter: snap scroll position after layout settles.
@@ -931,34 +917,9 @@
     progressTimer = setInterval(() => saveProgress(false), 30000);
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    // Handle app resume (e.g. iOS PWA returning from background)
-    handleVisibility = async () => {
-      if (document.visibilityState !== "visible" || !rendition) return;
-
-      // Check if iOS WebKit purged iframe content while backgrounded
-      let contentPurged = false;
-      try {
-        const contents = rendition.manager?.getContents?.();
-        contentPurged =
-          !contents?.length || !contents[0]?.document?.body?.innerHTML;
-      } catch {
-        contentPurged = true;
-      }
-
-      if (contentPurged && currentCfi) {
-        // Content was purged — re-display at saved position
-        for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            await rendition.display(currentCfi);
-            applyAllHighlights();
-            applyAllIllustrations();
-            break;
-          } catch {
-            if (attempt < 2)
-              await new Promise((r) => setTimeout(r, 1500));
-          }
-        }
-      } else {
+    // Fix layout offset when returning to the app (e.g. iOS task switcher)
+    handleVisibility = () => {
+      if (document.visibilityState === "visible" && rendition) {
         rendition.resize();
       }
     };

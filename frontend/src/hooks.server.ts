@@ -25,10 +25,16 @@ export const handle: Handle = async ({ event, resolve }) => {
     }
   }
 
-  // Redirect unauthenticated users to login (except the login page itself)
   const path = event.url.pathname;
+
+  // Redirect unauthenticated users to login (except the login page itself)
   if (!event.locals.token && path !== "/login") {
     throw redirect(302, "/login");
+  }
+
+  // Redirect authenticated users away from login page
+  if (event.locals.user && path === "/login") {
+    throw redirect(302, "/");
   }
 
   return resolve(event);

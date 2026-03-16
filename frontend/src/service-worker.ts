@@ -34,6 +34,13 @@ sw.addEventListener("activate", (event) => {
   );
 });
 
+// Respond to health-check pings from the app (iOS PWA resume detection)
+sw.addEventListener("message", (event) => {
+  if (event.data?.type === "ping" && event.ports[0]) {
+    event.ports[0].postMessage({ type: "pong" });
+  }
+});
+
 sw.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
 

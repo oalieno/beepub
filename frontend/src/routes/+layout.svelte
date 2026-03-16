@@ -1,5 +1,6 @@
 <script lang="ts">
   import "../app.css";
+  import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -51,6 +52,50 @@
         authStore.init();
       }
     }
+  });
+
+  // iOS PWA: detect dead service worker on resume and force full reload.
+  // When iOS backgrounds a PWA it kills the SW, breaking SvelteKit's
+  // client-side module loading. A full reload re-registers the SW cleanly.
+  onMount(() => {
+    let lastHidden = 0;
+    const STALE_MS = 30_000; // 30s background = likely SW was killed
+
+    function onVisibility() {
+      if (document.visibilityState === "hidden") {
+        lastHidden = Date.now();
+        return;
+      }
+      // Only act on "visible"
+      if (!lastHidden) return;
+      const elapsed = Date.now() - lastHidden;
+      if (elapsed < STALE_MS) return;
+
+      // Check if SW is still alive by pinging it
+      if (navigator.serviceWorker?.controller) {
+        const ch = new MessageChannel();
+        let timedOut = true;
+        ch.port1.onmessage = () => {
+          timedOut = false;
+        };
+        navigator.serviceWorker.controller.postMessage(
+          { type: "ping" },
+          [ch.port2],
+        );
+        setTimeout(() => {
+          if (timedOut) {
+            window.location.reload();
+          }
+        }, 1000);
+      } else {
+        // No SW controller at all — likely killed, reload
+        window.location.reload();
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () =>
+      document.removeEventListener("visibilitychange", onVisibility);
   });
 
   let isReaderPage = $derived($page.url.pathname.endsWith("/read"));

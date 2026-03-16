@@ -38,12 +38,15 @@ async function request(
       // ignore
     }
 
-    // Auto-logout and redirect on expired/invalid token
+    // Auto-logout on expired/invalid token — but only if not on /login already
+    // (avoids redirect loops on iOS PWA resume where stale requests may 401)
     if (res.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      document.cookie = "token=; Max-Age=0; path=/";
-      window.location.href = "/login";
+      if (window.location.pathname !== "/login") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        document.cookie = "token=; Max-Age=0; path=/";
+        window.location.href = "/login";
+      }
     }
 
     throw new Error(message);
