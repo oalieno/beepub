@@ -47,6 +47,7 @@ export interface BookOut {
   publisher: string | null;
   description: string | null;
   published_date: string | null;
+  word_count: number | null;
   display_title: string | null;
   display_authors: string[] | null;
   calibre_id: number | null;
@@ -165,7 +166,6 @@ export interface AdminStats {
   users: number;
   books: number;
   libraries: number;
-  metadata_queue: number;
 }
 
 export interface AdminSettings {

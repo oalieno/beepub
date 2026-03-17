@@ -3,7 +3,7 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
-from daemon.sources.goodreads import GoodreadsSource
+from app.services.metadata_sources.goodreads import GoodreadsSource
 
 
 class FakeAsyncClient:
@@ -77,7 +77,7 @@ def test_build_queries_strips_square_bracket_subtitle():
 
 def test_search_falls_back_to_title_only(monkeypatch):
     FakeAsyncClient.requests = []
-    monkeypatch.setattr("daemon.sources.goodreads.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.services.metadata_sources.goodreads.httpx.AsyncClient", FakeAsyncClient)
 
     source = GoodreadsSource()
     results = asyncio.run(source.search("極限返航", ["安迪．威爾"], None))

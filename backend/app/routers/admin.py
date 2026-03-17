@@ -20,8 +20,8 @@ from app.services.calibre import (
     scan_calibre_libraries,
     sync_calibre_library,
 )
-from app.services.metadata_queue import get_queue_length
 from app.services.settings import get_all_settings, update_settings
+from app.tasks.wordcount import compute_word_count
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -76,12 +76,10 @@ async def get_stats(
     user_count = (await db.execute(select(func.count(User.id)))).scalar()
     book_count = (await db.execute(select(func.count(Book.id)))).scalar()
     library_count = (await db.execute(select(func.count(Library.id)))).scalar()
-    queue_length = await get_queue_length()
     return {
         "users": user_count,
         "books": book_count,
         "libraries": library_count,
-        "metadata_queue": queue_length,
     }
 
 
@@ -249,3 +247,18 @@ async def put_settings(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     return await update_settings(db, body)
+
+
+@router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
+async def recompute_word_counts(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Queue word-count jobs for all books that don't have one yet."""
+    result = await db.execute(
+        select(Book.id).where(Book.word_count.is_(None))
+    )
+    book_ids = result.scalars().all()
+    for bid in book_ids:
+        compute_word_count.delay(str(bid))
+    return {"queued": len(book_ids)}

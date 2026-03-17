@@ -21,6 +21,7 @@ class BookOut(BaseModel):
     publisher: str | None
     description: str | None
     published_date: str | None
+    word_count: int | None = None
     display_title: str | None
     display_authors: list[str] | None
     calibre_id: int | None = None

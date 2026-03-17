@@ -6,7 +6,11 @@ import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
-from daemon.sources.base import AbstractMetadataSource, FetchResult, SearchResult
+from app.services.metadata_sources.base import (
+    AbstractMetadataSource,
+    FetchResult,
+    SearchResult,
+)
 
 logger = logging.getLogger(__name__)
 

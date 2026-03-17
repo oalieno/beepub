@@ -814,8 +814,7 @@
         </div>
       {/if}
 
-      {#if (book.publisher ?? book.epub_publisher) || (book.published_date ?? book.epub_published_date) || book.epub_language || book.epub_isbn}
-        <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
+      <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
           <div class="flex flex-col gap-4 text-sm">
             {#if book.publisher ?? book.epub_publisher}
               <div>
@@ -856,9 +855,28 @@
                 >
               </div>
             {/if}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >File Size</span
+              >
+              <span class="text-foreground font-medium"
+                >{book.file_size < 1_048_576
+                  ? (book.file_size / 1024).toFixed(1) + ' KB'
+                  : (book.file_size / 1_048_576).toFixed(1) + ' MB'}</span
+              >
+            </div>
+            {#if book.word_count}
+              <div>
+                <span class="text-muted-foreground block text-xs mb-0.5"
+                  >Word Count</span
+                >
+                <span class="text-foreground font-medium"
+                  >{book.word_count.toLocaleString()}</span
+                >
+              </div>
+            {/if}
           </div>
         </div>
-      {/if}
     </div>
 
     <!-- Notes -->

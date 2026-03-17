@@ -3,7 +3,7 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
-from daemon.sources.readmoo import ReadmooSource
+from app.services.metadata_sources.readmoo import ReadmooSource
 
 
 class FakeAsyncClient:
@@ -115,7 +115,7 @@ def test_extract_book_links_filters_non_book_links_and_dedups():
 
 def test_search_falls_back_to_normalized_query(monkeypatch):
     FakeAsyncClient.requests = []
-    monkeypatch.setattr("daemon.sources.readmoo.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("app.services.metadata_sources.readmoo.httpx.AsyncClient", FakeAsyncClient)
 
     source = ReadmooSource()
     results = asyncio.run(
@@ -136,7 +136,7 @@ def test_search_falls_back_to_normalized_query(monkeypatch):
 
 
 def test_fetch_parses_itemprop_rating_and_count(monkeypatch):
-    monkeypatch.setattr("daemon.sources.readmoo.httpx.AsyncClient", FakeFetchClient)
+    monkeypatch.setattr("app.services.metadata_sources.readmoo.httpx.AsyncClient", FakeFetchClient)
 
     source = ReadmooSource()
     result = asyncio.run(source.fetch("https://readmoo.com/book/210363642000101"))

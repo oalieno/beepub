@@ -16,6 +16,7 @@ from app.database import AsyncSessionLocal
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.services.storage import get_cover_path
+from app.tasks.wordcount import compute_word_count
 
 logger = logging.getLogger(__name__)
 
@@ -317,6 +318,7 @@ async def sync_calibre_library(
                             added_by=admin_user_id,
                         )
                         db.add(lb)
+                        compute_word_count.delay(str(book_id))
                         result.added += 1
 
                 except Exception as e:

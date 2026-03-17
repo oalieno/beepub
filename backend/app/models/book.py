@@ -63,6 +63,8 @@ class Book(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     calibre_added_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

@@ -50,7 +50,6 @@ from app.schemas.reading import (
     ReadingStatusUpdate,
 )
 from app.services.epub_parser import extract_cover, parse_epub_metadata
-from app.services.metadata_queue import push_metadata_job
 from app.services.settings import get_setting
 from app.services.storage import (
     delete_file,
@@ -58,6 +57,8 @@ from app.services.storage import (
     get_cover_path,
     save_upload_file,
 )
+from app.tasks.metadata import fetch_metadata
+from app.tasks.wordcount import compute_word_count
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -129,7 +130,8 @@ async def upload_book(
     await db.commit()
     await db.refresh(book)
 
-    await push_metadata_job(book_id, priority="high")
+    fetch_metadata.delay(str(book_id))
+    compute_word_count.delay(str(book_id))
     return book
 
 
@@ -178,7 +180,8 @@ async def upload_books_bulk(
             )
             db.add(lb)
         books.append(book)
-        await push_metadata_job(book_id, priority="normal")
+        fetch_metadata.delay(str(book_id))
+        compute_word_count.delay(str(book_id))
 
     await db.commit()
     for book in books:
@@ -425,7 +428,7 @@ async def refresh_book_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    await push_metadata_job(book_id, priority="high")
+    fetch_metadata.delay(str(book_id))
     return {"status": "queued"}
 
 
@@ -519,7 +522,7 @@ async def update_external_metadata_url(
         await db.commit()
         await db.refresh(meta)
         # Auto-trigger metadata refresh to fetch from the new URL
-        await push_metadata_job(book_id, priority="high")
+        fetch_metadata.delay(str(book_id))
         return meta
 
 

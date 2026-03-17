@@ -6,12 +6,21 @@ import httpx
 from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
-from daemon.sources.base import AbstractMetadataSource, FetchResult, SearchResult
+from app.services.metadata_sources.base import (
+    AbstractMetadataSource,
+    FetchResult,
+    SearchResult,
+)
 
 logger = logging.getLogger(__name__)
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (compatible; BeePub/1.0; +https://github.com/beepub)"
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
 }
 
 
@@ -157,13 +166,16 @@ class GoodreadsSource(AbstractMetadataSource):
 
                 if json_ld:
                     try:
-                        data = json.loads(json_ld.string)
+                        ld_text = json_ld.string or json_ld.get_text()
+                        data = json.loads(ld_text)
                         raw = data
                         agg = data.get("aggregateRating", {})
                         rating = float(agg.get("ratingValue", 0)) or None
                         rating_count = int(agg.get("ratingCount", 0)) or None
                     except Exception:
-                        pass
+                        logger.warning(
+                            "Failed to parse JSON-LD from %s", url
+                        )
 
                 # Fallback: scrape rating display
                 if rating is None:

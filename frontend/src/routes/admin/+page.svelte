@@ -13,7 +13,7 @@
     ChevronRight,
     HardDrive,
     Settings,
-    ListTodo,
+
   } from "@lucide/svelte";
 
   let stats = $state<AdminStats | null>(null);
@@ -81,17 +81,6 @@
           {stats?.libraries ?? 0}
         </p>
         <p class="text-muted-foreground text-sm mt-0.5">Libraries</p>
-      </div>
-      <div class="bg-card card-soft rounded-2xl p-6 text-center">
-        <div
-          class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
-        >
-          <ListTodo class="text-primary" size={22} />
-        </div>
-        <p class="text-3xl font-bold text-foreground">
-          {stats?.metadata_queue ?? 0}
-        </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Job Queue</p>
       </div>
     </div>
 
