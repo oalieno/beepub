@@ -113,6 +113,77 @@
   const SANS_FONTS =
     '"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif';
 
+  const PREFETCH_FORWARD = 3;
+  const PREFETCH_BACKWARD = 1;
+  const prefetchedUrls = new Set<string>();
+  let prefetchAbort: (() => void) | null = null;
+
+  function prefetchImage(url: string): Promise<void> {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve();
+      img.onerror = () => resolve();
+      img.src = url;
+    });
+  }
+
+  function prefetchSections() {
+    if (!epubBook?.spine || !rendition) return;
+    const currentSection = epubBook.spine.get(currentSectionIndex);
+    if (!currentSection) return;
+
+    // Abort previous prefetch chain if user navigated again
+    prefetchAbort?.();
+
+    const toPrefetch: any[] = [];
+
+    let section: any = currentSection;
+    for (let i = 0; i < PREFETCH_FORWARD; i++) {
+      section = section.next?.();
+      if (!section) break;
+      toPrefetch.push(section);
+    }
+
+    section = currentSection;
+    for (let i = 0; i < PREFETCH_BACKWARD; i++) {
+      section = section.prev?.();
+      if (!section) break;
+      toPrefetch.push(section);
+    }
+
+    // Collect all image URLs from sections, then load sequentially
+    let cancelled = false;
+    prefetchAbort = () => { cancelled = true; };
+
+    (async () => {
+      const allUrls: string[] = [];
+      for (const s of toPrefetch) {
+        try {
+          const contents: any = await s.load(epubBook.load.bind(epubBook));
+          contents.querySelectorAll("img").forEach((img: Element) => {
+            const src = img.getAttribute("src");
+            if (src) allUrls.push(new URL(src, s.url).href);
+          });
+          contents.querySelectorAll("image").forEach((img: Element) => {
+            const href =
+              img.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
+              img.getAttribute("href") ||
+              img.getAttribute("xlink:href");
+            if (href) allUrls.push(new URL(href, s.url).href);
+          });
+        } catch {}
+      }
+
+      // Load images one at a time so we don't compete for bandwidth
+      for (const url of allUrls) {
+        if (cancelled) break;
+        if (prefetchedUrls.has(url)) continue;
+        prefetchedUrls.add(url);
+        await prefetchImage(url);
+      }
+    })();
+  }
+
   function emitProgress() {
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
   }
@@ -203,6 +274,7 @@
       emitProgress();
       debouncedSave();
       updateIllustrationOverlays();
+      prefetchSections();
 
       // Cache progress in localStorage for offline/resume fallback
       try {

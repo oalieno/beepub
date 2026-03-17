@@ -406,7 +406,11 @@ async def get_book_content(
     content_type, _ = mimetypes.guess_type(path)
     if content_type is None:
         content_type = "application/octet-stream"
-    return Response(content=data, media_type=content_type)
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=86400, immutable"},
+    )
 
 
 @router.get("/{book_id}/cover")
