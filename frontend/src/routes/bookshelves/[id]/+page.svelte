@@ -82,7 +82,7 @@
         </p>
       </div>
     {:else}
-      <BookGrid {books} />
+      <BookGrid {books} enableInteractions />
     {/if}
   {/if}
 </div>

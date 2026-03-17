@@ -3,6 +3,7 @@
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant can-hover (@media (hover: hover));
 
 :root {
   --radius: 0.75rem;

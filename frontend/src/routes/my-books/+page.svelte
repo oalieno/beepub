@@ -129,6 +129,11 @@
       {total}
       {total === 1 ? "book" : "books"}
     </p>
-    <BookGrid {books} />
+    <BookGrid
+      {books}
+      interactionMap={Object.fromEntries(
+        books.map((b) => [b.id, b.reading_status]),
+      )}
+    />
   {/if}
 </div>

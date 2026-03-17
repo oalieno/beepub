@@ -309,7 +309,7 @@
         role="region"
         aria-label="Books"
       >
-        <BookGrid {books} />
+        <BookGrid {books} enableInteractions />
       </div>
       {#if hasMore}
         <div class="flex justify-center mt-8">

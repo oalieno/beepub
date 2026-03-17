@@ -231,7 +231,7 @@
           </p>
         </div>
       {:else}
-        <BookGrid books={recentBooks} />
+        <BookGrid books={recentBooks} enableInteractions />
       {/if}
     </section>
 

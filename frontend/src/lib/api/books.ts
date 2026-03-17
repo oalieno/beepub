@@ -174,6 +174,19 @@ export const booksApi = {
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
     `/api/books/${bookId}/illustrations/${illustrationId}/image`,
 
+  getBatchInteractions: (bookIds: string[], token: string) =>
+    post("/books/interactions/batch", { book_ids: bookIds }, token) as Promise<{
+      interactions: Record<string, { reading_status: string | null }>;
+    }>,
+
+  search: (query: string, token: string, limit: number = 20) => {
+    const params = new URLSearchParams({ q: query, limit: String(limit) });
+    return get(`/books/search?${params}`, token) as Promise<{
+      items: (BookOut & { library_name: string | null })[];
+      total: number;
+    }>;
+  },
+
   getMyBooks: (
     token: string,
     options?: {

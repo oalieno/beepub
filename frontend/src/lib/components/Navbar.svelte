@@ -3,11 +3,13 @@
   import { page } from "$app/stores";
   import { authStore } from "$lib/stores/auth";
   import { UserRole } from "$lib/types";
-  import { LogOut, Menu, X, Dices } from "@lucide/svelte";
+  import { LogOut, Menu, X, Dices, Search } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
+  import SearchModal from "./SearchModal.svelte";
 
+  let searchOpen = $state(false);
   let menuOpen = $state(false);
   let mobileMenuEl: HTMLElement | undefined = $state();
   let hamburgerEl: HTMLElement | undefined = $state();
@@ -61,7 +63,15 @@
   ]);
 </script>
 
-<svelte:window onpointerdown={handleClickOutside} />
+<svelte:window
+  onpointerdown={handleClickOutside}
+  onkeydown={(e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+      e.preventDefault();
+      searchOpen = !searchOpen;
+    }
+  }}
+/>
 
 <nav
   class="fixed top-0 left-0 right-0 z-50 h-16 bg-background/80 backdrop-blur-md border-b border-border/50"
@@ -96,6 +106,13 @@
 
     <!-- Right side -->
     <div class="hidden md:flex items-center gap-3">
+      <button
+        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+        onclick={() => (searchOpen = true)}
+        title="Search (⌘K)"
+      >
+        <Search size={20} />
+      </button>
       <a
         href="/gacha"
         class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
@@ -136,6 +153,12 @@
 
     <!-- Mobile right side -->
     <div class="md:hidden flex items-center gap-1">
+      <button
+        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+        onclick={() => (searchOpen = true)}
+      >
+        <Search size={20} />
+      </button>
       <a
         href="/gacha"
         class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
@@ -185,3 +208,5 @@
     </div>
   {/if}
 </nav>
+
+<SearchModal bind:open={searchOpen} />

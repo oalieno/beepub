@@ -31,12 +31,17 @@ from app.models.user import User, UserRole
 from app.schemas.book import (
     BookMetadataUpdate,
     BookOut,
+    BookSearchResult,
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
+    PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
 )
 from app.schemas.reading import (
+    BatchInteractionItem,
+    BatchInteractionRequest,
+    BatchInteractionResponse,
     FavoriteUpdate,
     HighlightCreate,
     HighlightOut,
@@ -316,6 +321,79 @@ async def get_random_books(
     if not books:
         raise HTTPException(status_code=404, detail="No accessible books found")
     return books
+
+
+@router.post("/interactions/batch", response_model=BatchInteractionResponse)
+async def batch_get_interactions(
+    body: BatchInteractionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    book_ids = body.book_ids[:200]
+    if not book_ids:
+        return BatchInteractionResponse(interactions={})
+    result = await db.execute(
+        select(UserBookInteraction.book_id, UserBookInteraction.reading_status).where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.book_id.in_(book_ids),
+        )
+    )
+    interactions = {}
+    for book_id, reading_status in result.all():
+        interactions[str(book_id)] = BatchInteractionItem(reading_status=reading_status)
+    return BatchInteractionResponse(interactions=interactions)
+
+
+@router.get("/search", response_model=PaginatedBookSearchResults)
+async def search_books(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: str = Query("", min_length=1),
+    limit: int = Query(20, ge=1, le=100),
+):
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast
+
+    from app.routers.libraries import accessible_libraries_condition
+
+    pattern = f"%{q}%"
+    # Subquery: accessible library IDs
+    accessible_libs = select(Library.id)
+    cond = accessible_libraries_condition(current_user)
+    if cond is not True:
+        accessible_libs = accessible_libs.where(cond)
+    accessible_lib_ids = accessible_libs.subquery()
+
+    # Main query: search books in accessible libraries
+    base_query = (
+        select(Book, Library.name.label("library_name"))
+        .join(LibraryBook, LibraryBook.book_id == Book.id)
+        .join(Library, Library.id == LibraryBook.library_id)
+        .where(
+            LibraryBook.library_id.in_(select(accessible_lib_ids.c.id)),
+            or_(
+                Book.title.ilike(pattern),
+                Book.epub_title.ilike(pattern),
+                cast(Book.authors, SAString).ilike(pattern),
+                cast(Book.epub_authors, SAString).ilike(pattern),
+            ),
+        )
+        .distinct(Book.id)
+        .order_by(Book.id, Library.name)
+    )
+
+    # Count
+    count_sub = base_query.with_only_columns(Book.id).subquery()
+    total = (await db.execute(select(func.count()).select_from(count_sub))).scalar() or 0
+
+    result = await db.execute(base_query.limit(limit))
+    items = []
+    for book, library_name in result.all():
+        item = BookSearchResult.model_validate(book)
+        item.library_name = library_name
+        items.append(item)
+
+    return PaginatedBookSearchResults(items=items, total=total)
 
 
 @router.get("/{book_id}", response_model=BookOut)

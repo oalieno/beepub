@@ -54,6 +54,15 @@ class PaginatedBooksWithInteraction(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookSearchResult(BookOut):
+    library_name: str | None = None
+
+
+class PaginatedBookSearchResults(BaseModel):
+    items: list[BookSearchResult]
+    total: int
+
+
 class BookMetadataUpdate(BaseModel):
     title: str | None = None
     authors: list[str] | None = None
