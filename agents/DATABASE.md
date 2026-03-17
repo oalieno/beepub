@@ -37,6 +37,7 @@ title, authors text[], publisher, description, published_date
 -- 計算欄位
 display_title = COALESCE(title, epub_title)
 display_authors = COALESCE(authors, epub_authors)
+word_count int nullable  -- 由 Celery task 異步計算
 calibre_id int nullable indexed  -- Calibre books.id，用於 re-sync 比對
 added_by uuid→users | added_at
 ```

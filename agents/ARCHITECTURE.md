@@ -24,7 +24,8 @@ beepub/
 │   └── app/
 │       ├── main.py
 │       ├── config.py
-│       ├── database.py
+│       ├── database.py          # get_db() + create_task_session()
+│       ├── celeryapp.py         # Celery app 設定 + beat schedule
 │       ├── deps.py
 │       ├── models/
 │       │   ├── __init__.py  (re-export all)
@@ -40,15 +41,13 @@ beepub/
 │       │   ├── auth.py, libraries.py, books.py, bookshelves.py, reading.py, admin.py
 │       ├── vendor/
 │       │   └── ebooklib/  (vendored, 修改版)
-│       └── services/
-│           ├── auth.py, epub_parser.py, storage.py, metadata_queue.py, calibre.py
-├── metadata-daemon/
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   └── daemon/
-│       ├── main.py, config.py, database.py, queue.py, scheduler.py
-│       └── sources/
-│           ├── base.py, goodreads.py, readmoo.py, kobo_tw.py
+│       ├── services/
+│       │   ├── auth.py, epub_parser.py, storage.py, calibre.py, epub_text.py
+│       │   └── metadata_sources/
+│       │       ├── base.py, goodreads.py, readmoo.py
+│       └── tasks/               # Celery tasks
+│           ├── metadata.py      # fetch_metadata, check_and_schedule_refresh
+│           └── wordcount.py     # compute_word_count
 └── frontend/
     ├── Dockerfile
     ├── package.json, svelte.config.js, vite.config.ts
@@ -85,7 +84,8 @@ services:
   postgres:   postgres:16-alpine, volume: postgres_data
   redis:      redis:7-alpine
   backend:    FastAPI, port 8000 (internal), volumes: books, covers
-  metadata-daemon: APScheduler worker
+  worker:     Celery worker (共用 backend image), concurrency=2
+  beat:       Celery beat scheduler (共用 backend image)
   frontend:   SvelteKit Node, port 3000 (internal)
   nginx:      port ${PORT:-80}, proxy /api/* → backend, /* → frontend
               static /covers/* → filesystem
@@ -113,24 +113,26 @@ def get_accessible_libraries(user):
         OR (visibility == PRIVATE AND library_access.user_id == user.id)
 ```
 
-## Metadata Daemon 架構
+## Celery 任務隊列架構
 
 ```
-Redis Queue (LIST: beepub:metadata:queue)
-  ← backend 推入: {"book_id": "uuid", "priority": "high"|"normal"}
+Redis (broker + result backend)
 
-Daemon Worker:
-  BRPOP beepub:metadata:queue  (blocking pop)
-  for each source in [goodreads, readmoo, kobo_tw]:
-    result = source.fetch(book)
-    upsert external_metadata
+Celery Worker (prefork, concurrency=2):
+  - fetch_metadata(book_id)        從 Goodreads/Readmoo 爬取 metadata
+  - compute_word_count(book_id)    解析 EPUB 計算字數
+  - check_and_schedule_refresh()   定期排程 metadata 更新
 
-APScheduler (每日 3:00 AM):
-  SELECT all books
-  推入全部到 queue (priority=normal)
+Celery Beat:
+  每小時執行 check_and_schedule_refresh，根據 DB 設定決定是否觸發批次更新
 ```
 
-### Source 模組介面
+### Celery task 與 async DB 的整合
+Celery worker 是 sync (prefork)，但 DB 用 async SQLAlchemy。
+每個 task 裡用 `asyncio.run()` 跑 async 程式碼，並用 `create_task_session()`
+建立獨立 engine（不共用 FastAPI 的全域 engine），避免 asyncpg 跨 event loop 衝突。
+
+### Metadata Source 模組介面
 ```python
 class AbstractMetadataSource(ABC):
     source_name: ClassVar[str]
@@ -143,7 +145,6 @@ class AbstractMetadataSource(ABC):
 |------|------|----------|
 | Goodreads | httpx + BS4 (JSON-LD) | ISBN → title+author 模糊匹配 |
 | Readmoo | httpx + BS4 (搜尋 API + 詳細頁) | title+author |
-| Kobo TW | httpx + BS4 (JSON-LD) | ISBN → title+author |
 
 ## 驗證方式
 
