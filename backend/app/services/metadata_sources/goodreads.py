@@ -73,8 +73,13 @@ class GoodreadsSource(AbstractMetadataSource):
                 else:
                     full_url = f"https://www.goodreads.com{href}"
 
-                # Strip query params to get clean URL
+                # Strip query params and subpaths to get clean book URL
                 full_url = full_url.split("?")[0]
+                match = re.match(
+                    r"(https?://www\.goodreads\.com/book/show/\d+)", full_url
+                )
+                if match:
+                    full_url = match.group(1)
 
                 if full_url in seen:
                     continue
@@ -102,11 +107,19 @@ class GoodreadsSource(AbstractMetadataSource):
                         "https://www.goodreads.com/search", params={"q": isbn}
                     )
                     if resp.status_code == 200:
-                        soup = BeautifulSoup(resp.text, "html.parser")
-                        for full_url, text in self._extract_book_links(soup, limit=3):
+                        # If redirected to a book page, use that URL directly
+                        final_url = str(resp.url)
+                        if "/book/show/" in final_url:
+                            clean_url = final_url.split("?")[0]
                             results.append(
-                                SearchResult(url=full_url, title=text, authors=[])
+                                SearchResult(url=clean_url, title="", authors=[])
                             )
+                        else:
+                            soup = BeautifulSoup(resp.text, "html.parser")
+                            for full_url, text in self._extract_book_links(soup, limit=3):
+                                results.append(
+                                    SearchResult(url=full_url, title=text, authors=[])
+                                )
             except Exception as e:
                 logger.warning(f"Goodreads ISBN search failed: {e}")
 
@@ -147,7 +160,14 @@ class GoodreadsSource(AbstractMetadataSource):
 
         return results[:3]
 
+    @staticmethod
+    def _normalize_book_url(url: str) -> str:
+        """Strip trailing subpaths like /reviews, /editions from book URLs."""
+        match = re.match(r"(https?://www\.goodreads\.com/book/show/\d+)", url)
+        return match.group(1) if match else url
+
     async def fetch(self, url: str) -> FetchResult:
+        url = self._normalize_book_url(url)
         try:
             async with httpx.AsyncClient(
                 headers=HEADERS, follow_redirects=True, timeout=15
