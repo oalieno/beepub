@@ -35,48 +35,51 @@
     { key: "favorites", label: "Favorites", icon: Heart },
   ];
 
-  let activeTab = $state<TabKey>("currently_reading");
   let books = $state<BookWithInteractionOut[]>([]);
   let total = $state(0);
   let loading = $state(true);
 
+  // Derive active tab from URL so back/forward navigation works
+  let urlTab = $derived(
+    ($page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
+  );
+  let activeTab = $derived(
+    tabs.some((t) => t.key === urlTab) ? urlTab : "currently_reading",
+  );
+
   onMount(() => {
     if (!$authStore.token) {
       goto("/login");
-      return;
     }
-    const urlTab = $page.url.searchParams.get("tab") as TabKey | null;
-    if (urlTab && tabs.some((t) => t.key === urlTab)) {
-      activeTab = urlTab;
-    }
-    loadBooks();
   });
 
-  async function loadBooks() {
+  // Load books whenever activeTab changes (including back/forward navigation)
+  $effect(() => {
+    const tab = activeTab;
+    if (!$authStore.token) return;
     loading = true;
-    try {
-      const isFavoriteTab = activeTab === "favorites";
-      const result = await booksApi.getMyBooks($authStore.token!, {
-        status: isFavoriteTab ? undefined : (activeTab as ReadingStatus),
+    const isFavoriteTab = tab === "favorites";
+    booksApi
+      .getMyBooks($authStore.token!, {
+        status: isFavoriteTab ? undefined : (tab as ReadingStatus),
         favorite: isFavoriteTab ? true : undefined,
-        sort: activeTab === "currently_reading" ? "last_read_at" : "updated_at",
+        sort: tab === "currently_reading" ? "last_read_at" : "updated_at",
         limit: 60,
+      })
+      .then((result) => {
+        books = result.items;
+        total = result.total;
+      })
+      .catch((e) => {
+        toastStore.error((e as Error).message);
+      })
+      .finally(() => {
+        loading = false;
       });
-      books = result.items;
-      total = result.total;
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      loading = false;
-    }
-  }
+  });
 
   function switchTab(tab: TabKey) {
-    activeTab = tab;
-    const url = new URL(window.location.href);
-    url.searchParams.set("tab", tab);
-    window.history.replaceState({}, "", url.toString());
-    loadBooks();
+    goto(`/my-books?tab=${tab}`);
   }
 </script>
 
@@ -129,11 +132,6 @@
       {total}
       {total === 1 ? "book" : "books"}
     </p>
-    <BookGrid
-      {books}
-      interactionMap={Object.fromEntries(
-        books.map((b) => [b.id, b.reading_status]),
-      )}
-    />
+    <BookGrid {books} />
   {/if}
 </div>

@@ -42,19 +42,22 @@
   }
 </script>
 
-<button
-  class="text-left w-full group"
+<div
+  role="button"
+  tabindex="0"
+  class="text-left w-full group cursor-pointer"
   style="-webkit-tap-highlight-color: transparent;"
   onclick={() => goto(`/books/${book.id}`)}
+  onkeydown={(e) => e.key === 'Enter' && goto(`/books/${book.id}`)}
 >
   <!-- Cover -->
   <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
-    <div class="relative inline-flex">
+    <div class="relative inline-flex book-shadow-hover transition-all duration-300">
       {#if book.cover_path}
         <img
           src="/covers/{book.id}.jpg"
           alt="{book.display_title} cover"
-          class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow book-shadow-hover transition-all duration-300"
+          class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow"
           loading="lazy"
         />
       {:else}
@@ -105,4 +108,4 @@
       {(book.display_authors ?? []).join(", ") || "\u00A0"}
     </p>
   </div>
-</button>
+</div>
