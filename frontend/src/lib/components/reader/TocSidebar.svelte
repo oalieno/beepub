@@ -1,17 +1,37 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import { tick } from "svelte";
 
   let {
     toc = [],
     darkMode = false,
+    currentHref = "",
     onchapter,
     onclose,
   }: {
     toc?: { label: string; href: string; subitems?: any[] }[];
     darkMode?: boolean;
+    currentHref?: string;
     onchapter?: (href: string) => void;
     onclose?: () => void;
   } = $props();
+
+  let scrollContainer: HTMLDivElement | undefined = $state(undefined);
+
+  function isActive(itemHref: string): boolean {
+    if (!currentHref) return false;
+    return itemHref === currentHref;
+  }
+
+  $effect(() => {
+    // Auto-scroll to the active entry when sidebar opens
+    if (scrollContainer && currentHref) {
+      tick().then(() => {
+        const active = scrollContainer?.querySelector("[data-toc-active]");
+        active?.scrollIntoView({ block: "center" });
+      });
+    }
+  });
 </script>
 
 <!-- Backdrop -->
@@ -51,7 +71,7 @@
       <X size={16} />
     </button>
   </div>
-  <div class="flex-1 overflow-y-auto p-2">
+  <div class="flex-1 overflow-y-auto p-2" bind:this={scrollContainer}>
     {#if toc.length === 0}
       <p
         class="text-sm {darkMode
@@ -63,10 +83,16 @@
     {:else}
       <div class="flex flex-col gap-0.5">
         {#each toc as item}
+          {@const active = isActive(item.href)}
           <button
-            class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {darkMode
-              ? 'hover:bg-gray-800 text-gray-300'
-              : 'hover:bg-accent text-foreground'}"
+            class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {active
+              ? darkMode
+                ? 'bg-gray-800 text-white font-medium'
+                : 'bg-accent text-foreground font-medium'
+              : darkMode
+                ? 'hover:bg-gray-800 text-gray-300'
+                : 'hover:bg-accent text-foreground'}"
+            data-toc-active={active ? "" : undefined}
             onclick={() => {
               onchapter?.(item.href);
               onclose?.();
@@ -76,10 +102,16 @@
           </button>
           {#if item.subitems}
             {#each item.subitems as sub}
+              {@const subActive = isActive(sub.href)}
               <button
-                class="w-full text-left pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors {darkMode
-                  ? 'hover:bg-gray-800 text-gray-400'
-                  : 'hover:bg-accent text-muted-foreground'}"
+                class="w-full text-left pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors {subActive
+                  ? darkMode
+                    ? 'bg-gray-800 text-white font-medium'
+                    : 'bg-accent text-foreground font-medium'
+                  : darkMode
+                    ? 'hover:bg-gray-800 text-gray-400'
+                    : 'hover:bg-accent text-muted-foreground'}"
+                data-toc-active={subActive ? "" : undefined}
                 onclick={() => {
                   onchapter?.(sub.href);
                   onclose?.();

@@ -475,7 +475,7 @@
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->
-      <div class="flex-shrink-0 w-64 mx-auto md:mx-0 flex justify-center">
+      <div class="flex-shrink-0 w-64 mx-auto md:mx-0 flex justify-center md:self-start">
         {#if book.cover_path}
           <img
             src="/covers/{book.id}.jpg"

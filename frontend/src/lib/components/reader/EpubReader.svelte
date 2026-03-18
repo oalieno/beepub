@@ -21,6 +21,7 @@
     onillustrationschange,
     onillustrationclick,
     onshare,
+    onhrefchange,
   }: {
     bookId: string;
     token: string;
@@ -36,6 +37,7 @@
     onillustrationschange?: (illustrations: IllustrationOut[]) => void;
     onillustrationclick?: (illustration: IllustrationOut) => void;
     onshare?: (highlight: HighlightOut) => void;
+    onhrefchange?: (href: string) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -89,6 +91,9 @@
   let currentSectionIndex = 0;
   let currentSectionPage = 0;
   let currentPercentage = 0;
+
+  // TOC tracking
+  let tocData: { label: string; href: string; subitems?: any[] }[] = [];
 
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -188,6 +193,84 @@
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
   }
 
+  function findActiveTocHref(sectionIndex: number): string {
+    if (!epubBook || tocData.length === 0) return "";
+
+    // Flatten TOC entries with their spine indices
+    const flat: { href: string; spineIndex: number }[] = [];
+    for (const item of tocData) {
+      const si = getSpineIndexForHref(item.href);
+      if (si !== -1) flat.push({ href: item.href, spineIndex: si });
+      if (item.subitems) {
+        for (const sub of item.subitems) {
+          const ssi = getSpineIndexForHref(sub.href);
+          if (ssi !== -1) flat.push({ href: sub.href, spineIndex: ssi });
+        }
+      }
+    }
+
+    // Sort by spine index, preserving TOC order for same-index entries
+    flat.sort((a, b) => a.spineIndex - b.spineIndex);
+
+    // Find the last entry whose spine index <= current section index
+    let active = "";
+    for (const entry of flat) {
+      if (entry.spineIndex <= sectionIndex) {
+        active = entry.href;
+      } else {
+        break;
+      }
+    }
+
+    // Refine: for entries sharing the same spine file as active,
+    // check fragment positions in the rendered DOM
+    if (active && rendition) {
+      const activeBase = active.split("#")[0];
+      const sameFile = flat.filter(
+        (e) =>
+          e.spineIndex === getSpineIndexForHref(active) &&
+          e.spineIndex === sectionIndex,
+      );
+
+      if (sameFile.length > 1) {
+        const contents = rendition.getContents();
+        if (contents && contents.length > 0) {
+          const doc = contents[0]?.document;
+          if (doc) {
+            // Walk entries in order; pick the last one whose anchor is
+            // above or at the current viewport position
+            let refined = sameFile[0].href; // default to first
+            for (const entry of sameFile) {
+              const fragment = entry.href.split("#")[1];
+              if (!fragment) {
+                refined = entry.href;
+                continue;
+              }
+              const el = doc.getElementById(fragment);
+              if (el) {
+                const rect = el.getBoundingClientRect();
+                // In paginated mode, elements we've scrolled past have
+                // negative top (vertical) or negative left (horizontal)
+                if (rect.top <= 10) {
+                  refined = entry.href;
+                }
+              }
+            }
+            active = refined;
+          }
+        }
+      }
+    }
+
+    return active;
+  }
+
+  function getSpineIndexForHref(tocHref: string): number {
+    const base = tocHref.split("#")[0];
+    const item = epubBook?.spine?.get(base);
+    return item?.index ?? -1;
+  }
+
   function normalizeFootnoteHref(rawHref: string): string | null {
     const href = (rawHref ?? "").trim();
     if (!href || href.startsWith("javascript:")) return null;
@@ -272,6 +355,7 @@
         ),
       );
       emitProgress();
+      onhrefchange?.(findActiveTocHref(currentSectionIndex));
       debouncedSave();
       updateIllustrationOverlays();
       prefetchSections();
@@ -981,6 +1065,7 @@
     );
     epubBook.loaded.navigation.then(
       (nav: { toc: { label: string; href: string; subitems?: any[] }[] }) => {
+        tocData = nav.toc;
         ontoc?.(nav.toc);
       },
     );

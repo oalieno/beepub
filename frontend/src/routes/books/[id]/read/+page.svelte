@@ -35,6 +35,7 @@
   let darkMode = $state(false);
   let percentage = $state(0);
   let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
+  let currentHref = $state("");
   let reader: EpubReader = $state(null as any);
   let ready = $state(false);
   let isRtl = $state(false);
@@ -337,6 +338,7 @@
           percentage = p.percentage;
         }}
         ontoc={(t) => (toc = t)}
+        onhrefchange={(href) => (currentHref = href)}
         ondirection={(rtl) => (isRtl = rtl)}
         onhighlightschange={(h) => (highlights = h)}
         onillustrate={handleIllustrate}
@@ -363,6 +365,7 @@
       <TocSidebar
         {toc}
         {darkMode}
+        {currentHref}
         onchapter={(href) => {
           reader?.displayChapter(href);
           showTocSidebar = false;
