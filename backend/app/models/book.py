@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     BigInteger,
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     Numeric,
@@ -55,6 +56,9 @@ class Book(Base, TimestampMixin):
     epub_isbn: Mapped[str | None] = mapped_column(String(20), nullable=True)
     epub_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     epub_published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    epub_series: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    epub_series_index: Mapped[float | None] = mapped_column(Float, nullable=True)
+    epub_tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
 
     # Manual overrides (take priority in display)
     title: Mapped[str | None] = mapped_column(String(500), nullable=True)
@@ -62,6 +66,9 @@ class Book(Base, TimestampMixin):
     publisher: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_date: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    series: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    series_index: Mapped[float | None] = mapped_column(Float, nullable=True)
+    tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
 
     word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -97,6 +104,20 @@ class Book(Base, TimestampMixin):
     @property
     def display_authors(self) -> list[str] | None:
         return self.authors or self.epub_authors
+
+    @property
+    def display_series(self) -> str | None:
+        return self.series or self.epub_series
+
+    @property
+    def display_series_index(self) -> float | None:
+        if self.series is not None:
+            return self.series_index
+        return self.epub_series_index
+
+    @property
+    def display_tags(self) -> list[str] | None:
+        return self.tags or self.epub_tags
 
 
 class ExternalMetadata(Base):

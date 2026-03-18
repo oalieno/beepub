@@ -177,6 +177,9 @@ async def list_library_books(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     search: str | None = Query(None),
+    author: str | None = Query(None),
+    tag: str | None = Query(None),
+    series: str | None = Query(None),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
@@ -196,6 +199,29 @@ async def list_library_books(
                 Book.epub_title.ilike(pattern),
                 cast(Book.authors, SAString).ilike(pattern),
                 cast(Book.epub_authors, SAString).ilike(pattern),
+                Book.series.ilike(pattern),
+                Book.epub_series.ilike(pattern),
+            )
+        )
+    if author:
+        base_query = base_query.where(
+            or_(
+                Book.authors.any(author),
+                Book.epub_authors.any(author),
+            )
+        )
+    if tag:
+        base_query = base_query.where(
+            or_(
+                Book.tags.any(tag),
+                Book.epub_tags.any(tag),
+            )
+        )
+    if series:
+        base_query = base_query.where(
+            or_(
+                Book.series == series,
+                Book.epub_series == series,
             )
         )
 
@@ -207,9 +233,25 @@ async def list_library_books(
     sort_map = {
         "display_title": coalesce(Book.title, Book.epub_title),
         "added_at": coalesce(Book.calibre_added_at, Book.created_at),
+        "series_index": coalesce(Book.series_index, Book.epub_series_index),
     }
+    # Default to series_index sort when filtering by series
+    if series and sort == "created_at":
+        sort = "series_index"
+        order = "asc"
     sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
-    if order == "desc":
+    if sort == "series_index":
+        # Sort by series name first, then index within each series; NULLS LAST
+        series_col = coalesce(Book.series, Book.epub_series)
+        if order == "desc":
+            base_query = base_query.order_by(
+                series_col.desc().nullslast(), sort_col.desc().nullslast(), Book.id
+            )
+        else:
+            base_query = base_query.order_by(
+                series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
+            )
+    elif order == "desc":
         base_query = base_query.order_by(sort_col.desc(), Book.id)
     else:
         base_query = base_query.order_by(sort_col.asc(), Book.id)

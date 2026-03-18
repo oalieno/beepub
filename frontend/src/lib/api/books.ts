@@ -41,6 +41,9 @@ export const booksApi = {
       publisher?: string | null;
       description?: string | null;
       published_date?: string | null;
+      series?: string | null;
+      series_index?: number | null;
+      tags?: string[] | null;
     },
     token: string,
   ) => put(`/books/${bookId}/metadata`, data, token) as Promise<BookOut>,

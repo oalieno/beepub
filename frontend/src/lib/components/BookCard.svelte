@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { BookOut, ReadingStatus } from "$lib/types";
-  import { BookOpen, Bookmark } from "@lucide/svelte";
+  import { BookOpen, Bookmark, Check } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
   import { authStore } from "$lib/stores/auth";
 
@@ -48,11 +48,13 @@
   class="text-left w-full group cursor-pointer"
   style="-webkit-tap-highlight-color: transparent;"
   onclick={() => goto(`/books/${book.id}`)}
-  onkeydown={(e) => e.key === 'Enter' && goto(`/books/${book.id}`)}
+  onkeydown={(e) => e.key === "Enter" && goto(`/books/${book.id}`)}
 >
   <!-- Cover -->
   <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
-    <div class="relative inline-flex book-shadow-hover transition-all duration-300">
+    <div
+      class="relative inline-flex book-shadow-hover transition-all duration-300"
+    >
       {#if book.cover_path}
         <img
           src="/covers/{book.id}.jpg"
@@ -65,34 +67,45 @@
           class="h-56 sm:h-64 aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
         >
           <BookOpen class="text-muted-foreground/30" size={36} />
-          <span class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+          <span
+            class="text-muted-foreground/60 text-xs text-center line-clamp-3"
             >{book.display_title ?? "Untitled"}</span
           >
         </div>
       {/if}
 
-      <!-- Bookmark overlay — anchored to cover image -->
+      <!-- Status overlay — anchored to cover image -->
       {#if onStatusChange}
-        <button
-          class="absolute -top-1 -right-1 p-1 transition-opacity duration-200
-            {readingStatus === 'want_to_read'
-            ? 'opacity-100'
-            : 'opacity-60 can-hover:opacity-0 can-hover:group-hover:opacity-100'}"
-          style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
-          onclick={toggleWantToRead}
-          title={readingStatus === "want_to_read"
-            ? "Remove from Want to Read"
-            : "Add to Want to Read"}
-        >
-          <Bookmark
-            size={26}
-            strokeWidth={readingStatus === "want_to_read" ? 0 : 2}
-            class="drop-shadow-md transition-colors {readingStatus ===
-            'want_to_read'
-              ? 'fill-primary text-primary'
-              : 'fill-background/60 text-foreground/70'}"
-          />
-        </button>
+        {#if readingStatus === "read"}
+          <div class="absolute top-2 right-2 p-1 bg-primary rounded-full">
+            <Check
+              size={13}
+              strokeWidth={3}
+              class="drop-shadow-md text-white"
+            />
+          </div>
+        {:else}
+          <button
+            class="absolute -top-2 right-0 p-1 transition-opacity duration-200
+              {readingStatus === 'want_to_read'
+              ? 'opacity-100'
+              : 'opacity-60 can-hover:opacity-0 can-hover:group-hover:opacity-100'}"
+            style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
+            onclick={toggleWantToRead}
+            title={readingStatus === "want_to_read"
+              ? "Remove from Want to Read"
+              : "Add to Want to Read"}
+          >
+            <Bookmark
+              size={26}
+              strokeWidth={readingStatus === "want_to_read" ? 0 : 2}
+              class="drop-shadow-md transition-colors {readingStatus ===
+              'want_to_read'
+                ? 'fill-primary text-primary'
+                : 'fill-background/60 text-foreground/70'}"
+            />
+          </button>
+        {/if}
       {/if}
     </div>
   </div>
@@ -107,5 +120,10 @@
     <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
       {(book.display_authors ?? []).join(", ") || "\u00A0"}
     </p>
+    {#if book.display_series}
+      <p class="text-muted-foreground/70 text-xs mt-0.5 flex items-baseline min-w-0">
+        <span class="truncate">{book.display_series}</span>{#if book.display_series_index != null}<span class="shrink-0">&nbsp;[{book.display_series_index}]</span>{/if}
+      </p>
+    {/if}
   </div>
 </div>

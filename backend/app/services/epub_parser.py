@@ -20,6 +20,9 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
         "epub_isbn": None,
         "epub_description": None,
         "epub_published_date": None,
+        "epub_series": None,
+        "epub_series_index": None,
+        "epub_tags": None,
     }
     try:
         book = epub.read_epub(file_path, options={"ignore_ncx": True})
@@ -60,6 +63,24 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
             ):
                 result["epub_isbn"] = value.replace("-", "")
                 break
+
+        subjects = book.get_metadata("DC", "subject")
+        if subjects:
+            tags = [s[0] for s in subjects if s[0]]
+            if tags:
+                result["epub_tags"] = tags
+
+        opf_meta = book.get_metadata("OPF", "meta")
+        for _value, attrs in opf_meta:
+            name = (attrs or {}).get("name", "").lower()
+            content = (attrs or {}).get("content", "")
+            if name == "calibre:series" and content:
+                result["epub_series"] = content
+            elif name == "calibre:series_index" and content:
+                try:
+                    result["epub_series_index"] = float(content)
+                except (ValueError, TypeError):
+                    pass
 
     except Exception:
         pass

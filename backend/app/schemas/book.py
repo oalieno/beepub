@@ -16,14 +16,23 @@ class BookOut(BaseModel):
     epub_isbn: str | None
     epub_description: str | None
     epub_published_date: str | None
+    epub_series: str | None = None
+    epub_series_index: float | None = None
+    epub_tags: list[str] | None = None
     title: str | None
     authors: list[str] | None
     publisher: str | None
     description: str | None
     published_date: str | None
+    series: str | None = None
+    series_index: float | None = None
+    tags: list[str] | None = None
     word_count: int | None = None
     display_title: str | None
     display_authors: list[str] | None
+    display_series: str | None = None
+    display_series_index: float | None = None
+    display_tags: list[str] | None = None
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID
@@ -69,6 +78,9 @@ class BookMetadataUpdate(BaseModel):
     publisher: str | None = None
     description: str | None = None
     published_date: str | None = None
+    series: str | None = None
+    series_index: float | None = None
+    tags: list[str] | None = None
 
 
 class ExternalMetadataUrlUpdate(BaseModel):

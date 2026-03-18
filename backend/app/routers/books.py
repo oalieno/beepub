@@ -376,6 +376,8 @@ async def search_books(
                 Book.epub_title.ilike(pattern),
                 cast(Book.authors, SAString).ilike(pattern),
                 cast(Book.epub_authors, SAString).ilike(pattern),
+                Book.series.ilike(pattern),
+                Book.epub_series.ilike(pattern),
             ),
         )
         .distinct(Book.id)

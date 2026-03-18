@@ -33,6 +33,9 @@ class CalibreBookInfo:
     description: str | None
     published_date: str | None
     isbn: str | None
+    series: str | None
+    series_index: float | None
+    tags: list[str] | None
     epub_path: str  # full path to .epub file
     cover_path: str | None  # full path to cover.jpg or None
     file_size: int
@@ -108,12 +111,15 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 b.has_cover,
                 b.pubdate,
                 b.timestamp AS added_at,
+                b.series_index,
                 d.name AS file_name,
                 d.uncompressed_size AS file_size,
                 GROUP_CONCAT(DISTINCT a.name) AS authors,
                 p.name AS publisher,
                 c.text AS description,
-                i.val AS isbn
+                i.val AS isbn,
+                s.name AS series_name,
+                GROUP_CONCAT(DISTINCT t.name) AS tags
             FROM books b
             JOIN data d ON d.book = b.id AND UPPER(d.format) = 'EPUB'
             LEFT JOIN books_authors_link bal ON bal.book = b.id
@@ -122,6 +128,10 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
             LEFT JOIN books_publishers_link bpl ON bpl.book = b.id
             LEFT JOIN publishers p ON p.id = bpl.publisher
             LEFT JOIN identifiers i ON i.book = b.id AND i.type = 'isbn'
+            LEFT JOIN books_series_link bsl ON bsl.book = b.id
+            LEFT JOIN series s ON s.id = bsl.series
+            LEFT JOIN books_tags_link btl ON btl.book = b.id
+            LEFT JOIN tags t ON t.id = btl.tag
             GROUP BY b.id
         """)
         results = []
@@ -148,6 +158,12 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
             if row["added_at"]:
                 added_at_str = str(row["added_at"])
 
+            series_name = row["series_name"]
+            series_index_val = row["series_index"] if series_name else None
+
+            tags_str = row["tags"] or ""
+            tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] or None
+
             results.append(CalibreBookInfo(
                 calibre_id=row["calibre_id"],
                 title=row["title"],
@@ -156,6 +172,9 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 description=row["description"],
                 published_date=pub_date,
                 isbn=row["isbn"],
+                series=series_name,
+                series_index=series_index_val,
+                tags=tags_list,
                 epub_path=epub_path,
                 cover_path=cover,
                 file_size=row["file_size"] or 0,
@@ -261,6 +280,15 @@ async def sync_calibre_library(
                         if book.calibre_added_at != calibre_added:
                             book.calibre_added_at = calibre_added
                             changed = True
+                        if book.epub_series != cal_book.series:
+                            book.epub_series = cal_book.series
+                            changed = True
+                        if book.epub_series_index != cal_book.series_index:
+                            book.epub_series_index = cal_book.series_index
+                            changed = True
+                        if book.epub_tags != cal_book.tags:
+                            book.epub_tags = cal_book.tags
+                            changed = True
                         if changed:
                             result.updated += 1
                         else:
@@ -285,6 +313,9 @@ async def sync_calibre_library(
                             "epub_description": cal_book.description,
                             "epub_published_date": cal_book.published_date,
                             "epub_isbn": cal_book.isbn,
+                            "epub_series": cal_book.series,
+                            "epub_series_index": cal_book.series_index,
+                            "epub_tags": cal_book.tags,
                         }
 
                         # Copy cover directly (skip Pillow resize — Calibre covers are already reasonable)

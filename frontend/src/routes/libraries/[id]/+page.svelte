@@ -18,6 +18,8 @@
     { value: "added_at:asc", label: "Oldest added" },
     { value: "display_title:asc", label: "Title A \u2192 Z" },
     { value: "display_title:desc", label: "Title Z \u2192 A" },
+    { value: "series_index:asc", label: "Series order \u2191" },
+    { value: "series_index:desc", label: "Series order \u2193" },
   ] as const;
 
   const PAGE_SIZE = 60;
@@ -34,6 +36,9 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let searchQuery = $state(($page.url.searchParams.get("search") ?? "").trim());
+  let filterAuthor = $state(($page.url.searchParams.get("author") ?? "").trim());
+  let filterTag = $state(($page.url.searchParams.get("tag") ?? "").trim());
+  let filterSeries = $state(($page.url.searchParams.get("series") ?? "").trim());
   let sortValue = $state($page.url.searchParams.get("sort") || "added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -55,9 +60,16 @@
   afterNavigate(() => {
     const params = new URLSearchParams(window.location.search);
     const search = (params.get("search") ?? "").trim();
+    const author = (params.get("author") ?? "").trim();
+    const tag = (params.get("tag") ?? "").trim();
+    const series = (params.get("series") ?? "").trim();
     const sort = params.get("sort") || "added_at:desc";
     searchQuery = search;
-    sortValue = sort;
+    filterAuthor = author;
+    filterTag = tag;
+    filterSeries = series;
+    // Auto-select series order when series filter is active
+    sortValue = (series && sort === "added_at:desc") ? "series_index:asc" : sort;
     const [s, o] = sort.split(":");
     loadData(search, s, o);
   });
@@ -73,6 +85,9 @@
         librariesApi.get(libraryId, $authStore.token!),
         librariesApi.getBooks(libraryId, $authStore.token!, {
           search: search || undefined,
+          author: filterAuthor || undefined,
+          tag: filterTag || undefined,
+          series: filterSeries || undefined,
           sort,
           order,
           limit: PAGE_SIZE,
@@ -95,6 +110,8 @@
     try {
       const result = await librariesApi.getBooks(libraryId, $authStore.token, {
         search: searchQuery || undefined,
+        tag: filterTag || undefined,
+        series: filterSeries || undefined,
         sort: sortBy,
         order: sortOrder,
         limit: PAGE_SIZE,
@@ -113,9 +130,23 @@
     const url = new URL($page.url);
     if (searchQuery) url.searchParams.set("search", searchQuery);
     else url.searchParams.delete("search");
+    if (filterAuthor) url.searchParams.set("author", filterAuthor);
+    else url.searchParams.delete("author");
+    if (filterTag) url.searchParams.set("tag", filterTag);
+    else url.searchParams.delete("tag");
+    if (filterSeries) url.searchParams.set("series", filterSeries);
+    else url.searchParams.delete("series");
     if (sortValue !== "added_at:desc") url.searchParams.set("sort", sortValue);
     else url.searchParams.delete("sort");
     replaceState(url, {});
+  }
+
+  function clearFilter(type: "author" | "tag" | "series") {
+    if (type === "author") filterAuthor = "";
+    else if (type === "tag") filterTag = "";
+    else filterSeries = "";
+    syncUrlParams();
+    loadData(searchQuery, sortBy, sortOrder);
   }
 
   async function handleSearch() {
@@ -124,6 +155,8 @@
     try {
       const result = await librariesApi.getBooks(libraryId, $authStore.token, {
         search: searchQuery || undefined,
+        tag: filterTag || undefined,
+        series: filterSeries || undefined,
         sort: sortBy,
         order: sortOrder,
         limit: PAGE_SIZE,
@@ -240,6 +273,40 @@
         </button>
       {/if}
     </div>
+
+    <!-- Active filters -->
+    {#if filterAuthor || filterTag || filterSeries}
+      <div class="flex flex-wrap items-center gap-2 mb-4">
+        <span class="text-xs text-muted-foreground">Filters:</span>
+        {#if filterAuthor}
+          <button
+            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            onclick={() => clearFilter("author")}
+          >
+            Author: {filterAuthor}
+            <X size={12} />
+          </button>
+        {/if}
+        {#if filterSeries}
+          <button
+            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            onclick={() => clearFilter("series")}
+          >
+            Series: {filterSeries}
+            <X size={12} />
+          </button>
+        {/if}
+        {#if filterTag}
+          <button
+            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            onclick={() => clearFilter("tag")}
+          >
+            Tag: {filterTag}
+            <X size={12} />
+          </button>
+        {/if}
+      </div>
+    {/if}
 
     <!-- Sort -->
     <div class="flex items-center gap-2 mb-4">

@@ -101,12 +101,29 @@
     return { full: totalFull, half, empty };
   }
 
-  function handleAuthorSearch(author: string) {
+  function handleAuthorFilter(author: string) {
     const q = author.trim();
     if (!q || !book?.library_id) return;
 
-    const params = new URLSearchParams({ search: q });
+    const params = new URLSearchParams({ author: q });
     goto(`/libraries/${book.library_id}?${params.toString()}`);
+  }
+
+  function handleSeriesFilter(seriesName: string) {
+    if (!seriesName || !book?.library_id) return;
+    const params = new URLSearchParams({ series: seriesName });
+    goto(`/libraries/${book.library_id}?${params.toString()}`);
+  }
+
+  function handleTagFilter(tag: string) {
+    if (!tag || !book?.library_id) return;
+    const params = new URLSearchParams({ tag });
+    goto(`/libraries/${book.library_id}?${params.toString()}`);
+  }
+
+  function formatSeriesIndex(idx: number | null | undefined): string {
+    if (idx == null) return "";
+    return Number.isInteger(idx) ? String(idx) : String(idx);
   }
 
   function handleStatusSelectChange(value: string) {
@@ -134,6 +151,9 @@
     description: "",
     publisher: "",
     published_date: "",
+    series: "",
+    series_index: "",
+    tags: "",
   });
   let notesText = $state("");
   let savingNotes = $state(false);
@@ -171,6 +191,9 @@
           description: book.description ?? "",
           publisher: book.publisher ?? "",
           published_date: book.published_date ?? "",
+          series: book.series ?? "",
+          series_index: book.series_index != null ? String(book.series_index) : "",
+          tags: (book.tags ?? []).join(", "),
         };
       }
       // Load user interaction (rating, favorite, progress)
@@ -245,6 +268,10 @@
   async function handleSaveEdit() {
     if (!book || !$authStore.token) return;
     try {
+      const parsedTags = editForm.tags
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
       const updated = await booksApi.updateMetadata(
         bookId,
         {
@@ -262,6 +289,9 @@
           description: editForm.description || null,
           publisher: editForm.publisher || null,
           published_date: editForm.published_date || null,
+          series: editForm.series || null,
+          series_index: editForm.series_index ? parseFloat(editForm.series_index) : null,
+          tags: parsedTags.length > 0 ? parsedTags : null,
         },
         $authStore.token,
       );
@@ -503,7 +533,7 @@
                 <button
                   type="button"
                   class="hover:text-foreground hover:underline transition-colors"
-                  onclick={() => handleAuthorSearch(author)}
+                  onclick={() => handleAuthorFilter(author)}
                 >
                   {author}
                 </button>{idx < (book.display_authors ?? []).length - 1
@@ -816,6 +846,17 @@
 
       <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
           <div class="flex flex-col gap-4 text-sm">
+            {#if book.display_series}
+              <div>
+                <span class="text-muted-foreground block text-xs mb-0.5">Series</span>
+                <button
+                  class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
+                  onclick={() => book && handleSeriesFilter(book.display_series!)}
+                >
+                  {book.display_series}{#if book.display_series_index != null} [{formatSeriesIndex(book.display_series_index)}]{/if}
+                </button>
+              </div>
+            {/if}
             {#if book.publisher ?? book.epub_publisher}
               <div>
                 <span class="text-muted-foreground block text-xs mb-0.5"
@@ -873,6 +914,21 @@
                 <span class="text-foreground font-medium"
                   >{book.word_count.toLocaleString()}</span
                 >
+              </div>
+            {/if}
+            {#if (book.display_tags ?? []).length > 0}
+              <div>
+                <span class="text-muted-foreground block text-xs mb-1">Tags</span>
+                <div class="flex flex-wrap gap-1.5">
+                  {#each book.display_tags ?? [] as tag}
+                    <button
+                      class="text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
+                      onclick={() => handleTagFilter(tag)}
+                    >
+                      {tag}
+                    </button>
+                  {/each}
+                </div>
               </div>
             {/if}
           </div>
@@ -1046,6 +1102,72 @@
         {#if editForm.published_date && book.epub_published_date && editForm.published_date !== book.epub_published_date}
           <p class="text-xs text-muted-foreground">
             Original: {book.epub_published_date}
+          </p>
+        {/if}
+      </div>
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-series">Series</label
+          >
+          {#if editForm.series && book.epub_series}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => { editForm.series = ""; editForm.series_index = ""; }}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
+        <div class="flex gap-2">
+          <input
+            id="edit-series"
+            bind:value={editForm.series}
+            placeholder={book.epub_series ?? ""}
+            class="flex-1 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <input
+            id="edit-series-index"
+            bind:value={editForm.series_index}
+            placeholder={book.epub_series_index != null ? String(book.epub_series_index) : "#"}
+            type="number"
+            step="0.1"
+            class="w-20 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+        </div>
+        {#if editForm.series && book.epub_series && editForm.series !== book.epub_series}
+          <p class="text-xs text-muted-foreground">
+            Original: {book.epub_series}{#if book.epub_series_index != null} [{book.epub_series_index}]{/if}
+          </p>
+        {/if}
+      </div>
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <label
+            class="block text-sm font-medium text-foreground"
+            for="edit-tags">Tags (comma-separated)</label
+          >
+          {#if editForm.tags && book.epub_tags?.length}
+            <button
+              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+              onclick={() => (editForm.tags = "")}
+            >
+              <Undo2 size={12} />
+              Reset
+            </button>
+          {/if}
+        </div>
+        <input
+          id="edit-tags"
+          bind:value={editForm.tags}
+          placeholder={(book.epub_tags ?? []).join(", ")}
+          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        {#if editForm.tags && book.epub_tags?.length && editForm.tags !== (book.epub_tags ?? []).join(", ")}
+          <p class="text-xs text-muted-foreground">
+            Original: {(book.epub_tags ?? []).join(", ")}
           </p>
         {/if}
       </div>
