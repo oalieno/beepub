@@ -73,8 +73,9 @@
     filterTag = tag;
     filterSeries = series;
     // Auto-select series order when series filter is active
-    sortValue = series && sort === "added_at:desc" ? "series_index:asc" : sort;
-    const [s, o] = sort.split(":");
+    const effectiveSort = series && sort === "added_at:desc" ? "series_index:asc" : sort;
+    sortValue = effectiveSort;
+    const [s, o] = effectiveSort.split(":");
     loadData(search, s, o);
   });
 
