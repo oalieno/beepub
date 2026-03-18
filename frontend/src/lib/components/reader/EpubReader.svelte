@@ -880,6 +880,14 @@
       );
       if (!section) return;
 
+      // If the link points to a different section, navigate there instead of showing a popup
+      if (section.index !== currentSectionIndex) {
+        linkEvent.preventDefault();
+        await rendition?.display(href);
+        return;
+      }
+
+      // Same-section link — check if it's a footnote or back-reference
       // Prevent default synchronously — async handler can't prevent after await
       linkEvent.preventDefault();
       // Flag to prevent the click handler (same event cycle) from closing the popup
@@ -899,36 +907,9 @@
 
         // Check if the target element has meaningful text content (not just a number/marker)
         const textLen = (el?.textContent ?? "").trim().length;
-        console.log(
-          "[link] el found:",
-          !!el,
-          "textLen:",
-          textLen,
-          "tagName:",
-          el?.tagName,
-          "text preview:",
-          (el?.textContent ?? "").trim().slice(0, 50),
-        );
         if (!el || textLen < 2) {
           // Back-reference link or empty target — navigate instead of popup
-          console.log("[link] back-reference → display()", href);
-          const mgr = rendition?.manager;
-          console.log(
-            "[link] BEFORE display: scrollLeft:",
-            mgr?.container?.scrollLeft,
-            "scrollWidth:",
-            mgr?.container?.scrollWidth,
-            "direction:",
-            mgr?.settings?.direction,
-          );
           await rendition?.display(href);
-          const mgr2 = rendition?.manager;
-          console.log(
-            "[link] AFTER display: scrollLeft:",
-            mgr2?.container?.scrollLeft,
-            "scrollWidth:",
-            mgr2?.container?.scrollWidth,
-          );
           return;
         }
 
