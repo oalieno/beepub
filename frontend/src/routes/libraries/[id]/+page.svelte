@@ -36,9 +36,13 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let searchQuery = $state(($page.url.searchParams.get("search") ?? "").trim());
-  let filterAuthor = $state(($page.url.searchParams.get("author") ?? "").trim());
+  let filterAuthor = $state(
+    ($page.url.searchParams.get("author") ?? "").trim(),
+  );
   let filterTag = $state(($page.url.searchParams.get("tag") ?? "").trim());
-  let filterSeries = $state(($page.url.searchParams.get("series") ?? "").trim());
+  let filterSeries = $state(
+    ($page.url.searchParams.get("series") ?? "").trim(),
+  );
   let sortValue = $state($page.url.searchParams.get("sort") || "added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -69,7 +73,7 @@
     filterTag = tag;
     filterSeries = series;
     // Auto-select series order when series filter is active
-    sortValue = (series && sort === "added_at:desc") ? "series_index:asc" : sort;
+    sortValue = series && sort === "added_at:desc" ? "series_index:asc" : sort;
     const [s, o] = sort.split(":");
     loadData(search, s, o);
   });
@@ -248,39 +252,39 @@
       {/if}
     </div>
 
-    <!-- Search -->
-    <div class="relative mb-8">
-      <Search
-        class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
-        size={16}
-      />
-      <input
-        type="text"
-        bind:value={searchQuery}
-        oninput={handleSearch}
-        placeholder="Search by title, author, or topic..."
-        class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-      />
-      {#if searchQuery}
-        <button
-          class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          onclick={() => {
-            searchQuery = "";
-            handleSearch();
-          }}
-        >
-          <X size={16} />
-        </button>
-      {/if}
-    </div>
+    <!-- Search & toolbar -->
+    <div class="mb-6 space-y-4">
+      <!-- Search -->
+      <div class="relative">
+        <Search
+          class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+          size={16}
+        />
+        <input
+          type="text"
+          bind:value={searchQuery}
+          oninput={handleSearch}
+          placeholder="Search by title, author, or topic..."
+          class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        />
+        {#if searchQuery}
+          <button
+            class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onclick={() => {
+              searchQuery = "";
+              handleSearch();
+            }}
+          >
+            <X size={16} />
+          </button>
+        {/if}
+      </div>
 
-    <!-- Active filters -->
-    {#if filterAuthor || filterTag || filterSeries}
-      <div class="flex flex-wrap items-center gap-2 mb-4">
-        <span class="text-xs text-muted-foreground">Filters:</span>
+      <!-- Filters & sort -->
+      <div class="flex flex-wrap items-center gap-2">
         {#if filterAuthor}
           <button
-            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
             onclick={() => clearFilter("author")}
           >
             Author: {filterAuthor}
@@ -289,7 +293,7 @@
         {/if}
         {#if filterSeries}
           <button
-            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
             onclick={() => clearFilter("series")}
           >
             Series: {filterSeries}
@@ -298,38 +302,39 @@
         {/if}
         {#if filterTag}
           <button
-            class="inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+            class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
             onclick={() => clearFilter("tag")}
           >
             Tag: {filterTag}
             <X size={12} />
           </button>
         {/if}
-      </div>
-    {/if}
 
-    <!-- Sort -->
-    <div class="flex items-center gap-2 mb-4">
-      <ArrowUpDown class="text-muted-foreground" size={16} />
-      <Select.Root
-        type="single"
-        value={sortValue}
-        onValueChange={(v) => {
-          if (v) {
-            sortValue = v;
-            handleSearch();
-          }
-        }}
-      >
-        <Select.Trigger class="w-auto rounded-lg bg-white">
-          {sortLabel}
-        </Select.Trigger>
-        <Select.Content>
-          {#each SORT_OPTIONS as opt}
-            <Select.Item value={opt.value}>{opt.label}</Select.Item>
-          {/each}
-        </Select.Content>
-      </Select.Root>
+        <div class="ml-auto">
+          <Select.Root
+            type="single"
+            value={sortValue}
+            onValueChange={(v) => {
+              if (v) {
+                sortValue = v;
+                handleSearch();
+              }
+            }}
+          >
+            <Select.Trigger
+              class="!h-8 inline-flex items-center gap-1.5 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 transition-colors border-none shadow-none"
+            >
+              <ArrowUpDown size={12} />
+              {sortLabel}
+            </Select.Trigger>
+            <Select.Content>
+              {#each SORT_OPTIONS as opt}
+                <Select.Item value={opt.value}>{opt.label}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+        </div>
+      </div>
     </div>
 
     {#if books.length === 0 && !loading}
