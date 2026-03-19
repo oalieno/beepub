@@ -22,6 +22,7 @@
     onillustrationclick,
     onshare,
     onhrefchange,
+    onready,
   }: {
     bookId: string;
     token: string;
@@ -38,6 +39,7 @@
     onillustrationclick?: (illustration: IllustrationOut) => void;
     onshare?: (highlight: HighlightOut) => void;
     onhrefchange?: (href: string) => void;
+    onready?: () => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -1065,6 +1067,7 @@
 
     prevFontSize = fontSize;
     initialized = true;
+    onready?.();
   });
 
   onDestroy(() => {

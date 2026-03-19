@@ -23,11 +23,17 @@
   let panStartTranslateY = 0;
 
   // Pinch state
+  let isPinching = $state(false);
   let initialPinchDistance = 0;
   let initialPinchScale = 1;
 
   // Double-tap state
   let lastTapTime = 0;
+
+  // Backdrop close state
+  let didMove = false;
+  let lastInteractionWasTouch = false;
+  let closeTapTimer: ReturnType<typeof setTimeout> | null = null;
 
   const MIN_SCALE = 1;
   const MAX_SCALE = 5;
@@ -60,9 +66,12 @@
   }
 
   function handleTouchStart(e: TouchEvent) {
+    lastInteractionWasTouch = true;
+    didMove = false;
     if (e.touches.length === 2) {
       // Pinch start
       isPanning = false;
+      isPinching = true;
       initialPinchDistance = getTouchDistance(e.touches[0], e.touches[1]);
       initialPinchScale = scale;
     } else if (e.touches.length === 1) {
@@ -70,6 +79,8 @@
       const now = Date.now();
       if (now - lastTapTime < 300) {
         e.preventDefault();
+        // Cancel pending single-tap close
+        if (closeTapTimer) { clearTimeout(closeTapTimer); closeTapTimer = null; }
         if (scale > 1) {
           resetTransform();
         } else {
@@ -92,6 +103,7 @@
   }
 
   function handleTouchMove(e: TouchEvent) {
+    didMove = true;
     if (e.touches.length === 2) {
       // Pinch zoom
       e.preventDefault();
@@ -116,6 +128,7 @@
 
   function handleTouchEnd(e: TouchEvent) {
     if (e.touches.length < 2) {
+      isPinching = false;
       initialPinchDistance = 0;
     }
     if (e.touches.length === 0) {
@@ -125,6 +138,8 @@
 
   // Mouse pan (desktop)
   function handleMouseDown(e: MouseEvent) {
+    lastInteractionWasTouch = false;
+    didMove = false;
     if (scale > 1) {
       isPanning = true;
       panStartX = e.clientX;
@@ -137,6 +152,7 @@
 
   function handleMouseMove(e: MouseEvent) {
     if (isPanning && scale > 1) {
+      didMove = true;
       translateX = panStartTranslateX + (e.clientX - panStartX) / scale;
       translateY = panStartTranslateY + (e.clientY - panStartY) / scale;
     }
@@ -150,9 +166,12 @@
     if (e.key === "Escape") onclose?.();
   }
 
-  function handleBackdropClick(e: MouseEvent) {
-    // Close only if clicking the backdrop (not the image)
-    if (e.target === e.currentTarget) {
+  function handleContainerClick() {
+    if (didMove || scale > 1) return;
+    if (lastInteractionWasTouch) {
+      // Delay close to allow double-tap zoom to cancel it
+      closeTapTimer = setTimeout(() => onclose?.(), 300);
+    } else {
       onclose?.();
     }
   }
@@ -163,10 +182,6 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="fixed inset-0 z-[70] flex items-center justify-center"
-  onclick={handleBackdropClick}
-  onkeydown={(e) => {
-    if (e.key === "Escape") onclose?.();
-  }}
 >
   <div class="absolute inset-0 bg-black/85"></div>
 
@@ -186,7 +201,7 @@
       ? isPanning
         ? 'grabbing'
         : 'grab'
-      : 'zoom-in'}; touch-action: none;"
+      : 'default'}; touch-action: none;"
     onwheel={handleWheel}
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
@@ -195,12 +210,13 @@
     onmousemove={handleMouseMove}
     onmouseup={handleMouseUp}
     onmouseleave={handleMouseUp}
+    onclick={handleContainerClick}
   >
     <img
       {src}
       alt=""
       class="max-w-full max-h-full object-contain select-none pointer-events-none"
-      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning
+      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning || isPinching
         ? 'none'
         : 'transform 0.2s ease'};"
       draggable="false"

@@ -52,6 +52,7 @@
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
+  let epubLoaded = $state(false);
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
 
@@ -355,21 +356,30 @@
         onillustrationschange={(ills) => (illustrations = ills)}
         onillustrationclick={(ill) => (viewingIllustration = ill)}
         onshare={handleShareHighlight}
+        onready={() => (epubLoaded = true)}
       />
     {/if}
 
+    {#if !epubLoaded}
+      <div class="absolute inset-0 z-10 flex items-center justify-center {darkMode ? 'bg-gray-900' : 'bg-white'}">
+        <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 {darkMode ? 'border-gray-400' : 'border-primary'}"></div>
+      </div>
+    {/if}
+
     <!-- Bottom percentage indicator -->
-    <div
-      class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none"
-    >
-      <span
-        class="text-xs px-3 py-1 rounded-full {darkMode
-          ? 'bg-gray-800/80 text-gray-400'
-          : 'bg-black/5 text-muted-foreground'}"
+    {#if epubLoaded}
+      <div
+        class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none"
       >
-        {percentage}%
-      </span>
-    </div>
+        <span
+          class="text-xs px-3 py-1 rounded-full {darkMode
+            ? 'bg-gray-800/80 text-gray-400'
+            : 'bg-black/5 text-muted-foreground'}"
+        >
+          {percentage}%
+        </span>
+      </div>
+    {/if}
 
     {#if showTocSidebar}
       <TocSidebar
