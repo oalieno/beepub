@@ -18,6 +18,7 @@ celery.conf.update(
     imports=[
         "app.tasks.metadata",
         "app.tasks.wordcount",
+        "app.tasks.illustration",
     ],
     beat_schedule={
         "metadata-refresh-check": {

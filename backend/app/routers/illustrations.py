@@ -2,19 +2,20 @@ import os
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import AsyncSessionLocal, get_db
+from app.database import get_db
 from app.deps import get_current_user, get_current_user_or_cookie
 from app.models.illustration import Illustration
 from app.models.user import User
 from app.routers.books import _get_book_with_access
 from app.schemas.illustration import IllustrationCreate, IllustrationOut, StylePromptOut
-from app.services.gemini import generate_illustration, get_style_prompts
+from app.services.gemini import get_style_prompts
 from app.services.storage import delete_file, get_illustration_path
+from app.tasks.illustration import generate_illustration_task
 
 router = APIRouter(prefix="/api/books", tags=["illustrations"])
 
@@ -42,7 +43,6 @@ async def list_illustrations(
 async def create_illustration(
     book_id: uuid.UUID,
     body: IllustrationCreate,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -65,9 +65,8 @@ async def create_illustration(
     await db.commit()
     await db.refresh(illustration)
 
-    background_tasks.add_task(
-        _generate_illustration_task,
-        illustration_id,
+    generate_illustration_task.delay(
+        str(illustration_id),
         body.text,
         body.style_prompt,
         body.custom_prompt,
@@ -156,33 +155,3 @@ async def delete_illustration(
     delete_file(illustration.image_path)
     await db.delete(illustration)
     await db.commit()
-
-
-async def _generate_illustration_task(
-    illustration_id: uuid.UUID,
-    text: str,
-    style_prompt: str | None,
-    custom_prompt: str | None,
-    image_path: str,
-) -> None:
-    """Background task: call Gemini API, save image, update DB status."""
-    async with AsyncSessionLocal() as db:
-        try:
-            image_bytes = await generate_illustration(text, style_prompt, custom_prompt)
-            os.makedirs(os.path.dirname(image_path), exist_ok=True)
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
-            result = await db.execute(
-                select(Illustration).where(Illustration.id == illustration_id)
-            )
-            ill = result.scalar_one()
-            ill.status = "completed"
-            await db.commit()
-        except Exception as e:
-            result = await db.execute(
-                select(Illustration).where(Illustration.id == illustration_id)
-            )
-            ill = result.scalar_one()
-            ill.status = "failed"
-            ill.error_message = str(e)[:500]
-            await db.commit()

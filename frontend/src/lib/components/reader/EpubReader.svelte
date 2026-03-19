@@ -1311,11 +1311,18 @@
 
   export function addIllustrationAnnotation(ill: IllustrationOut) {
     if (!rendition) return;
+    const exists = illustrations.some((x) => x.id === ill.id);
+    if (exists) {
+      illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
+    } else {
+      illustrations = [...illustrations, ill];
+    }
     updateIllustrationOverlays();
   }
 
   export function removeIllustrationAnnotation(cfiRange: string) {
     if (!rendition) return;
+    illustrations = illustrations.filter((x) => x.cfi_range !== cfiRange);
     updateIllustrationOverlays();
   }
 

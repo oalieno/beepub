@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     illustrations_dir: str = "/data/illustrations"
     gemini_api_key: str = ""
     gemini_model: str = "gemini-2.0-flash-exp"
+    llm_provider: str = "gemini"
 
     class Config:
         env_file = ".env"
