@@ -1108,7 +1108,9 @@ class Contents {
       // Setting direction:rtl on vertical-rl content flips inline direction
       // (bottom-to-top), causing text misalignment.
       let bodyWM = this.content
-        ? this.window.getComputedStyle(this.content)[prefixed("writing-mode")] || ""
+        ? this.window.getComputedStyle(this.content)[
+            prefixed("writing-mode")
+          ] || ""
         : "";
       if (bodyWM.indexOf("vertical") !== 0) {
         this.direction(dir);
@@ -1133,19 +1135,21 @@ class Contents {
     if (this.content) {
       // Filter out elements injected by beepub (illustration overlays, etc.)
       let meaningful = Array.from(this.content.children).filter(
-        (el) => !el.id || !el.id.startsWith("beepub-")
+        (el) => !el.id || !el.id.startsWith("beepub-"),
       );
       if (meaningful.length === 1) {
         let el = meaningful[0];
         let tag = el.tagName.toLowerCase();
-        isImageOnly = tag === "img" || tag === "svg" ||
+        isImageOnly =
+          tag === "img" ||
+          tag === "svg" ||
           (el.children.length === 1 &&
             (el.children[0].tagName.toLowerCase() === "img" ||
-             el.children[0].tagName.toLowerCase() === "svg"));
+              el.children[0].tagName.toLowerCase() === "svg"));
       }
     }
-    let mainPad = isImageOnly ? "4px" : (gap / 2 + "px");
-    let crossPad = isImageOnly ? "4px" : "20px";
+    let mainPad = isImageOnly ? "20px" : gap / 2 + "px";
+    let crossPad = "20px";
 
     if (axis === "vertical") {
       this.css("padding-top", mainPad, true);
