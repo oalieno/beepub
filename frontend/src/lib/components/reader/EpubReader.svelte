@@ -160,7 +160,9 @@
 
     // Collect all image URLs from sections, then load sequentially
     let cancelled = false;
-    prefetchAbort = () => { cancelled = true; };
+    prefetchAbort = () => {
+      cancelled = true;
+    };
 
     (async () => {
       const allUrls: string[] = [];
@@ -1192,7 +1194,8 @@
 
     // views() returns a Views object with internal _views array
     const viewsResult = rendition.views?.();
-    const views: any[] = viewsResult?._views ?? (Array.isArray(viewsResult) ? viewsResult : []);
+    const views: any[] =
+      viewsResult?._views ?? (Array.isArray(viewsResult) ? viewsResult : []);
     if (views.length === 0) return;
 
     for (const view of views) {
@@ -1259,7 +1262,9 @@
           for (const rect of rects) {
             const overlay = doc.createElement("button");
             overlay.type = "button";
-            overlay.title = isGenerating ? "Generating..." : "View illustration";
+            overlay.title = isGenerating
+              ? "Generating..."
+              : "View illustration";
             overlay.setAttribute("aria-label", overlay.title);
             overlay.style.cssText = [
               "position:absolute",
@@ -1277,7 +1282,9 @@
               "box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10)",
               "mix-blend-mode:multiply",
               "touch-action:manipulation",
-              isGenerating ? "animation:beepub-pulse 2s ease-in-out infinite" : "",
+              isGenerating
+                ? "animation:beepub-pulse 2s ease-in-out infinite"
+                : "",
             ].join(";");
             if (!isGenerating) {
               overlay.addEventListener("click", (e: Event) => {

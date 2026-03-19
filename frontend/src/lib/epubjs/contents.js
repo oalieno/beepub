@@ -1128,17 +1128,36 @@ class Contents {
     this.css("overflow-y", "hidden");
     this.css("margin", "0", true);
 
+    // Detect image-only pages (manga/comics): reduce padding to maximize image size
+    let isImageOnly = false;
+    if (this.content) {
+      // Filter out elements injected by beepub (illustration overlays, etc.)
+      let meaningful = Array.from(this.content.children).filter(
+        (el) => !el.id || !el.id.startsWith("beepub-")
+      );
+      if (meaningful.length === 1) {
+        let el = meaningful[0];
+        let tag = el.tagName.toLowerCase();
+        isImageOnly = tag === "img" || tag === "svg" ||
+          (el.children.length === 1 &&
+            (el.children[0].tagName.toLowerCase() === "img" ||
+             el.children[0].tagName.toLowerCase() === "svg"));
+      }
+    }
+    let mainPad = isImageOnly ? "4px" : (gap / 2 + "px");
+    let crossPad = isImageOnly ? "4px" : "20px";
+
     if (axis === "vertical") {
-      this.css("padding-top", gap / 2 + "px", true);
-      this.css("padding-bottom", gap / 2 + "px", true);
-      this.css("padding-left", "20px");
-      this.css("padding-right", "20px");
+      this.css("padding-top", mainPad, true);
+      this.css("padding-bottom", mainPad, true);
+      this.css("padding-left", crossPad);
+      this.css("padding-right", crossPad);
       this.css(COLUMN_AXIS, "vertical");
     } else {
-      this.css("padding-top", "20px");
-      this.css("padding-bottom", "20px");
-      this.css("padding-left", gap / 2 + "px", true);
-      this.css("padding-right", gap / 2 + "px", true);
+      this.css("padding-top", crossPad);
+      this.css("padding-bottom", crossPad);
+      this.css("padding-left", mainPad, true);
+      this.css("padding-right", mainPad, true);
       this.css(COLUMN_AXIS, "horizontal");
     }
 

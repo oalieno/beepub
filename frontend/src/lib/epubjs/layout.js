@@ -199,9 +199,11 @@ class Layout {
 
     // Per-section layout override: some EPUBs mark individual spine items
     // as pre-paginated while the book is globally reflowable (mixed layout).
-    var isPrePaginated = this.name === "pre-paginated" ||
-      (section && section.properties &&
-       section.properties.includes("rendition:layout-pre-paginated"));
+    var isPrePaginated =
+      this.name === "pre-paginated" ||
+      (section &&
+        section.properties &&
+        section.properties.includes("rendition:layout-pre-paginated"));
 
     if (this.name === "pre-paginated") {
       formating = contents.fit(this.columnWidth, this.height, section);
@@ -223,14 +225,14 @@ class Layout {
           "justify-content: center !important; " +
           "align-items: center !important; " +
           "box-sizing: border-box !important; " +
-        "} " +
-        "body.beepub-pre-paginated svg, " +
-        "body.beepub-pre-paginated img { " +
+          "} " +
+          "body.beepub-pre-paginated svg, " +
+          "body.beepub-pre-paginated img { " +
           "max-width: 100% !important; " +
           "max-height: 100% !important; " +
           "object-fit: contain !important; " +
-        "}",
-        "beepub-pre-paginated"
+          "}",
+        "beepub-pre-paginated",
       );
     } else if (this._flow === "paginated") {
       formating = contents.columns(
