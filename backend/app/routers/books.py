@@ -486,6 +486,18 @@ async def get_book_content(
     content_type, _ = mimetypes.guess_type(path)
     if content_type is None:
         content_type = "application/octet-stream"
+
+    # Fix malformed XHTML: self-close void elements (e.g. <link ...> → <link .../>)
+    if path.endswith((".xhtml", ".html", ".htm")):
+        text = data.decode("utf-8", errors="replace")
+        text = re.sub(
+            r"<(meta|link|br|hr|img|input|source|col|area|base|embed|track|wbr)"
+            r"(\s[^>]*?)(?<!/)>",
+            r"<\1\2/>",
+            text,
+        )
+        data = text.encode("utf-8")
+
     return Response(
         content=data,
         media_type=content_type,
