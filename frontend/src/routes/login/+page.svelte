@@ -3,7 +3,7 @@
   import { authApi } from "$lib/api/auth";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
-  import { BookOpen } from "@lucide/svelte";
+  import { BookOpen, Eye, EyeOff } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -15,6 +15,7 @@
   let email = $state("");
   let showRegister = $state(false);
   let loading = $state(false);
+  let showPassword = $state(false);
 
   async function handleLogin() {
     if (!username || !password) return;
@@ -108,14 +109,28 @@
             </div>
             <div class="space-y-1.5">
               <Label for="password" class="text-sm font-medium">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                bind:value={password}
-                placeholder="Enter password"
-                required
-                class="rounded-xl h-11"
-              />
+              <div class="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  bind:value={password}
+                  placeholder="Enter password"
+                  required
+                  class="rounded-xl h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onclick={() => (showPassword = !showPassword)}
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabindex={-1}
+                >
+                  {#if showPassword}
+                    <EyeOff size={18} />
+                  {:else}
+                    <Eye size={18} />
+                  {/if}
+                </button>
+              </div>
             </div>
             <Button
               type="submit"
@@ -164,14 +179,28 @@
               <Label for="reg-password" class="text-sm font-medium"
                 >Password</Label
               >
-              <Input
-                id="reg-password"
-                type="password"
-                bind:value={password}
-                placeholder="Choose password"
-                required
-                class="rounded-xl h-11"
-              />
+              <div class="relative">
+                <Input
+                  id="reg-password"
+                  type={showPassword ? "text" : "password"}
+                  bind:value={password}
+                  placeholder="Choose password"
+                  required
+                  class="rounded-xl h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onclick={() => (showPassword = !showPassword)}
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  tabindex={-1}
+                >
+                  {#if showPassword}
+                    <EyeOff size={18} />
+                  {:else}
+                    <Eye size={18} />
+                  {/if}
+                </button>
+              </div>
             </div>
             <Button
               type="submit"
