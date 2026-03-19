@@ -51,6 +51,16 @@
       return STYLE_LABELS[ill.style_prompt] ?? ill.style_prompt;
     return "Default";
   }
+
+  function friendlyError(msg: string): string {
+    if (msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY"))
+      return "Blocked by safety filters";
+    if (msg.includes("ReadTimeout"))
+      return "API timed out";
+    if (msg.includes("500"))
+      return "API server error, please retry";
+    return msg.length > 80 ? msg.slice(0, 80) + "…" : msg;
+  }
 </script>
 
 <!-- Backdrop -->
@@ -199,6 +209,11 @@
                 >
                   {truncate(ill.text)}
                 </p>
+                {#if ill.status === "failed" && ill.error_message}
+                  <p class="text-[10px] mt-0.5 text-red-400/80 leading-snug">
+                    {friendlyError(ill.error_message)}
+                  </p>
+                {/if}
                 <p
                   class="text-[10px] mt-1 {darkMode
                     ? 'text-gray-600'

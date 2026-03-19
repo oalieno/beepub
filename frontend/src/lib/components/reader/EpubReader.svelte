@@ -1175,16 +1175,30 @@
     return root;
   }
 
+  /**
+   * Extract the spine step number from a CFI string.
+   * e.g. "epubcfi(/6/28!/4/2...)" → 28, which maps to spine index 28/2 - 1 = 13
+   */
+  function cfiSpineIndex(cfi: string): number {
+    const m = cfi.match(/^epubcfi\(\/6\/(\d+)/);
+    return m ? Math.floor(parseInt(m[1], 10) / 2) - 1 : -1;
+  }
+
   function updateIllustrationOverlays() {
     if (!rendition) return;
 
-    const contentItems = rendition.getContents?.() ?? [];
-    if (contentItems.length === 0) return;
+    // views() returns a Views object with internal _views array
+    const viewsResult = rendition.views?.();
+    const views: any[] = viewsResult?._views ?? (Array.isArray(viewsResult) ? viewsResult : []);
+    if (views.length === 0) return;
 
-    for (const contents of contentItems) {
+    for (const view of views) {
+      const contents = view?.contents;
       const doc = contents?.document;
       const win = contents?.window;
       if (!doc || !win) continue;
+
+      const viewSpineIndex: number = view.index ?? view.section?.index ?? -1;
 
       const root = ensureIllustrationOverlayRoot(contents);
       if (!root) continue;
@@ -1194,7 +1208,12 @@
       const scrollY = win.scrollY || 0;
 
       for (const ill of illustrations) {
-        if (ill.status !== "completed") continue;
+        if (ill.status !== "completed" && ill.status !== "generating") continue;
+
+        const illSpine = cfiSpineIndex(ill.cfi_range);
+
+        // Only render overlays for illustrations belonging to this section
+        if (viewSpineIndex >= 0 && illSpine !== viewSpineIndex) continue;
 
         try {
           const range = contents.range(ill.cfi_range);
@@ -1233,11 +1252,12 @@
             }
           }
           const rects = nonEmpty.filter((_r, idx) => !discard.has(idx));
+          const isGenerating = ill.status === "generating";
           for (const rect of rects) {
             const overlay = doc.createElement("button");
             overlay.type = "button";
-            overlay.title = "View illustration";
-            overlay.setAttribute("aria-label", "View illustration");
+            overlay.title = isGenerating ? "Generating..." : "View illustration";
+            overlay.setAttribute("aria-label", overlay.title);
             overlay.style.cssText = [
               "position:absolute",
               `left:${rect.left + scrollX}px`,
@@ -1249,18 +1269,29 @@
               "border-radius:4px",
               "padding:0",
               "margin:0",
-              "cursor:pointer",
+              isGenerating ? "cursor:wait" : "cursor:pointer",
               "pointer-events:auto",
               "box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10)",
               "mix-blend-mode:multiply",
               "touch-action:manipulation",
+              isGenerating ? "animation:beepub-pulse 2s ease-in-out infinite" : "",
             ].join(";");
-            overlay.addEventListener("click", (e: Event) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onillustrationclick?.(ill);
-            });
+            if (!isGenerating) {
+              overlay.addEventListener("click", (e: Event) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onillustrationclick?.(ill);
+              });
+            }
             root.appendChild(overlay);
+          }
+
+          // Inject pulse animation if generating and not already present
+          if (isGenerating && !doc.getElementById("beepub-pulse-style")) {
+            const style = doc.createElement("style");
+            style.id = "beepub-pulse-style";
+            style.textContent = `@keyframes beepub-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }`;
+            doc.head.appendChild(style);
           }
         } catch {}
       }

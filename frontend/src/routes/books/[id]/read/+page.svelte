@@ -204,6 +204,7 @@
   async function handleCreateIllustration(detail: {
     style_prompt?: string;
     custom_prompt?: string;
+    reference_images?: Array<{ source: "epub" | "illustration"; path: string }>;
   }) {
     showIllustrationModal = false;
     if (!$authStore.token) return;
@@ -218,6 +219,7 @@
         $authStore.token,
       );
       illustrations = [...illustrations, ill];
+      reader?.addIllustrationAnnotation(ill);
       toastStore.success("Generating illustration...");
       pollIllustration(ill.id);
     } catch (e) {
@@ -243,10 +245,18 @@
           return;
         }
         if (ill.status === "failed") {
-          illustrations = illustrations.filter((x) => x.id !== ill.id);
-          toastStore.error(
-            `Generation failed: ${ill.error_message ?? "unknown error"}`,
+          illustrations = illustrations.map((x) =>
+            x.id === ill.id ? ill : x,
           );
+          const msg = ill.error_message ?? "";
+          const friendly = msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
+            ? "Content was blocked by safety filters. Try a different text selection."
+            : msg.includes("ReadTimeout")
+              ? "API request timed out. Please try again later."
+              : msg.includes("500")
+                ? "API server error. Please try again later."
+                : msg || "Unknown error";
+          toastStore.error(`Generation failed: ${friendly}`);
           return;
         }
       } catch {
@@ -415,6 +425,9 @@
       text={illustrationModalText}
       styles={stylePrompts}
       {darkMode}
+      {bookId}
+      token={$authStore.token ?? ""}
+      completedIllustrations={illustrations.filter((x) => x.status === "completed")}
       oncreate={handleCreateIllustration}
       onclose={() => (showIllustrationModal = false)}
     />

@@ -46,9 +46,62 @@ async def create_illustration(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    book = await _get_book_with_access(book_id, current_user, db)
+
+    # Prevent duplicate illustrations for the same text range
+    existing = await db.execute(
+        select(Illustration).where(
+            Illustration.user_id == current_user.id,
+            Illustration.book_id == book_id,
+            Illustration.cfi_range == body.cfi_range,
+            Illustration.status.in_(["generating", "completed"]),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=409,
+            detail="An illustration already exists for this text selection",
+        )
+
     illustration_id = uuid.uuid4()
     image_path = get_illustration_path(illustration_id)
+
+    # Resolve reference images into Celery-serializable dicts
+    resolved_refs: list[dict] | None = None
+    if body.reference_images:
+        resolved_refs = []
+        for ref in body.reference_images:
+            if ref.source == "epub":
+                # Validate path exists in the epub
+                import zipfile
+
+                with zipfile.ZipFile(book.file_path, "r") as zf:
+                    if ref.path not in zf.namelist():
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Image path not found in EPUB: {ref.path}",
+                        )
+                resolved_refs.append(
+                    {"type": "epub", "epub_path": book.file_path, "image_path": ref.path}
+                )
+            elif ref.source == "illustration":
+                result = await db.execute(
+                    select(Illustration).where(
+                        Illustration.id == uuid.UUID(ref.path),
+                        Illustration.user_id == current_user.id,
+                        Illustration.book_id == book_id,
+                        Illustration.status == "completed",
+                    )
+                )
+                ref_ill = result.scalar_one_or_none()
+                if not ref_ill:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Reference illustration not found: {ref.path}",
+                    )
+                resolved_refs.append(
+                    {"type": "illustration", "file_path": ref_ill.image_path}
+                )
 
     illustration = Illustration(
         id=illustration_id,
@@ -71,6 +124,7 @@ async def create_illustration(
         body.style_prompt,
         body.custom_prompt,
         image_path,
+        resolved_refs,
     )
     return illustration
 

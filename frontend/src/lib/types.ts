@@ -171,6 +171,16 @@ export interface StylePromptOut {
   description: string;
 }
 
+export interface EpubImageInfo {
+  path: string;
+  name: string;
+}
+
+export interface ReferenceImageInput {
+  source: "epub" | "illustration";
+  path: string;
+}
+
 export interface AdminStats {
   users: number;
   books: number;

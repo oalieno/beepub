@@ -2,6 +2,7 @@ import { get, post, put, del } from "./client";
 import type {
   BookOut,
   BookWithInteractionOut,
+  EpubImageInfo,
   ExternalMetadataOut,
   HighlightOut,
   IllustrationOut,
@@ -9,6 +10,7 @@ import type {
   PaginatedBooksWithInteraction,
   ProgressOut,
   ReadingStatus,
+  ReferenceImageInput,
   StylePromptOut,
 } from "$lib/types";
 
@@ -151,6 +153,7 @@ export const booksApi = {
       text: string;
       style_prompt?: string;
       custom_prompt?: string;
+      reference_images?: ReferenceImageInput[];
     },
     token: string,
   ) =>
@@ -176,6 +179,9 @@ export const booksApi = {
 
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
     `/api/books/${bookId}/illustrations/${illustrationId}/image`,
+
+  getEpubImages: (bookId: string, token: string) =>
+    get(`/books/${bookId}/images`, token) as Promise<EpubImageInfo[]>,
 
   getBatchInteractions: (bookIds: string[], token: string) =>
     post("/books/interactions/batch", { book_ids: bookIds }, token) as Promise<{

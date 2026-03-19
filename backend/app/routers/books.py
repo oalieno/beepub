@@ -493,6 +493,25 @@ async def get_book_content(
     )
 
 
+@router.get("/{book_id}/images")
+async def list_epub_images(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """List all images embedded in the EPUB file."""
+    book = await _get_book_with_access(book_id, current_user, db)
+    if not os.path.exists(book.file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    with zipfile.ZipFile(book.file_path, "r") as zf:
+        return [
+            {"path": name, "name": os.path.basename(name)}
+            for name in sorted(zf.namelist())
+            if os.path.splitext(name)[1].lower() in image_exts
+        ]
+
+
 @router.get("/{book_id}/cover")
 async def get_book_cover(
     book_id: uuid.UUID,
