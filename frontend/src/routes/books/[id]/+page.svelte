@@ -759,7 +759,7 @@
         <!-- Action Buttons -->
         <div class="mt-auto pt-6 flex items-center gap-3">
           <button
-            onclick={() => goto(`/books/${book.id}/read`, { replaceState: true })}
+            onclick={() => goto(`/books/${book!.id}/read`, { replaceState: true })}
             class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 sm:px-6 py-3 rounded-full transition-colors whitespace-nowrap text-sm sm:text-base"
           >
             <BookOpen size={16} />

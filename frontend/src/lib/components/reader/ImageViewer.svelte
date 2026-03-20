@@ -194,8 +194,8 @@
   </button>
 
   <!-- Image container -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
+    role="presentation"
     class="relative w-full h-full flex items-center justify-center overflow-hidden"
     style="cursor: {scale > 1
       ? isPanning

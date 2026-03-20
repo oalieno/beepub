@@ -90,8 +90,8 @@
     onkeydown={handleKeydown}
   >
     <!-- Modal -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
+      role="presentation"
       class="max-w-xl mt-[12vh] mx-4 sm:mx-auto bg-card rounded-2xl shadow-2xl border border-border/50 overflow-hidden"
       onclick={(e) => e.stopPropagation()}
     >
