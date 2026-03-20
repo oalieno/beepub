@@ -115,6 +115,7 @@
     try {
       const result = await librariesApi.getBooks(libraryId, $authStore.token, {
         search: searchQuery || undefined,
+        author: filterAuthor || undefined,
         tag: filterTag || undefined,
         series: filterSeries || undefined,
         sort: sortBy,
@@ -160,6 +161,7 @@
     try {
       const result = await librariesApi.getBooks(libraryId, $authStore.token, {
         search: searchQuery || undefined,
+        author: filterAuthor || undefined,
         tag: filterTag || undefined,
         series: filterSeries || undefined,
         sort: sortBy,
