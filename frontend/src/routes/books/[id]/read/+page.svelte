@@ -14,6 +14,7 @@
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
   import type {
     HighlightOut,
     IllustrationOut,
@@ -368,11 +369,10 @@
           ? 'bg-gray-900'
           : 'bg-white'}"
       >
-        <div
-          class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 {darkMode
-            ? 'border-gray-400'
-            : 'border-primary'}"
-        ></div>
+        <Spinner
+          size="lg"
+          class={darkMode ? "border-gray-400" : ""}
+        />
       </div>
     {/if}
 
