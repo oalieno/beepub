@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { page } from "$app/stores";
   import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
@@ -12,6 +12,7 @@
   import { UserRole } from "$lib/types";
   import { Upload, Search, X, HardDrive, ArrowUpDown } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
+  import type { Snapshot } from "./$types";
 
   const SORT_OPTIONS = [
     { value: "added_at:desc", label: "Newest added" },
@@ -53,6 +54,46 @@
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
   let dragOver = $state(false);
+  let restoredFromSnapshot = $state(false);
+  let pendingScrollY = $state(0);
+
+  interface PageSnapshot {
+    books: BookOut[];
+    totalBooks: number;
+    library: LibraryOut | null;
+    scrollY: number;
+    searchQuery: string;
+    filterAuthor: string;
+    filterTag: string;
+    filterSeries: string;
+    sortValue: string;
+  }
+
+  export const snapshot: Snapshot<PageSnapshot> = {
+    capture: () => ({
+      books,
+      totalBooks,
+      library,
+      scrollY: window.scrollY,
+      searchQuery,
+      filterAuthor,
+      filterTag,
+      filterSeries,
+      sortValue,
+    }),
+    restore: (data) => {
+      books = data.books;
+      totalBooks = data.totalBooks;
+      library = data.library;
+      searchQuery = data.searchQuery;
+      filterAuthor = data.filterAuthor;
+      filterTag = data.filterTag;
+      filterSeries = data.filterSeries;
+      sortValue = data.sortValue;
+      pendingScrollY = data.scrollY;
+      restoredFromSnapshot = true;
+    },
+  };
 
   onMount(() => {
     if (!$authStore.token) {
@@ -61,7 +102,15 @@
     }
   });
 
-  afterNavigate(() => {
+  afterNavigate(async () => {
+    if (restoredFromSnapshot) {
+      restoredFromSnapshot = false;
+      loading = false;
+      await tick();
+      window.scrollTo(0, pendingScrollY);
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const search = (params.get("search") ?? "").trim();
     const author = (params.get("author") ?? "").trim();
@@ -73,7 +122,8 @@
     filterTag = tag;
     filterSeries = series;
     // Auto-select series order when series filter is active
-    const effectiveSort = series && sort === "added_at:desc" ? "series_index:asc" : sort;
+    const effectiveSort =
+      series && sort === "added_at:desc" ? "series_index:asc" : sort;
     sortValue = effectiveSort;
     const [s, o] = effectiveSort.split(":");
     loadData(search, s, o);
