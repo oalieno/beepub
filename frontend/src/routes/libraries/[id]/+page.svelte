@@ -12,6 +12,7 @@
   import { UserRole } from "$lib/types";
   import { Upload, Search, X, HardDrive, ArrowUpDown } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
+  import Spinner from "$lib/components/Spinner.svelte";
   import type { Snapshot } from "./$types";
 
   const SORT_OPTIONS = [
@@ -262,9 +263,7 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else if library}
     <div
@@ -445,9 +444,7 @@
           >
             {#if loadingMore}
               <span class="flex items-center gap-2">
-                <span
-                  class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-foreground"
-                ></span>
+                <Spinner size="sm" color="foreground" />
                 Loading...
               </span>
             {:else}
@@ -492,9 +489,7 @@
     </div>
     {#if uploading}
       <div class="flex items-center gap-2 text-primary text-sm">
-        <div
-          class="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-primary"
-        ></div>
+        <Spinner size="sm" />
         Uploading...
       </div>
     {/if}

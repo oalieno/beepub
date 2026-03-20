@@ -51,6 +51,11 @@
       label: "Highlights",
       active: $page.url.pathname.startsWith("/highlights"),
     },
+    {
+      href: "/discover",
+      label: "Discover",
+      active: $page.url.pathname.startsWith("/discover"),
+    },
     ...(isAdmin
       ? [
           {

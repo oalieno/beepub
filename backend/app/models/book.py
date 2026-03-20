@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from app.models.bookshelf import BookshelfBook
     from app.models.library import LibraryBook
     from app.models.reading import Highlight, UserBookInteraction
+    from app.models.tag import AiBookTag
     from app.models.user import User
 
 
@@ -95,6 +96,12 @@ class Book(Base, TimestampMixin):
     )
     bookshelf_books: Mapped[list[BookshelfBook]] = relationship(
         "BookshelfBook", back_populates="book", cascade="all, delete-orphan"
+    )
+    ai_tags: Mapped[list[AiBookTag]] = relationship(
+        "AiBookTag",
+        back_populates="book",
+        cascade="all, delete-orphan",
+        lazy="selectin",
     )
 
     @property

@@ -8,6 +8,7 @@
   import { LibraryVisibility } from "$lib/types";
   import { Library, HardDrive } from "@lucide/svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -41,9 +42,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">

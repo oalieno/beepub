@@ -4,6 +4,22 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class AiBookTagNested(BaseModel):
+    id: uuid.UUID
+    tag: str
+    label: str = ""
+    category: str
+    confidence: float
+
+    model_config = {"from_attributes": True}
+
+    def model_post_init(self, __context: object) -> None:
+        if not self.label:
+            from app.services.tags import TAG_LABELS
+
+            self.label = TAG_LABELS.get(self.tag, self.tag)
+
+
 class BookOut(BaseModel):
     id: uuid.UUID
     file_size: int
@@ -33,6 +49,7 @@ class BookOut(BaseModel):
     display_series: str | None = None
     display_series_index: float | None = None
     display_tags: list[str] | None = None
+    ai_tags: list[AiBookTagNested] = []
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID

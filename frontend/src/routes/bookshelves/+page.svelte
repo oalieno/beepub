@@ -8,6 +8,7 @@
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import type { BookshelfOut } from "$lib/types";
   import { Plus, BookMarked, Trash2 } from "@lucide/svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
 
   let bookshelves = $state<BookshelfOut[]>([]);
   let loading = $state(true);
@@ -95,9 +96,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else if bookshelves.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">

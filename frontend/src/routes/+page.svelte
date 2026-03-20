@@ -16,6 +16,7 @@
   } from "$lib/types";
   import { goto } from "$app/navigation";
   import { BookOpen, BookMarked } from "@lucide/svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
@@ -83,9 +84,7 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else}
     <!-- Hero greeting -->

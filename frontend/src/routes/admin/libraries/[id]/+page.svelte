@@ -13,6 +13,7 @@
   import type { LibraryOut, UserOut } from "$lib/types";
   import { UserRole, LibraryVisibility } from "$lib/types";
   import { Trash2, UserPlus, Save } from "@lucide/svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
 
   let libraryId = $derived($page.params.id as string);
 
@@ -137,9 +138,7 @@
 
   {#if loading}
     <div class="flex items-center justify-center h-40">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else if library}
     <!-- Edit form -->

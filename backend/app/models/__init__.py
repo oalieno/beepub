@@ -4,6 +4,7 @@ from app.models.illustration import Illustration
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, UserBookInteraction
 from app.models.settings import AppSetting
+from app.models.tag import AiBookTag, TagCategory
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -22,4 +23,6 @@ __all__ = [
     "Highlight",
     "Illustration",
     "AppSetting",
+    "AiBookTag",
+    "TagCategory",
 ]

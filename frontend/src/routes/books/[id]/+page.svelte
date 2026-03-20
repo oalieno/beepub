@@ -17,6 +17,7 @@
     ReadingStatus,
   } from "$lib/types";
   import HighlightList from "$lib/components/HighlightList.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
   import { UserRole } from "$lib/types";
   import {
     Heart,
@@ -141,6 +142,7 @@
   let externalMeta = $state<ExternalMetadataOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
+  let similarBooks = $state<BookOut[]>([]);
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
@@ -163,12 +165,19 @@
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
-  onMount(async () => {
+  onMount(() => {
     if (!$authStore.token) {
       goto("/login");
-      return;
     }
-    await loadData();
+  });
+
+  $effect(() => {
+    // Re-load data when bookId changes (e.g. navigating from similar books)
+    bookId;
+    if ($authStore.token) {
+      loadData();
+      window.scrollTo(0, 0);
+    }
   });
 
   async function loadData() {
@@ -211,6 +220,12 @@
         );
       } catch {
         // ignore
+      }
+      // Load similar books
+      try {
+        similarBooks = await booksApi.getSimilar(bookId, $authStore.token!, 10);
+      } catch {
+        similarBooks = [];
       }
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -491,9 +506,7 @@
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
     <div class="flex items-center justify-center h-64">
-      <div
-        class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary"
-      ></div>
+      <Spinner size="lg" />
     </div>
   {:else if book}
     <!-- Back Button -->
@@ -939,6 +952,35 @@
               </div>
             </div>
           {/if}
+          {#if (book.ai_tags ?? []).length > 0}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-1"
+                >AI Tags</span
+              >
+              <div class="flex flex-wrap gap-1.5">
+                {#each book.ai_tags ?? [] as aiTag}
+                  {@const categoryStyles = {
+                    genre:
+                      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+                    mood: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
+                    topic:
+                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+                  }}
+                  <button
+                    class="text-xs px-2 py-0.5 rounded-full transition-colors hover:opacity-80 {categoryStyles[
+                      aiTag.category
+                    ] ?? 'bg-secondary text-foreground'}"
+                    onclick={() => handleTagFilter(aiTag.tag)}
+                    title="{aiTag.category} · {Math.round(
+                      aiTag.confidence * 100,
+                    )}% confidence"
+                  >
+                    {aiTag.label}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
       </div>
     </div>
@@ -987,6 +1029,48 @@
               }
             }}
           />
+        </div>
+      </div>
+    {/if}
+
+    <!-- Similar Books -->
+    {#if similarBooks.length > 0}
+      <div class="border-t border-border my-8"></div>
+      <div>
+        <h2 class="text-xl font-bold mb-3 text-foreground">Similar Books</h2>
+        <div class="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
+          {#each similarBooks as simBook}
+            <a href="/books/{simBook.id}" class="flex-shrink-0 w-28 group">
+              <div
+                class="aspect-[2/3] rounded-lg overflow-hidden bg-secondary mb-2 book-shadow group-hover:book-shadow-hover transition-shadow"
+              >
+                {#if simBook.cover_path}
+                  <img
+                    src="/covers/{simBook.id}.jpg"
+                    alt={simBook.display_title ?? ""}
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div
+                    class="w-full h-full flex items-center justify-center text-muted-foreground text-xs p-2 text-center"
+                  >
+                    {simBook.display_title ?? "Untitled"}
+                  </div>
+                {/if}
+              </div>
+              <p
+                class="text-xs text-foreground font-medium line-clamp-2 group-hover:text-primary transition-colors"
+              >
+                {simBook.display_title ?? "Untitled"}
+              </p>
+              {#if simBook.display_authors?.length}
+                <p class="text-xs text-muted-foreground line-clamp-1">
+                  {simBook.display_authors.join(", ")}
+                </p>
+              {/if}
+            </a>
+          {/each}
         </div>
       </div>
     {/if}

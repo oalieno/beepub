@@ -60,18 +60,19 @@ async def _process_metadata_job(book_id: str) -> None:
                 if pinned_url:
                     logger.info(
                         "Using pinned URL for %s book %s: %s",
-                        source.source_name, book_id, pinned_url,
+                        source.source_name,
+                        book_id,
+                        pinned_url,
                     )
                     fetch_result = await source.fetch(pinned_url)
                     source_url = pinned_url
                 else:
-                    results = await source.search(
-                        display_title, display_authors, isbn
-                    )
+                    results = await source.search(display_title, display_authors, isbn)
                     if not results:
                         logger.info(
                             "No results from %s for book %s",
-                            source.source_name, book_id,
+                            source.source_name,
+                            book_id,
                         )
                         continue
 
@@ -132,11 +133,15 @@ async def _process_metadata_job(book_id: str) -> None:
                     },
                 )
                 await db.commit()
-                logger.info("Updated %s metadata for book %s", source.source_name, book_id)
+                logger.info(
+                    "Updated %s metadata for book %s", source.source_name, book_id
+                )
             except Exception as e:
                 logger.error(
                     "Error processing %s for book %s: %s",
-                    source.source_name, book_id, e,
+                    source.source_name,
+                    book_id,
+                    e,
                 )
                 await db.rollback()
 
@@ -187,12 +192,8 @@ async def _check_and_schedule_refresh() -> None:
         if now_local.hour != refresh_hour:
             return
 
-        interval_days = int(
-            await _get_setting("metadata_refresh_interval_days", "7")
-        )
-        cooldown_days = int(
-            await _get_setting("metadata_refresh_cooldown_days", "30")
-        )
+        interval_days = int(await _get_setting("metadata_refresh_interval_days", "7"))
+        cooldown_days = int(await _get_setting("metadata_refresh_cooldown_days", "30"))
 
     # Check if we already ran within the interval
     client = aioredis.from_url(settings.redis_url)
@@ -204,7 +205,8 @@ async def _check_and_schedule_refresh() -> None:
             if days_since < interval_days:
                 logger.debug(
                     "Last scheduled %.1f days ago, interval is %d days, skipping",
-                    days_since, interval_days,
+                    days_since,
+                    interval_days,
                 )
                 return
 
@@ -227,8 +229,12 @@ async def _check_and_schedule_refresh() -> None:
         if not book_ids:
             logger.info("No books need metadata refresh")
         else:
+            from app.tasks.auto_tag import auto_tag_book
+
             for book_id in book_ids:
-                fetch_metadata.delay(book_id)
+                fetch_metadata.apply_async(
+                    args=[book_id], link=auto_tag_book.si(book_id)
+                )
             logger.info("Queued %d books for metadata refresh", len(book_ids))
 
         # Record last scheduled time

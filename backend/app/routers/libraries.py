@@ -11,6 +11,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
+from app.models.tag import AiBookTag
 from app.models.user import User, UserRole
 from app.schemas.book import PaginatedBooks
 from app.schemas.library import (
@@ -215,6 +216,9 @@ async def list_library_books(
             or_(
                 Book.tags.any(tag),
                 Book.epub_tags.any(tag),
+                Book.id.in_(
+                    select(AiBookTag.book_id).where(AiBookTag.tag == tag)
+                ),
             )
         )
     if series:

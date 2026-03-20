@@ -62,6 +62,7 @@ from app.services.storage import (
     get_cover_path,
     save_upload_file,
 )
+from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_metadata
 from app.tasks.wordcount import compute_word_count
 
@@ -128,14 +129,16 @@ async def upload_book(
         lib_result = await db.execute(select(Library).where(Library.id == lib_id))
         lib = lib_result.scalar_one_or_none()
         if lib and lib.calibre_path:
-            raise HTTPException(status_code=403, detail="Cannot upload to a Calibre library")
+            raise HTTPException(
+                status_code=403, detail="Cannot upload to a Calibre library"
+            )
         lb = LibraryBook(library_id=lib_id, book_id=book_id, added_by=current_user.id)
         db.add(lb)
 
     await db.commit()
     await db.refresh(book)
 
-    fetch_metadata.delay(str(book_id))
+    fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
     compute_word_count.delay(str(book_id))
     return book
 
@@ -154,7 +157,9 @@ async def upload_books_bulk(
         )
         lib = lib_result.scalar_one_or_none()
         if lib and lib.calibre_path:
-            raise HTTPException(status_code=403, detail="Cannot upload to a Calibre library")
+            raise HTTPException(
+                status_code=403, detail="Cannot upload to a Calibre library"
+            )
 
     books = []
     for file in files:
@@ -185,7 +190,9 @@ async def upload_books_bulk(
             )
             db.add(lb)
         books.append(book)
-        fetch_metadata.delay(str(book_id))
+        fetch_metadata.apply_async(
+            args=[str(book_id)], link=auto_tag_book.si(str(book_id))
+        )
         compute_word_count.delay(str(book_id))
 
     await db.commit()
@@ -231,9 +238,8 @@ async def list_my_books(
     from app.routers.libraries import accessible_libraries_condition
 
     # Subquery: book IDs the user can access (deduplicated)
-    accessible_books = (
-        select(LibraryBook.book_id)
-        .join(Library, Library.id == LibraryBook.library_id)
+    accessible_books = select(LibraryBook.book_id).join(
+        Library, Library.id == LibraryBook.library_id
     )
     cond = accessible_libraries_condition(current_user)
     if cond is not True:
@@ -386,7 +392,9 @@ async def search_books(
 
     # Count
     count_sub = base_query.with_only_columns(Book.id).subquery()
-    total = (await db.execute(select(func.count()).select_from(count_sub))).scalar() or 0
+    total = (
+        await db.execute(select(func.count()).select_from(count_sub))
+    ).scalar() or 0
 
     result = await db.execute(base_query.limit(limit))
     items = []
@@ -398,6 +406,97 @@ async def search_books(
     return PaginatedBookSearchResults(items=items, total=total)
 
 
+@router.get("/discover/recommendations", response_model=list[BookWithInteractionOut])
+async def get_discover_recommendations(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(20, ge=1, le=50),
+):
+    """Personalized book recommendations based on reading history."""
+    from app.services.recommendations import get_personalized_recommendations
+
+    recs = await get_personalized_recommendations(
+        db,
+        current_user.id,
+        is_admin=current_user.role == UserRole.admin,
+        limit=limit,
+    )
+    if not recs:
+        return []
+
+    book_ids = [r["book_id"] for r in recs]
+
+    result = await db.execute(select(Book).where(Book.id.in_(book_ids)))
+    books = {b.id: b for b in result.scalars().all()}
+
+    # Get interactions
+    interaction_result = await db.execute(
+        select(UserBookInteraction).where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.book_id.in_(book_ids),
+        )
+    )
+    interactions = {i.book_id: i for i in interaction_result.scalars().all()}
+
+    items = []
+    for bid in book_ids:
+        book = books.get(bid)
+        if not book:
+            continue
+        item = BookWithInteractionOut.model_validate(book)
+        interaction = interactions.get(bid)
+        if interaction:
+            item.reading_status = interaction.reading_status
+            item.is_favorite = interaction.is_favorite
+            progress = interaction.reading_progress or {}
+            item.reading_percentage = progress.get("percentage")
+            item.last_read_at = progress.get("last_read_at")
+        items.append(item)
+
+    return items
+
+
+@router.get("/discover/browse")
+async def get_discover_browse(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    category: str = Query(..., pattern="^(genre|mood|topic)$"),
+    limit_per_tag: int = Query(8, ge=1, le=20),
+    max_tags: int = Query(10, ge=1, le=30),
+):
+    """Browse books by tag category."""
+    from app.schemas.tag import TagBrowseSection
+    from app.services.recommendations import get_books_by_tag_category
+    from app.services.tags import TAG_LABELS
+
+    sections_data = await get_books_by_tag_category(
+        db,
+        current_user.id,
+        is_admin=current_user.role == UserRole.admin,
+        category=category,
+        limit_per_tag=limit_per_tag,
+        max_tags=max_tags,
+    )
+
+    sections = []
+    for section in sections_data:
+        if not section["book_ids"]:
+            continue
+        result = await db.execute(select(Book).where(Book.id.in_(section["book_ids"])))
+        books = list(result.scalars().all())
+        sections.append(
+            TagBrowseSection(
+                tag=section["tag"],
+                label=TAG_LABELS.get(section["tag"], section["tag"]),
+                category=section["category"],
+                book_count=section["book_count"],
+                books=[BookOut.model_validate(b) for b in books],
+            )
+        )
+
+    return sections
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,
@@ -407,9 +506,7 @@ async def get_book(
     book = await _get_book_with_access(book_id, current_user, db)
     # Find the first library this book belongs to
     lb_result = await db.execute(
-        select(LibraryBook.library_id)
-        .where(LibraryBook.book_id == book_id)
-        .limit(1)
+        select(LibraryBook.library_id).where(LibraryBook.book_id == book_id).limit(1)
     )
     library_id = lb_result.scalar_one_or_none()
     out = BookOut.model_validate(book)
@@ -543,7 +640,51 @@ async def refresh_book_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    fetch_metadata.delay(str(book_id))
+    fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
+    return {"status": "queued"}
+
+
+@router.get("/{book_id}/similar", response_model=list[BookOut])
+async def get_similar_books_endpoint(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Get books similar to this one."""
+    from app.services.recommendations import get_similar_books
+
+    await _get_book_with_access(book_id, current_user, db)
+    similar = await get_similar_books(
+        db,
+        book_id,
+        current_user.id,
+        is_admin=current_user.role == UserRole.admin,
+        limit=limit,
+    )
+    if not similar:
+        return []
+
+    result = await db.execute(
+        select(Book).where(Book.id.in_([s["book_id"] for s in similar]))
+    )
+    books = {b.id: b for b in result.scalars().all()}
+
+    # Return in score order
+    score_map = {s["book_id"]: s["score"] for s in similar}
+    ordered = sorted(books.values(), key=lambda b: score_map.get(b.id, 0), reverse=True)
+    return ordered
+
+
+@router.post("/{book_id}/retag")
+async def retag_book(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Re-run AI tagging for a book (admin only)."""
+    await _get_book_with_access(book_id, current_user, db)
+    auto_tag_book.delay(str(book_id))
     return {"status": "queued"}
 
 
@@ -560,9 +701,7 @@ async def get_book_external_metadata(
     return result.scalars().all()
 
 
-@router.put(
-    "/{book_id}/external/{source}/url", response_model=ExternalMetadataOut
-)
+@router.put("/{book_id}/external/{source}/url", response_model=ExternalMetadataOut)
 async def update_external_metadata_url(
     book_id: uuid.UUID,
     source: str,
@@ -585,9 +724,7 @@ async def update_external_metadata_url(
         MetadataSource.goodreads: re.compile(
             r"^https://www\.goodreads\.com/book/show/\d+[\w-]*$"
         ),
-        MetadataSource.readmoo: re.compile(
-            r"^https://readmoo\.com/book/\d+$"
-        ),
+        MetadataSource.readmoo: re.compile(r"^https://readmoo\.com/book/\d+$"),
     }
     if body.source_url is not None:
         pattern = _SOURCE_URL_PATTERNS.get(validated_source)

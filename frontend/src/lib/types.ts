@@ -30,6 +30,14 @@ export interface LibraryOut {
   preview_book_ids: string[];
 }
 
+export interface AiBookTag {
+  id: string;
+  tag: string;
+  label: string;
+  category: "genre" | "mood" | "topic";
+  confidence: number;
+}
+
 export interface BookOut {
   id: string;
   file_size: number;
@@ -59,11 +67,20 @@ export interface BookOut {
   display_series: string | null;
   display_series_index: number | null;
   display_tags: string[] | null;
+  ai_tags?: AiBookTag[];
   calibre_id: number | null;
   calibre_added_at: string | null;
   added_by: string;
   created_at: string;
   library_id: string | null;
+}
+
+export interface TagBrowseSection {
+  tag: string;
+  label: string;
+  category: string;
+  book_count: number;
+  books: BookOut[];
 }
 
 export interface PaginatedBooks {

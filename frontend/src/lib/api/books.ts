@@ -12,6 +12,7 @@ import type {
   ReadingStatus,
   ReferenceImageInput,
   StylePromptOut,
+  TagBrowseSection,
 } from "$lib/types";
 
 export const booksApi = {
@@ -229,4 +230,20 @@ export const booksApi = {
 
   getRandomBooks: (token: string, count: number = 8) =>
     get(`/books/random?count=${count}`, token) as Promise<BookOut[]>,
+
+  getSimilar: (bookId: string, token: string, limit: number = 10) =>
+    get(`/books/${bookId}/similar?limit=${limit}`, token) as Promise<BookOut[]>,
+
+  retag: (bookId: string, token: string) =>
+    post(`/books/${bookId}/retag`, undefined, token),
+
+  getRecommendations: (token: string, limit: number = 20) =>
+    get(`/books/discover/recommendations?limit=${limit}`, token) as Promise<
+      BookWithInteractionOut[]
+    >,
+
+  getBrowseByCategory: (category: string, token: string) =>
+    get(`/books/discover/browse?category=${category}`, token) as Promise<
+      TagBrowseSection[]
+    >,
 };

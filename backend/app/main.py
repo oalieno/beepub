@@ -9,6 +9,7 @@ from app.routers import (
     highlights,
     illustrations,
     libraries,
+    tags,
 )
 
 app = FastAPI(title="BeePub API", version="1.0.0")
@@ -28,6 +29,7 @@ app.include_router(bookshelves.router)
 app.include_router(admin.router)
 app.include_router(highlights.router)
 app.include_router(illustrations.router)
+app.include_router(tags.router)
 
 
 @app.get("/api/health")

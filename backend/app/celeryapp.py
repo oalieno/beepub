@@ -19,6 +19,7 @@ celery.conf.update(
         "app.tasks.metadata",
         "app.tasks.wordcount",
         "app.tasks.illustration",
+        "app.tasks.auto_tag",
     ],
     beat_schedule={
         "metadata-refresh-check": {
