@@ -50,13 +50,22 @@ sw.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/")) return;
 
   const isAsset = ASSETS.includes(url.pathname);
+  const isCover = url.pathname.startsWith("/covers/");
 
-  if (isAsset) {
-    // Cache-first for static assets
+  if (isAsset || isCover) {
+    // Cache-first for static assets and cover images
     event.respondWith(
-      caches
-        .match(event.request)
-        .then((cached) => cached ?? fetch(event.request)),
+      caches.match(event.request).then(
+        (cached) =>
+          cached ??
+          fetch(event.request).then((response) => {
+            if (response.status === 200) {
+              const clone = response.clone();
+              caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+            }
+            return response;
+          }),
+      ),
     );
   } else {
     // Network-first for pages
