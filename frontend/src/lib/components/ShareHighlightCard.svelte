@@ -13,11 +13,23 @@
 
   // Strip extra whitespace from multi-line epub selections
   let cleanText = $derived(
-    text.split(/\n/).map(line => line.trim()).filter(Boolean).join("")
+    text
+      .split(/\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join(""),
   );
 
   let fontSize = $derived(
-    cleanText.length < 50 ? 56 : cleanText.length < 100 ? 48 : cleanText.length < 200 ? 42 : cleanText.length < 400 ? 36 : 30,
+    cleanText.length < 50
+      ? 56
+      : cleanText.length < 100
+        ? 48
+        : cleanText.length < 200
+          ? 42
+          : cleanText.length < 400
+            ? 36
+            : 30,
   );
 </script>
 

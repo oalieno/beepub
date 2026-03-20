@@ -80,7 +80,10 @@
       if (now - lastTapTime < 300) {
         e.preventDefault();
         // Cancel pending single-tap close
-        if (closeTapTimer) { clearTimeout(closeTapTimer); closeTapTimer = null; }
+        if (closeTapTimer) {
+          clearTimeout(closeTapTimer);
+          closeTapTimer = null;
+        }
         if (scale > 1) {
           resetTransform();
         } else {
@@ -180,9 +183,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="fixed inset-0 z-[70] flex items-center justify-center"
->
+<div class="fixed inset-0 z-[70] flex items-center justify-center">
   <div class="absolute inset-0 bg-black/85"></div>
 
   <!-- Close button -->
@@ -216,7 +217,8 @@
       {src}
       alt=""
       class="max-w-full max-h-full object-contain select-none pointer-events-none"
-      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning || isPinching
+      style="transform: scale({scale}) translate({translateX}px, {translateY}px); transition: {isPanning ||
+      isPinching
         ? 'none'
         : 'transform 0.2s ease'};"
       draggable="false"

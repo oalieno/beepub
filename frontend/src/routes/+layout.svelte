@@ -78,10 +78,9 @@
         ch.port1.onmessage = () => {
           timedOut = false;
         };
-        navigator.serviceWorker.controller.postMessage(
-          { type: "ping" },
-          [ch.port2],
-        );
+        navigator.serviceWorker.controller.postMessage({ type: "ping" }, [
+          ch.port2,
+        ]);
         setTimeout(() => {
           if (timedOut) {
             window.location.reload();
@@ -94,8 +93,7 @@
     }
 
     document.addEventListener("visibilitychange", onVisibility);
-    return () =>
-      document.removeEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   });
 
   let isReaderPage = $derived($page.url.pathname.endsWith("/read"));

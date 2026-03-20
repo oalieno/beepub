@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { Trash2, X, Sparkles, Copy, Share2, Highlighter } from "@lucide/svelte";
+  import {
+    Trash2,
+    X,
+    Sparkles,
+    Copy,
+    Share2,
+    Highlighter,
+  } from "@lucide/svelte";
 
   let {
     hasExisting = false,

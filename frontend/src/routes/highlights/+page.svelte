@@ -10,9 +10,9 @@
   import { Highlighter } from "@lucide/svelte";
 
   let highlights = $state<HighlightOut[]>([]);
-  let bookData = $state<
-    Record<string, { title: string; authors: string[] }>
-  >({});
+  let bookData = $state<Record<string, { title: string; authors: string[] }>>(
+    {},
+  );
   let loading = $state(true);
 
   // Share modal state
@@ -54,10 +54,8 @@
           try {
             const book = await booksApi.get(id, $authStore.token!);
             data[id] = {
-              title:
-                book.display_title ?? book.epub_title ?? "Untitled",
-              authors:
-                book.display_authors ?? book.epub_authors ?? [],
+              title: book.display_title ?? book.epub_title ?? "Untitled",
+              authors: book.display_authors ?? book.epub_authors ?? [],
             };
           } catch {
             data[id] = { title: "Unknown Book", authors: [] };
@@ -140,8 +138,12 @@
 <ShareHighlightModal
   open={shareModalOpen}
   highlight={shareHighlight}
-  bookTitle={shareHighlight ? (bookData[shareHighlight.book_id]?.title ?? "") : ""}
-  bookAuthors={shareHighlight ? (bookData[shareHighlight.book_id]?.authors ?? []) : []}
+  bookTitle={shareHighlight
+    ? (bookData[shareHighlight.book_id]?.title ?? "")
+    : ""}
+  bookAuthors={shareHighlight
+    ? (bookData[shareHighlight.book_id]?.authors ?? [])
+    : []}
   onclose={() => {
     shareModalOpen = false;
     shareHighlight = null;

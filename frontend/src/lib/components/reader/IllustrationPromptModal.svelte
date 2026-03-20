@@ -266,9 +266,7 @@
                   No images found in this book
                 </p>
               {:else}
-                <div
-                  class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto"
-                >
+                <div class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto">
                   {#each epubImages as img}
                     {@const selected = isSelected("epub", img.path)}
                     <button
@@ -296,9 +294,7 @@
                         <div
                           class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
                         >
-                          <div
-                            class="bg-purple-500 rounded-full p-0.5"
-                          >
+                          <div class="bg-purple-500 rounded-full p-0.5">
                             <Check size={10} class="text-white" />
                           </div>
                         </div>
@@ -319,9 +315,7 @@
                 >
                   Generated illustrations
                 </p>
-                <div
-                  class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto"
-                >
+                <div class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto">
                   {#each completedIllustrations as ill}
                     {@const selected = isSelected("illustration", ill.id)}
                     <button
@@ -352,9 +346,7 @@
                         <div
                           class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
                         >
-                          <div
-                            class="bg-purple-500 rounded-full p-0.5"
-                          >
+                          <div class="bg-purple-500 rounded-full p-0.5">
                             <Check size={10} class="text-white" />
                           </div>
                         </div>

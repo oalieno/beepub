@@ -79,9 +79,12 @@
 
     // Fetch book authors for share card
     if ($authStore.token) {
-      booksApi.get(bookId, $authStore.token).then((book) => {
-        bookAuthors = book.display_authors ?? book.epub_authors ?? [];
-      }).catch(() => {});
+      booksApi
+        .get(bookId, $authStore.token)
+        .then((book) => {
+          bookAuthors = book.display_authors ?? book.epub_authors ?? [];
+        })
+        .catch(() => {});
     }
   });
 
@@ -246,17 +249,16 @@
           return;
         }
         if (ill.status === "failed") {
-          illustrations = illustrations.map((x) =>
-            x.id === ill.id ? ill : x,
-          );
+          illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           const msg = ill.error_message ?? "";
-          const friendly = msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
-            ? "Content was blocked by safety filters. Try a different text selection."
-            : msg.includes("ReadTimeout")
-              ? "API request timed out. Please try again later."
-              : msg.includes("500")
-                ? "API server error. Please try again later."
-                : msg || "Unknown error";
+          const friendly =
+            msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
+              ? "Content was blocked by safety filters. Try a different text selection."
+              : msg.includes("ReadTimeout")
+                ? "API request timed out. Please try again later."
+                : msg.includes("500")
+                  ? "API server error. Please try again later."
+                  : msg || "Unknown error";
           toastStore.error(`Generation failed: ${friendly}`);
           return;
         }
@@ -361,8 +363,16 @@
     {/if}
 
     {#if !epubLoaded}
-      <div class="absolute inset-0 z-10 flex items-center justify-center {darkMode ? 'bg-gray-900' : 'bg-white'}">
-        <div class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 {darkMode ? 'border-gray-400' : 'border-primary'}"></div>
+      <div
+        class="absolute inset-0 z-10 flex items-center justify-center {darkMode
+          ? 'bg-gray-900'
+          : 'bg-white'}"
+      >
+        <div
+          class="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 {darkMode
+            ? 'border-gray-400'
+            : 'border-primary'}"
+        ></div>
       </div>
     {/if}
 
@@ -437,7 +447,9 @@
       {darkMode}
       {bookId}
       token={$authStore.token ?? ""}
-      completedIllustrations={illustrations.filter((x) => x.status === "completed")}
+      completedIllustrations={illustrations.filter(
+        (x) => x.status === "completed",
+      )}
       oncreate={handleCreateIllustration}
       onclose={() => (showIllustrationModal = false)}
     />

@@ -55,10 +55,8 @@
   function friendlyError(msg: string): string {
     if (msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY"))
       return "Blocked by safety filters";
-    if (msg.includes("ReadTimeout"))
-      return "API timed out";
-    if (msg.includes("500"))
-      return "API server error, please retry";
+    if (msg.includes("ReadTimeout")) return "API timed out";
+    if (msg.includes("500")) return "API server error, please retry";
     return msg.length > 80 ? msg.slice(0, 80) + "…" : msg;
   }
 </script>

@@ -284,9 +284,11 @@ class IframeView {
     var width = _width || this.settings.width;
     var height = _height || this.settings.height;
 
-    var isPrePaginated = this.layout.name === "pre-paginated" ||
-      (this.section && this.section.properties &&
-       this.section.properties.includes("rendition:layout-pre-paginated"));
+    var isPrePaginated =
+      this.layout.name === "pre-paginated" ||
+      (this.section &&
+        this.section.properties &&
+        this.section.properties.includes("rendition:layout-pre-paginated"));
 
     if (isPrePaginated) {
       this.lock("both", width, height);
@@ -345,9 +347,11 @@ class IframeView {
 
     this._expanding = true;
 
-    var isPrePaginated = this.layout.name === "pre-paginated" ||
-      (this.section && this.section.properties &&
-       this.section.properties.includes("rendition:layout-pre-paginated"));
+    var isPrePaginated =
+      this.layout.name === "pre-paginated" ||
+      (this.section &&
+        this.section.properties &&
+        this.section.properties.includes("rendition:layout-pre-paginated"));
 
     if (isPrePaginated) {
       width = this.layout.columnWidth;
@@ -369,8 +373,10 @@ class IframeView {
       // Only stop when we see this specific pattern 2+ times consecutively.
       if (this._prevExpandWidth !== undefined) {
         var growth = width - this._prevExpandWidth;
-        if (growth >= this.layout.pageWidth * 0.9 &&
-            growth <= this.layout.pageWidth * 1.1) {
+        if (
+          growth >= this.layout.pageWidth * 0.9 &&
+          growth <= this.layout.pageWidth * 1.1
+        ) {
           this._divergeCount = (this._divergeCount || 0) + 1;
           if (this._divergeCount >= 2) {
             // Diverging — use the previous stable width

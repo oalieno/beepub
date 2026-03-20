@@ -121,8 +121,13 @@
       {(book.display_authors ?? []).join(", ") || "\u00A0"}
     </p>
     {#if book.display_series}
-      <p class="text-muted-foreground/70 text-xs mt-0.5 flex items-baseline min-w-0">
-        <span class="truncate">{book.display_series}</span>{#if book.display_series_index != null}<span class="shrink-0">&nbsp;[{book.display_series_index}]</span>{/if}
+      <p
+        class="text-muted-foreground/70 text-xs mt-0.5 flex items-baseline min-w-0"
+      >
+        <span class="truncate">{book.display_series}</span
+        >{#if book.display_series_index != null}<span class="shrink-0"
+            >&nbsp;[{book.display_series_index}]</span
+          >{/if}
       </p>
     {/if}
   </div>

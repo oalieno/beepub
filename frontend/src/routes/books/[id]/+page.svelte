@@ -192,7 +192,8 @@
           publisher: book.publisher ?? "",
           published_date: book.published_date ?? "",
           series: book.series ?? "",
-          series_index: book.series_index != null ? String(book.series_index) : "",
+          series_index:
+            book.series_index != null ? String(book.series_index) : "",
           tags: (book.tags ?? []).join(", "),
         };
       }
@@ -290,7 +291,9 @@
           publisher: editForm.publisher || null,
           published_date: editForm.published_date || null,
           series: editForm.series || null,
-          series_index: editForm.series_index ? parseFloat(editForm.series_index) : null,
+          series_index: editForm.series_index
+            ? parseFloat(editForm.series_index)
+            : null,
           tags: parsedTags.length > 0 ? parsedTags : null,
         },
         $authStore.token,
@@ -505,7 +508,9 @@
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->
-      <div class="flex-shrink-0 w-64 mx-auto md:mx-0 flex justify-center md:self-start">
+      <div
+        class="flex-shrink-0 w-64 mx-auto md:mx-0 flex justify-center md:self-start"
+      >
         {#if book.cover_path}
           <img
             src="/covers/{book.id}.jpg"
@@ -759,7 +764,8 @@
         <!-- Action Buttons -->
         <div class="mt-auto pt-6 flex items-center gap-3">
           <button
-            onclick={() => goto(`/books/${book!.id}/read`, { replaceState: true })}
+            onclick={() =>
+              goto(`/books/${book!.id}/read`, { replaceState: true })}
             class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 sm:px-6 py-3 rounded-full transition-colors whitespace-nowrap text-sm sm:text-base"
           >
             <BookOpen size={16} />
@@ -845,94 +851,96 @@
       {/if}
 
       <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
-          <div class="flex flex-col gap-4 text-sm">
-            {#if book.display_series}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5">Series</span>
-                <button
-                  class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
-                  onclick={() => book && handleSeriesFilter(book.display_series!)}
-                >
-                  {book.display_series}{#if book.display_series_index != null} [{formatSeriesIndex(book.display_series_index)}]{/if}
-                </button>
-              </div>
-            {/if}
-            {#if book.publisher ?? book.epub_publisher}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5"
-                  >Publisher</span
-                >
-                <span class="text-foreground font-medium"
-                  >{book.publisher ?? book.epub_publisher}</span
-                >
-              </div>
-            {/if}
-            {#if book.published_date ?? book.epub_published_date}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5"
-                  >Published</span
-                >
-                <span class="text-foreground font-medium"
-                  >{book.published_date ?? book.epub_published_date}</span
-                >
-              </div>
-            {/if}
-            {#if book.epub_language}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5"
-                  >Language</span
-                >
-                <span class="text-foreground font-medium"
-                  >{book.epub_language}</span
-                >
-              </div>
-            {/if}
-            {#if book.epub_isbn}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5"
-                  >ISBN</span
-                >
-                <span class="text-foreground font-medium">{book.epub_isbn}</span
-                >
-              </div>
-            {/if}
+        <div class="flex flex-col gap-4 text-sm">
+          {#if book.display_series}
             <div>
               <span class="text-muted-foreground block text-xs mb-0.5"
-                >File Size</span
+                >Series</span
+              >
+              <button
+                class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
+                onclick={() => book && handleSeriesFilter(book.display_series!)}
+              >
+                {book.display_series}{#if book.display_series_index != null}
+                  [{formatSeriesIndex(book.display_series_index)}]{/if}
+              </button>
+            </div>
+          {/if}
+          {#if book.publisher ?? book.epub_publisher}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >Publisher</span
               >
               <span class="text-foreground font-medium"
-                >{book.file_size < 1_048_576
-                  ? (book.file_size / 1024).toFixed(1) + ' KB'
-                  : (book.file_size / 1_048_576).toFixed(1) + ' MB'}</span
+                >{book.publisher ?? book.epub_publisher}</span
               >
             </div>
-            {#if book.word_count}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-0.5"
-                  >Word Count</span
-                >
-                <span class="text-foreground font-medium"
-                  >{book.word_count.toLocaleString()}</span
-                >
-              </div>
-            {/if}
-            {#if (book.display_tags ?? []).length > 0}
-              <div>
-                <span class="text-muted-foreground block text-xs mb-1">Tags</span>
-                <div class="flex flex-wrap gap-1.5">
-                  {#each book.display_tags ?? [] as tag}
-                    <button
-                      class="text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
-                      onclick={() => handleTagFilter(tag)}
-                    >
-                      {tag}
-                    </button>
-                  {/each}
-                </div>
-              </div>
-            {/if}
+          {/if}
+          {#if book.published_date ?? book.epub_published_date}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >Published</span
+              >
+              <span class="text-foreground font-medium"
+                >{book.published_date ?? book.epub_published_date}</span
+              >
+            </div>
+          {/if}
+          {#if book.epub_language}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >Language</span
+              >
+              <span class="text-foreground font-medium"
+                >{book.epub_language}</span
+              >
+            </div>
+          {/if}
+          {#if book.epub_isbn}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >ISBN</span
+              >
+              <span class="text-foreground font-medium">{book.epub_isbn}</span>
+            </div>
+          {/if}
+          <div>
+            <span class="text-muted-foreground block text-xs mb-0.5"
+              >File Size</span
+            >
+            <span class="text-foreground font-medium"
+              >{book.file_size < 1_048_576
+                ? (book.file_size / 1024).toFixed(1) + " KB"
+                : (book.file_size / 1_048_576).toFixed(1) + " MB"}</span
+            >
           </div>
+          {#if book.word_count}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-0.5"
+                >Word Count</span
+              >
+              <span class="text-foreground font-medium"
+                >{book.word_count.toLocaleString()}</span
+              >
+            </div>
+          {/if}
+          {#if (book.display_tags ?? []).length > 0}
+            <div>
+              <span class="text-muted-foreground block text-xs mb-1">Tags</span>
+              <div class="flex flex-wrap gap-1.5">
+                {#each book.display_tags ?? [] as tag}
+                  <button
+                    class="text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
+                    onclick={() => handleTagFilter(tag)}
+                  >
+                    {tag}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
         </div>
+      </div>
     </div>
 
     <!-- Notes -->
@@ -1114,7 +1122,10 @@
           {#if editForm.series && book.epub_series}
             <button
               class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => { editForm.series = ""; editForm.series_index = ""; }}
+              onclick={() => {
+                editForm.series = "";
+                editForm.series_index = "";
+              }}
             >
               <Undo2 size={12} />
               Reset
@@ -1131,7 +1142,9 @@
           <input
             id="edit-series-index"
             bind:value={editForm.series_index}
-            placeholder={book.epub_series_index != null ? String(book.epub_series_index) : "#"}
+            placeholder={book.epub_series_index != null
+              ? String(book.epub_series_index)
+              : "#"}
             type="number"
             step="0.1"
             class="w-20 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -1139,7 +1152,8 @@
         </div>
         {#if editForm.series && book.epub_series && editForm.series !== book.epub_series}
           <p class="text-xs text-muted-foreground">
-            Original: {book.epub_series}{#if book.epub_series_index != null} [{book.epub_series_index}]{/if}
+            Original: {book.epub_series}{#if book.epub_series_index != null}
+              [{book.epub_series_index}]{/if}
           </p>
         {/if}
       </div>
