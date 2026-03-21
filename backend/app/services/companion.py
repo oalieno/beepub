@@ -79,7 +79,7 @@ async def get_or_create_conversation(
     )
     db.add(conversation)
     await db.flush()
-    conversation.messages = []
+    await db.refresh(conversation, ["messages"])
     return conversation
 
 
