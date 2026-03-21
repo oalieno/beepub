@@ -1,6 +1,12 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import os
+import uuid
 
+import structlog
+from fastapi import FastAPI, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+
+from app.logging import setup_logging
 from app.routers import (
     admin,
     auth,
@@ -12,8 +18,43 @@ from app.routers import (
     libraries,
     tags,
 )
+from app.services.auth import decode_token
+
+setup_logging(log_format=os.environ.get("LOG_FORMAT", "console"))
 
 app = FastAPI(title="BeePub API", version="1.0.0")
+
+
+class RequestContextMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        request_id = uuid.uuid4().hex[:12]
+        ctx = {
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+        }
+
+        # Extract user_id from JWT if present
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            payload = decode_token(auth_header[7:])
+            if payload and payload.get("sub"):
+                ctx["user_id"] = payload["sub"]
+
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(**ctx)
+
+        logger = structlog.get_logger()
+        logger.info("request_started")
+
+        response: Response = await call_next(request)
+
+        logger.info("request_finished", status_code=response.status_code)
+        structlog.contextvars.clear_contextvars()
+        return response
+
+
+app.add_middleware(RequestContextMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

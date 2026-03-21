@@ -1,6 +1,17 @@
+import os
+
 from celery import Celery
+from celery.signals import setup_logging as celery_setup_logging
 
 from app.config import settings
+
+
+@celery_setup_logging.connect
+def configure_celery_logging(**kwargs):
+    from app.logging import setup_logging
+
+    setup_logging(log_format=os.environ.get("LOG_FORMAT", "console"))
+
 
 celery = Celery("beepub")
 
