@@ -272,6 +272,60 @@ async def get_ai_status(
     }
 
 
+@router.get("/ai/models")
+async def list_ai_models(
+    provider: str,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Fetch available models from a configured AI provider."""
+    settings = await get_all_settings(db)
+
+    from app.services.llm import _resolve_credentials
+
+    api_key, base_url = _resolve_credentials(settings, provider)
+
+    import httpx
+
+    models: list[dict[str, str]] = []
+
+    if provider == "gemini":
+        if not api_key:
+            raise HTTPException(status_code=400, detail="Gemini API key not configured")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                "https://generativelanguage.googleapis.com/v1beta/models",
+                headers={"x-goog-api-key": api_key},
+            )
+            resp.raise_for_status()
+            for m in resp.json().get("models", []):
+                model_id = m.get("name", "").removeprefix("models/")
+                if model_id:
+                    models.append(
+                        {"id": model_id, "name": m.get("displayName", model_id)}
+                    )
+    elif provider == "openai":
+        if not base_url:
+            raise HTTPException(
+                status_code=400, detail="OpenAI base URL not configured"
+            )
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(f"{base_url.rstrip('/')}/models", headers=headers)
+            resp.raise_for_status()
+            for m in resp.json().get("data", []):
+                model_id = m.get("id", "")
+                if model_id:
+                    models.append({"id": model_id, "name": model_id})
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+
+    models.sort(key=lambda m: m["name"])
+    return models
+
+
 @router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
 async def recompute_word_counts(
     current_user: Annotated[User, Depends(require_admin)],

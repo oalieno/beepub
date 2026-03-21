@@ -42,6 +42,49 @@
   let hasGemini = $derived(geminiApiKey.trim().length > 0);
   let hasOpenai = $derived(openaiBaseUrl.trim().length > 0);
 
+  // Model lists fetched from providers
+  let geminiModels = $state<{ id: string; name: string }[]>([]);
+  let openaiModels = $state<{ id: string; name: string }[]>([]);
+  let loadingGeminiModels = $state(false);
+  let loadingOpenaiModels = $state(false);
+
+  async function fetchModels(provider: "gemini" | "openai") {
+    if (!$authStore.token) return;
+    if (provider === "gemini") {
+      loadingGeminiModels = true;
+      try {
+        geminiModels = await adminApi.getAiModels("gemini", $authStore.token);
+      } catch {
+        geminiModels = [];
+      } finally {
+        loadingGeminiModels = false;
+      }
+    } else {
+      loadingOpenaiModels = true;
+      try {
+        openaiModels = await adminApi.getAiModels("openai", $authStore.token);
+      } catch {
+        openaiModels = [];
+      } finally {
+        loadingOpenaiModels = false;
+      }
+    }
+  }
+
+  function getModelsForProvider(
+    provider: string,
+  ): { id: string; name: string }[] {
+    if (provider === "gemini") return geminiModels;
+    if (provider === "openai") return openaiModels;
+    return [];
+  }
+
+  function isLoadingModels(provider: string): boolean {
+    if (provider === "gemini") return loadingGeminiModels;
+    if (provider === "openai") return loadingOpenaiModels;
+    return false;
+  }
+
   const allTimezones = Intl.supportedValuesOf("timeZone");
 
   function formatUtcOffset(timeZone: string): string {
@@ -136,6 +179,12 @@
       tagModel = settings.tag_model || "";
       imageProvider = settings.image_provider || "";
       imageModel = settings.image_model || "";
+
+      // Fetch model lists for configured providers
+      const fetches: Promise<void>[] = [];
+      if (geminiApiKey.trim()) fetches.push(fetchModels("gemini"));
+      if (openaiBaseUrl.trim()) fetches.push(fetchModels("openai"));
+      await Promise.all(fetches);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -211,14 +260,44 @@
       {/if}
     </div>
     {#if value}
+      {@const models = getModelsForProvider(value)}
+      {@const loadingM = isLoadingModels(value)}
       <div class="space-y-1.5">
         <Label for="{prefix}-model">Model</Label>
-        <Input
-          id="{prefix}-model"
-          placeholder={modelPlaceholder}
-          value={model}
-          oninput={(e) => onModelChange(e.currentTarget.value)}
-        />
+        {#if loadingM}
+          <div
+            class="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground"
+          >
+            <Spinner size="sm" />
+            Loading models…
+          </div>
+        {:else if models.length > 0}
+          <Select.Root
+            type="single"
+            value={model || "none"}
+            onValueChange={(v) => onModelChange(v === "none" ? "" : v)}
+          >
+            <Select.Trigger id="{prefix}-model" class="w-full bg-background">
+              {model || "Select a model"}
+            </Select.Trigger>
+            <Select.Content align="start" class="max-h-64">
+              <Select.Item value="none">Select a model</Select.Item>
+              {#each models as m}
+                <Select.Item value={m.id}>{m.name}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+        {:else}
+          <Input
+            id="{prefix}-model"
+            placeholder={modelPlaceholder}
+            value={model}
+            oninput={(e) => onModelChange(e.currentTarget.value)}
+          />
+          <p class="text-xs text-muted-foreground">
+            Could not load models — type a model name manually
+          </p>
+        {/if}
       </div>
     {/if}
   </div>
@@ -372,39 +451,41 @@
           </Card.Description>
         </Card.Header>
         <Card.Content class="space-y-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div class="space-y-1.5">
-              <Label for="gemini-key">Gemini API Key</Label>
-              <Input
-                id="gemini-key"
-                type="password"
-                placeholder="AIza..."
-                value={geminiApiKey}
-                oninput={(e) => (geminiApiKey = e.currentTarget.value)}
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="openai-key">OpenAI Compatible API Key</Label>
-              <Input
-                id="openai-key"
-                type="password"
-                placeholder="sk-... (optional for Ollama)"
-                value={openaiApiKey}
-                oninput={(e) => (openaiApiKey = e.currentTarget.value)}
-              />
-            </div>
-          </div>
           <div class="max-w-sm space-y-1.5">
-            <Label for="openai-url">OpenAI Compatible Base URL</Label>
+            <Label for="gemini-key">Gemini API Key</Label>
             <Input
-              id="openai-url"
-              placeholder="https://api.openai.com/v1"
-              value={openaiBaseUrl}
-              oninput={(e) => (openaiBaseUrl = e.currentTarget.value)}
+              id="gemini-key"
+              type="password"
+              placeholder="AIza..."
+              value={geminiApiKey}
+              oninput={(e) => (geminiApiKey = e.currentTarget.value)}
             />
-            <p class="text-xs text-muted-foreground">
-              For Ollama: http://host:11434/v1
-            </p>
+          </div>
+          <div class="border-t border-border/30 pt-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div class="space-y-1.5">
+                <Label for="openai-key">OpenAI Compatible API Key</Label>
+                <Input
+                  id="openai-key"
+                  type="password"
+                  placeholder="sk-... (optional for Ollama)"
+                  value={openaiApiKey}
+                  oninput={(e) => (openaiApiKey = e.currentTarget.value)}
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="openai-url">Base URL</Label>
+                <Input
+                  id="openai-url"
+                  placeholder="https://api.openai.com/v1"
+                  value={openaiBaseUrl}
+                  oninput={(e) => (openaiBaseUrl = e.currentTarget.value)}
+                />
+                <p class="text-xs text-muted-foreground">
+                  For Ollama: http://host:11434/v1
+                </p>
+              </div>
+            </div>
           </div>
         </Card.Content>
       </Card.Root>

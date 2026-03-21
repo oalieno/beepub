@@ -82,6 +82,11 @@ export const adminApi = {
     put("/admin/settings", data, token) as Promise<
       import("$lib/types").AdminSettings
     >,
+
+  getAiModels: (provider: string, token: string) =>
+    get(`/admin/ai/models?provider=${provider}`, token) as Promise<
+      { id: string; name: string }[]
+    >,
 };
 
 export const aiApi = {
