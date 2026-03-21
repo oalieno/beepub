@@ -68,7 +68,7 @@
 </script>
 
 <div
-  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-2 sm:gap-3 py-2 z-10 relative touch-manipulation {darkMode
+  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-1 sm:gap-3 py-2 z-10 relative touch-manipulation {darkMode
     ? 'bg-gray-900 border-gray-800 text-gray-200'
     : 'bg-background border-border text-foreground'}"
 >
@@ -162,26 +162,32 @@
     ></div>
 
     <button
-      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        darkMode,
+      )}"
       onclick={() => onfontDecrease?.()}
       disabled={fontSize <= 10}
     >
       <Minus size={14} />
     </button>
     <span
-      class="text-[11px] w-8 text-center {darkMode
+      class="hidden sm:inline text-[11px] w-8 text-center {darkMode
         ? 'text-gray-500'
         : 'text-muted-foreground'}">{fontSize}px</span
     >
     <button
-      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        darkMode,
+      )}"
       onclick={() => onfontIncrease?.()}
       disabled={fontSize >= 32}
     >
       <Plus size={14} />
     </button>
 
-    <div class="w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"></div>
+    <div
+      class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
+    ></div>
 
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
