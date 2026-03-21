@@ -25,6 +25,14 @@
   let metadataIntervalDays = $state(7);
   let metadataCooldownDays = $state(30);
 
+  // LLM settings
+  let llmProvider = $state("");
+  let geminiApiKey = $state("");
+  let geminiModel = $state("");
+  let openaiApiKey = $state("");
+  let openaiBaseUrl = $state("");
+  let openaiModel = $state("");
+
   const allTimezones = Intl.supportedValuesOf("timeZone");
 
   function formatUtcOffset(timeZone: string): string {
@@ -104,6 +112,12 @@
         parseInt(settings.metadata_refresh_interval_days) || 7;
       metadataCooldownDays =
         parseInt(settings.metadata_refresh_cooldown_days) || 30;
+      llmProvider = settings.llm_provider || "";
+      geminiApiKey = settings.gemini_api_key || "";
+      geminiModel = settings.gemini_model || "";
+      openaiApiKey = settings.openai_api_key || "";
+      openaiBaseUrl = settings.openai_base_url || "";
+      openaiModel = settings.openai_model || "";
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -122,6 +136,12 @@
           metadata_refresh_hour: String(metadataHour),
           metadata_refresh_interval_days: String(metadataIntervalDays),
           metadata_refresh_cooldown_days: String(metadataCooldownDays),
+          llm_provider: llmProvider,
+          gemini_api_key: geminiApiKey,
+          gemini_model: geminiModel,
+          openai_api_key: openaiApiKey,
+          openai_base_url: openaiBaseUrl,
+          openai_model: openaiModel,
         },
         $authStore.token,
       );
@@ -271,6 +291,103 @@
                 </div>
                 <p class="text-xs text-muted-foreground">
                   Skip books fetched within this period
+                </p>
+              </div>
+            </div>
+          {/if}
+        </Card.Content>
+      </Card.Root>
+
+      <!-- LLM Provider -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>AI / LLM Provider</Card.Title>
+          <Card.Description>
+            Configure the AI model for Reading Companion and other AI features.
+            Leave blank to use .env defaults.
+          </Card.Description>
+        </Card.Header>
+        <Card.Content class="space-y-5">
+          <div class="max-w-sm space-y-1.5">
+            <Label for="llm-provider">Provider</Label>
+            <Select.Root
+              type="single"
+              value={llmProvider || "default"}
+              onValueChange={(v) => (llmProvider = v === "default" ? "" : v)}
+            >
+              <Select.Trigger id="llm-provider" class="w-full bg-background">
+                {llmProvider === "gemini"
+                  ? "Gemini"
+                  : llmProvider === "openai"
+                    ? "OpenAI Compatible"
+                    : "Default (from .env)"}
+              </Select.Trigger>
+              <Select.Content align="start">
+                <Select.Item value="default">Default (from .env)</Select.Item>
+                <Select.Item value="gemini">Gemini</Select.Item>
+                <Select.Item value="openai">OpenAI Compatible</Select.Item>
+              </Select.Content>
+            </Select.Root>
+          </div>
+
+          {#if llmProvider === "gemini"}
+            <div
+              class="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-border/30"
+            >
+              <div class="space-y-1.5">
+                <Label for="gemini-key">API Key</Label>
+                <Input
+                  id="gemini-key"
+                  type="password"
+                  placeholder="AIza..."
+                  bind:value={geminiApiKey}
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="gemini-model">Model</Label>
+                <Input
+                  id="gemini-model"
+                  placeholder="gemini-2.0-flash-exp"
+                  bind:value={geminiModel}
+                />
+              </div>
+            </div>
+          {/if}
+
+          {#if llmProvider === "openai"}
+            <div
+              class="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-border/30"
+            >
+              <div class="space-y-1.5">
+                <Label for="openai-key">API Key</Label>
+                <Input
+                  id="openai-key"
+                  type="password"
+                  placeholder="sk-..."
+                  bind:value={openaiApiKey}
+                />
+                <p class="text-xs text-muted-foreground">
+                  Leave blank if not required (e.g. local Ollama)
+                </p>
+              </div>
+              <div class="space-y-1.5">
+                <Label for="openai-model">Model</Label>
+                <Input
+                  id="openai-model"
+                  placeholder="gpt-4o-mini"
+                  bind:value={openaiModel}
+                />
+              </div>
+              <div class="space-y-1.5 sm:col-span-2">
+                <Label for="openai-url">Base URL</Label>
+                <Input
+                  id="openai-url"
+                  placeholder="https://api.openai.com/v1"
+                  bind:value={openaiBaseUrl}
+                />
+                <p class="text-xs text-muted-foreground">
+                  For Ollama: http://host:11434/v1 · For any OpenAI-compatible
+                  API
                 </p>
               </div>
             </div>

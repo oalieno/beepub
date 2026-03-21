@@ -210,6 +210,12 @@ export interface AdminSettings {
   metadata_refresh_hour: string;
   metadata_refresh_interval_days: string;
   metadata_refresh_cooldown_days: string;
+  llm_provider: string;
+  gemini_api_key: string;
+  gemini_model: string;
+  openai_api_key: string;
+  openai_base_url: string;
+  openai_model: string;
 }
 
 export interface CalibreLibraryInfo {

@@ -12,9 +12,9 @@ from sqlalchemy.orm import selectinload
 
 from app.models.book import Book
 from app.models.companion import CompanionConversation, CompanionMessage
-from app.models.reading import Highlight, UserBookInteraction
 from app.services.epub_text import extract_text_up_to
 from app.services.llm import ChatMessage, get_llm_provider
+from app.services.settings import get_all_settings
 
 logger = logging.getLogger(__name__)
 
@@ -172,8 +172,9 @@ async def stream_companion_response(
     # Build chat messages
     chat_messages = build_chat_messages(conversation, user_message, selected_text)
 
-    # Stream from LLM
-    provider = get_llm_provider()
+    # Stream from LLM (use DB settings overrides)
+    db_settings = await get_all_settings(db)
+    provider = get_llm_provider(db_settings)
     token_stream = provider.chat_stream(chat_messages, system=system_prompt)
 
     return token_stream, conversation.id, user_msg.id

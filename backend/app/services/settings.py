@@ -9,6 +9,12 @@ DEFAULTS = {
     "metadata_refresh_hour": "3",
     "metadata_refresh_interval_days": "7",
     "metadata_refresh_cooldown_days": "30",
+    "llm_provider": "",
+    "gemini_api_key": "",
+    "gemini_model": "",
+    "openai_api_key": "",
+    "openai_base_url": "",
+    "openai_model": "",
 }
 
 
