@@ -12,6 +12,10 @@ class CompanionMessageRequest(BaseModel):
     conversation_id: uuid.UUID | None = None
 
 
+class CompanionRenameRequest(BaseModel):
+    title: str
+
+
 class CompanionMessageOut(BaseModel):
     id: uuid.UUID
     role: str
@@ -23,9 +27,20 @@ class CompanionMessageOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CompanionConversationSummary(BaseModel):
+    id: uuid.UUID
+    book_id: uuid.UUID
+    title: str | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class CompanionConversationOut(BaseModel):
     id: uuid.UUID
     book_id: uuid.UUID
+    title: str | None
     messages: list[CompanionMessageOut]
     created_at: datetime
 

@@ -83,6 +83,14 @@ export function put(
   return request("PUT", path, body, token);
 }
 
+export function patch(
+  path: string,
+  body?: unknown,
+  token?: string | null,
+): Promise<unknown> {
+  return request("PATCH", path, body, token);
+}
+
 export function del(path: string, token?: string | null): Promise<unknown> {
   return request("DELETE", path, undefined, token);
 }

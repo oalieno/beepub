@@ -20,7 +20,9 @@ from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.user import User
 from app.schemas.companion import (
     CompanionConversationOut,
+    CompanionConversationSummary,
     CompanionMessageRequest,
+    CompanionRenameRequest,
 )
 from app.services.companion import (
     get_or_create_conversation,
@@ -96,7 +98,9 @@ async def send_companion_message(
         )
 
     # Get or create conversation
-    conversation = await get_or_create_conversation(db, book_id, current_user.id)
+    conversation = await get_or_create_conversation(
+        db, book_id, current_user.id, body.conversation_id
+    )
 
     # Start streaming
     try:
@@ -127,15 +131,36 @@ async def send_companion_message(
 
 
 @router.get("/{book_id}/companion")
-async def get_companion_conversation(
+async def list_companion_conversations(
     book_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-) -> CompanionConversationOut | None:
-    """Get the existing companion conversation for a book."""
+) -> list[CompanionConversationSummary]:
+    """List all companion conversations for a book."""
     result = await db.execute(
         select(CompanionConversation)
         .where(
+            CompanionConversation.book_id == book_id,
+            CompanionConversation.user_id == current_user.id,
+        )
+        .order_by(CompanionConversation.updated_at.desc())
+    )
+    conversations = result.scalars().all()
+    return [CompanionConversationSummary.model_validate(c) for c in conversations]
+
+
+@router.get("/{book_id}/companion/{conversation_id}")
+async def get_companion_conversation(
+    book_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CompanionConversationOut:
+    """Get a specific companion conversation with messages."""
+    result = await db.execute(
+        select(CompanionConversation)
+        .where(
+            CompanionConversation.id == conversation_id,
             CompanionConversation.book_id == book_id,
             CompanionConversation.user_id == current_user.id,
         )
@@ -143,19 +168,53 @@ async def get_companion_conversation(
     )
     conversation = result.scalar_one_or_none()
     if conversation is None:
-        return None
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
+        )
     return CompanionConversationOut.model_validate(conversation)
 
 
-@router.delete("/{book_id}/companion", status_code=status.HTTP_204_NO_CONTENT)
+@router.patch("/{book_id}/companion/{conversation_id}")
+async def rename_companion_conversation(
+    book_id: uuid.UUID,
+    conversation_id: uuid.UUID,
+    body: CompanionRenameRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> CompanionConversationSummary:
+    """Rename a companion conversation."""
+    result = await db.execute(
+        select(CompanionConversation).where(
+            CompanionConversation.id == conversation_id,
+            CompanionConversation.book_id == book_id,
+            CompanionConversation.user_id == current_user.id,
+        )
+    )
+    conversation = result.scalar_one_or_none()
+    if conversation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
+        )
+    conversation.title = body.title
+    await db.commit()
+    await db.refresh(conversation)
+    return CompanionConversationSummary.model_validate(conversation)
+
+
+@router.delete(
+    "/{book_id}/companion/{conversation_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
 async def delete_companion_conversation(
     book_id: uuid.UUID,
+    conversation_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
-    """Reset/clear the companion conversation for a book."""
+    """Delete a specific companion conversation."""
     result = await db.execute(
         select(CompanionConversation).where(
+            CompanionConversation.id == conversation_id,
             CompanionConversation.book_id == book_id,
             CompanionConversation.user_id == current_user.id,
         )

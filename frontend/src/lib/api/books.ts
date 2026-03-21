@@ -1,8 +1,9 @@
-import { get, post, put, del } from "./client";
+import { get, post, put, patch, del } from "./client";
 import type {
   BookOut,
   BookWithInteractionOut,
   CompanionConversationOut,
+  CompanionConversationSummary,
   EpubImageInfo,
   ExternalMetadataOut,
   HighlightOut,
@@ -249,11 +250,20 @@ export const booksApi = {
     >,
 
   // Companion
-  getCompanionConversation: (bookId: string, token: string) =>
+  listCompanionConversations: (bookId: string, token: string) =>
+    get(`/books/${bookId}/companion`, token) as Promise<
+      CompanionConversationSummary[]
+    >,
+
+  getCompanionConversation: (
+    bookId: string,
+    conversationId: string,
+    token: string,
+  ) =>
     get(
-      `/books/${bookId}/companion`,
+      `/books/${bookId}/companion/${conversationId}`,
       token,
-    ) as Promise<CompanionConversationOut | null>,
+    ) as Promise<CompanionConversationOut>,
 
   sendCompanionMessage: (
     bookId: string,
@@ -262,6 +272,7 @@ export const booksApi = {
       selected_text?: string | null;
       cfi_range?: string | null;
       current_cfi?: string | null;
+      conversation_id?: string | null;
     },
     token: string,
   ) =>
@@ -274,6 +285,16 @@ export const booksApi = {
       body: JSON.stringify(data),
     }),
 
-  deleteCompanionConversation: (bookId: string, token: string) =>
-    del(`/books/${bookId}/companion`, token),
+  renameCompanionConversation: (
+    bookId: string,
+    conversationId: string,
+    title: string,
+    token: string,
+  ) => patch(`/books/${bookId}/companion/${conversationId}`, { title }, token),
+
+  deleteCompanionConversation: (
+    bookId: string,
+    conversationId: string,
+    token: string,
+  ) => del(`/books/${bookId}/companion/${conversationId}`, token),
 };

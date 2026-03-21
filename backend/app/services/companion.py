@@ -62,20 +62,24 @@ async def get_or_create_conversation(
     db: AsyncSession,
     book_id: uuid.UUID,
     user_id: uuid.UUID,
+    conversation_id: uuid.UUID | None = None,
 ) -> CompanionConversation:
-    """Get existing conversation or create a new one."""
-    result = await db.execute(
-        select(CompanionConversation)
-        .where(
-            CompanionConversation.book_id == book_id,
-            CompanionConversation.user_id == user_id,
+    """Get existing conversation by ID, or create a new one."""
+    if conversation_id is not None:
+        result = await db.execute(
+            select(CompanionConversation)
+            .where(
+                CompanionConversation.id == conversation_id,
+                CompanionConversation.book_id == book_id,
+                CompanionConversation.user_id == user_id,
+            )
+            .options(selectinload(CompanionConversation.messages))
         )
-        .options(selectinload(CompanionConversation.messages))
-    )
-    conversation = result.scalar_one_or_none()
-    if conversation is not None:
-        return conversation
+        conversation = result.scalar_one_or_none()
+        if conversation is not None:
+            return conversation
 
+    # Create new conversation
     conversation = CompanionConversation(book_id=book_id, user_id=user_id)
     db.add(conversation)
     await db.flush()
@@ -308,17 +312,6 @@ async def stream_companion_response(
 
     # Build chat messages
     chat_messages = build_chat_messages(conversation, user_message, selected_text)
-
-    # Debug: print what we're sending to the LLM
-    print(f"=== DEBUG current_cfi={current_cfi!r} ===")
-    print("=== COMPANION LLM INPUT ===")
-    print(f"System prompt ({len(system_prompt)} chars):")
-    print(system_prompt)
-    for i, msg in enumerate(chat_messages):
-        print(f"Message[{i}] role={msg.role} ({len(msg.content)} chars):")
-        print(msg.content)
-    print("=== END COMPANION LLM INPUT ===")
-
     # Stream from LLM (use DB settings)
     db_settings = await get_all_settings(db)
     provider = get_companion_provider(db_settings)

@@ -265,9 +265,18 @@ export interface CompanionMessageOut {
   created_at: string;
 }
 
+export interface CompanionConversationSummary {
+  id: string;
+  book_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CompanionConversationOut {
   id: string;
   book_id: string;
+  title: string | null;
   messages: CompanionMessageOut[];
   created_at: string;
 }
