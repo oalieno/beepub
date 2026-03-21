@@ -14,6 +14,7 @@
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
+  import SearchSidebar from "$lib/components/reader/SearchSidebar.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -50,6 +51,7 @@
   let showHighlightSidebar = $state(false);
   let showTocSidebar = $state(false);
   let showIllustrationSidebar = $state(false);
+  let showSearchSidebar = $state(false);
   let showCompanionSidebar = $state(false);
   let companionSelectedText = $state<string | null>(null);
   let companionSelectedCfi = $state<string | null>(null);
@@ -353,12 +355,14 @@
       showTocSidebar = false;
       showIllustrationSidebar = false;
       showCompanionSidebar = false;
+      showSearchSidebar = false;
     }}
     onillustrations={() => {
       showIllustrationSidebar = !showIllustrationSidebar;
       showHighlightSidebar = false;
       showTocSidebar = false;
       showCompanionSidebar = false;
+      showSearchSidebar = false;
     }}
     oncompanion={() => {
       showCompanionSidebar = !showCompanionSidebar;
@@ -367,12 +371,21 @@
       showHighlightSidebar = false;
       showTocSidebar = false;
       showIllustrationSidebar = false;
+      showSearchSidebar = false;
+    }}
+    onsearch={() => {
+      showSearchSidebar = !showSearchSidebar;
+      showHighlightSidebar = false;
+      showTocSidebar = false;
+      showIllustrationSidebar = false;
+      showCompanionSidebar = false;
     }}
     ontoc_toggle={() => {
       showTocSidebar = !showTocSidebar;
       showHighlightSidebar = false;
       showIllustrationSidebar = false;
       showCompanionSidebar = false;
+      showSearchSidebar = false;
     }}
   />
 
@@ -437,6 +450,18 @@
           showTocSidebar = false;
         }}
         onclose={() => (showTocSidebar = false)}
+      />
+    {/if}
+
+    {#if showSearchSidebar}
+      <SearchSidebar
+        {darkMode}
+        onselect={(cfi) => {
+          reader?.displayCfi(cfi);
+        }}
+        onclose={() => (showSearchSidebar = false)}
+        onsearch={(query, onResults, signal) =>
+          reader?.searchBook(query, onResults, signal)}
       />
     {/if}
 

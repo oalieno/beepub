@@ -8,6 +8,7 @@
     Sun,
     Moon,
     List,
+    Search,
     Highlighter,
     Sparkles,
     MessageCircle,
@@ -35,6 +36,7 @@
     onhighlights,
     onillustrations,
     oncompanion,
+    onsearch,
     ontoc_toggle,
   }: {
     bookId?: string;
@@ -57,6 +59,7 @@
     onhighlights?: () => void;
     onillustrations?: () => void;
     oncompanion?: () => void;
+    onsearch?: () => void;
     ontoc_toggle?: () => void;
   } = $props();
 
@@ -87,6 +90,15 @@
     onclick={() => ontoc_toggle?.()}
   >
     <List size={18} />
+  </button>
+
+  <!-- Search button -->
+  <button
+    class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+    title="Search in book"
+    onclick={() => onsearch?.()}
+  >
+    <Search size={18} />
   </button>
 
   <!-- Highlights button -->

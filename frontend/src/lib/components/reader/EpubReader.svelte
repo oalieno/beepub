@@ -1428,6 +1428,59 @@
     rendition?.annotations.remove(cfiRange, "highlight");
   }
 
+  export interface SearchResult {
+    cfi: string;
+    excerpt: string;
+    sectionLabel: string;
+    sectionIndex: number;
+  }
+
+  /**
+   * Search the entire book for a query string.
+   * Loads each spine section, runs section.find(), and yields results progressively.
+   */
+  export async function searchBook(
+    query: string,
+    onResults: (results: SearchResult[]) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    if (!epubBook?.spine) return;
+    const allResults: SearchResult[] = [];
+    const spineItems = epubBook.spine.spineItems;
+
+    for (let i = 0; i < spineItems.length; i++) {
+      if (signal?.aborted) return;
+      const section = spineItems[i];
+      try {
+        await section.load(epubBook.load.bind(epubBook));
+        const matches = section.find(query);
+        if (matches.length > 0) {
+          // Find section label from TOC
+          const label =
+            tocData.find((t) => {
+              const tocHref = t.href.split("#")[0];
+              const sectionHref = section.href.split("#")[0];
+              return tocHref === sectionHref;
+            })?.label || `Section ${i + 1}`;
+
+          for (const match of matches) {
+            allResults.push({
+              cfi: match.cfi,
+              excerpt: match.excerpt,
+              sectionLabel: label,
+              sectionIndex: i,
+            });
+          }
+          onResults([...allResults]);
+        }
+      } catch {
+        // Skip sections that fail to load (e.g. image-only)
+      }
+    }
+    // Final callback even if no new results in last sections
+    onResults([...allResults]);
+  }
+
   /** Clear iOS custom selection state (clear selection + overlay) */
   function clearIOSSelection() {
     const c = rendition?.manager?.getContents?.()?.[0];
