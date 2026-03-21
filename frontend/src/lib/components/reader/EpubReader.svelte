@@ -1106,6 +1106,13 @@
 
   function handleKeyboard(e: KeyboardEvent) {
     showFootnote = false;
+    const tag = (e.target as HTMLElement)?.tagName;
+    if (
+      tag === "INPUT" ||
+      tag === "TEXTAREA" ||
+      (e.target as HTMLElement)?.isContentEditable
+    )
+      return;
     if (e.key === "ArrowLeft") isRtl ? rendition?.next() : rendition?.prev();
     if (e.key === "ArrowRight") isRtl ? rendition?.prev() : rendition?.next();
   }
