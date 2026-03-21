@@ -168,6 +168,15 @@ async def stream_companion_response(
     # Build chat messages
     chat_messages = build_chat_messages(conversation, user_message, selected_text)
 
+    # Debug: print what we're sending to the LLM
+    print("=== COMPANION LLM INPUT ===")
+    print(f"System prompt ({len(system_prompt)} chars):")
+    print(system_prompt)
+    for i, msg in enumerate(chat_messages):
+        print(f"Message[{i}] role={msg.role} ({len(msg.content)} chars):")
+        print(msg.content)
+    print("=== END COMPANION LLM INPUT ===")
+
     # Stream from LLM (use DB settings)
     db_settings = await get_all_settings(db)
     provider = get_companion_provider(db_settings)
