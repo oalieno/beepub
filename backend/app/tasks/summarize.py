@@ -114,15 +114,8 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
             for chunk in chunks:
                 stripped = chunk.text.strip()
-                # Skip very short sections (likely title pages, etc.)
-                if len(stripped) < 200:
-                    chunk.summary = stripped
-                    continue
-
-                # Skip TOC-like pages: mostly short lines (chapter listings)
-                lines = [ln for ln in stripped.split("\n") if ln.strip()]
-                avg_line_len = len(stripped) / max(len(lines), 1)
-                if avg_line_len < 30 and len(lines) > 5:
+                # Skip short/non-content sections (title pages, copyright, TOC, etc.)
+                if len(stripped) < 1000:
                     chunk.summary = stripped[:200]
                     continue
 
