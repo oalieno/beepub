@@ -22,5 +22,7 @@
 </script>
 
 <div
-  class="animate-spin rounded-full border-2 border-t-transparent {sizes[size]} {className || colors[color]}"
+  class="animate-spin rounded-full border-2 border-t-transparent {sizes[
+    size
+  ]} {className || colors[color]}"
 ></div>

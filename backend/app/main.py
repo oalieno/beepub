@@ -6,6 +6,7 @@ from app.routers import (
     auth,
     books,
     bookshelves,
+    companion,
     highlights,
     illustrations,
     libraries,
@@ -30,6 +31,7 @@ app.include_router(admin.router)
 app.include_router(highlights.router)
 app.include_router(illustrations.router)
 app.include_router(tags.router)
+app.include_router(companion.router)
 
 
 @app.get("/api/health")

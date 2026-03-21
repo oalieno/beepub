@@ -2,6 +2,7 @@ import { get, post, put, del } from "./client";
 import type {
   BookOut,
   BookWithInteractionOut,
+  CompanionConversationOut,
   EpubImageInfo,
   ExternalMetadataOut,
   HighlightOut,
@@ -246,4 +247,33 @@ export const booksApi = {
     get(`/books/discover/browse?category=${category}`, token) as Promise<
       TagBrowseSection[]
     >,
+
+  // Companion
+  getCompanionConversation: (bookId: string, token: string) =>
+    get(
+      `/books/${bookId}/companion`,
+      token,
+    ) as Promise<CompanionConversationOut | null>,
+
+  sendCompanionMessage: (
+    bookId: string,
+    data: {
+      message: string;
+      selected_text?: string | null;
+      cfi_range?: string | null;
+      current_cfi?: string | null;
+    },
+    token: string,
+  ) =>
+    fetch(`/api/books/${bookId}/companion`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    }),
+
+  deleteCompanionConversation: (bookId: string, token: string) =>
+    del(`/books/${bookId}/companion`, token),
 };

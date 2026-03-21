@@ -10,6 +10,7 @@
     List,
     Highlighter,
     Sparkles,
+    MessageCircle,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
 
@@ -33,6 +34,7 @@
     onchapter,
     onhighlights,
     onillustrations,
+    oncompanion,
     ontoc_toggle,
   }: {
     bookId?: string;
@@ -54,6 +56,7 @@
     onchapter?: (href: string) => void;
     onhighlights?: () => void;
     onillustrations?: () => void;
+    oncompanion?: () => void;
     ontoc_toggle?: () => void;
   } = $props();
 
@@ -119,6 +122,15 @@
         {illustrationCount > 99 ? "99" : illustrationCount}
       </span>
     {/if}
+  </button>
+
+  <!-- Companion button -->
+  <button
+    class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+    title="AI Companion"
+    onclick={() => oncompanion?.()}
+  >
+    <MessageCircle size={18} />
   </button>
 
   <div

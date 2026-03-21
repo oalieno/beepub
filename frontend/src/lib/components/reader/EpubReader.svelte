@@ -23,6 +23,7 @@
     onshare,
     onhrefchange,
     onready,
+    oncompanion,
   }: {
     bookId: string;
     token: string;
@@ -40,6 +41,7 @@
     onshare?: (highlight: HighlightOut) => void;
     onhrefchange?: (href: string) => void;
     onready?: () => void;
+    oncompanion?: (detail: { cfiRange: string; text: string }) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -1411,6 +1413,10 @@
     rendition?.display(cfi);
   }
 
+  export function getCurrentCfi(): string {
+    return currentCfi;
+  }
+
   export function removeHighlightAnnotation(cfiRange: string) {
     rendition?.annotations.remove(cfiRange, "highlight");
   }
@@ -1487,6 +1493,13 @@
     onillustrate?.({ cfiRange: selectedCfi, text: selectedText });
   }
 
+  function handleCompanion() {
+    showHighlightMenu = false;
+    clearIOSSelection();
+    if (!selectedCfi || !selectedText) return;
+    oncompanion?.({ cfiRange: selectedCfi, text: selectedText });
+  }
+
   async function handleRemoveHighlight() {
     showHighlightMenu = false;
     clearIOSSelection();
@@ -1540,6 +1553,7 @@
         onhighlight={handleHighlight}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
+        oncompanion={handleCompanion}
         oncopy={handleCopy}
         onshare={handleShare}
         onclose={() => {

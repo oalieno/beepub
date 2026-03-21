@@ -61,7 +61,9 @@ sw.addEventListener("fetch", (event) => {
           fetch(event.request).then((response) => {
             if (response.status === 200) {
               const clone = response.clone();
-              caches.open(CACHE).then((cache) => cache.put(event.request, clone));
+              caches
+                .open(CACHE)
+                .then((cache) => cache.put(event.request, clone));
             }
             return response;
           }),

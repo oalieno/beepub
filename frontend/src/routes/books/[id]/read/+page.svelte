@@ -12,6 +12,7 @@
   import { toastStore } from "$lib/stores/toast";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
+  import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -46,6 +47,9 @@
   let showHighlightSidebar = $state(false);
   let showTocSidebar = $state(false);
   let showIllustrationSidebar = $state(false);
+  let showCompanionSidebar = $state(false);
+  let companionSelectedText = $state<string | null>(null);
+  let companionSelectedCfi = $state<string | null>(null);
   let showIllustrationModal = $state(false);
   let illustrationModalCfi = $state("");
   let illustrationModalText = $state("");
@@ -287,6 +291,15 @@
     shareModalOpen = true;
   }
 
+  function handleCompanion(detail: { cfiRange: string; text: string }) {
+    companionSelectedText = detail.text;
+    companionSelectedCfi = detail.cfiRange;
+    showCompanionSidebar = true;
+    showHighlightSidebar = false;
+    showTocSidebar = false;
+    showIllustrationSidebar = false;
+  }
+
   function handleSelectIllustration(ill: IllustrationOut) {
     reader?.displayCfi(ill.cfi_range);
     showIllustrationSidebar = false;
@@ -325,16 +338,27 @@
       showHighlightSidebar = !showHighlightSidebar;
       showTocSidebar = false;
       showIllustrationSidebar = false;
+      showCompanionSidebar = false;
     }}
     onillustrations={() => {
       showIllustrationSidebar = !showIllustrationSidebar;
       showHighlightSidebar = false;
       showTocSidebar = false;
+      showCompanionSidebar = false;
+    }}
+    oncompanion={() => {
+      showCompanionSidebar = !showCompanionSidebar;
+      companionSelectedText = null;
+      companionSelectedCfi = null;
+      showHighlightSidebar = false;
+      showTocSidebar = false;
+      showIllustrationSidebar = false;
     }}
     ontoc_toggle={() => {
       showTocSidebar = !showTocSidebar;
       showHighlightSidebar = false;
       showIllustrationSidebar = false;
+      showCompanionSidebar = false;
     }}
   />
 
@@ -359,6 +383,7 @@
         onillustrationschange={(ills) => (illustrations = ills)}
         onillustrationclick={(ill) => (viewingIllustration = ill)}
         onshare={handleShareHighlight}
+        oncompanion={handleCompanion}
         onready={() => (epubLoaded = true)}
       />
     {/if}
@@ -369,10 +394,7 @@
           ? 'bg-gray-900'
           : 'bg-white'}"
       >
-        <Spinner
-          size="lg"
-          class={darkMode ? "border-gray-400" : ""}
-        />
+        <Spinner size="lg" class={darkMode ? "border-gray-400" : ""} />
       </div>
     {/if}
 
@@ -436,6 +458,18 @@
         onselect={handleSelectIllustration}
         ondelete={handleDeleteIllustration}
         onclose={() => (showIllustrationSidebar = false)}
+      />
+    {/if}
+
+    {#if showCompanionSidebar && $authStore.token}
+      <CompanionSidebar
+        {bookId}
+        token={$authStore.token}
+        {darkMode}
+        selectedText={companionSelectedText}
+        selectedCfi={companionSelectedCfi}
+        getCurrentCfi={() => reader?.getCurrentCfi() ?? ""}
+        onclose={() => (showCompanionSidebar = false)}
       />
     {/if}
   </div>

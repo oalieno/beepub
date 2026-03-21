@@ -240,3 +240,19 @@ export interface CalibreLibraryStatus {
   imported_book_count: number;
   sync: CalibreSyncStatus | null;
 }
+
+export interface CompanionMessageOut {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  selected_text: string | null;
+  cfi_range: string | null;
+  created_at: string;
+}
+
+export interface CompanionConversationOut {
+  id: string;
+  book_id: string;
+  messages: CompanionMessageOut[];
+  created_at: string;
+}

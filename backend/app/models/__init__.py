@@ -1,5 +1,6 @@
 from app.models.book import Book, ExternalMetadata, MetadataSource
 from app.models.bookshelf import Bookshelf, BookshelfBook
+from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.illustration import Illustration
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, UserBookInteraction
@@ -25,4 +26,6 @@ __all__ = [
     "AppSetting",
     "AiBookTag",
     "TagCategory",
+    "CompanionConversation",
+    "CompanionMessage",
 ]

@@ -6,6 +6,7 @@
     Copy,
     Share2,
     Highlighter,
+    MessageCircle,
   } from "@lucide/svelte";
 
   let {
@@ -13,6 +14,7 @@
     onhighlight,
     onremove,
     onillustrate,
+    oncompanion,
     oncopy,
     onshare,
     onclose,
@@ -21,6 +23,7 @@
     onhighlight?: () => void;
     onremove?: () => void;
     onillustrate?: () => void;
+    oncompanion?: () => void;
     oncopy?: () => void;
     onshare?: () => void;
     onclose?: () => void;
@@ -67,6 +70,15 @@
     onclick={() => onillustrate?.()}
   >
     <Sparkles size={14} />
+  </button>
+
+  <div class="w-px h-4 bg-border"></div>
+  <button
+    class="p-0.5 transition-colors hover:scale-110 transform text-blue-500 hover:text-blue-400"
+    title="Ask Companion"
+    onclick={() => oncompanion?.()}
+  >
+    <MessageCircle size={14} />
   </button>
 
   {#if hasExisting}
