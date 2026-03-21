@@ -16,6 +16,7 @@ from app.database import AsyncSessionLocal
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.services.storage import get_cover_path
+from app.tasks.text_extract import extract_book_text
 from app.tasks.wordcount import compute_word_count
 
 logger = logging.getLogger(__name__)
@@ -65,11 +66,13 @@ def scan_calibre_libraries() -> list[dict]:
                 count = _count_calibre_epubs(db_path)
             except Exception:
                 count = None
-            results.append({
-                "path": lib_path,
-                "name": entry,
-                "book_count": count,
-            })
+            results.append(
+                {
+                    "path": lib_path,
+                    "name": entry,
+                    "book_count": count,
+                }
+            )
     return results
 
 
@@ -164,22 +167,24 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
             tags_str = row["tags"] or ""
             tags_list = [t.strip() for t in tags_str.split(",") if t.strip()] or None
 
-            results.append(CalibreBookInfo(
-                calibre_id=row["calibre_id"],
-                title=row["title"],
-                authors=authors,
-                publisher=row["publisher"],
-                description=row["description"],
-                published_date=pub_date,
-                isbn=row["isbn"],
-                series=series_name,
-                series_index=series_index_val,
-                tags=tags_list,
-                epub_path=epub_path,
-                cover_path=cover,
-                file_size=row["file_size"] or 0,
-                added_at=added_at_str,
-            ))
+            results.append(
+                CalibreBookInfo(
+                    calibre_id=row["calibre_id"],
+                    title=row["title"],
+                    authors=authors,
+                    publisher=row["publisher"],
+                    description=row["description"],
+                    published_date=pub_date,
+                    isbn=row["isbn"],
+                    series=series_name,
+                    series_index=series_index_val,
+                    tags=tags_list,
+                    epub_path=epub_path,
+                    cover_path=cover,
+                    file_size=row["file_size"] or 0,
+                    added_at=added_at_str,
+                )
+            )
         return results
     finally:
         conn.close()
@@ -220,7 +225,9 @@ async def sync_calibre_library(
     client = aioredis.from_url(settings.redis_url)
     key = _sync_key(library_id)
 
-    async def _update_progress(result: SyncResult, total: int, processed: int, status: str = "running"):
+    async def _update_progress(
+        result: SyncResult, total: int, processed: int, status: str = "running"
+    ):
         progress = {
             "status": status,
             "total": total,
@@ -243,6 +250,7 @@ async def sync_calibre_library(
         async with AsyncSessionLocal() as db:
             # Verify library still exists (may have been deleted)
             from sqlalchemy import select
+
             lib_check = await db.execute(
                 select(Library).where(Library.id == library_id)
             )
@@ -350,14 +358,15 @@ async def sync_calibre_library(
                         )
                         db.add(lb)
                         compute_word_count.delay(str(book_id))
+                        extract_book_text.delay(str(book_id))
                         result.added += 1
 
                 except Exception as e:
                     result.skipped += 1
-                    result.errors.append(
-                        f"Error processing '{cal_book.title}': {e}"
+                    result.errors.append(f"Error processing '{cal_book.title}': {e}")
+                    logger.exception(
+                        f"Error syncing calibre book {cal_book.calibre_id}"
                     )
-                    logger.exception(f"Error syncing calibre book {cal_book.calibre_id}")
 
                 # Update progress every book
                 await _update_progress(result, total, i + 1)

@@ -64,6 +64,7 @@ from app.services.storage import (
 )
 from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_metadata
+from app.tasks.text_extract import extract_book_text
 from app.tasks.wordcount import compute_word_count
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -140,6 +141,7 @@ async def upload_book(
 
     fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
     compute_word_count.delay(str(book_id))
+    extract_book_text.delay(str(book_id))
     return book
 
 
@@ -194,6 +196,7 @@ async def upload_books_bulk(
             args=[str(book_id)], link=auto_tag_book.si(str(book_id))
         )
         compute_word_count.delay(str(book_id))
+        extract_book_text.delay(str(book_id))
 
     await db.commit()
     for book in books:
@@ -963,6 +966,14 @@ async def update_progress(
         progress["total_pages"] = body.total_pages
     interaction.reading_progress = progress
     await db.commit()
+
+    # Trigger text extraction + summary generation in the background
+    if body.section_index is not None:
+        from app.tasks.summarize import summarize_chunks
+
+        extract_book_text.delay(str(book_id))
+        summarize_chunks.delay(str(book_id), body.section_index)
+
     return {"status": "updated"}
 
 

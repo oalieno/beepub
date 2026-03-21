@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.book import Book
+from app.models.book_text import BookTextChunk
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.services.epub_text import extract_text_up_to
 from app.services.llm import ChatMessage, get_companion_provider
@@ -51,8 +53,8 @@ ANTI-PATTERNS (never do these):
 - Don't be sycophantic. If the user's take is wrong, gently push back.
 - Don't summarize what the user just said back to them.
 
-BOOK TEXT (up to current reading position):
-{book_text}
+BOOK CONTEXT:
+{book_context}
 """
 
 
@@ -81,6 +83,76 @@ async def get_or_create_conversation(
     return conversation
 
 
+MAX_CURRENT_SECTION_CHARS = 12_000
+MAX_SUMMARY_CHARS = 6_000
+FALLBACK_RAW_CHARS = 16_000
+
+
+def _parse_spine_index_from_cfi(cfi: str | None) -> int | None:
+    """Parse spine index from a CFI string. /6/N -> (N/2) - 1."""
+    if not cfi:
+        return None
+    m = re.match(r"/(\d+)/(\d+)", cfi)
+    if m:
+        return (int(m.group(2)) // 2) - 1
+    return None
+
+
+async def _build_context_from_chunks(
+    db: AsyncSession, book_id: uuid.UUID, current_spine: int | None
+) -> str | None:
+    """Build context from DB text chunks: past summaries + current raw text.
+
+    Returns None if no chunks exist yet (fallback to raw extraction).
+    """
+    result = await db.execute(
+        select(BookTextChunk)
+        .where(BookTextChunk.book_id == book_id)
+        .order_by(BookTextChunk.spine_index)
+    )
+    chunks = result.scalars().all()
+
+    if not chunks:
+        return None
+
+    # Determine which chunk is "current"
+    current_idx = current_spine if current_spine is not None else len(chunks) - 1
+
+    parts: list[str] = []
+
+    # Past sections: use summaries (or truncated text if no summary yet)
+    summary_parts: list[str] = []
+    summary_chars = 0
+    for chunk in chunks:
+        if chunk.spine_index >= current_idx:
+            break
+        if chunk.summary:
+            entry = f"[Ch {chunk.spine_index}] {chunk.summary}"
+        elif len(chunk.text.strip()) < 200:
+            continue  # Skip very short sections (title pages, etc.)
+        else:
+            # No summary yet — use first 200 chars as fallback
+            entry = f"[Ch {chunk.spine_index}] {chunk.text[:200]}..."
+        if summary_chars + len(entry) > MAX_SUMMARY_CHARS:
+            break
+        summary_parts.append(entry)
+        summary_chars += len(entry)
+
+    if summary_parts:
+        parts.append("PREVIOUS CHAPTERS (summaries):\n" + "\n\n".join(summary_parts))
+
+    # Current section: raw text
+    current_chunk = next((c for c in chunks if c.spine_index == current_idx), None)
+    if current_chunk:
+        text = current_chunk.text
+        if len(text) > MAX_CURRENT_SECTION_CHARS:
+            text = text[:MAX_CURRENT_SECTION_CHARS] + "\n\n[...section truncated...]"
+        section_label = current_chunk.section_title or f"Section {current_idx}"
+        parts.append(f"CURRENT SECTION ({section_label}):\n{text}")
+
+    return "\n\n---\n\n".join(parts) if parts else None
+
+
 async def build_system_prompt(
     db: AsyncSession,
     book: Book,
@@ -92,23 +164,33 @@ async def build_system_prompt(
     authors = ", ".join(book.epub_authors or []) or "Unknown"
     language = book.epub_language or "Unknown"
 
-    # Extract book text up to current reading position
-    book_text = ""
-    try:
-        book_text = extract_text_up_to(book.file_path, current_cfi, max_chars=16_000)
-    except Exception:
-        logger.warning("Failed to extract text from book %s", book.id, exc_info=True)
-        book_text = "(Book text unavailable — the EPUB file could not be read.)"
+    current_spine = _parse_spine_index_from_cfi(current_cfi)
 
-    # Truncate to ~16K chars to stay within context budget
-    if len(book_text) > 16_000:
-        book_text = book_text[:16_000] + "\n\n[...text truncated...]"
+    # Try chunk-based context first (summaries + current raw text)
+    book_context = await _build_context_from_chunks(db, book.id, current_spine)
+
+    # Fallback: raw text extraction (no chunks in DB yet)
+    if not book_context:
+        try:
+            book_context = extract_text_up_to(
+                book.file_path, current_cfi, max_chars=FALLBACK_RAW_CHARS
+            )
+        except Exception:
+            logger.warning(
+                "Failed to extract text from book %s", book.id, exc_info=True
+            )
+            book_context = "(Book text unavailable — the EPUB file could not be read.)"
+
+        if len(book_context) > FALLBACK_RAW_CHARS:
+            book_context = (
+                book_context[:FALLBACK_RAW_CHARS] + "\n\n[...text truncated...]"
+            )
 
     return SYSTEM_PROMPT_TEMPLATE.format(
         title=title,
         authors=authors,
         language=language,
-        book_text=book_text,
+        book_context=book_context,
     )
 
 
