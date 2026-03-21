@@ -172,10 +172,11 @@ async def _build_context_from_chunks(
     for chunk in chunks:
         if chunk.spine_index >= current_idx:
             break
+        # Skip non-content sections (copyright, TOC, epigraphs, etc.)
+        if len(chunk.text.strip()) < 500:
+            continue
         if chunk.summary:
             entry = f"[Ch {chunk.spine_index}] {chunk.summary}"
-        elif len(chunk.text.strip()) < 200:
-            continue  # Skip very short sections (title pages, etc.)
         else:
             # No summary yet — use first 200 chars as fallback
             entry = f"[Ch {chunk.spine_index}] {chunk.text[:200]}..."

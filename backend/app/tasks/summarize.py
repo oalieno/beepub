@@ -3,11 +3,40 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from app.celeryapp import celery
 
 logger = logging.getLogger(__name__)
+
+_CJK_RE = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]")
+_KANA_RE = re.compile(r"[\u3040-\u309f\u30a0-\u30ff]")
+_HANGUL_RE = re.compile(r"[\uac00-\ud7af]")
+
+
+def _detect_language(text: str) -> str:
+    """Detect language from text content using character ratios."""
+    sample = text[:5000]
+    total = max(len(sample), 1)
+    cjk = len(_CJK_RE.findall(sample))
+    kana = len(_KANA_RE.findall(sample))
+    hangul = len(_HANGUL_RE.findall(sample))
+
+    if kana / total > 0.05:
+        return "Japanese (日本語)"
+    if hangul / total > 0.05:
+        return "Korean (한국어)"
+    if cjk / total > 0.1:
+        # Detect Traditional vs Simplified by checking common traditional-only chars
+        trad_chars = len(
+            re.findall(r"[們個這種與對實經過點後發現問題讓說還將從關]", sample)
+        )
+        if trad_chars > 10:
+            return "Traditional Chinese (繁體中文)"
+        return "Chinese (中文)"
+    return "the same language as the text"
+
 
 SUMMARY_PROMPT = """\
 Summarize this book chapter/section in 2-4 sentences. Focus on key events, \
@@ -48,9 +77,17 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
             book_result = await db.execute(
                 select(Book.epub_language).where(Book.id == bid)
             )
-            book_lang = (
-                book_result.scalar_one_or_none() or "the same language as the text"
-            )
+            epub_lang = book_result.scalar_one_or_none()
+            if epub_lang and epub_lang.startswith("zh"):
+                book_lang = "Traditional Chinese (繁體中文)"
+            elif epub_lang and epub_lang.startswith("ja"):
+                book_lang = "Japanese (日本語)"
+            elif epub_lang and epub_lang.startswith("ko"):
+                book_lang = "Korean (한국어)"
+            elif epub_lang:
+                book_lang = epub_lang
+            else:
+                book_lang = None  # will detect per-chunk below
 
             # Get chunks that need summaries
             result = await db.execute(
@@ -95,8 +132,9 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
                     text = text[:12_000] + "\n\n[...truncated...]"
 
                 try:
+                    lang = book_lang or _detect_language(text)
                     summary = await provider.generate(
-                        SUMMARY_PROMPT.format(language=book_lang, text=text),
+                        SUMMARY_PROMPT.format(language=lang, text=text),
                     )
                     chunk.summary = summary.strip()
                 except Exception:
