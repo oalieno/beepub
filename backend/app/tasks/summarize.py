@@ -11,8 +11,9 @@ logger = logging.getLogger(__name__)
 
 SUMMARY_PROMPT = """\
 Summarize this book chapter/section in 2-4 sentences. Focus on key events, \
-character actions, and important details. Keep it factual and concise. \
-Write in the same language as the text.
+character actions, and important details. Keep it factual and concise.
+
+CRITICAL: You MUST write the summary in {language}. Do NOT translate to English.
 
 Text:
 {text}"""
@@ -34,6 +35,7 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
         from sqlalchemy import select
 
         from app.database import create_task_session
+        from app.models.book import Book
         from app.models.book_text import BookTextChunk
         from app.services.llm import LLMNotConfiguredError, get_tag_provider
         from app.services.settings import get_all_settings
@@ -41,6 +43,14 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
         session_factory = create_task_session()
         async with session_factory() as db:
             bid = uuid.UUID(book_id)
+
+            # Get book language for summary prompt
+            book_result = await db.execute(
+                select(Book.epub_language).where(Book.id == bid)
+            )
+            book_lang = (
+                book_result.scalar_one_or_none() or "the same language as the text"
+            )
 
             # Get chunks that need summaries
             result = await db.execute(
@@ -66,9 +76,17 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
                 return
 
             for chunk in chunks:
+                stripped = chunk.text.strip()
                 # Skip very short sections (likely title pages, etc.)
-                if len(chunk.text.strip()) < 200:
-                    chunk.summary = chunk.text.strip()
+                if len(stripped) < 200:
+                    chunk.summary = stripped
+                    continue
+
+                # Skip TOC-like pages: mostly short lines (chapter listings)
+                lines = [ln for ln in stripped.split("\n") if ln.strip()]
+                avg_line_len = len(stripped) / max(len(lines), 1)
+                if avg_line_len < 30 and len(lines) > 5:
+                    chunk.summary = stripped[:200]
                     continue
 
                 # Truncate very long sections for the summary prompt
@@ -78,7 +96,7 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
                 try:
                     summary = await provider.generate(
-                        SUMMARY_PROMPT.format(text=text),
+                        SUMMARY_PROMPT.format(language=book_lang, text=text),
                     )
                     chunk.summary = summary.strip()
                 except Exception:

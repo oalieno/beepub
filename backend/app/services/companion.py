@@ -88,21 +88,67 @@ MAX_SUMMARY_CHARS = 6_000
 FALLBACK_RAW_CHARS = 16_000
 
 
-def _parse_spine_index_from_cfi(cfi: str | None) -> int | None:
-    """Parse spine index from a CFI string. /6/N -> (N/2) - 1."""
+def _parse_cfi(cfi: str | None) -> tuple[int | None, int | None]:
+    """Parse spine index and in-chapter node index from a CFI.
+
+    CFI example: 'epubcfi(/6/30!/4[...]/116/1:0)'
+    - /6/30  → spine index = (30 // 2) - 1 = 14
+    - /116   → node index within the chapter (roughly paragraph * 2)
+
+    Returns (spine_index, node_index).
+    """
     if not cfi:
-        return None
-    m = re.match(r"/(\d+)/(\d+)", cfi)
-    if m:
-        return (int(m.group(2)) // 2) - 1
-    return None
+        return None, None
+
+    spine_m = re.search(r"/6/(\d+)", cfi)
+    spine_idx = (int(spine_m.group(1)) // 2) - 1 if spine_m else None
+
+    # Extract the largest node index after '!' to estimate position.
+    # CFI: !/4[...]/116/1:0 → look for the significant node number.
+    # Skip the first step after ! (always /4 = body), then grab the next number.
+    node_idx = None
+    after_bang = cfi.split("!", 1)
+    if len(after_bang) == 2:
+        # Find all /N segments, skip first (/4 = body), use second
+        node_matches = re.findall(r"/(\d+)", after_bang[1])
+        # e.g. ['4', '116', '1'] from !/4[...]/116/1:0
+        # Skip index 0 (/4=body), take index 1 if it exists
+        if len(node_matches) >= 2:
+            node_idx = int(node_matches[1])
+
+    return spine_idx, node_idx
+
+
+def _estimate_char_position(text: str, node_idx: int | None) -> int:
+    """Estimate character position from CFI node index.
+
+    EPUB CFI node indices roughly correspond to HTML element positions.
+    We split the text into paragraphs and map node_idx to a paragraph boundary.
+    node_idx is typically 2*paragraph_number (even = element, odd = text node).
+    """
+    if node_idx is None:
+        return len(text)
+
+    paragraphs = text.split("\n")
+    # node_idx/2 ≈ paragraph number (CFI uses even numbers for elements)
+    target_para = node_idx // 2
+    char_pos = 0
+    for i, para in enumerate(paragraphs):
+        if i >= target_para:
+            break
+        char_pos += len(para) + 1  # +1 for the newline
+    return min(char_pos, len(text))
 
 
 async def _build_context_from_chunks(
-    db: AsyncSession, book_id: uuid.UUID, current_spine: int | None
+    db: AsyncSession,
+    book_id: uuid.UUID,
+    current_spine: int | None,
+    node_idx: int | None = None,
 ) -> str | None:
     """Build context from DB text chunks: past summaries + current raw text.
 
+    Only includes text up to the user's current reading position to avoid spoilers.
     Returns None if no chunks exist yet (fallback to raw extraction).
     """
     result = await db.execute(
@@ -141,12 +187,19 @@ async def _build_context_from_chunks(
     if summary_parts:
         parts.append("PREVIOUS CHAPTERS (summaries):\n" + "\n\n".join(summary_parts))
 
-    # Current section: raw text
+    # Current section: raw text up to reading position (no spoilers)
     current_chunk = next((c for c in chunks if c.spine_index == current_idx), None)
     if current_chunk:
         text = current_chunk.text
+        # Truncate to user's reading position within the chapter
+        read_pos = _estimate_char_position(text, node_idx)
+        # Add a small buffer past the reading position for context
+        read_pos = min(len(text), read_pos + 500)
+        text = text[:read_pos]
         if len(text) > MAX_CURRENT_SECTION_CHARS:
-            text = text[:MAX_CURRENT_SECTION_CHARS] + "\n\n[...section truncated...]"
+            text = text[:MAX_CURRENT_SECTION_CHARS]
+        if read_pos < len(current_chunk.text):
+            text += "\n\n[...reading position — text beyond here not shown...]"
         section_label = current_chunk.section_title or f"Section {current_idx}"
         parts.append(f"CURRENT SECTION ({section_label}):\n{text}")
 
@@ -164,10 +217,15 @@ async def build_system_prompt(
     authors = ", ".join(book.epub_authors or []) or "Unknown"
     language = book.epub_language or "Unknown"
 
-    current_spine = _parse_spine_index_from_cfi(current_cfi)
+    current_spine, node_idx = _parse_cfi(current_cfi)
+    print(
+        f"=== DEBUG current_cfi={current_cfi!r} spine={current_spine} node={node_idx} ==="
+    )
 
     # Try chunk-based context first (summaries + current raw text)
-    book_context = await _build_context_from_chunks(db, book.id, current_spine)
+    book_context = await _build_context_from_chunks(
+        db, book.id, current_spine, node_idx
+    )
 
     # Fallback: raw text extraction (no chunks in DB yet)
     if not book_context:
@@ -251,6 +309,7 @@ async def stream_companion_response(
     chat_messages = build_chat_messages(conversation, user_message, selected_text)
 
     # Debug: print what we're sending to the LLM
+    print(f"=== DEBUG current_cfi={current_cfi!r} ===")
     print("=== COMPANION LLM INPUT ===")
     print(f"System prompt ({len(system_prompt)} chars):")
     print(system_prompt)
