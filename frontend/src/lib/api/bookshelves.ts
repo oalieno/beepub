@@ -83,3 +83,8 @@ export const adminApi = {
       import("$lib/types").AdminSettings
     >,
 };
+
+export const aiApi = {
+  getStatus: (token: string) =>
+    get("/ai/status", token) as Promise<import("$lib/types").AiStatus>,
+};

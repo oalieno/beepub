@@ -16,6 +16,7 @@ async def _process_auto_tag(book_id: str) -> None:
     from sqlalchemy import text
 
     from app.database import create_task_session
+    from app.services.settings import get_all_settings
     from app.services.tags import generate_ai_tags, save_ai_tags
 
     SessionLocal = create_task_session()
@@ -58,12 +59,14 @@ async def _process_auto_tag(book_id: str) -> None:
                 reviews.extend(r[0])
 
         # Generate tags via LLM
+        db_settings = await get_all_settings(db)
         tags = await generate_ai_tags(
             title=display_title,
             authors=display_authors,
             description=display_description,
             language=language,
             reviews=reviews or None,
+            db_settings=db_settings,
         )
 
         if not tags:

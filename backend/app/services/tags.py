@@ -246,11 +246,12 @@ async def generate_ai_tags(
     description: str | None,
     language: str | None,
     reviews: list[dict] | None,
+    db_settings: dict[str, str] | None = None,
 ) -> list[dict]:
-    """Call Gemini to generate tags for a book. Returns list of {tag, category, confidence}."""
-    from app.services.llm import get_llm_provider
+    """Call LLM to generate tags for a book. Returns list of {tag, category, confidence}."""
+    from app.services.llm import get_tag_provider
 
-    provider = get_llm_provider()
+    provider = get_tag_provider(db_settings)
     system = _build_system_prompt()
     user_prompt = _build_user_prompt(title, authors, description, language, reviews)
 

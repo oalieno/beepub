@@ -39,11 +39,22 @@ async def _run(
     image_path: str,
     reference_images: list[dict] | None,
 ) -> None:
+    from app.database import create_task_session
     from app.services.gemini import generate_illustration
+    from app.services.settings import get_all_settings
+
+    # Read image provider settings from DB
+    SessionLocal = create_task_session()
+    async with SessionLocal() as db:
+        db_settings = await get_all_settings(db)
 
     ref_bytes = _load_reference_images(reference_images)
     image_bytes = await generate_illustration(
-        text, style_prompt, custom_prompt, reference_images=ref_bytes
+        text,
+        style_prompt,
+        custom_prompt,
+        reference_images=ref_bytes,
+        db_settings=db_settings,
     )
     os.makedirs(os.path.dirname(image_path), exist_ok=True)
     with open(image_path, "wb") as f:
@@ -62,9 +73,7 @@ async def _mark_status(
     SessionLocal = create_task_session()
     async with SessionLocal() as db:
         result = await db.execute(
-            select(Illustration).where(
-                Illustration.id == uuid.UUID(illustration_id)
-            )
+            select(Illustration).where(Illustration.id == uuid.UUID(illustration_id))
         )
         ill = result.scalar_one()
         ill.status = status
@@ -73,7 +82,9 @@ async def _mark_status(
         await db.commit()
 
 
-def _safe_mark(illustration_id: str, status: str, error_message: str | None = None) -> None:
+def _safe_mark(
+    illustration_id: str, status: str, error_message: str | None = None
+) -> None:
     """Mark illustration status, logging any DB errors instead of raising."""
     try:
         asyncio.run(_mark_status(illustration_id, status, error_message))
@@ -101,8 +112,12 @@ def generate_illustration_task(
     try:
         asyncio.run(
             _run(
-                illustration_id, text, style_prompt, custom_prompt,
-                image_path, reference_images,
+                illustration_id,
+                text,
+                style_prompt,
+                custom_prompt,
+                image_path,
+                reference_images,
             )
         )
         # Success — mark completed

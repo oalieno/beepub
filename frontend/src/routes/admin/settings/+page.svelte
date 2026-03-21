@@ -25,13 +25,22 @@
   let metadataIntervalDays = $state(7);
   let metadataCooldownDays = $state(30);
 
-  // LLM settings
-  let llmProvider = $state("");
+  // Provider credentials (stored once)
   let geminiApiKey = $state("");
-  let geminiModel = $state("");
   let openaiApiKey = $state("");
   let openaiBaseUrl = $state("");
-  let openaiModel = $state("");
+
+  // Per-feature config
+  let companionProvider = $state("");
+  let companionModel = $state("");
+  let tagProvider = $state("");
+  let tagModel = $state("");
+  let imageProvider = $state("");
+  let imageModel = $state("");
+
+  // Derived: which providers have credentials configured
+  let hasGemini = $derived(geminiApiKey.trim().length > 0);
+  let hasOpenai = $derived(openaiBaseUrl.trim().length > 0);
 
   const allTimezones = Intl.supportedValuesOf("timeZone");
 
@@ -93,6 +102,12 @@
     label: `${String(i).padStart(2, "0")}:00`,
   }));
 
+  function providerLabel(value: string): string {
+    if (value === "gemini") return "Gemini";
+    if (value === "openai") return "OpenAI Compatible";
+    return "Not configured";
+  }
+
   onMount(async () => {
     if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
       goto("/");
@@ -112,12 +127,15 @@
         parseInt(settings.metadata_refresh_interval_days) || 7;
       metadataCooldownDays =
         parseInt(settings.metadata_refresh_cooldown_days) || 30;
-      llmProvider = settings.llm_provider || "";
       geminiApiKey = settings.gemini_api_key || "";
-      geminiModel = settings.gemini_model || "";
       openaiApiKey = settings.openai_api_key || "";
       openaiBaseUrl = settings.openai_base_url || "";
-      openaiModel = settings.openai_model || "";
+      companionProvider = settings.companion_provider || "";
+      companionModel = settings.companion_model || "";
+      tagProvider = settings.tag_provider || "";
+      tagModel = settings.tag_model || "";
+      imageProvider = settings.image_provider || "";
+      imageModel = settings.image_model || "";
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -136,12 +154,15 @@
           metadata_refresh_hour: String(metadataHour),
           metadata_refresh_interval_days: String(metadataIntervalDays),
           metadata_refresh_cooldown_days: String(metadataCooldownDays),
-          llm_provider: llmProvider,
           gemini_api_key: geminiApiKey,
-          gemini_model: geminiModel,
           openai_api_key: openaiApiKey,
           openai_base_url: openaiBaseUrl,
-          openai_model: openaiModel,
+          companion_provider: companionProvider,
+          companion_model: companionModel,
+          tag_provider: tagProvider,
+          tag_model: tagModel,
+          image_provider: imageProvider,
+          image_model: imageModel,
         },
         $authStore.token,
       );
@@ -153,6 +174,55 @@
     }
   }
 </script>
+
+{#snippet featureProviderFields(
+  prefix: string,
+  value: string,
+  model: string,
+  modelPlaceholder: string,
+  onChange: (v: string) => void,
+  onModelChange: (v: string) => void,
+)}
+  <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+    <div class="space-y-1.5">
+      <Label for="{prefix}-provider">Provider</Label>
+      <Select.Root
+        type="single"
+        value={value || "none"}
+        onValueChange={(v) => onChange(v === "none" ? "" : v)}
+      >
+        <Select.Trigger id="{prefix}-provider" class="w-full bg-background">
+          {providerLabel(value)}
+        </Select.Trigger>
+        <Select.Content align="start">
+          <Select.Item value="none">Not configured</Select.Item>
+          {#if hasGemini}
+            <Select.Item value="gemini">Gemini</Select.Item>
+          {/if}
+          {#if hasOpenai}
+            <Select.Item value="openai">OpenAI Compatible</Select.Item>
+          {/if}
+        </Select.Content>
+      </Select.Root>
+      {#if !hasGemini && !hasOpenai}
+        <p class="text-xs text-muted-foreground">
+          Add API keys in the AI Providers section above first
+        </p>
+      {/if}
+    </div>
+    {#if value}
+      <div class="space-y-1.5">
+        <Label for="{prefix}-model">Model</Label>
+        <Input
+          id="{prefix}-model"
+          placeholder={modelPlaceholder}
+          value={model}
+          oninput={(e) => onModelChange(e.currentTarget.value)}
+        />
+      </div>
+    {/if}
+  </div>
+{/snippet}
 
 <svelte:head>
   <title>Settings - Admin - BeePub</title>
@@ -213,7 +283,6 @@
           >
         </Card.Header>
         <Card.Content class="space-y-5">
-          <!-- Enable/Disable -->
           <label class="flex items-center gap-3 cursor-pointer">
             <input
               type="checkbox"
@@ -229,7 +298,6 @@
             <div
               class="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t border-border/30"
             >
-              <!-- Hour -->
               <div class="space-y-1.5">
                 <Label for="metadata-hour">Run at hour</Label>
                 <Select.Root
@@ -253,8 +321,6 @@
                   Hour of day ({timezone})
                 </p>
               </div>
-
-              <!-- Interval -->
               <div class="space-y-1.5">
                 <Label for="metadata-interval">Schedule interval</Label>
                 <div class="flex items-center gap-2">
@@ -273,8 +339,6 @@
                   How often to run the refresh
                 </p>
               </div>
-
-              <!-- Cooldown -->
               <div class="space-y-1.5">
                 <Label for="metadata-cooldown">Cooldown</Label>
                 <div class="flex items-center gap-2">
@@ -298,100 +362,110 @@
         </Card.Content>
       </Card.Root>
 
-      <!-- LLM Provider -->
+      <!-- AI Providers -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>AI / LLM Provider</Card.Title>
+          <Card.Title>AI Providers</Card.Title>
           <Card.Description>
-            Configure the AI model for Reading Companion and other AI features.
-            Leave blank to use .env defaults.
+            Configure API keys for AI providers. Each feature below can use any
+            configured provider.
           </Card.Description>
         </Card.Header>
         <Card.Content class="space-y-5">
-          <div class="max-w-sm space-y-1.5">
-            <Label for="llm-provider">Provider</Label>
-            <Select.Root
-              type="single"
-              value={llmProvider || "default"}
-              onValueChange={(v) => (llmProvider = v === "default" ? "" : v)}
-            >
-              <Select.Trigger id="llm-provider" class="w-full bg-background">
-                {llmProvider === "gemini"
-                  ? "Gemini"
-                  : llmProvider === "openai"
-                    ? "OpenAI Compatible"
-                    : "Default (from .env)"}
-              </Select.Trigger>
-              <Select.Content align="start">
-                <Select.Item value="default">Default (from .env)</Select.Item>
-                <Select.Item value="gemini">Gemini</Select.Item>
-                <Select.Item value="openai">OpenAI Compatible</Select.Item>
-              </Select.Content>
-            </Select.Root>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div class="space-y-1.5">
+              <Label for="gemini-key">Gemini API Key</Label>
+              <Input
+                id="gemini-key"
+                type="password"
+                placeholder="AIza..."
+                value={geminiApiKey}
+                oninput={(e) => (geminiApiKey = e.currentTarget.value)}
+              />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="openai-key">OpenAI Compatible API Key</Label>
+              <Input
+                id="openai-key"
+                type="password"
+                placeholder="sk-... (optional for Ollama)"
+                value={openaiApiKey}
+                oninput={(e) => (openaiApiKey = e.currentTarget.value)}
+              />
+            </div>
           </div>
+          <div class="max-w-sm space-y-1.5">
+            <Label for="openai-url">OpenAI Compatible Base URL</Label>
+            <Input
+              id="openai-url"
+              placeholder="https://api.openai.com/v1"
+              value={openaiBaseUrl}
+              oninput={(e) => (openaiBaseUrl = e.currentTarget.value)}
+            />
+            <p class="text-xs text-muted-foreground">
+              For Ollama: http://host:11434/v1
+            </p>
+          </div>
+        </Card.Content>
+      </Card.Root>
 
-          {#if llmProvider === "gemini"}
-            <div
-              class="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-border/30"
-            >
-              <div class="space-y-1.5">
-                <Label for="gemini-key">API Key</Label>
-                <Input
-                  id="gemini-key"
-                  type="password"
-                  placeholder="AIza..."
-                  bind:value={geminiApiKey}
-                />
-              </div>
-              <div class="space-y-1.5">
-                <Label for="gemini-model">Model</Label>
-                <Input
-                  id="gemini-model"
-                  placeholder="gemini-2.0-flash-exp"
-                  bind:value={geminiModel}
-                />
-              </div>
-            </div>
-          {/if}
+      <!-- Companion AI -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Companion AI</Card.Title>
+          <Card.Description>
+            For the AI Reading Companion chat sidebar
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          {@render featureProviderFields(
+            "companion",
+            companionProvider,
+            companionModel,
+            "gemini-2.5-flash",
+            (v) => (companionProvider = v),
+            (v) => (companionModel = v),
+          )}
+        </Card.Content>
+      </Card.Root>
 
-          {#if llmProvider === "openai"}
-            <div
-              class="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-4 border-t border-border/30"
-            >
-              <div class="space-y-1.5">
-                <Label for="openai-key">API Key</Label>
-                <Input
-                  id="openai-key"
-                  type="password"
-                  placeholder="sk-..."
-                  bind:value={openaiApiKey}
-                />
-                <p class="text-xs text-muted-foreground">
-                  Leave blank if not required (e.g. local Ollama)
-                </p>
-              </div>
-              <div class="space-y-1.5">
-                <Label for="openai-model">Model</Label>
-                <Input
-                  id="openai-model"
-                  placeholder="gpt-4o-mini"
-                  bind:value={openaiModel}
-                />
-              </div>
-              <div class="space-y-1.5 sm:col-span-2">
-                <Label for="openai-url">Base URL</Label>
-                <Input
-                  id="openai-url"
-                  placeholder="https://api.openai.com/v1"
-                  bind:value={openaiBaseUrl}
-                />
-                <p class="text-xs text-muted-foreground">
-                  For Ollama: http://host:11434/v1 · For any OpenAI-compatible
-                  API
-                </p>
-              </div>
-            </div>
-          {/if}
+      <!-- Tag AI -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Tag AI</Card.Title>
+          <Card.Description>
+            For AI-powered book tagging and recommendations
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          {@render featureProviderFields(
+            "tag",
+            tagProvider,
+            tagModel,
+            "gemini-2.0-flash",
+            (v) => (tagProvider = v),
+            (v) => (tagModel = v),
+          )}
+        </Card.Content>
+      </Card.Root>
+
+      <!-- Image AI -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Image AI</Card.Title>
+          <Card.Description>
+            For AI Illustrations (requires Gemini with image generation support)
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          {@render featureProviderFields(
+            "image",
+            imageProvider,
+            imageModel,
+            "gemini-2.0-flash-exp",
+            (v) => (imageProvider = v),
+            (v) => (imageModel = v),
+          )}
         </Card.Content>
       </Card.Root>
 

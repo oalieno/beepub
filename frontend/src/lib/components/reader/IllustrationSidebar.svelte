@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Trash2, Loader2, Sparkles, AlertCircle } from "@lucide/svelte";
+  import { X, Trash2, Loader2, AlertCircle } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
 
@@ -82,26 +82,20 @@
       ? 'border-gray-800'
       : 'border-border'}"
   >
-    <div class="flex items-center gap-2">
-      <Sparkles
-        size={14}
-        class={darkMode ? "text-purple-400" : "text-purple-500"}
-      />
-      <p
-        class="text-sm font-semibold {darkMode
-          ? 'text-gray-200'
-          : 'text-foreground'}"
-      >
-        Illustrations
-        {#if illustrations.length > 0}
-          <span
-            class="ml-1.5 text-xs font-normal {darkMode
-              ? 'text-gray-500'
-              : 'text-muted-foreground'}">{illustrations.length}</span
-          >
-        {/if}
-      </p>
-    </div>
+    <p
+      class="text-sm font-semibold {darkMode
+        ? 'text-gray-200'
+        : 'text-foreground'}"
+    >
+      Illustrations
+      {#if illustrations.length > 0}
+        <span
+          class="ml-1.5 text-xs font-normal {darkMode
+            ? 'text-gray-500'
+            : 'text-muted-foreground'}">{illustrations.length}</span
+        >
+      {/if}
+    </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
         ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'

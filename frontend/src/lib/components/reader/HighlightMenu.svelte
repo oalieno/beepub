@@ -35,7 +35,7 @@
 >
   {#if !hasExisting}
     <button
-      class="p-0.5 transition-colors hover:scale-110 transform text-yellow-500 hover:text-yellow-400"
+      class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
       title="Highlight"
       onclick={() => onhighlight?.()}
     >
@@ -65,7 +65,7 @@
 
   <div class="w-px h-4 bg-border"></div>
   <button
-    class="p-0.5 transition-colors hover:scale-110 transform text-purple-500 hover:text-purple-400"
+    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
     title="AI Illustration"
     onclick={() => onillustrate?.()}
   >
@@ -74,7 +74,7 @@
 
   <div class="w-px h-4 bg-border"></div>
   <button
-    class="p-0.5 transition-colors hover:scale-110 transform text-blue-500 hover:text-blue-400"
+    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
     title="Ask Companion"
     onclick={() => oncompanion?.()}
   >

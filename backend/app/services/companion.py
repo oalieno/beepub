@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.models.book import Book
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.services.epub_text import extract_text_up_to
-from app.services.llm import ChatMessage, get_llm_provider
+from app.services.llm import ChatMessage, get_companion_provider
 from app.services.settings import get_all_settings
 
 logger = logging.getLogger(__name__)
@@ -74,9 +74,7 @@ async def get_or_create_conversation(
     if conversation is not None:
         return conversation
 
-    conversation = CompanionConversation(
-        book_id=book_id, user_id=user_id
-    )
+    conversation = CompanionConversation(book_id=book_id, user_id=user_id)
     db.add(conversation)
     await db.flush()
     await db.refresh(conversation, ["messages"])
@@ -97,9 +95,7 @@ async def build_system_prompt(
     # Extract book text up to current reading position
     book_text = ""
     try:
-        book_text = extract_text_up_to(
-            book.file_path, current_cfi, max_chars=16_000
-        )
+        book_text = extract_text_up_to(book.file_path, current_cfi, max_chars=16_000)
     except Exception:
         logger.warning("Failed to extract text from book %s", book.id, exc_info=True)
         book_text = "(Book text unavailable — the EPUB file could not be read.)"
@@ -172,9 +168,9 @@ async def stream_companion_response(
     # Build chat messages
     chat_messages = build_chat_messages(conversation, user_message, selected_text)
 
-    # Stream from LLM (use DB settings overrides)
+    # Stream from LLM (use DB settings)
     db_settings = await get_all_settings(db)
-    provider = get_llm_provider(db_settings)
+    provider = get_companion_provider(db_settings)
     token_stream = provider.chat_stream(chat_messages, system=system_prompt)
 
     return token_stream, conversation.id, user_msg.id

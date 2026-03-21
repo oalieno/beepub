@@ -7,8 +7,6 @@ from typing import Protocol
 
 import httpx
 
-from app.config import settings
-
 
 @dataclass
 class ChatMessage:
@@ -245,20 +243,65 @@ class OpenAICompatibleProvider:
                         yield content
 
 
-def get_llm_provider(overrides: dict[str, str] | None = None) -> LLMProvider:
-    """Create LLM provider. DB settings override .env defaults."""
-    o = overrides or {}
-    provider = o.get("llm_provider", settings.llm_provider)
+class LLMNotConfiguredError(Exception):
+    """Raised when no LLM provider is configured."""
+
+
+def get_llm_provider_from_settings(
+    provider: str,
+    api_key: str,
+    model: str,
+    base_url: str,
+) -> LLMProvider:
+    """Create an LLM provider from explicit settings."""
+    if not provider:
+        raise LLMNotConfiguredError("AI provider is not configured")
+    if not model:
+        raise LLMNotConfiguredError("AI model is not configured")
 
     if provider == "gemini":
-        return GeminiProvider(
-            api_key=o.get("gemini_api_key", settings.gemini_api_key),
-            model=o.get("gemini_model", settings.gemini_model),
-        )
+        if not api_key:
+            raise LLMNotConfiguredError("Gemini API key is not configured")
+        return GeminiProvider(api_key=api_key, model=model)
     if provider == "openai":
         return OpenAICompatibleProvider(
-            api_key=o.get("openai_api_key", settings.openai_api_key),
-            model=o.get("openai_model", settings.openai_model),
-            base_url=o.get("openai_base_url", settings.openai_base_url),
+            api_key=api_key,
+            model=model,
+            base_url=base_url or "https://api.openai.com/v1",
         )
     raise ValueError(f"Unknown LLM provider: {provider}")
+
+
+def _resolve_credentials(db_settings: dict[str, str], provider: str) -> tuple[str, str]:
+    """Get api_key and base_url for a provider type from shared credentials."""
+    if provider == "gemini":
+        return db_settings.get("gemini_api_key", ""), ""
+    if provider == "openai":
+        return db_settings.get("openai_api_key", ""), db_settings.get(
+            "openai_base_url", ""
+        )
+    return "", ""
+
+
+def get_companion_provider(db_settings: dict[str, str]) -> LLMProvider:
+    """Create the companion LLM provider from DB settings."""
+    provider = db_settings.get("companion_provider", "")
+    model = db_settings.get("companion_model", "")
+    api_key, base_url = _resolve_credentials(db_settings, provider)
+    return get_llm_provider_from_settings(provider, api_key, model, base_url)
+
+
+def get_tag_provider(db_settings: dict[str, str]) -> LLMProvider:
+    """Create the tag LLM provider from DB settings."""
+    provider = db_settings.get("tag_provider", "")
+    model = db_settings.get("tag_model", "")
+    api_key, base_url = _resolve_credentials(db_settings, provider)
+    return get_llm_provider_from_settings(provider, api_key, model, base_url)
+
+
+def get_image_provider(db_settings: dict[str, str]) -> LLMProvider:
+    """Create the image LLM provider from DB settings."""
+    provider = db_settings.get("image_provider", "")
+    model = db_settings.get("image_model", "")
+    api_key, base_url = _resolve_credentials(db_settings, provider)
+    return get_llm_provider_from_settings(provider, api_key, model, base_url)

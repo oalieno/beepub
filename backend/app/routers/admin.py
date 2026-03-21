@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import require_admin
+from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.models.user import User
@@ -100,22 +100,22 @@ async def list_calibre_libraries(
     available = await asyncio.to_thread(scan_calibre_libraries)
 
     # Get already-linked libraries
-    result = await db.execute(
-        select(Library).where(Library.calibre_path.isnot(None))
-    )
+    result = await db.execute(select(Library).where(Library.calibre_path.isnot(None)))
     linked = {lib.calibre_path: lib for lib in result.scalars().all()}
 
     output = []
     for lib in available:
         linked_lib = linked.get(lib["path"])
-        output.append({
-            "path": lib["path"],
-            "name": lib["name"],
-            "calibre_book_count": lib["book_count"],
-            "linked": linked_lib is not None,
-            "library_id": str(linked_lib.id) if linked_lib else None,
-            "library_name": linked_lib.name if linked_lib else None,
-        })
+        output.append(
+            {
+                "path": lib["path"],
+                "name": lib["name"],
+                "calibre_book_count": lib["book_count"],
+                "linked": linked_lib is not None,
+                "library_id": str(linked_lib.id) if linked_lib else None,
+                "library_name": linked_lib.name if linked_lib else None,
+            }
+        )
     return output
 
 
@@ -162,7 +162,9 @@ async def link_calibre_library(
     }
 
 
-@router.post("/calibre/libraries/{library_id}/sync", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/calibre/libraries/{library_id}/sync", status_code=status.HTTP_202_ACCEPTED
+)
 async def trigger_calibre_sync(
     library_id: uuid.UUID,
     current_user: Annotated[User, Depends(require_admin)],
@@ -204,9 +206,9 @@ async def get_calibre_library_status(
     # Count imported books
     imported_count = (
         await db.execute(
-            select(func.count()).select_from(LibraryBook).where(
-                LibraryBook.library_id == library_id
-            )
+            select(func.count())
+            .select_from(LibraryBook)
+            .where(LibraryBook.library_id == library_id)
         )
     ).scalar()
 
@@ -249,15 +251,34 @@ async def put_settings(
     return await update_settings(db, body)
 
 
+# --- AI Status (accessible to all authenticated users) ---
+
+ai_router = APIRouter(prefix="/api", tags=["ai"])
+
+
+@ai_router.get("/ai/status")
+async def get_ai_status(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Return which AI features are configured and available."""
+    settings = await get_all_settings(db)
+    return {
+        "companion": bool(
+            settings.get("companion_provider") and settings.get("companion_model")
+        ),
+        "tag": bool(settings.get("tag_provider") and settings.get("tag_model")),
+        "image": bool(settings.get("image_provider") and settings.get("image_model")),
+    }
+
+
 @router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
 async def recompute_word_counts(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Queue word-count jobs for all books that don't have one yet."""
-    result = await db.execute(
-        select(Book.id).where(Book.word_count.is_(None))
-    )
+    result = await db.execute(select(Book.id).where(Book.word_count.is_(None)))
     book_ids = result.scalars().all()
     for bid in book_ids:
         compute_word_count.delay(str(bid))

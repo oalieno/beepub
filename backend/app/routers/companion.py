@@ -26,6 +26,7 @@ from app.services.companion import (
     get_or_create_conversation,
     stream_companion_response,
 )
+from app.services.llm import LLMNotConfiguredError
 from app.services.sse import sse_event
 
 logger = logging.getLogger(__name__)
@@ -98,16 +99,22 @@ async def send_companion_message(
     conversation = await get_or_create_conversation(db, book_id, current_user.id)
 
     # Start streaming
-    token_stream, conv_id, user_msg_id = await stream_companion_response(
-        db=db,
-        book=book,
-        conversation=conversation,
-        user_message=body.message,
-        selected_text=body.selected_text,
-        cfi_range=body.cfi_range,
-        current_cfi=body.current_cfi,
-        user_id=current_user.id,
-    )
+    try:
+        token_stream, conv_id, user_msg_id = await stream_companion_response(
+            db=db,
+            book=book,
+            conversation=conversation,
+            user_message=body.message,
+            selected_text=body.selected_text,
+            cfi_range=body.cfi_range,
+            current_cfi=body.current_cfi,
+            user_id=current_user.id,
+        )
+    except LLMNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
 
     return StreamingResponse(
         _streaming_generator(token_stream, conv_id, user_msg_id),

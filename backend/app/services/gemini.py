@@ -5,8 +5,6 @@ import logging
 import httpx
 from PIL import Image
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 BASE_INSTRUCTION = (
@@ -101,8 +99,18 @@ async def generate_illustration(
     style_prompt: str | None,
     custom_prompt: str | None,
     reference_images: list[bytes] | None = None,
+    *,
+    db_settings: dict[str, str] | None = None,
 ) -> bytes:
     """Call Gemini API to generate an image. Returns resized PNG bytes."""
+    from app.services.llm import _resolve_credentials
+
+    settings = db_settings or {}
+    provider = settings.get("image_provider", "")
+    model = settings.get("image_model", "")
+    api_key, _ = _resolve_credentials(settings, provider)
+    if not api_key or not model:
+        raise ValueError("Image AI is not configured. Set it in Admin > Settings.")
     if custom_prompt:
         prompt = f"{BASE_INSTRUCTION}{custom_prompt}\n\nScene: {text}"
     elif style_prompt and style_prompt in STYLE_PROMPTS:
@@ -128,29 +136,32 @@ async def generate_illustration(
     if reference_images:
         for img_bytes in reference_images:
             resized = _resize_for_reference(img_bytes)
-            parts.append({
-                "inline_data": {
-                    "mime_type": "image/png",
-                    "data": base64.b64encode(resized).decode(),
+            parts.append(
+                {
+                    "inline_data": {
+                        "mime_type": "image/png",
+                        "data": base64.b64encode(resized).decode(),
+                    }
                 }
-            })
-        parts.append({
-            "text": (
-                "The above images are style references. "
-                "You MUST closely match their art style, color palette, "
-                "line work, and rendering technique in the illustration "
-                "you generate.\n\n"
             )
-        })
+        parts.append(
+            {
+                "text": (
+                    "The above images are style references. "
+                    "You MUST closely match their art style, color palette, "
+                    "line work, and rendering technique in the illustration "
+                    "you generate.\n\n"
+                )
+            }
+        )
     parts.append({"text": prompt})
 
-    model = settings.gemini_model
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(
             url,
-            headers={"x-goog-api-key": settings.gemini_api_key},
+            headers={"x-goog-api-key": api_key},
             json={
                 "contents": [{"parts": parts}],
                 "generationConfig": {
@@ -180,9 +191,7 @@ async def generate_illustration(
             finish_reason,
             data,
         )
-        raise ValueError(
-            f"Gemini returned no content (finishReason={finish_reason})"
-        )
+        raise ValueError(f"Gemini returned no content (finishReason={finish_reason})")
 
     for part in response_parts:
         if "inlineData" in part:

@@ -9,6 +9,7 @@
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
+  import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
@@ -16,7 +17,9 @@
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
+  import { UserRole } from "$lib/types";
   import type {
+    AiStatus,
     HighlightOut,
     IllustrationOut,
     InteractionOut,
@@ -57,6 +60,11 @@
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
+  let aiStatus = $state<AiStatus>({
+    companion: false,
+    tag: false,
+    image: false,
+  });
   let epubLoaded = $state(false);
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
@@ -78,6 +86,12 @@
     if (savedSize) fontSize = parseInt(savedSize);
     if (savedTheme) darkMode = savedTheme === "1";
     ready = true;
+
+    // Fetch AI feature status
+    aiApi
+      .getStatus($authStore.token!)
+      .then((s) => (aiStatus = s))
+      .catch(() => {});
 
     // Fetch current interaction and start reading timer
     fetchInteractionAndStartTimer();
@@ -466,6 +480,8 @@
         {bookId}
         token={$authStore.token}
         {darkMode}
+        {aiStatus}
+        isAdmin={$authStore.user?.role === UserRole.Admin}
         selectedText={companionSelectedText}
         selectedCfi={companionSelectedCfi}
         getCurrentCfi={() => reader?.getCurrentCfi() ?? ""}
@@ -481,6 +497,8 @@
       {darkMode}
       {bookId}
       token={$authStore.token ?? ""}
+      {aiStatus}
+      isAdmin={$authStore.user?.role === UserRole.Admin}
       completedIllustrations={illustrations.filter(
         (x) => x.status === "completed",
       )}

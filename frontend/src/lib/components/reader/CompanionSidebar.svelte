@@ -1,15 +1,24 @@
 <script lang="ts">
-  import { X, Send, Trash2, Quote } from "@lucide/svelte";
+  import {
+    X,
+    Send,
+    Trash2,
+    Quote,
+    MessageCircle,
+    Settings,
+  } from "@lucide/svelte";
   import { onMount, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
-  import type { CompanionMessageOut } from "$lib/types";
+  import type { AiStatus, CompanionMessageOut } from "$lib/types";
   import Spinner from "$lib/components/Spinner.svelte";
 
   let {
     bookId,
     token,
     darkMode = false,
+    aiStatus = { companion: false, tag: false, image: false },
+    isAdmin = false,
     selectedText = null,
     selectedCfi = null,
     getCurrentCfi,
@@ -18,6 +27,8 @@
     bookId: string;
     token: string;
     darkMode?: boolean;
+    aiStatus?: AiStatus;
+    isAdmin?: boolean;
     selectedText?: string | null;
     selectedCfi?: string | null;
     getCurrentCfi?: () => string;
@@ -247,149 +258,207 @@
     </div>
   </div>
 
-  <!-- Messages -->
-  <div class="flex-1 overflow-y-auto p-4 space-y-4" bind:this={scrollContainer}>
-    {#if loading}
-      <div class="flex justify-center py-8">
-        <Spinner size="md" class={darkMode ? "border-gray-400" : ""} />
-      </div>
-    {:else if messages.length === 0 && !isStreaming}
+  {#if !aiStatus.companion}
+    <!-- Not configured overlay -->
+    <div
+      class="flex-1 flex flex-col items-center justify-center px-6 text-center gap-4"
+    >
       <div
-        class="flex flex-col items-center justify-center h-full text-center px-4 gap-3"
+        class="w-12 h-12 rounded-full flex items-center justify-center {darkMode
+          ? 'bg-gray-800'
+          : 'bg-muted'}"
       >
-        <p
-          class="text-sm {darkMode ? 'text-gray-400' : 'text-muted-foreground'}"
-        >
-          Select text and tap the chat icon, or just ask a question about the
-          book.
-        </p>
+        <MessageCircle
+          size={24}
+          class={darkMode ? "text-gray-500" : "text-muted-foreground/50"}
+        />
       </div>
-    {:else}
-      {#each messages as msg (msg.id)}
-        <div
-          class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}"
+      <div class="space-y-2">
+        <p
+          class="text-sm font-medium {darkMode
+            ? 'text-gray-300'
+            : 'text-foreground'}"
         >
-          <div
-            class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {msg.role ===
-            'user'
-              ? darkMode
-                ? 'bg-blue-600 text-white'
-                : 'bg-primary text-primary-foreground'
-              : darkMode
-                ? 'bg-gray-800 text-gray-200'
-                : 'bg-muted text-foreground'}"
+          Companion AI not configured
+        </p>
+        {#if isAdmin}
+          <p
+            class="text-xs {darkMode
+              ? 'text-gray-500'
+              : 'text-muted-foreground'}"
           >
-            {#if msg.selected_text}
-              <div
-                class="flex items-start gap-1.5 mb-2 pb-2 border-b {msg.role ===
-                'user'
-                  ? darkMode
-                    ? 'border-blue-500/40'
-                    : 'border-primary-foreground/20'
-                  : darkMode
-                    ? 'border-gray-700'
-                    : 'border-border'}"
-              >
-                <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
-                <p class="text-xs opacity-80 italic line-clamp-3">
-                  {msg.selected_text}
-                </p>
-              </div>
-            {/if}
-            <p class="whitespace-pre-wrap">{msg.content}</p>
-          </div>
+            Set up a provider and model in admin settings.
+          </p>
+          <a
+            href="/admin/settings"
+            class="inline-flex items-center gap-1.5 text-xs font-medium mt-1 {darkMode
+              ? 'text-blue-400 hover:text-blue-300'
+              : 'text-primary hover:text-primary/80'}"
+          >
+            <Settings size={12} />
+            Go to Settings
+          </a>
+        {:else}
+          <p
+            class="text-xs {darkMode
+              ? 'text-gray-500'
+              : 'text-muted-foreground'}"
+          >
+            Ask your admin to enable AI features in the settings.
+          </p>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <!-- Messages -->
+    <div
+      class="flex-1 overflow-y-auto p-4 space-y-4"
+      bind:this={scrollContainer}
+    >
+      {#if loading}
+        <div class="flex justify-center py-8">
+          <Spinner size="md" class={darkMode ? "border-gray-400" : ""} />
         </div>
-      {/each}
-
-      {#if isStreaming && streamingContent}
-        <div class="flex justify-start">
-          <div
-            class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {darkMode
-              ? 'bg-gray-800 text-gray-200'
-              : 'bg-muted text-foreground'}"
+      {:else if messages.length === 0 && !isStreaming}
+        <div
+          class="flex flex-col items-center justify-center h-full text-center px-4 gap-3"
+        >
+          <p
+            class="text-sm {darkMode
+              ? 'text-gray-400'
+              : 'text-muted-foreground'}"
           >
-            <p class="whitespace-pre-wrap">{streamingContent}</p>
-          </div>
+            Select text and tap the chat icon, or just ask a question about the
+            book.
+          </p>
         </div>
-      {/if}
-
-      {#if isStreaming && !streamingContent}
-        <div class="flex justify-start">
+      {:else}
+        {#each messages as msg (msg.id)}
           <div
-            class="rounded-2xl px-3.5 py-2.5 {darkMode
-              ? 'bg-gray-800'
-              : 'bg-muted'}"
+            class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}"
           >
-            <div class="flex gap-1">
-              <span
-                class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                  ? 'bg-gray-500'
-                  : 'bg-muted-foreground/40'}"
-                style="animation-delay: 0ms"
-              ></span>
-              <span
-                class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                  ? 'bg-gray-500'
-                  : 'bg-muted-foreground/40'}"
-                style="animation-delay: 150ms"
-              ></span>
-              <span
-                class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                  ? 'bg-gray-500'
-                  : 'bg-muted-foreground/40'}"
-                style="animation-delay: 300ms"
-              ></span>
+            <div
+              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {msg.role ===
+              'user'
+                ? darkMode
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-primary text-primary-foreground'
+                : darkMode
+                  ? 'bg-gray-800 text-gray-200'
+                  : 'bg-muted text-foreground'}"
+            >
+              {#if msg.selected_text}
+                <div
+                  class="flex items-start gap-1.5 mb-2 pb-2 border-b {msg.role ===
+                  'user'
+                    ? darkMode
+                      ? 'border-blue-500/40'
+                      : 'border-primary-foreground/20'
+                    : darkMode
+                      ? 'border-gray-700'
+                      : 'border-border'}"
+                >
+                  <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
+                  <p class="text-xs opacity-80 italic line-clamp-3">
+                    {msg.selected_text}
+                  </p>
+                </div>
+              {/if}
+              <p class="whitespace-pre-wrap">{msg.content}</p>
             </div>
           </div>
+        {/each}
+
+        {#if isStreaming && streamingContent}
+          <div class="flex justify-start">
+            <div
+              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {darkMode
+                ? 'bg-gray-800 text-gray-200'
+                : 'bg-muted text-foreground'}"
+            >
+              <p class="whitespace-pre-wrap">{streamingContent}</p>
+            </div>
+          </div>
+        {/if}
+
+        {#if isStreaming && !streamingContent}
+          <div class="flex justify-start">
+            <div
+              class="rounded-2xl px-3.5 py-2.5 {darkMode
+                ? 'bg-gray-800'
+                : 'bg-muted'}"
+            >
+              <div class="flex gap-1">
+                <span
+                  class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
+                    ? 'bg-gray-500'
+                    : 'bg-muted-foreground/40'}"
+                  style="animation-delay: 0ms"
+                ></span>
+                <span
+                  class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
+                    ? 'bg-gray-500'
+                    : 'bg-muted-foreground/40'}"
+                  style="animation-delay: 150ms"
+                ></span>
+                <span
+                  class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
+                    ? 'bg-gray-500'
+                    : 'bg-muted-foreground/40'}"
+                  style="animation-delay: 300ms"
+                ></span>
+              </div>
+            </div>
+          </div>
+        {/if}
+      {/if}
+    </div>
+
+    <!-- Input area -->
+    <div class="border-t p-3 {darkMode ? 'border-gray-800' : 'border-border'}">
+      {#if pendingSelectedText}
+        <div
+          class="flex items-start gap-2 mb-2 px-2 py-1.5 rounded-lg text-xs {darkMode
+            ? 'bg-gray-800 text-gray-300'
+            : 'bg-muted text-muted-foreground'}"
+        >
+          <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
+          <p class="flex-1 line-clamp-2 italic">{pendingSelectedText}</p>
+          <button
+            class="shrink-0 p-0.5 rounded hover:opacity-70"
+            onclick={clearPendingSelection}
+          >
+            <X size={12} />
+          </button>
         </div>
       {/if}
-    {/if}
-  </div>
-
-  <!-- Input area -->
-  <div class="border-t p-3 {darkMode ? 'border-gray-800' : 'border-border'}">
-    {#if pendingSelectedText}
-      <div
-        class="flex items-start gap-2 mb-2 px-2 py-1.5 rounded-lg text-xs {darkMode
-          ? 'bg-gray-800 text-gray-300'
-          : 'bg-muted text-muted-foreground'}"
-      >
-        <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
-        <p class="flex-1 line-clamp-2 italic">{pendingSelectedText}</p>
+      <div class="flex items-end gap-2">
+        <textarea
+          bind:this={inputEl}
+          bind:value={inputText}
+          placeholder="Ask about the book..."
+          rows={1}
+          class="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm outline-none {darkMode
+            ? 'bg-gray-800 text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-gray-600'
+            : 'bg-muted text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-ring'}"
+          disabled={isStreaming}
+          onkeydown={handleKeydown}
+        ></textarea>
         <button
-          class="shrink-0 p-0.5 rounded hover:opacity-70"
-          onclick={clearPendingSelection}
+          class="shrink-0 p-2.5 rounded-xl transition-colors {isStreaming ||
+          !inputText.trim()
+            ? darkMode
+              ? 'text-gray-600 bg-gray-800'
+              : 'text-muted-foreground/40 bg-muted'
+            : darkMode
+              ? 'text-white bg-blue-600 hover:bg-blue-500'
+              : 'text-primary-foreground bg-primary hover:bg-primary/90'}"
+          disabled={isStreaming || !inputText.trim()}
+          onclick={sendMessage}
         >
-          <X size={12} />
+          <Send size={16} />
         </button>
       </div>
-    {/if}
-    <div class="flex items-end gap-2">
-      <textarea
-        bind:this={inputEl}
-        bind:value={inputText}
-        placeholder="Ask about the book..."
-        rows={1}
-        class="flex-1 resize-none rounded-xl px-3.5 py-2.5 text-sm outline-none {darkMode
-          ? 'bg-gray-800 text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-gray-600'
-          : 'bg-muted text-foreground placeholder:text-muted-foreground focus:ring-1 focus:ring-ring'}"
-        disabled={isStreaming}
-        onkeydown={handleKeydown}
-      ></textarea>
-      <button
-        class="shrink-0 p-2.5 rounded-xl transition-colors {isStreaming ||
-        !inputText.trim()
-          ? darkMode
-            ? 'text-gray-600 bg-gray-800'
-            : 'text-muted-foreground/40 bg-muted'
-          : darkMode
-            ? 'text-white bg-blue-600 hover:bg-blue-500'
-            : 'text-primary-foreground bg-primary hover:bg-primary/90'}"
-        disabled={isStreaming || !inputText.trim()}
-        onclick={sendMessage}
-      >
-        <Send size={16} />
-      </button>
     </div>
-  </div>
+  {/if}
 </div>

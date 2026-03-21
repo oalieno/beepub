@@ -9,12 +9,17 @@ DEFAULTS = {
     "metadata_refresh_hour": "3",
     "metadata_refresh_interval_days": "7",
     "metadata_refresh_cooldown_days": "30",
-    "llm_provider": "",
+    # Provider credentials (stored once)
     "gemini_api_key": "",
-    "gemini_model": "",
     "openai_api_key": "",
     "openai_base_url": "",
-    "openai_model": "",
+    # Per-feature config
+    "companion_provider": "",
+    "companion_model": "",
+    "tag_provider": "",
+    "tag_model": "",
+    "image_provider": "",
+    "image_model": "",
 }
 
 
