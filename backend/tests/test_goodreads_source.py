@@ -58,7 +58,7 @@ def test_extract_book_links_supports_modern_selector_and_dedup():
 
     assert links == [
         (
-            "https://www.goodreads.com/book/show/60495597-project-hail-mary",
+            "https://www.goodreads.com/book/show/60495597",
             "Project Hail Mary",
         )
     ]
@@ -85,7 +85,7 @@ def test_search_falls_back_to_title_only(monkeypatch):
     assert len(results) == 1
     assert (
         results[0].url
-        == "https://www.goodreads.com/book/show/60495597-project-hail-mary"
+        == "https://www.goodreads.com/book/show/60495597"
     )
     assert FakeAsyncClient.requests == [
         ("https://www.goodreads.com/search", "極限返航 安迪．威爾"),
