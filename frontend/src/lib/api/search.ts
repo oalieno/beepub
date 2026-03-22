@@ -16,6 +16,22 @@ export interface SemanticSearchResponse {
   query: string;
 }
 
+export interface KeywordSearchResult {
+  book_id: string;
+  book_title: string;
+  book_author: string | null;
+  passage: string;
+  spine_index: number;
+  char_offset_start: number;
+  char_offset_end: number;
+}
+
+export interface KeywordSearchResponse {
+  results: KeywordSearchResult[];
+  query: string;
+  total: number;
+}
+
 export const searchApi = {
   semantic(
     q: string,
@@ -26,5 +42,16 @@ export const searchApi = {
       `/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`,
       token,
     ) as Promise<SemanticSearchResponse>;
+  },
+
+  keyword(
+    q: string,
+    token: string,
+    limit = 10,
+  ): Promise<KeywordSearchResponse> {
+    return get(
+      `/search/keyword?q=${encodeURIComponent(q)}&limit=${limit}`,
+      token,
+    ) as Promise<KeywordSearchResponse>;
   },
 };

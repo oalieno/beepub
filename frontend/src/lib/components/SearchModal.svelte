@@ -1,14 +1,18 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { booksApi } from "$lib/api/books";
-  import { searchApi, type SemanticSearchResult } from "$lib/api/search";
+  import {
+    searchApi,
+    type SemanticSearchResult,
+    type KeywordSearchResult,
+  } from "$lib/api/search";
   import { authStore } from "$lib/stores/auth";
   import type { BookOut } from "$lib/types";
-  import { Search, BookOpen, FileText, X } from "@lucide/svelte";
+  import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
-  type Tab = "books" | "content";
+  type Tab = "books" | "content" | "keyword";
   type BookSearchResult = BookOut & { library_name: string | null };
 
   let activeTab = $state<Tab>("books");
@@ -25,6 +29,12 @@
   let contentResults = $state<SemanticSearchResult[]>([]);
   let contentLoading = $state(false);
   let contentError = $state("");
+
+  // Keyword tab state
+  let keywordResults = $state<KeywordSearchResult[]>([]);
+  let keywordTotal = $state(0);
+  let keywordLoading = $state(false);
+  let keywordError = $state("");
 
   let selectedIndex = $state(-1);
 
@@ -85,6 +95,36 @@
       });
   }
 
+  function doKeywordSearch() {
+    const q = query.trim();
+    if (!q) {
+      keywordResults = [];
+      keywordTotal = 0;
+      keywordError = "";
+      return;
+    }
+    const token = $authStore.token;
+    if (!token) return;
+
+    keywordLoading = true;
+    keywordError = "";
+    searchApi
+      .keyword(q, token)
+      .then((resp) => {
+        keywordResults = resp.results;
+        keywordTotal = resp.total;
+        selectedIndex = -1;
+      })
+      .catch(() => {
+        keywordResults = [];
+        keywordTotal = 0;
+        keywordError = "Search unavailable — please try again";
+      })
+      .finally(() => {
+        keywordLoading = false;
+      });
+  }
+
   function handleInput() {
     clearTimeout(debounceTimer);
     if (activeTab === "books") {
@@ -96,6 +136,8 @@
   function handleSearchSubmit() {
     if (activeTab === "content") {
       doContentSearch();
+    } else if (activeTab === "keyword") {
+      doKeywordSearch();
     }
   }
 
@@ -104,7 +146,9 @@
     goto(`/books/${result.id}`);
   }
 
-  function selectContentResult(result: SemanticSearchResult) {
+  function selectContentResult(
+    result: SemanticSearchResult | KeywordSearchResult,
+  ) {
     open = false;
     goto(`/books/${result.book_id}`);
   }
@@ -115,13 +159,16 @@
     // Re-run search if there's a query
     if (query.trim()) {
       if (tab === "books") doBookSearch();
-      else doContentSearch();
+      else if (tab === "content") doContentSearch();
+      else doKeywordSearch();
     }
     setTimeout(() => inputEl?.focus(), 10);
   }
 
   function currentResults(): number {
-    return activeTab === "books" ? bookResults.length : contentResults.length;
+    if (activeTab === "books") return bookResults.length;
+    if (activeTab === "content") return contentResults.length;
+    return keywordResults.length;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -137,6 +184,8 @@
         selectBookResult(bookResults[selectedIndex]);
       } else if (activeTab === "content" && contentResults[selectedIndex]) {
         selectContentResult(contentResults[selectedIndex]);
+      } else if (activeTab === "keyword" && keywordResults[selectedIndex]) {
+        selectContentResult(keywordResults[selectedIndex]);
       }
     } else if (e.key === "Enter" && selectedIndex < 0) {
       handleSearchSubmit();
@@ -152,6 +201,9 @@
       bookTotal = 0;
       contentResults = [];
       contentError = "";
+      keywordResults = [];
+      keywordTotal = 0;
+      keywordError = "";
       selectedIndex = -1;
       activeTab = "books";
       setTimeout(() => inputEl?.focus(), 50);
@@ -203,6 +255,18 @@
           <FileText size={14} />
           Content
         </button>
+        <button
+          role="tab"
+          aria-selected={activeTab === "keyword"}
+          class="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm transition-colors
+            {activeTab === 'keyword'
+            ? 'text-foreground border-b-2 border-primary font-medium'
+            : 'text-muted-foreground hover:text-foreground'}"
+          onclick={() => switchTab("keyword")}
+        >
+          <TextSearch size={14} />
+          Keyword
+        </button>
       </div>
 
       <!-- Search input -->
@@ -215,7 +279,9 @@
           onkeydown={handleKeydown}
           placeholder={activeTab === "books"
             ? "Search books across all libraries..."
-            : "Search book content by meaning..."}
+            : activeTab === "content"
+              ? "Search book content by meaning..."
+              : "Search book content by keyword..."}
           class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-base"
         />
         {#if query}
@@ -227,6 +293,9 @@
               bookTotal = 0;
               contentResults = [];
               contentError = "";
+              keywordResults = [];
+              keywordTotal = 0;
+              keywordError = "";
               inputEl?.focus();
             }}
           >
@@ -235,7 +304,7 @@
         {/if}
         <kbd
           class="hidden sm:inline text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded"
-          >{activeTab === "content" ? "↵" : "esc"}</kbd
+          >{activeTab === "books" ? "esc" : "↵"}</kbd
         >
       </div>
 
@@ -301,7 +370,7 @@
             {/if}
           </div>
         {/if}
-      {:else}
+      {:else if activeTab === "content"}
         <!-- Content tab results -->
         {#if !query.trim()}
           <div
@@ -389,6 +458,93 @@
                 </span>
               </button>
             {/each}
+          </div>
+        {/if}
+      {:else}
+        <!-- Keyword tab results -->
+        {#if !query.trim()}
+          <div
+            class="px-4 py-8 text-center text-muted-foreground text-sm space-y-1"
+          >
+            <p>Type a word or phrase and press Enter</p>
+            <p class="text-xs">
+              Searches across all your books by exact keyword match
+            </p>
+          </div>
+        {:else if keywordLoading}
+          <!-- Skeleton loading -->
+          <div class="max-h-[60vh] overflow-y-auto">
+            {#each [1, 2, 3] as _}
+              <div class="flex items-start gap-3 px-4 py-3 animate-pulse">
+                <div class="w-10 h-14 shrink-0 rounded-sm bg-secondary"></div>
+                <div class="flex-1 space-y-2">
+                  <div class="h-3.5 bg-secondary rounded w-1/3"></div>
+                  <div class="h-3 bg-secondary rounded w-full"></div>
+                  <div class="h-3 bg-secondary rounded w-2/3"></div>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else if keywordError}
+          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
+            {keywordError}
+          </div>
+        {:else if keywordResults.length === 0}
+          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
+            <TextSearch size={24} class="mx-auto mb-2 opacity-30" />
+            No matching passages found. Try different keywords or check that your
+            books have been indexed.
+          </div>
+        {:else}
+          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel">
+            {#each keywordResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
+              <button
+                class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
+                  {i === selectedIndex ? 'bg-secondary/70' : ''}"
+                onclick={() => selectContentResult(result)}
+                onmouseenter={() => (selectedIndex = i)}
+              >
+                <div
+                  class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
+                >
+                  <img
+                    src="/covers/{result.book_id}.jpg"
+                    alt=""
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                    onerror={(e) => {
+                      const target = e.currentTarget as HTMLImageElement;
+                      target.style.display = "none";
+                    }}
+                  />
+                </div>
+
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-foreground truncate">
+                    {result.book_title}
+                  </p>
+                  {#if result.book_author}
+                    <p class="text-xs text-muted-foreground truncate">
+                      {result.book_author}
+                    </p>
+                  {/if}
+                  <p
+                    class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 leading-relaxed"
+                  >
+                    {result.passage.slice(0, 200)}{result.passage.length > 200
+                      ? "..."
+                      : ""}
+                  </p>
+                </div>
+              </button>
+            {/each}
+            {#if keywordTotal > keywordResults.length}
+              <div
+                class="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50"
+              >
+                Showing {keywordResults.length} of {keywordTotal} results
+              </div>
+            {/if}
           </div>
         {/if}
       {/if}

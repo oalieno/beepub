@@ -213,7 +213,8 @@
                 title="Process all books"
               >
                 <Infinity size={18} class="text-muted-foreground" />
-                <span class="text-xs text-muted-foreground font-sans font-medium"
+                <span
+                  class="text-xs text-muted-foreground font-sans font-medium"
                   >All</span
                 >
               </button>
@@ -225,7 +226,8 @@
                 title="Process only unprocessed books"
               >
                 <ScanSearch size={18} class="text-muted-foreground" />
-                <span class="text-xs text-muted-foreground font-sans font-medium"
+                <span
+                  class="text-xs text-muted-foreground font-sans font-medium"
                   >Missing</span
                 >
               </button>

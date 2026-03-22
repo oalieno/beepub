@@ -1,4 +1,4 @@
-"""Semantic search API — cross-book search using pgvector embeddings."""
+"""Search API — semantic (pgvector) and keyword (pg_trgm ILIKE) search."""
 
 from __future__ import annotations
 
@@ -21,6 +21,29 @@ from app.services.settings import get_all_settings
 router = APIRouter(prefix="/api/search", tags=["search"])
 
 
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _accessible_book_ids_subquery(user: User):
+    """Build a subquery of book IDs the user is allowed to access."""
+    from app.routers.libraries import accessible_libraries_condition
+
+    stmt = select(LibraryBook.book_id).join(
+        Library, Library.id == LibraryBook.library_id
+    )
+    cond = accessible_libraries_condition(user)
+    if cond is not True:
+        stmt = stmt.where(cond)
+    return stmt.subquery()
+
+
+# ---------------------------------------------------------------------------
+# Schemas
+# ---------------------------------------------------------------------------
+
+
 class SemanticSearchResult(BaseModel):
     book_id: str
     book_title: str
@@ -37,6 +60,27 @@ class SemanticSearchResponse(BaseModel):
     query: str
 
 
+class KeywordSearchResult(BaseModel):
+    book_id: str
+    book_title: str
+    book_author: str | None
+    passage: str
+    spine_index: int
+    char_offset_start: int
+    char_offset_end: int
+
+
+class KeywordSearchResponse(BaseModel):
+    results: list[KeywordSearchResult]
+    query: str
+    total: int
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
 @router.get("/semantic", response_model=SemanticSearchResponse)
 async def semantic_search(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -45,8 +89,6 @@ async def semantic_search(
     limit: int = Query(10, ge=1, le=50),
 ):
     """Search across all accessible books by semantic similarity."""
-    from app.routers.libraries import accessible_libraries_condition
-
     # Load embedding settings
     settings = await get_all_settings(db)
     provider = settings.get("embedding_provider", "")
@@ -73,14 +115,7 @@ async def semantic_search(
         user_id=current_user.id,
     )
 
-    # Build accessible books subquery
-    accessible_books = select(LibraryBook.book_id).join(
-        Library, Library.id == LibraryBook.library_id
-    )
-    cond = accessible_libraries_condition(current_user)
-    if cond is not True:
-        accessible_books = accessible_books.where(cond)
-    accessible_book_ids = accessible_books.subquery()
+    accessible_book_ids = _accessible_book_ids_subquery(current_user)
 
     # Vector similarity search with access control pre-filter
     import numpy as np
@@ -124,6 +159,67 @@ async def semantic_search(
     ]
 
     return SemanticSearchResponse(results=results, query=q)
+
+
+@router.get("/keyword", response_model=KeywordSearchResponse)
+async def keyword_search(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: str = Query(..., min_length=1, max_length=500),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """Search across all accessible books by exact keyword match (ILIKE + pg_trgm)."""
+    accessible_book_ids = _accessible_book_ids_subquery(current_user)
+    pattern = f"%{q}%"
+
+    # Count total matches (capped for performance)
+    count_stmt = (
+        select(func.count())
+        .select_from(BookEmbeddingChunk)
+        .where(
+            BookEmbeddingChunk.book_id.in_(select(accessible_book_ids)),
+            BookEmbeddingChunk.text.ilike(pattern),
+        )
+    )
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Fetch results
+    stmt = (
+        select(
+            BookEmbeddingChunk.book_id,
+            BookEmbeddingChunk.text,
+            BookEmbeddingChunk.spine_index,
+            BookEmbeddingChunk.char_offset_start,
+            BookEmbeddingChunk.char_offset_end,
+            func.coalesce(Book.title, Book.epub_title).label("display_title"),
+            func.coalesce(Book.authors, Book.epub_authors).label("display_authors"),
+        )
+        .join(Book, Book.id == BookEmbeddingChunk.book_id)
+        .where(
+            BookEmbeddingChunk.book_id.in_(select(accessible_book_ids)),
+            BookEmbeddingChunk.text.ilike(pattern),
+        )
+        .order_by(Book.title, BookEmbeddingChunk.spine_index)
+        .limit(limit)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    results = [
+        KeywordSearchResult(
+            book_id=str(row.book_id),
+            book_title=row.display_title or "Untitled",
+            book_author=", ".join(row.display_authors) if row.display_authors else None,
+            passage=row.text,
+            spine_index=row.spine_index,
+            char_offset_start=row.char_offset_start,
+            char_offset_end=row.char_offset_end,
+        )
+        for row in rows
+    ]
+
+    return KeywordSearchResponse(results=results, query=q, total=total)
 
 
 @router.post("/build-index", status_code=202)
