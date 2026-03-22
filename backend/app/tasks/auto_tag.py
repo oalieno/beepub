@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 
@@ -90,7 +89,9 @@ async def _process_auto_tag(book_id: str) -> None:
 def auto_tag_book(self, book_id: str) -> None:
     """Celery task: generate AI tags for a book."""
     try:
-        asyncio.run(_process_auto_tag(book_id))
+        from app.celeryapp import run_async
+
+        run_async(_process_auto_tag(book_id))
     except Exception as exc:
         logger.exception("auto_tag_book failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

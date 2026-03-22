@@ -58,7 +58,6 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
     Summarizes all chunks with spine_index <= up_to_spine_index.
     """
-    import asyncio
 
     async def _run() -> None:
         from sqlalchemy import select
@@ -164,7 +163,9 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
             )
 
     try:
-        asyncio.run(_run())
+        from app.celeryapp import run_async
+
+        run_async(_run())
     except Exception as exc:
         logger.exception("summarize_chunks failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

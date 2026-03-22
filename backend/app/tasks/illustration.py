@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import uuid
@@ -110,7 +109,9 @@ def _safe_mark(
 ) -> None:
     """Mark illustration status, logging any DB errors instead of raising."""
     try:
-        asyncio.run(_mark_status(illustration_id, status, error_message))
+        from app.celeryapp import run_async
+
+        run_async(_mark_status(illustration_id, status, error_message))
     except Exception:
         logger.exception(
             "Failed to mark illustration %s as %s", illustration_id, status
@@ -133,7 +134,9 @@ def generate_illustration_task(
 ) -> None:
     """Celery task: call Gemini API to generate an illustration."""
     try:
-        asyncio.run(
+        from app.celeryapp import run_async
+
+        run_async(
             _run(
                 illustration_id,
                 text,

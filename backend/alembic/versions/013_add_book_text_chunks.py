@@ -40,7 +40,9 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.UniqueConstraint("book_id", "spine_index", name="uq_book_text_chunk_book_spine"),
+        sa.UniqueConstraint(
+            "book_id", "spine_index", name="uq_book_text_chunk_book_spine"
+        ),
     )
 
 

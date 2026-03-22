@@ -49,6 +49,7 @@ class SyncResult:
     updated: int = 0
     unchanged: int = 0
     skipped: int = 0
+    removed: int = 0
     errors: list[str] = field(default_factory=list)
 
 
@@ -236,6 +237,7 @@ async def sync_calibre_library(
             "updated": result.updated,
             "unchanged": result.unchanged,
             "skipped": result.skipped,
+            "removed": result.removed,
             "errors": result.errors[-10:],  # keep last 10 errors
         }
         await client.set(key, json.dumps(progress), ex=3600)  # expire in 1 hour
@@ -370,6 +372,33 @@ async def sync_calibre_library(
 
                 # Update progress every book
                 await _update_progress(result, total, i + 1)
+
+            # Remove orphan books — in DB but no longer in Calibre
+            calibre_ids = {cb.calibre_id for cb in calibre_books}
+            orphans = [b for cid, b in existing_books.items() if cid not in calibre_ids]
+            if orphans:
+                from app.services.storage import delete_file
+
+                for book in orphans:
+                    # Remove library association
+                    orphan_lb = await db.execute(
+                        select(LibraryBook).where(
+                            LibraryBook.library_id == library_id,
+                            LibraryBook.book_id == book.id,
+                        )
+                    )
+                    for lb in orphan_lb.scalars().all():
+                        await db.delete(lb)
+                    # Delete cover file if exists
+                    if book.cover_path:
+                        delete_file(book.cover_path)
+                    await db.delete(book)
+                    result.removed += 1
+                logger.info(
+                    "Removed %d orphan books from library %s",
+                    result.removed,
+                    library_id,
+                )
 
             await db.commit()
 

@@ -16,14 +16,14 @@ _EMBED_BATCH_SIZE = 100
 @celery.task(
     name="app.tasks.embed.embed_book",
     bind=True,
-    max_retries=3,
+    max_retries=5,
+    rate_limit="10/m",
 )
 def embed_book(self, book_id: str) -> None:
     """Embed all text chunks of a book into BookEmbeddingChunk rows.
 
     Idempotent at chunk level — skips sub-chunks that already have embeddings.
     """
-    import asyncio
 
     async def _run() -> None:
         from sqlalchemy import select
@@ -130,10 +130,17 @@ def embed_book(self, book_id: str) -> None:
             logger.info("Embedded %d sub-chunks for book %s", total_embedded, book_id)
 
     try:
-        asyncio.run(_run())
+        from app.celeryapp import run_async
+
+        run_async(_run())
     except Exception as exc:
         logger.exception("embed_book failed for book %s", book_id)
-        raise self.retry(exc=exc, countdown=30 * (2**self.request.retries))
+        # Longer backoff for rate limits (429)
+        if "429" in str(exc):
+            countdown = 60 * (2**self.request.retries)
+        else:
+            countdown = 30 * (2**self.request.retries)
+        raise self.retry(exc=exc, countdown=countdown)
 
 
 @celery.task(

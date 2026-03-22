@@ -25,7 +25,9 @@ def upgrade() -> None:
     op.add_column("books", sa.Column("series", sa.String(500), nullable=True))
     op.add_column("books", sa.Column("series_index", sa.Float, nullable=True))
     op.add_column("books", sa.Column("tags", ARRAY(sa.String), nullable=True))
-    op.create_index("ix_books_epub_tags", "books", ["epub_tags"], postgresql_using="gin")
+    op.create_index(
+        "ix_books_epub_tags", "books", ["epub_tags"], postgresql_using="gin"
+    )
     op.create_index("ix_books_tags", "books", ["tags"], postgresql_using="gin")
 
 

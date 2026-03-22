@@ -1,9 +1,30 @@
+import asyncio
 import os
 
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
 
 from app.config import settings
+
+
+def run_async(coro):
+    """Run an async coroutine from a Celery task.
+
+    Handles the case where an event loop is already running
+    (e.g. gevent/eventlet pool or nested calls) by running
+    the coroutine in a separate thread.
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        # No running loop — safe to use asyncio.run()
+        return asyncio.run(coro)
+    else:
+        # Already in an event loop — run in a new thread
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(1) as pool:
+            return pool.submit(asyncio.run, coro).result()
 
 
 @celery_setup_logging.connect

@@ -45,7 +45,9 @@ def compute_word_count(self, book_id: str) -> None:
             logger.info("Book %s word count: %d", book_id, wc)
 
     try:
-        asyncio.run(_run())
+        from app.celeryapp import run_async
+
+        run_async(_run())
     except Exception as exc:
         logger.exception("compute_word_count failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

@@ -69,13 +69,10 @@ def extract_book_text(self, book_id: str) -> None:
             await db.commit()
             logger.info("Extracted %d text chunks from book %s", len(chunks), book_id)
 
-            # Chain: trigger embedding after successful text extraction
-            from app.tasks.embed import embed_book
-
-            embed_book.delay(book_id)
-
     try:
-        asyncio.run(_run())
+        from app.celeryapp import run_async
+
+        run_async(_run())
     except Exception as exc:
         logger.exception("extract_book_text failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

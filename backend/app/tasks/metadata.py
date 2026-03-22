@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 from datetime import UTC, datetime
@@ -150,7 +149,9 @@ async def _process_metadata_job(book_id: str) -> None:
 def fetch_metadata(self, book_id: str) -> None:
     """Celery task: fetch external metadata for a book."""
     try:
-        asyncio.run(_process_metadata_job(book_id))
+        from app.celeryapp import run_async
+
+        run_async(_process_metadata_job(book_id))
     except Exception as exc:
         logger.exception("fetch_metadata failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
@@ -246,4 +247,6 @@ async def _check_and_schedule_refresh() -> None:
 @celery.task(name="app.tasks.metadata.check_and_schedule_refresh")
 def check_and_schedule_refresh() -> None:
     """Celery beat task: periodic metadata refresh check."""
-    asyncio.run(_check_and_schedule_refresh())
+    from app.celeryapp import run_async
+
+    run_async(_check_and_schedule_refresh())

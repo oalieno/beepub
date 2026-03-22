@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from app.celeryapp import celery
@@ -15,7 +14,9 @@ BATCH_SIZE = 10
 @celery.task(name="app.tasks.bulk_jobs.run_bulk_job", bind=True)
 def run_bulk_job(self, job_type: str, mode: str = "missing") -> None:
     """Orchestrator task: iterate books in batches, call per-book task, track progress."""
-    asyncio.run(_run_bulk_job(job_type, mode))
+    from app.celeryapp import run_async
+
+    run_async(_run_bulk_job(job_type, mode))
 
 
 async def _run_bulk_job(job_type: str, mode: str) -> None:
