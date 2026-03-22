@@ -312,6 +312,7 @@ export interface LlmUsageByFeature {
   output_tokens: number;
   total_tokens: number;
   call_count: number;
+  estimated_cost: number;
 }
 
 export interface LlmUsageByDay {
@@ -342,5 +343,6 @@ export interface LlmUsageResponse {
     output_tokens: number;
     total_tokens: number;
     call_count: number;
+    estimated_cost: number;
   };
 }

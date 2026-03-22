@@ -340,6 +340,48 @@ async def get_llm_usage(
 
     from app.models.llm_usage import LLMUsageLog
 
+    # Price per 1M tokens: (input_price, output_price)
+    # Last updated: 2026-03
+    MODEL_PRICING: dict[str, tuple[float, float]] = {
+        # Gemini — https://ai.google.dev/pricing
+        "gemini-2.0-flash": (0.10, 0.40),
+        "gemini-2.0-flash-lite": (0.075, 0.30),
+        "gemini-2.5-flash": (0.30, 2.50),
+        "gemini-2.5-flash-lite": (0.10, 0.40),
+        "gemini-2.5-pro": (1.25, 10.00),
+        "gemini-2.5-pro-preview-05-06": (1.25, 10.00),
+        "gemini-3-flash-preview": (0.50, 3.00),
+        "gemini-3.1-flash-lite": (0.25, 1.50),
+        "gemini-3.1-pro-preview": (2.00, 12.00),
+        # Gemini embedding (free tier: $0, paid tier pricing below)
+        "gemini-embedding-001": (0.15, 0.00),
+        "gemini-embedding-002": (0.20, 0.00),
+        # OpenAI — https://openai.com/api/pricing
+        "gpt-5.4": (2.50, 15.00),
+        "gpt-5.4-mini": (0.75, 4.50),
+        "gpt-5.4-nano": (0.20, 1.25),
+        "gpt-5.1": (1.25, 10.00),
+        "gpt-5.1-codex": (1.25, 10.00),
+        "gpt-4o": (2.50, 10.00),
+        "gpt-4o-mini": (0.15, 0.60),
+        "gpt-4.1": (2.00, 8.00),
+        "gpt-4.1-mini": (0.40, 1.60),
+        "gpt-4.1-nano": (0.10, 0.40),
+        "o1": (15.00, 60.00),
+        "o3": (2.00, 8.00),
+        "o3-mini": (1.10, 4.40),
+        "o4-mini": (1.10, 4.40),
+        # OpenAI embedding
+        "text-embedding-3-small": (0.02, 0.00),
+        "text-embedding-3-large": (0.13, 0.00),
+    }
+
+    def estimate_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+        prices = MODEL_PRICING.get(model)
+        if not prices:
+            return 0.0
+        return (input_tokens * prices[0] + output_tokens * prices[1]) / 1_000_000
+
     # Determine date range
     now = datetime.now(UTC)
     if period == "day":
@@ -427,21 +469,26 @@ async def get_llm_usage(
     totals_result = await db.execute(totals_stmt)
     totals_row = totals_result.one()
 
+    by_feature_rows = [
+        {
+            "feature": row.feature,
+            "provider": row.provider,
+            "model": row.model,
+            "input_tokens": row.input_tokens or 0,
+            "output_tokens": row.output_tokens or 0,
+            "total_tokens": row.total_tokens or 0,
+            "call_count": row.call_count,
+            "estimated_cost": estimate_cost(
+                row.model, row.input_tokens or 0, row.output_tokens or 0
+            ),
+        }
+        for row in by_feature_result.all()
+    ]
+
     return {
         "period": period,
         "since": since.isoformat(),
-        "by_feature": [
-            {
-                "feature": row.feature,
-                "provider": row.provider,
-                "model": row.model,
-                "input_tokens": row.input_tokens or 0,
-                "output_tokens": row.output_tokens or 0,
-                "total_tokens": row.total_tokens or 0,
-                "call_count": row.call_count,
-            }
-            for row in by_feature_result.all()
-        ],
+        "by_feature": by_feature_rows,
         "by_user": [
             *[
                 {
@@ -483,6 +530,7 @@ async def get_llm_usage(
             "output_tokens": totals_row.output_tokens or 0,
             "total_tokens": totals_row.total_tokens or 0,
             "call_count": totals_row.call_count or 0,
+            "estimated_cost": sum(r["estimated_cost"] for r in by_feature_rows),
         },
     }
 

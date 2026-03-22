@@ -28,6 +28,12 @@
     return n.toString();
   }
 
+  function formatCost(n: number): string {
+    if (n === 0) return "$0.00";
+    if (n < 0.01) return `$${n.toFixed(4)}`;
+    return `$${n.toFixed(2)}`;
+  }
+
   async function loadUsage() {
     if (!$authStore.token) return;
     loading = true;
@@ -91,7 +97,11 @@
     </div>
   {:else if data}
     <!-- Totals -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
+      <div class="bg-card card-soft rounded-2xl p-5 text-center">
+        <p class="text-2xl font-bold text-foreground">{formatCost(data.totals.estimated_cost)}</p>
+        <p class="text-muted-foreground text-sm mt-0.5">Est. Cost</p>
+      </div>
       <div class="bg-card card-soft rounded-2xl p-5 text-center">
         <p class="text-2xl font-bold text-foreground">{formatTokens(data.totals.total_tokens)}</p>
         <p class="text-muted-foreground text-sm mt-0.5">Total Tokens</p>
@@ -163,6 +173,7 @@
                 <th class="px-4 py-3 font-medium text-muted-foreground text-right">Output</th>
                 <th class="px-4 py-3 font-medium text-muted-foreground text-right">Total</th>
                 <th class="px-4 py-3 font-medium text-muted-foreground text-right">Calls</th>
+                <th class="px-4 py-3 font-medium text-muted-foreground text-right">Est. Cost</th>
               </tr>
             </thead>
             <tbody>
@@ -174,6 +185,7 @@
                   <td class="px-4 py-3 text-right tabular-nums text-foreground">{formatTokens(row.output_tokens)}</td>
                   <td class="px-4 py-3 text-right tabular-nums font-medium text-foreground">{formatTokens(row.total_tokens)}</td>
                   <td class="px-4 py-3 text-right tabular-nums text-muted-foreground">{row.call_count.toLocaleString()}</td>
+                  <td class="px-4 py-3 text-right tabular-nums font-medium text-foreground">{formatCost(row.estimated_cost)}</td>
                 </tr>
               {/each}
             </tbody>
