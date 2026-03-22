@@ -20,6 +20,9 @@ DEFAULTS = {
     "tag_model": "",
     "image_provider": "",
     "image_model": "",
+    # Embedding config (shared by semantic search + companion RAG)
+    "embedding_provider": "",
+    "embedding_model": "",
 }
 
 

@@ -1,4 +1,5 @@
 from app.models.book import Book, ExternalMetadata, MetadataSource
+from app.models.book_embedding import BookEmbeddingChunk
 from app.models.book_text import BookTextChunk
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.companion import CompanionConversation, CompanionMessage
@@ -30,4 +31,5 @@ __all__ = [
     "CompanionConversation",
     "CompanionMessage",
     "BookTextChunk",
+    "BookEmbeddingChunk",
 ]

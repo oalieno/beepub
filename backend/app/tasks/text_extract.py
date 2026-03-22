@@ -69,6 +69,11 @@ def extract_book_text(self, book_id: str) -> None:
             await db.commit()
             logger.info("Extracted %d text chunks from book %s", len(chunks), book_id)
 
+            # Chain: trigger embedding after successful text extraction
+            from app.tasks.embed import embed_book
+
+            embed_book.delay(book_id)
+
     try:
         asyncio.run(_run())
     except Exception as exc:

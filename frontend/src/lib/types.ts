@@ -219,6 +219,8 @@ export interface AdminSettings {
   tag_model: string;
   image_provider: string;
   image_model: string;
+  embedding_provider: string;
+  embedding_model: string;
 }
 
 export interface AiStatus {
@@ -271,6 +273,27 @@ export interface CompanionConversationSummary {
   title: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface JobProgress {
+  status: "running" | "completed" | "failed";
+  total: number;
+  processed: number;
+  failed: number;
+}
+
+export interface JobStatus {
+  key: string;
+  label: string;
+  description: string;
+  total: number;
+  missing: number;
+  active: boolean;
+  progress: JobProgress | null;
+}
+
+export interface AllJobsResponse {
+  jobs: JobStatus[];
 }
 
 export interface CompanionConversationOut {

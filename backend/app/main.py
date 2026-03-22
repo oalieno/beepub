@@ -15,7 +15,9 @@ from app.routers import (
     companion,
     highlights,
     illustrations,
+    jobs,
     libraries,
+    search,
     tags,
 )
 from app.services.auth import decode_token
@@ -74,6 +76,8 @@ app.include_router(highlights.router)
 app.include_router(illustrations.router)
 app.include_router(tags.router)
 app.include_router(companion.router)
+app.include_router(search.router)
+app.include_router(jobs.router)
 
 
 @app.get("/api/health")

@@ -21,7 +21,6 @@ from app.services.calibre import (
     sync_calibre_library,
 )
 from app.services.settings import get_all_settings, update_settings
-from app.tasks.wordcount import compute_word_count
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -329,11 +328,9 @@ async def list_ai_models(
 @router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
 async def recompute_word_counts(
     current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Queue word-count jobs for all books that don't have one yet."""
-    result = await db.execute(select(Book.id).where(Book.word_count.is_(None)))
-    book_ids = result.scalars().all()
-    for bid in book_ids:
-        compute_word_count.delay(str(bid))
-    return {"queued": len(book_ids)}
+    """Legacy wrapper — delegates to the unified bulk job system."""
+    from app.tasks.bulk_jobs import run_bulk_job
+
+    run_bulk_job.delay("word_count", "missing")
+    return {"status": "accepted"}

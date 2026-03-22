@@ -87,6 +87,25 @@ export const adminApi = {
     get(`/admin/ai/models?provider=${provider}`, token) as Promise<
       { id: string; name: string }[]
     >,
+
+  buildSearchIndex: (token: string) =>
+    post("/search/build-index", undefined, token) as Promise<{
+      status: string;
+      message: string;
+    }>,
+
+  // Job Queue
+  getJobs: (token: string) =>
+    get("/admin/jobs", token) as Promise<
+      import("$lib/types").AllJobsResponse
+    >,
+
+  triggerJob: (jobType: string, mode: string, token: string) =>
+    post(`/admin/jobs/${jobType}`, { mode }, token) as Promise<{
+      status: string;
+      job_type: string;
+      mode: string;
+    }>,
 };
 
 export const aiApi = {

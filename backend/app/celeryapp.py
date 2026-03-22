@@ -33,6 +33,8 @@ celery.conf.update(
         "app.tasks.auto_tag",
         "app.tasks.text_extract",
         "app.tasks.summarize",
+        "app.tasks.embed",
+        "app.tasks.bulk_jobs",
     ],
     beat_schedule={
         "metadata-refresh-check": {

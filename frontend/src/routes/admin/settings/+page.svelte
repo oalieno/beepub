@@ -17,7 +17,6 @@
   let settings = $state<AdminSettings | null>(null);
   let loading = $state(true);
   let saving = $state(false);
-
   // Form state
   let timezone = $state("Asia/Taipei");
   let metadataEnabled = $state(true);
@@ -37,6 +36,8 @@
   let tagModel = $state("");
   let imageProvider = $state("");
   let imageModel = $state("");
+  let embeddingProvider = $state("");
+  let embeddingModel = $state("");
 
   // Derived: which providers have credentials configured
   let hasGemini = $derived(geminiApiKey.trim().length > 0);
@@ -179,6 +180,8 @@
       tagModel = settings.tag_model || "";
       imageProvider = settings.image_provider || "";
       imageModel = settings.image_model || "";
+      embeddingProvider = settings.embedding_provider || "";
+      embeddingModel = settings.embedding_model || "";
 
       // Fetch model lists for configured providers
       const fetches: Promise<void>[] = [];
@@ -212,6 +215,8 @@
           tag_model: tagModel,
           image_provider: imageProvider,
           image_model: imageModel,
+          embedding_provider: embeddingProvider,
+          embedding_model: embeddingModel,
         },
         $authStore.token,
       );
@@ -546,6 +551,27 @@
             "gemini-2.0-flash-exp",
             (v) => (imageProvider = v),
             (v) => (imageModel = v),
+          )}
+        </Card.Content>
+      </Card.Root>
+
+      <!-- Embedding AI -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>Embedding AI</Card.Title>
+          <Card.Description>
+            For semantic search across your library. Uses embedding models to
+            search book content by meaning.
+          </Card.Description>
+        </Card.Header>
+        <Card.Content>
+          {@render featureProviderFields(
+            "embedding",
+            embeddingProvider,
+            embeddingModel,
+            "gemini-embedding-001",
+            (v) => (embeddingProvider = v),
+            (v) => (embeddingModel = v),
           )}
         </Card.Content>
       </Card.Root>
