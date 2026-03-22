@@ -1,15 +1,20 @@
 <script lang="ts">
   import { page } from "$app/stores";
-  import { BookX } from "@lucide/svelte";
 </script>
 
 <svelte:head>
   <title>{$page.status} - BeePub</title>
 </svelte:head>
 
-<div class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] px-4 text-center">
-  <BookX class="text-muted-foreground/40 mb-4" size={48} strokeWidth={1.5} />
-  <h1 class="text-4xl font-bold text-foreground mb-2">{$page.status}</h1>
+<div
+  class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] px-4 text-center"
+>
+  <img
+    src="/404.png"
+    alt="404"
+    style="max-width: min(24rem, 70vw);"
+    class="mb-4 sm:!max-w-96"
+  />
   <p class="text-muted-foreground text-lg mb-6">
     {$page.error?.message || "Page not found"}
   </p>
