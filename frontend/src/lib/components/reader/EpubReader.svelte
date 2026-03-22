@@ -450,6 +450,33 @@
         }
       });
 
+      // Highlight cursor: show pointer when hovering over a highlight
+      doc.addEventListener("mousemove", (e: MouseEvent) => {
+        const views = rendition?.manager?.views;
+        if (!views?._views?.length) return;
+        const view = views._views[0];
+        if (!view?.highlights || !view?.iframe) return;
+        // Convert iframe-local coords to parent-document coords
+        const iframeRect = view.iframe.getBoundingClientRect();
+        const px = e.clientX + iframeRect.left;
+        const py = e.clientY + iframeRect.top;
+        let overHighlight = false;
+        for (const cfi in view.highlights) {
+          const hl = view.highlights[cfi];
+          if (!hl?.mark) continue;
+          const rects = hl.mark.getClientRects();
+          for (let i = 0; i < rects.length; i++) {
+            const r = rects[i];
+            if (px >= r.left && px <= r.right && py >= r.top && py <= r.bottom) {
+              overHighlight = true;
+              break;
+            }
+          }
+          if (overHighlight) break;
+        }
+        doc.body.style.cursor = overHighlight ? "pointer" : "";
+      });
+
       // Detect iOS (iPhone/iPad/iPod or desktop iPad with touch)
       const isIOS =
         /iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -842,6 +869,29 @@
         highlightMenuShownAt = Date.now();
       },
     );
+
+    rendition.on("markClicked", (cfiRange: string, _data: any, contents: any) => {
+      const hl = highlights.find((h: HighlightOut) => h.cfi_range === cfiRange);
+      if (!hl) return;
+
+      // Get the range position for menu placement
+      const range = contents?.range?.(cfiRange);
+      if (!range) return;
+      const rect = range.getBoundingClientRect();
+      const mgr = rendition?.manager;
+      const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+      const scrollTop = mgr?.container?.scrollTop ?? 0;
+
+      selectedCfi = cfiRange;
+      selectedText = hl.text;
+      existingHighlight = hl;
+      setClampedMenuPosition(
+        rect.left - scrollLeft + rect.width / 2,
+        rect.top - scrollTop - 8,
+      );
+      showHighlightMenu = true;
+      highlightMenuShownAt = Date.now();
+    });
 
     rendition.on("click", () => {
       // Guard: on mobile, 'click' fires right after 'selected' and would

@@ -50,7 +50,7 @@
   <div class="flex flex-col gap-1">
     {#each highlights as hl (hl.id)}
       <div
-        class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start {darkMode
+        class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start cursor-pointer {darkMode
           ? 'hover:bg-gray-800'
           : 'hover:bg-accent'}"
         role="button"
@@ -97,33 +97,33 @@
             {formatDate(hl.created_at)}
           </p>
         </div>
-        <div class="self-center flex items-center gap-0.5 flex-shrink-0">
+        <div class="self-center flex items-center gap-1 flex-shrink-0">
           {#if onshare}
             <button
-              class="p-1 rounded transition-all {darkMode
-                ? 'text-gray-500 hover:text-gray-300'
-                : 'text-muted-foreground hover:text-foreground'}"
+              class="p-2 rounded-md transition-all cursor-pointer {darkMode
+                ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800 active:bg-gray-700'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent/80'}"
               title="Share as card"
               onclick={(e) => {
                 e.stopPropagation();
                 onshare?.(hl);
               }}
             >
-              <Share2 size={13} />
+              <Share2 size={16} />
             </button>
           {/if}
           {#if ondelete}
             <button
-              class="p-1 rounded transition-all {darkMode
-                ? 'text-gray-500 hover:text-red-400'
-                : 'text-muted-foreground hover:text-destructive'}"
+              class="p-2 rounded-md transition-all cursor-pointer {darkMode
+                ? 'text-gray-500 hover:text-red-400 hover:bg-gray-800 active:bg-red-900/30'
+                : 'text-muted-foreground hover:text-destructive hover:bg-accent active:bg-destructive/10'}"
               title="Delete highlight"
               onclick={(e) => {
                 e.stopPropagation();
                 ondelete?.(hl);
               }}
             >
-              <Trash2 size={13} />
+              <Trash2 size={16} />
             </button>
           {/if}
         </div>
