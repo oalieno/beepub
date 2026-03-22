@@ -3,7 +3,7 @@ import os
 import re
 import uuid
 import zipfile
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
@@ -52,6 +52,8 @@ from app.schemas.reading import (
     ProgressUpdate,
     RatingUpdate,
     ReadingActivityOut,
+    ReadingGoalUpdate,
+    ReadingStatsOut,
     ReadingStatusUpdate,
 )
 from app.services.epub_parser import extract_cover, parse_epub_metadata
@@ -225,6 +227,108 @@ async def get_reading_activity(
         .order_by(ReadingActivity.date)
     )
     return result.scalars().all()
+
+
+@router.get("/reading-stats", response_model=ReadingStatsOut)
+async def get_reading_stats(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get reading streak and goal progress for the current user."""
+    tz_name = await get_setting(db, "timezone")
+    try:
+        today = datetime.now(ZoneInfo(tz_name)).date()
+    except (KeyError, Exception):
+        today = datetime.now(UTC).date()
+
+    # Fetch all reading days ordered by date desc
+    result = await db.execute(
+        select(ReadingActivity.date, ReadingActivity.seconds)
+        .where(
+            ReadingActivity.user_id == current_user.id,
+            ReadingActivity.seconds > 0,
+        )
+        .order_by(ReadingActivity.date.desc())
+    )
+    rows = result.all()
+
+    today_seconds = 0
+    dates_with_reading: list[date] = []
+    for row in rows:
+        if row.date == today:
+            today_seconds = row.seconds
+        dates_with_reading.append(row.date)
+
+    # Compute current streak (Duolingo-style: grace if not read today yet)
+    current_streak = _compute_streak(dates_with_reading, today)
+
+    # Compute longest streak
+    longest_streak = _compute_longest_streak(dates_with_reading)
+
+    return ReadingStatsOut(
+        current_streak=current_streak,
+        longest_streak=max(longest_streak, current_streak),
+        today_seconds=today_seconds,
+        goal_seconds=current_user.daily_reading_goal_seconds,
+    )
+
+
+def _compute_streak(dates: list[date], today: date) -> int:
+    """Count consecutive days with reading, starting from today or yesterday."""
+    if not dates:
+        return 0
+
+    # Start from today; if no reading today, try yesterday (grace period)
+    expected = today
+    if dates[0] != today:
+        expected = today - timedelta(days=1)
+
+    streak = 0
+    for d in dates:
+        if d == expected:
+            streak += 1
+            expected -= timedelta(days=1)
+        elif d < expected:
+            break
+    return streak
+
+
+def _compute_longest_streak(dates: list[date]) -> int:
+    """Find the longest consecutive run in a desc-sorted list of dates."""
+    if not dates:
+        return 0
+
+    longest = 1
+    current = 1
+    for i in range(1, len(dates)):
+        if dates[i] == dates[i - 1] - timedelta(days=1):
+            current += 1
+            longest = max(longest, current)
+        else:
+            current = 1
+    return longest
+
+
+@router.put("/reading-goal", response_model=ReadingStatsOut)
+async def update_reading_goal(
+    body: ReadingGoalUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Set, update, or remove the daily reading goal."""
+    if body.goal_seconds is not None and (
+        body.goal_seconds < 60 or body.goal_seconds > 86400
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="Goal must be between 60 and 86400 seconds (1 min to 24 hrs)",
+        )
+
+    current_user.daily_reading_goal_seconds = body.goal_seconds
+    await db.commit()
+
+    # Return updated stats
+    return await get_reading_stats(current_user, db)
 
 
 @router.get("/me", response_model=PaginatedBooksWithInteraction)

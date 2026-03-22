@@ -81,6 +81,23 @@ class ReadingActivityOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReadingStatsOut(BaseModel):
+    current_streak: int
+    longest_streak: int
+    today_seconds: int
+    goal_seconds: int | None
+
+
+class ReadingGoalUpdate(BaseModel):
+    goal_seconds: int | None = None  # null to remove goal
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [{"goal_seconds": 1800}],
+        }
+    }
+
+
 class InteractionOut(BaseModel):
     rating: int | None
     is_favorite: bool

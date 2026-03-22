@@ -11,6 +11,7 @@ import type {
   InteractionOut,
   PaginatedBooksWithInteraction,
   ProgressOut,
+  ReadingStats,
   ReadingStatus,
   ReferenceImageInput,
   StylePromptOut,
@@ -297,4 +298,14 @@ export const booksApi = {
     conversationId: string,
     token: string,
   ) => del(`/books/${bookId}/companion/${conversationId}`, token),
+
+  getReadingStats: (token: string) =>
+    get("/books/reading-stats", token) as Promise<ReadingStats>,
+
+  updateReadingGoal: (goalSeconds: number | null, token: string) =>
+    put(
+      "/books/reading-goal",
+      { goal_seconds: goalSeconds },
+      token,
+    ) as Promise<ReadingStats>,
 };

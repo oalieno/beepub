@@ -2,7 +2,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String
+from sqlalchemy import Boolean, Integer, String
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -34,6 +34,9 @@ class User(Base, TimestampMixin):
         SAEnum(UserRole), nullable=False, default=UserRole.user
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
 
     # Relationships
     library_accesses: Mapped[list["LibraryAccess"]] = relationship(

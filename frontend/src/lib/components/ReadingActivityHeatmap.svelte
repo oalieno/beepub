@@ -117,7 +117,7 @@
   </div>
 
   <div
-    class="mt-1 flex flex-wrap items-center justify-start gap-1.5 text-xs text-muted-foreground sm:justify-end"
+    class="mt-1 flex flex-wrap items-center justify-end gap-1.5 text-xs text-muted-foreground"
   >
     <span>Less</span>
     <div

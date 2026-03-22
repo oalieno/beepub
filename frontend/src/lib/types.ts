@@ -304,6 +304,13 @@ export interface CompanionConversationOut {
   created_at: string;
 }
 
+export interface ReadingStats {
+  current_streak: number;
+  longest_streak: number;
+  today_seconds: number;
+  goal_seconds: number | null;
+}
+
 export interface LlmUsageByFeature {
   feature: string;
   provider: string;

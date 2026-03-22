@@ -6,6 +6,7 @@
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
+  import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { booksApi } from "$lib/api/books";
   import type {
@@ -13,6 +14,7 @@
     BookshelfOut,
     BookWithInteractionOut,
     LibraryOut,
+    ReadingStats,
   } from "$lib/types";
   import { goto } from "$app/navigation";
   import { BookOpen, BookMarked } from "@lucide/svelte";
@@ -23,28 +25,32 @@
   let recentBooks = $state<BookOut[]>([]);
   let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
+  let readingStats = $state<ReadingStats | null>(null);
   let currentYear = new Date().getFullYear();
   let loading = $state(true);
 
   onMount(async () => {
     try {
-      const [libs, shelves, activity, currentlyReading] = await Promise.all([
-        librariesApi.list($authStore.token!),
-        bookshelvesApi.list($authStore.token!),
-        booksApi
-          .getReadingActivity(currentYear, $authStore.token!)
-          .catch(() => []),
-        booksApi
-          .getMyBooks($authStore.token!, {
-            status: "currently_reading",
-            sort: "last_read_at",
-            limit: 12,
-          })
-          .catch(() => ({ items: [], total: 0 })),
-      ]);
+      const [libs, shelves, activity, stats, currentlyReading] =
+        await Promise.all([
+          librariesApi.list($authStore.token!),
+          bookshelvesApi.list($authStore.token!),
+          booksApi
+            .getReadingActivity(currentYear, $authStore.token!)
+            .catch(() => []),
+          booksApi.getReadingStats($authStore.token!).catch(() => null),
+          booksApi
+            .getMyBooks($authStore.token!, {
+              status: "currently_reading",
+              sort: "last_read_at",
+              limit: 12,
+            })
+            .catch(() => ({ items: [], total: 0 })),
+        ]);
       libraries = libs;
       bookshelves = shelves;
       readingActivity = activity;
+      readingStats = stats;
       continueReadingBooks = currentlyReading.items;
 
       // Gather recent books from all libraries (only fetch top 12 each)
@@ -200,6 +206,21 @@
       <div
         class="w-full max-w-full overflow-hidden bg-card card-soft rounded-2xl p-4 sm:p-6"
       >
+        {#if readingStats}
+          <div class="mb-4 pb-4 border-b border-border">
+            <ReadingStreakCard
+              stats={readingStats}
+              {readingActivity}
+              onGoalUpdate={async (goalSeconds) => {
+                const updated = await booksApi.updateReadingGoal(
+                  goalSeconds,
+                  $authStore.token!,
+                );
+                readingStats = updated;
+              }}
+            />
+          </div>
+        {/if}
         <ReadingActivityHeatmap data={readingActivity} year={currentYear} />
       </div>
     </section>
