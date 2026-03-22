@@ -105,6 +105,12 @@ export const adminApi = {
       mode: string;
     }>,
 
+  stopJob: (jobType: string, token: string) =>
+    del(`/admin/jobs/${jobType}`, token) as Promise<{
+      status: string;
+      job_type: string;
+    }>,
+
   // LLM Usage
   getLlmUsage: (token: string, period: string = "month", feature?: string) => {
     const params = new URLSearchParams({ period });

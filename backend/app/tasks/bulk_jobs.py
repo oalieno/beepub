@@ -24,7 +24,7 @@ async def _run_bulk_job(job_type: str, mode: str) -> None:
 
     from app.database import create_task_session
     from app.models.book import Book
-    from app.services.job_queue import set_job_status
+    from app.services.job_queue import get_job_status, set_job_status
 
     session_factory = create_task_session()
     async with session_factory() as db:
@@ -62,6 +62,13 @@ async def _run_bulk_job(job_type: str, mode: str) -> None:
                 failed += 1
 
             processed += 1
+
+        # Check for cancellation before updating progress — if cancelled,
+        # don't overwrite the "cancelled" status back to "running"
+        current = await get_job_status(job_type)
+        if current and current.get("status") == "cancelled":
+            logger.info("bulk_job %s cancelled at %d/%d", job_type, processed, total)
+            return
 
         await set_job_status(
             job_type, status="running", total=total, processed=processed, failed=failed

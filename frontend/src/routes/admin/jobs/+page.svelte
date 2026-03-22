@@ -15,12 +15,14 @@
     Infinity,
     ScanSearch,
     Loader2,
+    Square,
   } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
   let jobs = $state<JobStatus[]>([]);
   let loading = $state(true);
   let triggeringJob = $state<string | null>(null);
+  let stoppingJob = $state<string | null>(null);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
 
   const JOB_ICONS: Record<string, typeof FileText> = {
@@ -42,6 +44,20 @@
       }
     } finally {
       loading = false;
+    }
+  }
+
+  async function stopJob(jobType: string) {
+    if (!$authStore.token) return;
+    stoppingJob = jobType;
+    try {
+      await adminApi.stopJob(jobType, $authStore.token);
+      toastStore.success(`Job stopped: ${jobType}`);
+      await fetchJobs();
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      stoppingJob = null;
     }
   }
 
@@ -182,29 +198,47 @@
           <div
             class="flex flex-col border-l border-border/50 shrink-0 w-[4.5rem] sm:w-20"
           >
-            <button
-              class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              disabled={job.active || isTriggering}
-              onclick={() => triggerJob(job.key, "all")}
-              title="Process all books"
-            >
-              <Infinity size={18} class="text-muted-foreground" />
-              <span class="text-xs text-muted-foreground font-sans font-medium"
-                >All</span
+            {#if job.active}
+              <button
+                class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-destructive/10 active:bg-destructive/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={stoppingJob === job.key}
+                onclick={() => stopJob(job.key)}
+                title="Stop this job"
               >
-            </button>
-            <div class="h-px bg-border/50"></div>
-            <button
-              class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-              disabled={job.active || isTriggering || job.missing === 0}
-              onclick={() => triggerJob(job.key, "missing")}
-              title="Process only unprocessed books"
-            >
-              <ScanSearch size={18} class="text-muted-foreground" />
-              <span class="text-xs text-muted-foreground font-sans font-medium"
-                >Missing</span
+                {#if stoppingJob === job.key}
+                  <Loader2 class="text-destructive animate-spin" size={18} />
+                {:else}
+                  <Square size={16} class="text-destructive fill-destructive" />
+                {/if}
+                <span class="text-xs text-destructive font-sans font-medium"
+                  >Stop</span
+                >
+              </button>
+            {:else}
+              <button
+                class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={isTriggering}
+                onclick={() => triggerJob(job.key, "all")}
+                title="Process all books"
               >
-            </button>
+                <Infinity size={18} class="text-muted-foreground" />
+                <span class="text-xs text-muted-foreground font-sans font-medium"
+                  >All</span
+                >
+              </button>
+              <div class="h-px bg-border/50"></div>
+              <button
+                class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={isTriggering || job.missing === 0}
+                onclick={() => triggerJob(job.key, "missing")}
+                title="Process only unprocessed books"
+              >
+                <ScanSearch size={18} class="text-muted-foreground" />
+                <span class="text-xs text-muted-foreground font-sans font-medium"
+                  >Missing</span
+                >
+              </button>
+            {/if}
           </div>
         </div>
       {/each}

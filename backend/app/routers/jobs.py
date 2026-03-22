@@ -16,6 +16,7 @@ from app.services.job_queue import (
     count_missing_books,
     get_all_job_statuses,
     get_job_status,
+    set_job_status,
 )
 
 router = APIRouter(prefix="/api/admin/jobs", tags=["jobs"])
@@ -94,3 +95,32 @@ async def trigger_job(
 
     run_bulk_job.delay(job_type, body.mode)
     return {"status": "accepted", "job_type": job_type, "mode": body.mode}
+
+
+@router.delete("/{job_type}", status_code=status.HTTP_200_OK)
+async def stop_job(
+    job_type: str,
+    _admin: Annotated[User, Depends(require_admin)],
+):
+    """Stop a running bulk job by setting its status to cancelled."""
+    if job_type not in JOB_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown job type: {job_type}",
+        )
+
+    current = await get_job_status(job_type)
+    if not current or current.get("status") != "running":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Job '{job_type}' is not running",
+        )
+
+    await set_job_status(
+        job_type,
+        status="cancelled",
+        total=current.get("total", 0),
+        processed=current.get("processed", 0),
+        failed=current.get("failed", 0),
+    )
+    return {"status": "cancelled", "job_type": job_type}
