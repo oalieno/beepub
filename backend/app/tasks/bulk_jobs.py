@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 BATCH_SIZE = 10
 
 
-@celery.task(name="app.tasks.bulk_jobs.run_bulk_job", bind=True)
+@celery.task(name="app.tasks.bulk_jobs.run_bulk_job", bind=True, acks_late=False)
 def run_bulk_job(self, job_type: str, mode: str = "missing") -> None:
     """Orchestrator task: iterate books in batches, call per-book task, track progress."""
     from app.celeryapp import run_async
@@ -25,6 +25,16 @@ async def _run_bulk_job(job_type: str, mode: str) -> None:
     from app.database import create_task_session
     from app.models.book import Book
     from app.services.job_queue import get_job_status, set_job_status
+
+    # Skip if another instance is already running (e.g. redelivered after worker restart)
+    current = await get_job_status(job_type)
+    if current and current.get("status") == "running":
+        logger.info("bulk_job %s already running, skipping duplicate", job_type)
+        return
+    # Also skip if cancelled before worker even picked it up
+    if current and current.get("status") == "cancelled":
+        logger.info("bulk_job %s was cancelled before starting, skipping", job_type)
+        return
 
     session_factory = create_task_session()
     async with session_factory() as db:
@@ -48,39 +58,62 @@ async def _run_bulk_job(job_type: str, mode: str) -> None:
     processed = 0
     failed = 0
 
-    for i in range(0, total, BATCH_SIZE):
-        batch = book_ids[i : i + BATCH_SIZE]
+    try:
+        for i in range(0, total, BATCH_SIZE):
+            batch = book_ids[i : i + BATCH_SIZE]
 
-        for bid in batch:
-            bid_str = str(bid)
-            try:
-                _dispatch_single(job_type, bid_str)
-            except Exception:
-                logger.exception(
-                    "bulk_job %s: failed for book %s, skipping", job_type, bid_str
+            for bid in batch:
+                bid_str = str(bid)
+                try:
+                    _dispatch_single(job_type, bid_str)
+                except Exception:
+                    logger.exception(
+                        "bulk_job %s: failed for book %s, skipping", job_type, bid_str
+                    )
+                    failed += 1
+
+                processed += 1
+
+            # Check for cancellation before updating progress — if cancelled,
+            # don't overwrite the "cancelled" status back to "running"
+            current = await get_job_status(job_type)
+            if current and current.get("status") == "cancelled":
+                logger.info(
+                    "bulk_job %s cancelled at %d/%d", job_type, processed, total
                 )
-                failed += 1
+                return
 
-            processed += 1
-
-        # Check for cancellation before updating progress — if cancelled,
-        # don't overwrite the "cancelled" status back to "running"
-        current = await get_job_status(job_type)
-        if current and current.get("status") == "cancelled":
-            logger.info("bulk_job %s cancelled at %d/%d", job_type, processed, total)
-            return
+            await set_job_status(
+                job_type,
+                status="running",
+                total=total,
+                processed=processed,
+                failed=failed,
+            )
+            logger.info("bulk_job %s progress: %d/%d", job_type, processed, total)
 
         await set_job_status(
-            job_type, status="running", total=total, processed=processed, failed=failed
+            job_type,
+            status="completed",
+            total=total,
+            processed=processed,
+            failed=failed,
         )
-        logger.info("bulk_job %s progress: %d/%d", job_type, processed, total)
-
-    await set_job_status(
-        job_type, status="completed", total=total, processed=processed, failed=failed
-    )
-    logger.info(
-        "bulk_job %s complete: %d processed, %d failed", job_type, processed, failed
-    )
+        logger.info(
+            "bulk_job %s complete: %d processed, %d failed",
+            job_type,
+            processed,
+            failed,
+        )
+    except Exception:
+        logger.exception("bulk_job %s crashed at %d/%d", job_type, processed, total)
+        await set_job_status(
+            job_type,
+            status="failed",
+            total=total,
+            processed=processed,
+            failed=failed,
+        )
 
 
 async def _get_missing_book_ids(db, job_type: str) -> list:

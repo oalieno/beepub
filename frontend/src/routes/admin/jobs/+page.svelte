@@ -16,6 +16,7 @@
     ScanSearch,
     Loader2,
     Square,
+    Clock,
   } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
@@ -139,7 +140,9 @@
               >
                 {job.label}
               </span>
-              {#if job.active}
+              {#if job.progress?.status === "pending"}
+                <Clock class="text-primary shrink-0" size={15} />
+              {:else if job.active}
                 <Loader2 class="text-primary animate-spin shrink-0" size={15} />
               {/if}
             </div>
@@ -175,22 +178,10 @@
               </div>
             </div>
 
-            <!-- Progress bar -->
-            {#if job.active && job.progress && job.progress.total > 0}
-              <div class="mt-3 max-w-sm">
-                <div class="h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    class="h-full bg-primary rounded-full transition-all duration-500"
-                    style="width: {progressPct}%"
-                  ></div>
-                </div>
-                <p class="text-xs text-muted-foreground mt-1">
-                  {progressPct}%
-                  {#if job.progress.failed > 0}
-                    &middot; {job.progress.failed} failed
-                  {/if}
-                </p>
-              </div>
+            {#if job.active && job.progress && job.progress.failed > 0}
+              <p class="text-xs text-muted-foreground mt-3">
+                {job.progress.failed} failed
+              </p>
             {/if}
           </div>
 

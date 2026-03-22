@@ -52,7 +52,7 @@ async def get_jobs_status(
     for key, job_type in JOB_TYPES.items():
         total, missing = await count_missing_books(db, key)
         progress = statuses.get(key)
-        active = progress is not None and progress.get("status") == "running"
+        active = progress is not None and progress.get("status") in ("running", "pending")
 
         jobs.append(
             JobStatusOut(
@@ -83,13 +83,16 @@ async def trigger_job(
             detail=f"Unknown job type: {job_type}",
         )
 
-    # Check if already running
+    # Check if already running or pending
     current = await get_job_status(job_type)
-    if current and current.get("status") == "running":
+    if current and current.get("status") in ("running", "pending"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job '{job_type}' is already running",
         )
+
+    # Mark as pending immediately to prevent duplicate triggers
+    await set_job_status(job_type, status="pending")
 
     from app.tasks.bulk_jobs import run_bulk_job
 
@@ -110,7 +113,7 @@ async def stop_job(
         )
 
     current = await get_job_status(job_type)
-    if not current or current.get("status") != "running":
+    if not current or current.get("status") not in ("running", "pending"):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job '{job_type}' is not running",

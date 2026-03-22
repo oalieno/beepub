@@ -52,7 +52,7 @@
     </div>
   {:else}
     <!-- Stats -->
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
       <div class="bg-card card-soft rounded-2xl p-6 text-center">
         <div
           class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
