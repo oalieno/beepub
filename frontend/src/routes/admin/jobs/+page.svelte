@@ -113,8 +113,14 @@
           <div class="flex-1 px-5 py-4 sm:px-6 sm:py-5 min-w-0">
             <!-- Header row -->
             <div class="flex items-center gap-2.5">
-              <Icon class="text-muted-foreground shrink-0" size={18} strokeWidth={1.75} />
-              <span class="font-semibold text-foreground font-sans text-base leading-none">
+              <Icon
+                class="text-muted-foreground shrink-0"
+                size={18}
+                strokeWidth={1.75}
+              />
+              <span
+                class="font-semibold text-foreground font-sans text-base leading-none"
+              >
                 {job.label}
               </span>
               {#if job.active}
@@ -132,7 +138,9 @@
             >
               <div class="flex items-center gap-5 px-3.5 py-2 bg-muted/50">
                 <span class="text-sm text-muted-foreground">Active</span>
-                <span class="text-sm font-semibold text-foreground font-sans tabular-nums">
+                <span
+                  class="text-sm font-semibold text-foreground font-sans tabular-nums"
+                >
                   {#if job.active && job.progress}
                     {job.progress.processed.toLocaleString()}/{job.progress.total.toLocaleString()}
                   {:else}
@@ -143,7 +151,9 @@
               <div class="w-px bg-border/50"></div>
               <div class="flex items-center gap-5 px-3.5 py-2">
                 <span class="text-sm text-muted-foreground">Missing</span>
-                <span class="text-sm font-semibold text-foreground font-sans tabular-nums">
+                <span
+                  class="text-sm font-semibold text-foreground font-sans tabular-nums"
+                >
                   {job.missing.toLocaleString()}
                 </span>
               </div>

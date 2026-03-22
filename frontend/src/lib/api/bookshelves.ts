@@ -96,9 +96,7 @@ export const adminApi = {
 
   // Job Queue
   getJobs: (token: string) =>
-    get("/admin/jobs", token) as Promise<
-      import("$lib/types").AllJobsResponse
-    >,
+    get("/admin/jobs", token) as Promise<import("$lib/types").AllJobsResponse>,
 
   triggerJob: (jobType: string, mode: string, token: string) =>
     post(`/admin/jobs/${jobType}`, { mode }, token) as Promise<{

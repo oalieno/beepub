@@ -317,9 +317,7 @@
           <div class="max-h-[60vh] overflow-y-auto">
             {#each [1, 2, 3] as _}
               <div class="flex items-start gap-3 px-4 py-3 animate-pulse">
-                <div
-                  class="w-10 h-14 shrink-0 rounded-sm bg-secondary"
-                ></div>
+                <div class="w-10 h-14 shrink-0 rounded-sm bg-secondary"></div>
                 <div class="flex-1 space-y-2">
                   <div class="h-3.5 bg-secondary rounded w-1/3"></div>
                   <div class="h-3 bg-secondary rounded w-full"></div>
