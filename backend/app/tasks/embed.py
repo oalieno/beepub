@@ -93,7 +93,9 @@ def embed_book(self, book_id: str) -> None:
                     batch = new_sub_chunks[i : i + _EMBED_BATCH_SIZE]
                     texts = [sc.text for sc in batch]
 
-                    vectors = await embed_texts(texts, api_key=api_key, model=model)
+                    vectors, usage = await embed_texts(
+                        texts, api_key=api_key, model=model
+                    )
 
                     for sc, vector in zip(batch, vectors):
                         db.add(
@@ -112,6 +114,18 @@ def embed_book(self, book_id: str) -> None:
 
                     await db.commit()
                     total_embedded += len(batch)
+
+                    # Log usage (fire-and-forget)
+                    from app.services.llm_usage import log_llm_usage
+
+                    await log_llm_usage(
+                        feature="embedding",
+                        provider=provider,
+                        model=model,
+                        usage=usage,
+                        book_id=bid,
+                        session_factory=session_factory,
+                    )
 
             logger.info("Embedded %d sub-chunks for book %s", total_embedded, book_id)
 

@@ -39,7 +39,10 @@ async def _run(
     image_path: str,
     reference_images: list[dict] | None,
 ) -> None:
+    from sqlalchemy import select
+
     from app.database import create_task_session
+    from app.models.illustration import Illustration
     from app.services.gemini import generate_illustration
     from app.services.settings import get_all_settings
 
@@ -47,9 +50,16 @@ async def _run(
     SessionLocal = create_task_session()
     async with SessionLocal() as db:
         db_settings = await get_all_settings(db)
+        # Get user_id and book_id for usage logging
+        ill_result = await db.execute(
+            select(Illustration.user_id, Illustration.book_id).where(
+                Illustration.id == uuid.UUID(illustration_id)
+            )
+        )
+        ill_row = ill_result.one_or_none()
 
     ref_bytes = _load_reference_images(reference_images)
-    image_bytes = await generate_illustration(
+    image_bytes, usage = await generate_illustration(
         text,
         style_prompt,
         custom_prompt,
@@ -60,6 +70,19 @@ async def _run(
     with open(image_path, "wb") as f:
         f.write(image_bytes)
     logger.info("Illustration %s image saved", illustration_id)
+
+    # Log usage (fire-and-forget)
+    from app.services.llm_usage import log_llm_usage
+
+    await log_llm_usage(
+        feature="illustration",
+        provider=db_settings.get("image_provider", ""),
+        model=db_settings.get("image_model", ""),
+        usage=usage,
+        user_id=ill_row.user_id if ill_row else None,
+        book_id=ill_row.book_id if ill_row else None,
+        session_factory=SessionLocal,
+    )
 
 
 async def _mark_status(

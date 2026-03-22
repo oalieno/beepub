@@ -65,9 +65,7 @@ def _extract_section_title(text: str) -> str | None:
     return None
 
 
-def extract_full_text(
-    file_path: str, max_chars: int = 500_000
-) -> list[TextChunk]:
+def extract_full_text(file_path: str, max_chars: int = 500_000) -> list[TextChunk]:
     """Extract all text from epub, split by spine item.
 
     Returns a list of TextChunk objects, each representing one spine section.
@@ -90,12 +88,14 @@ def extract_full_text(
             else:
                 break
 
-        chunks.append(TextChunk(
-            spine_index=idx,
-            section_title=_extract_section_title(text),
-            text=text,
-            char_offset=total_chars,
-        ))
+        chunks.append(
+            TextChunk(
+                spine_index=idx,
+                section_title=_extract_section_title(text),
+                text=text,
+                char_offset=total_chars,
+            )
+        )
         total_chars += len(text)
 
         if total_chars >= max_chars:

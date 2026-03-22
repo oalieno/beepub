@@ -126,10 +126,22 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
                 try:
                     lang = book_lang or _detect_language(text)
-                    summary = await provider.generate(
+                    result = await provider.generate(
                         SUMMARY_PROMPT.format(language=lang, text=text),
                     )
-                    chunk.summary = summary.strip()
+                    chunk.summary = result.text.strip()
+
+                    # Log usage (fire-and-forget)
+                    from app.services.llm_usage import log_llm_usage
+
+                    await log_llm_usage(
+                        feature="summarize",
+                        provider=db_settings.get("tag_provider", ""),
+                        model=db_settings.get("tag_model", ""),
+                        usage=result.usage,
+                        book_id=bid,
+                        session_factory=session_factory,
+                    )
                 except Exception:
                     logger.warning(
                         "Failed to summarize chunk %s (spine %d) of book %s",

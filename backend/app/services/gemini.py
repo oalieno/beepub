@@ -5,6 +5,8 @@ import logging
 import httpx
 from PIL import Image
 
+from app.services.llm import TokenUsage
+
 logger = logging.getLogger(__name__)
 
 BASE_INSTRUCTION = (
@@ -101,8 +103,8 @@ async def generate_illustration(
     reference_images: list[bytes] | None = None,
     *,
     db_settings: dict[str, str] | None = None,
-) -> bytes:
-    """Call Gemini API to generate an image. Returns resized PNG bytes."""
+) -> tuple[bytes, TokenUsage]:
+    """Call Gemini API to generate an image. Returns (resized PNG bytes, usage)."""
     from app.services.llm import _resolve_credentials
 
     settings = db_settings or {}
@@ -176,6 +178,14 @@ async def generate_illustration(
         resp.raise_for_status()
         data = resp.json()
 
+    # Parse usage from response
+    meta = data.get("usageMetadata", {})
+    usage = TokenUsage(
+        input_tokens=meta.get("promptTokenCount", 0),
+        output_tokens=meta.get("candidatesTokenCount", 0),
+        total_tokens=meta.get("totalTokenCount", 0),
+    )
+
     candidates = data.get("candidates", [])
     if not candidates:
         logger.error("Gemini response has no candidates: %s", data)
@@ -196,10 +206,10 @@ async def generate_illustration(
     for part in response_parts:
         if "inlineData" in part:
             raw_bytes = base64.b64decode(part["inlineData"]["data"])
-            return _resize_image(raw_bytes)
+            return _resize_image(raw_bytes), usage
         if "inline_data" in part:
             raw_bytes = base64.b64decode(part["inline_data"]["data"])
-            return _resize_image(raw_bytes)
+            return _resize_image(raw_bytes), usage
 
     raise ValueError("No image data in Gemini response")
 

@@ -14,6 +14,7 @@
     HardDrive,
     Settings,
     ListChecks,
+    Activity,
   } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
@@ -181,6 +182,32 @@
             </p>
             <p class="text-muted-foreground text-sm">
               Monitor and trigger background processing tasks
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
+          size={20}
+        />
+      </a>
+      <a
+        href="/admin/llm-usage"
+        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+          >
+            <Activity class="text-primary" size={18} />
+          </div>
+          <div>
+            <p
+              class="font-semibold text-foreground group-hover:text-primary transition-colors"
+            >
+              LLM Usage
+            </p>
+            <p class="text-muted-foreground text-sm">
+              Monitor AI token usage across features
             </p>
           </div>
         </div>

@@ -82,7 +82,11 @@ async def create_illustration(
                             detail=f"Image path not found in EPUB: {ref.path}",
                         )
                 resolved_refs.append(
-                    {"type": "epub", "epub_path": book.file_path, "image_path": ref.path}
+                    {
+                        "type": "epub",
+                        "epub_path": book.file_path,
+                        "image_path": ref.path,
+                    }
                 )
             elif ref.source == "illustration":
                 result = await db.execute(

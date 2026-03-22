@@ -20,6 +20,7 @@ from app.services.job_queue import (
 # _job_key
 # ---------------------------------------------------------------------------
 
+
 class TestJobKey:
     def test_format(self):
         assert _job_key("text_extraction") == f"{JOB_KEY_PREFIX}:text_extraction"
@@ -33,12 +34,19 @@ class TestJobKey:
 # JOB_TYPES registry
 # ---------------------------------------------------------------------------
 
+
 class TestJobTypes:
     def test_has_five_types(self):
         assert len(JOB_TYPES) == 5
 
     def test_expected_keys(self):
-        expected = {"text_extraction", "embedding", "summarize", "auto_tag", "word_count"}
+        expected = {
+            "text_extraction",
+            "embedding",
+            "summarize",
+            "auto_tag",
+            "word_count",
+        }
         assert set(JOB_TYPES.keys()) == expected
 
     def test_each_has_label_and_description(self):
@@ -52,6 +60,7 @@ class TestJobTypes:
 # get_job_status
 # ---------------------------------------------------------------------------
 
+
 class TestGetJobStatus:
     @pytest.mark.asyncio
     async def test_returns_parsed_json_when_data_exists(self):
@@ -60,7 +69,9 @@ class TestGetJobStatus:
         mock_client.get = AsyncMock(return_value=json.dumps(data))
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             result = await get_job_status("text_extraction")
 
         assert result == data
@@ -73,7 +84,9 @@ class TestGetJobStatus:
         mock_client.get = AsyncMock(return_value=None)
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             result = await get_job_status("embedding")
 
         assert result is None
@@ -84,7 +97,9 @@ class TestGetJobStatus:
         mock_client.get = AsyncMock(side_effect=Exception("Redis down"))
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             result = await get_job_status("embedding")
 
         assert result is None
@@ -95,6 +110,7 @@ class TestGetJobStatus:
 # set_job_status
 # ---------------------------------------------------------------------------
 
+
 class TestSetJobStatus:
     @pytest.mark.asyncio
     async def test_sets_json_with_ttl(self):
@@ -102,7 +118,9 @@ class TestSetJobStatus:
         mock_client.set = AsyncMock()
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             await set_job_status(
                 "text_extraction", status="running", total=100, processed=50, failed=2
             )
@@ -122,7 +140,9 @@ class TestSetJobStatus:
         mock_client.set = AsyncMock()
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             await set_job_status("embedding", status="completed")
 
         data = json.loads(mock_client.set.call_args[0][1])
@@ -135,6 +155,7 @@ class TestSetJobStatus:
 # clear_job_status
 # ---------------------------------------------------------------------------
 
+
 class TestClearJobStatus:
     @pytest.mark.asyncio
     async def test_deletes_key(self):
@@ -142,7 +163,9 @@ class TestClearJobStatus:
         mock_client.delete = AsyncMock()
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             await clear_job_status("auto_tag")
 
         mock_client.delete.assert_called_once_with(_job_key("auto_tag"))
@@ -152,11 +175,13 @@ class TestClearJobStatus:
 # get_all_job_statuses
 # ---------------------------------------------------------------------------
 
+
 class TestGetAllJobStatuses:
     @pytest.mark.asyncio
     async def test_returns_dict_for_all_job_types(self):
         data = {"status": "running", "total": 10, "processed": 5, "failed": 0}
         mock_client = AsyncMock()
+
         # Return data only for text_extraction, None for everything else
         async def mock_get(key):
             if key == _job_key("text_extraction"):
@@ -166,7 +191,9 @@ class TestGetAllJobStatuses:
         mock_client.get = mock_get
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             result = await get_all_job_statuses()
 
         assert len(result) == len(JOB_TYPES)
@@ -180,7 +207,9 @@ class TestGetAllJobStatuses:
         mock_client.get = AsyncMock(side_effect=Exception("Redis down"))
         mock_client.aclose = AsyncMock()
 
-        with patch("app.services.job_queue.aioredis.from_url", return_value=mock_client):
+        with patch(
+            "app.services.job_queue.aioredis.from_url", return_value=mock_client
+        ):
             result = await get_all_job_statuses()
 
         assert all(v is None for v in result.values())

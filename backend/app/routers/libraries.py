@@ -216,9 +216,7 @@ async def list_library_books(
             or_(
                 Book.tags.any(tag),
                 Book.epub_tags.any(tag),
-                Book.id.in_(
-                    select(AiBookTag.book_id).where(AiBookTag.tag == tag)
-                ),
+                Book.id.in_(select(AiBookTag.book_id).where(AiBookTag.tag == tag)),
             )
         )
     if series:
@@ -277,7 +275,9 @@ async def add_book_to_library(
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
     if library.calibre_path:
-        raise HTTPException(status_code=403, detail="Cannot add books to a Calibre library")
+        raise HTTPException(
+            status_code=403, detail="Cannot add books to a Calibre library"
+        )
     existing = await db.execute(
         select(LibraryBook).where(
             LibraryBook.library_id == library_id, LibraryBook.book_id == body.book_id

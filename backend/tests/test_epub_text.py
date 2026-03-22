@@ -15,6 +15,7 @@ from app.services.epub_text import (
 # _html_to_text
 # ---------------------------------------------------------------------------
 
+
 class TestHtmlToText:
     def test_strips_simple_tags(self):
         html_bytes = b"<p>Hello <b>world</b></p>"
@@ -55,7 +56,10 @@ class TestHtmlToText:
 
     def test_fallback_on_parse_error(self):
         """When lxml raises, the regex fallback strips tags."""
-        with patch("app.services.epub_text.html.fromstring", side_effect=Exception("parse error")):
+        with patch(
+            "app.services.epub_text.html.fromstring",
+            side_effect=Exception("parse error"),
+        ):
             result = _html_to_text(b"<p>fallback</p>")
         assert result == "fallback"
 
@@ -63,6 +67,7 @@ class TestHtmlToText:
 # ---------------------------------------------------------------------------
 # _extract_section_title
 # ---------------------------------------------------------------------------
+
 
 class TestExtractSectionTitle:
     def test_returns_first_nonempty_line(self):
@@ -93,6 +98,7 @@ class TestExtractSectionTitle:
 # ---------------------------------------------------------------------------
 # count_words
 # ---------------------------------------------------------------------------
+
 
 def _make_mock_book(texts: list[str]):
     """Create a mock EpubBook with spine items returning given HTML texts."""
@@ -150,7 +156,9 @@ class TestCountWords:
             assert count_words("fake.epub") == 5
 
     def test_returns_none_on_read_error(self):
-        with patch("app.services.epub_text.epub.read_epub", side_effect=Exception("bad file")):
+        with patch(
+            "app.services.epub_text.epub.read_epub", side_effect=Exception("bad file")
+        ):
             assert count_words("bad.epub") is None
 
     def test_skips_section_on_content_error(self):
@@ -169,6 +177,7 @@ class TestCountWords:
 # ---------------------------------------------------------------------------
 # extract_full_text
 # ---------------------------------------------------------------------------
+
 
 class TestExtractFullText:
     def test_returns_text_chunks(self):
@@ -199,7 +208,9 @@ class TestExtractFullText:
         book.get_item_with_id = lambda iid: {
             "item_0": MagicMock(get_content=MagicMock(return_value=b"<p>content</p>")),
             "item_1": item,
-            "item_2": MagicMock(get_content=MagicMock(return_value=b"<p>more content</p>")),
+            "item_2": MagicMock(
+                get_content=MagicMock(return_value=b"<p>more content</p>")
+            ),
         }.get(iid)
 
         with patch("app.services.epub_text.epub.read_epub", return_value=book):
@@ -220,6 +231,7 @@ class TestExtractFullText:
 # ---------------------------------------------------------------------------
 # extract_text_up_to
 # ---------------------------------------------------------------------------
+
 
 class TestExtractTextUpTo:
     def test_no_cfi_returns_all_text(self):

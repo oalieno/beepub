@@ -325,6 +325,168 @@ async def list_ai_models(
     return models
 
 
+# --- LLM Usage ---
+
+
+@router.get("/llm-usage")
+async def get_llm_usage(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    period: str = "month",
+    feature: str | None = None,
+):
+    """Get LLM usage statistics aggregated by feature, day, and user."""
+    from datetime import UTC, datetime, timedelta
+
+    from app.models.llm_usage import LLMUsageLog
+
+    # Determine date range
+    now = datetime.now(UTC)
+    if period == "day":
+        since = now - timedelta(days=1)
+    elif period == "week":
+        since = now - timedelta(weeks=1)
+    else:  # month
+        since = now - timedelta(days=30)
+
+    # Base filter
+    base_filter = [LLMUsageLog.created_at >= since]
+    if feature:
+        base_filter.append(LLMUsageLog.feature == feature)
+
+    # By feature
+    by_feature_stmt = (
+        select(
+            LLMUsageLog.feature,
+            LLMUsageLog.provider,
+            LLMUsageLog.model,
+            func.sum(LLMUsageLog.input_tokens).label("input_tokens"),
+            func.sum(LLMUsageLog.output_tokens).label("output_tokens"),
+            func.sum(LLMUsageLog.total_tokens).label("total_tokens"),
+            func.count().label("call_count"),
+        )
+        .where(*base_filter)
+        .group_by(LLMUsageLog.feature, LLMUsageLog.provider, LLMUsageLog.model)
+        .order_by(func.sum(LLMUsageLog.total_tokens).desc())
+    )
+    by_feature_result = await db.execute(by_feature_stmt)
+
+    # By day
+    date_trunc = func.date_trunc("day", LLMUsageLog.created_at)
+    by_day_stmt = (
+        select(
+            date_trunc.label("day"),
+            LLMUsageLog.feature,
+            func.sum(LLMUsageLog.input_tokens).label("input_tokens"),
+            func.sum(LLMUsageLog.output_tokens).label("output_tokens"),
+            func.sum(LLMUsageLog.total_tokens).label("total_tokens"),
+            func.count().label("call_count"),
+        )
+        .where(*base_filter)
+        .group_by(date_trunc, LLMUsageLog.feature)
+        .order_by(date_trunc.desc())
+    )
+    by_day_result = await db.execute(by_day_stmt)
+
+    # By user
+    from app.models.user import User as UserModel
+
+    by_user_stmt = (
+        select(
+            UserModel.id.label("user_id"),
+            UserModel.username,
+            func.sum(LLMUsageLog.input_tokens).label("input_tokens"),
+            func.sum(LLMUsageLog.output_tokens).label("output_tokens"),
+            func.sum(LLMUsageLog.total_tokens).label("total_tokens"),
+            func.count().label("call_count"),
+        )
+        .join(UserModel, LLMUsageLog.user_id == UserModel.id)
+        .where(*base_filter)
+        .group_by(UserModel.id, UserModel.username)
+        .order_by(func.sum(LLMUsageLog.total_tokens).desc())
+    )
+    by_user_result = await db.execute(by_user_stmt)
+
+    # System usage (no user_id, from background tasks)
+    system_stmt = select(
+        func.sum(LLMUsageLog.input_tokens).label("input_tokens"),
+        func.sum(LLMUsageLog.output_tokens).label("output_tokens"),
+        func.sum(LLMUsageLog.total_tokens).label("total_tokens"),
+        func.count().label("call_count"),
+    ).where(*base_filter, LLMUsageLog.user_id.is_(None))
+    system_result = await db.execute(system_stmt)
+    system_row = system_result.one()
+
+    # Totals
+    totals_stmt = select(
+        func.sum(LLMUsageLog.input_tokens).label("input_tokens"),
+        func.sum(LLMUsageLog.output_tokens).label("output_tokens"),
+        func.sum(LLMUsageLog.total_tokens).label("total_tokens"),
+        func.count().label("call_count"),
+    ).where(*base_filter)
+    totals_result = await db.execute(totals_stmt)
+    totals_row = totals_result.one()
+
+    return {
+        "period": period,
+        "since": since.isoformat(),
+        "by_feature": [
+            {
+                "feature": row.feature,
+                "provider": row.provider,
+                "model": row.model,
+                "input_tokens": row.input_tokens or 0,
+                "output_tokens": row.output_tokens or 0,
+                "total_tokens": row.total_tokens or 0,
+                "call_count": row.call_count,
+            }
+            for row in by_feature_result.all()
+        ],
+        "by_user": [
+            *[
+                {
+                    "username": row.username,
+                    "input_tokens": row.input_tokens or 0,
+                    "output_tokens": row.output_tokens or 0,
+                    "total_tokens": row.total_tokens or 0,
+                    "call_count": row.call_count,
+                }
+                for row in by_user_result.all()
+            ],
+            *(
+                [
+                    {
+                        "username": "(system)",
+                        "input_tokens": system_row.input_tokens or 0,
+                        "output_tokens": system_row.output_tokens or 0,
+                        "total_tokens": system_row.total_tokens or 0,
+                        "call_count": system_row.call_count or 0,
+                    }
+                ]
+                if (system_row.call_count or 0) > 0
+                else []
+            ),
+        ],
+        "by_day": [
+            {
+                "day": row.day.isoformat() if row.day else None,
+                "feature": row.feature,
+                "input_tokens": row.input_tokens or 0,
+                "output_tokens": row.output_tokens or 0,
+                "total_tokens": row.total_tokens or 0,
+                "call_count": row.call_count,
+            }
+            for row in by_day_result.all()
+        ],
+        "totals": {
+            "input_tokens": totals_row.input_tokens or 0,
+            "output_tokens": totals_row.output_tokens or 0,
+            "total_tokens": totals_row.total_tokens or 0,
+            "call_count": totals_row.call_count or 0,
+        },
+    }
+
+
 @router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
 async def recompute_word_counts(
     current_user: Annotated[User, Depends(require_admin)],

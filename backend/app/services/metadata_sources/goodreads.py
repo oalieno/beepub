@@ -116,7 +116,9 @@ class GoodreadsSource(AbstractMetadataSource):
                             )
                         else:
                             soup = BeautifulSoup(resp.text, "html.parser")
-                            for full_url, text in self._extract_book_links(soup, limit=3):
+                            for full_url, text in self._extract_book_links(
+                                soup, limit=3
+                            ):
                                 results.append(
                                     SearchResult(url=full_url, title=text, authors=[])
                                 )
@@ -193,9 +195,7 @@ class GoodreadsSource(AbstractMetadataSource):
                         rating = float(agg.get("ratingValue", 0)) or None
                         rating_count = int(agg.get("ratingCount", 0)) or None
                     except Exception:
-                        logger.warning(
-                            "Failed to parse JSON-LD from %s", url
-                        )
+                        logger.warning("Failed to parse JSON-LD from %s", url)
 
                 # Fallback: scrape rating display
                 if rating is None:

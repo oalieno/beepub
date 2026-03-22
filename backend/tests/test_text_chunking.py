@@ -14,6 +14,7 @@ from app.services.text_chunking import (
 # Empty / whitespace inputs
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyInputs:
     def test_empty_string(self):
         assert split_text_into_chunks("") == []
@@ -28,6 +29,7 @@ class TestEmptyInputs:
 # ---------------------------------------------------------------------------
 # Short text (fits in a single chunk)
 # ---------------------------------------------------------------------------
+
 
 class TestShortText:
     def test_short_text_returns_single_chunk(self):
@@ -60,6 +62,7 @@ class TestShortText:
 # Basic splitting at soft target
 # ---------------------------------------------------------------------------
 
+
 class TestBasicSplitting:
     def test_splits_long_text_without_sentences(self):
         """Without sentence boundaries, splits at SOFT_TARGET."""
@@ -73,7 +76,9 @@ class TestBasicSplitting:
         text = "b" * 1500
         result = split_text_into_chunks(text)
         for i, chunk in enumerate(result):
-            assert chunk.index == i if hasattr(chunk, "index") else chunk.chunk_index == i
+            assert (
+                chunk.index == i if hasattr(chunk, "index") else chunk.chunk_index == i
+            )
 
     def test_offsets_cover_entire_text(self):
         """Every character in the original text appears in at least one chunk."""
@@ -95,6 +100,7 @@ class TestBasicSplitting:
 # ---------------------------------------------------------------------------
 # Sentence boundary detection
 # ---------------------------------------------------------------------------
+
 
 class TestSentenceBoundary:
     def _make_text_with_boundary(self, punct: str) -> str:
@@ -137,6 +143,7 @@ class TestSentenceBoundary:
 # Overlap handling
 # ---------------------------------------------------------------------------
 
+
 class TestOverlap:
     def test_consecutive_chunks_overlap(self):
         text = "a" * 1500
@@ -152,8 +159,12 @@ class TestOverlap:
         text = "".join(str(i % 10) for i in range(1500))
         result = split_text_into_chunks(text)
         for i in range(len(result) - 1):
-            overlap_from_first = result[i].text[-(result[i].char_offset_end - result[i + 1].char_offset_start):]
-            overlap_from_second = result[i + 1].text[: result[i].char_offset_end - result[i + 1].char_offset_start]
+            overlap_from_first = result[i].text[
+                -(result[i].char_offset_end - result[i + 1].char_offset_start) :
+            ]
+            overlap_from_second = result[i + 1].text[
+                : result[i].char_offset_end - result[i + 1].char_offset_start
+            ]
             assert overlap_from_first == overlap_from_second
 
     def test_forward_progress_guaranteed(self):
@@ -167,6 +178,7 @@ class TestOverlap:
 # ---------------------------------------------------------------------------
 # CJK text handling
 # ---------------------------------------------------------------------------
+
 
 class TestCJKText:
     def test_cjk_sentence_boundary(self):
@@ -206,6 +218,7 @@ class TestCJKText:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestEdgeCases:
     def test_very_long_text_without_boundaries(self):
         text = "x" * 10000
@@ -234,7 +247,9 @@ class TestEdgeCases:
 
     def test_dataclass_fields(self):
         """TextSubChunk has the expected fields."""
-        chunk = TextSubChunk(text="hi", char_offset_start=0, char_offset_end=2, chunk_index=0)
+        chunk = TextSubChunk(
+            text="hi", char_offset_start=0, char_offset_end=2, chunk_index=0
+        )
         assert chunk.text == "hi"
         assert chunk.char_offset_start == 0
         assert chunk.char_offset_end == 2

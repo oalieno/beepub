@@ -27,8 +27,13 @@ def create_task_session() -> async_sessionmaker[AsyncSession]:
     pool that is safe to use inside a single ``asyncio.run()`` invocation.
     """
     task_engine = create_async_engine(
-        settings.database_url, echo=False, pool_size=1, max_overflow=0,
+        settings.database_url,
+        echo=False,
+        pool_size=1,
+        max_overflow=0,
     )
     return async_sessionmaker(
-        task_engine, class_=AsyncSession, expire_on_commit=False,
+        task_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
     )

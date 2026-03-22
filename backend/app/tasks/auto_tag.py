@@ -67,6 +67,8 @@ async def _process_auto_tag(book_id: str) -> None:
             language=language,
             reviews=reviews or None,
             db_settings=db_settings,
+            book_id=uuid.UUID(book_id),
+            session_factory=SessionLocal,
         )
 
         if not tags:

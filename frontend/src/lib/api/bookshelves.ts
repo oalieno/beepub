@@ -106,6 +106,15 @@ export const adminApi = {
       job_type: string;
       mode: string;
     }>,
+
+  // LLM Usage
+  getLlmUsage: (token: string, period: string = "month", feature?: string) => {
+    const params = new URLSearchParams({ period });
+    if (feature) params.set("feature", feature);
+    return get(`/admin/llm-usage?${params}`, token) as Promise<
+      import("$lib/types").LlmUsageResponse
+    >;
+  },
 };
 
 export const aiApi = {

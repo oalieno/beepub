@@ -303,3 +303,44 @@ export interface CompanionConversationOut {
   messages: CompanionMessageOut[];
   created_at: string;
 }
+
+export interface LlmUsageByFeature {
+  feature: string;
+  provider: string;
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+export interface LlmUsageByDay {
+  day: string;
+  feature: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+export interface LlmUsageByUser {
+  username: string;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+export interface LlmUsageResponse {
+  period: string;
+  since: string;
+  by_feature: LlmUsageByFeature[];
+  by_user: LlmUsageByUser[];
+  by_day: LlmUsageByDay[];
+  totals: {
+    input_tokens: number;
+    output_tokens: number;
+    total_tokens: number;
+    call_count: number;
+  };
+}

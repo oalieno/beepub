@@ -60,7 +60,18 @@ async def semantic_search(
         )
 
     # Embed the query
-    query_vector = await embed_text(text=q, api_key=api_key, model=model)
+    query_vector, embed_usage = await embed_text(text=q, api_key=api_key, model=model)
+
+    # Log usage (fire-and-forget)
+    from app.services.llm_usage import log_llm_usage
+
+    await log_llm_usage(
+        feature="search",
+        provider=provider,
+        model=model,
+        usage=embed_usage,
+        user_id=current_user.id,
+    )
 
     # Build accessible books subquery
     accessible_books = select(LibraryBook.book_id).join(

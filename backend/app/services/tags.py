@@ -247,16 +247,32 @@ async def generate_ai_tags(
     language: str | None,
     reviews: list[dict] | None,
     db_settings: dict[str, str] | None = None,
+    book_id: uuid.UUID | None = None,
+    session_factory=None,
 ) -> list[dict]:
     """Call LLM to generate tags for a book. Returns list of {tag, category, confidence}."""
     from app.services.llm import get_tag_provider
 
-    provider = get_tag_provider(db_settings)
+    settings = db_settings or {}
+    provider = get_tag_provider(settings)
     system = _build_system_prompt()
     user_prompt = _build_user_prompt(title, authors, description, language, reviews)
 
-    response = await provider.generate(user_prompt, system=system)
-    return _parse_tags_response(response)
+    result = await provider.generate(user_prompt, system=system)
+
+    # Log usage (fire-and-forget)
+    from app.services.llm_usage import log_llm_usage
+
+    await log_llm_usage(
+        feature="auto_tag",
+        provider=settings.get("tag_provider", ""),
+        model=settings.get("tag_model", ""),
+        usage=result.usage,
+        book_id=book_id,
+        session_factory=session_factory,
+    )
+
+    return _parse_tags_response(result.text)
 
 
 async def save_ai_tags(

@@ -170,9 +170,7 @@ class TestDeleteFile:
         mock_remove.assert_called_once_with("/data/books/test.epub")
 
     def test_ignores_file_not_found(self):
-        with patch(
-            "app.services.storage.os.remove", side_effect=FileNotFoundError
-        ):
+        with patch("app.services.storage.os.remove", side_effect=FileNotFoundError):
             # Should not raise
             delete_file("/data/books/nonexistent.epub")
 

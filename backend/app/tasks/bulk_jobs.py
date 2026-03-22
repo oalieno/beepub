@@ -95,9 +95,7 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             BookEmbeddingChunk.book_id
         )
         result = await db.execute(
-            select(Book.id)
-            .where(Book.id.notin_(has_embed))
-            .order_by(Book.created_at)
+            select(Book.id).where(Book.id.notin_(has_embed)).order_by(Book.created_at)
         )
     elif job_type == "summarize":
         # Books without text, plus books with unsummarized text chunks
@@ -108,9 +106,7 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             .group_by(BookTextChunk.book_id)
         )
         no_text_result = await db.execute(
-            select(Book.id)
-            .where(Book.id.notin_(has_text))
-            .order_by(Book.created_at)
+            select(Book.id).where(Book.id.notin_(has_text)).order_by(Book.created_at)
         )
         unsummarized_result = await db.execute(
             select(Book.id)

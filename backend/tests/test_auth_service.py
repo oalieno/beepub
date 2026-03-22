@@ -18,6 +18,7 @@ from app.services.auth import (
 # _prehash
 # ---------------------------------------------------------------------------
 
+
 class TestPrehash:
     def test_returns_bytes(self):
         result = _prehash("hello")
@@ -38,6 +39,7 @@ class TestPrehash:
 # ---------------------------------------------------------------------------
 # hash_password / verify_password
 # ---------------------------------------------------------------------------
+
 
 class TestHashPassword:
     def test_returns_string(self):
@@ -87,6 +89,7 @@ class TestVerifyPassword:
 # create_access_token
 # ---------------------------------------------------------------------------
 
+
 class TestCreateAccessToken:
     def test_returns_string(self):
         token = create_access_token({"sub": "user1"})
@@ -106,8 +109,16 @@ class TestCreateAccessToken:
         exp = datetime.fromtimestamp(payload["exp"], tz=UTC)
 
         # JWT exp is truncated to integer seconds, so allow 1s tolerance
-        expected_min = before + timedelta(minutes=settings.access_token_expire_minutes) - timedelta(seconds=1)
-        expected_max = after + timedelta(minutes=settings.access_token_expire_minutes) + timedelta(seconds=1)
+        expected_min = (
+            before
+            + timedelta(minutes=settings.access_token_expire_minutes)
+            - timedelta(seconds=1)
+        )
+        expected_max = (
+            after
+            + timedelta(minutes=settings.access_token_expire_minutes)
+            + timedelta(seconds=1)
+        )
         assert expected_min <= exp <= expected_max
 
     def test_does_not_mutate_input(self):
@@ -125,6 +136,7 @@ class TestCreateAccessToken:
 # ---------------------------------------------------------------------------
 # decode_token
 # ---------------------------------------------------------------------------
+
 
 class TestDecodeToken:
     def test_valid_token(self):

@@ -28,7 +28,7 @@ from app.services.companion import (
     get_or_create_conversation,
     stream_companion_response,
 )
-from app.services.llm import LLMNotConfiguredError
+from app.services.llm import LLMNotConfiguredError, LLMStream
 from app.services.sse import sse_event
 
 logger = logging.getLogger(__name__)
@@ -37,15 +37,20 @@ router = APIRouter(prefix="/api/books", tags=["companion"])
 
 
 async def _streaming_generator(
-    token_stream: AsyncIterator[str],
+    llm_stream: LLMStream,
     conversation_id: uuid.UUID,
     user_message_id: uuid.UUID,
+    *,
+    user_id: uuid.UUID,
+    book_id: uuid.UUID,
+    provider_name: str,
+    model_name: str,
 ) -> AsyncIterator[str]:
     """Wrap the LLM token stream with SSE events and save the assistant message."""
     accumulated = []
     assistant_msg_id = uuid.uuid4()
     try:
-        async for chunk in token_stream:
+        async for chunk in llm_stream:
             accumulated.append(chunk)
             yield sse_event("token", {"text": chunk})
 
@@ -68,6 +73,21 @@ async def _streaming_generator(
                 conversation_id,
                 exc_info=True,
             )
+
+        # Log LLM usage (fire-and-forget)
+        try:
+            from app.services.llm_usage import log_llm_usage
+
+            await log_llm_usage(
+                feature="companion",
+                provider=provider_name,
+                model=model_name,
+                usage=llm_stream.usage,
+                user_id=user_id,
+                book_id=book_id,
+            )
+        except Exception:
+            logger.warning("Failed to log companion LLM usage", exc_info=True)
 
         yield sse_event(
             "done",
@@ -104,7 +124,13 @@ async def send_companion_message(
 
     # Start streaming
     try:
-        token_stream, conv_id, user_msg_id = await stream_companion_response(
+        from app.services.settings import get_all_settings
+
+        db_settings = await get_all_settings(db)
+        provider_name = db_settings.get("companion_provider", "")
+        model_name = db_settings.get("companion_model", "")
+
+        llm_stream, conv_id, user_msg_id = await stream_companion_response(
             db=db,
             book=book,
             conversation=conversation,
@@ -121,7 +147,15 @@ async def send_companion_message(
         ) from exc
 
     return StreamingResponse(
-        _streaming_generator(token_stream, conv_id, user_msg_id),
+        _streaming_generator(
+            llm_stream,
+            conv_id,
+            user_msg_id,
+            user_id=current_user.id,
+            book_id=book_id,
+            provider_name=provider_name,
+            model_name=model_name,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

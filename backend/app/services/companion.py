@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 import uuid
-from collections.abc import AsyncIterator
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +14,7 @@ from app.models.book import Book
 from app.models.book_text import BookTextChunk
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.services.epub_text import extract_text_up_to
-from app.services.llm import ChatMessage, get_companion_provider
+from app.services.llm import ChatMessage, LLMStream, get_companion_provider
 from app.services.settings import get_all_settings
 
 logger = logging.getLogger(__name__)
@@ -289,7 +288,7 @@ async def stream_companion_response(
     cfi_range: str | None,
     current_cfi: str | None,
     user_id: uuid.UUID,
-) -> tuple[AsyncIterator[str], uuid.UUID, uuid.UUID]:
+) -> tuple[LLMStream, uuid.UUID, uuid.UUID]:
     """
     Save the user message, build context, and return an SSE token stream.
 
@@ -315,6 +314,6 @@ async def stream_companion_response(
     # Stream from LLM (use DB settings)
     db_settings = await get_all_settings(db)
     provider = get_companion_provider(db_settings)
-    token_stream = provider.chat_stream(chat_messages, system=system_prompt)
+    llm_stream = await provider.chat_stream(chat_messages, system=system_prompt)
 
-    return token_stream, conversation.id, user_msg.id
+    return llm_stream, conversation.id, user_msg.id

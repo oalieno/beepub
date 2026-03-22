@@ -19,7 +19,9 @@ class IllustrationCreate(BaseModel):
 
     @field_validator("reference_images")
     @classmethod
-    def max_four(cls, v: list[ReferenceImageInput] | None) -> list[ReferenceImageInput] | None:
+    def max_four(
+        cls, v: list[ReferenceImageInput] | None
+    ) -> list[ReferenceImageInput] | None:
         if v and len(v) > 4:
             raise ValueError("Maximum 4 reference images")
         return v
