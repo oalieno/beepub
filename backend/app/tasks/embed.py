@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from sqlalchemy import func
@@ -84,7 +85,13 @@ def embed_book(self, book_id: str) -> None:
                 # Batch embed — use ON CONFLICT DO NOTHING for race-safe idempotency
                 for i in range(0, len(sub_chunks), _EMBED_BATCH_SIZE):
                     batch = sub_chunks[i : i + _EMBED_BATCH_SIZE]
-                    texts = [sc.text for sc in batch]
+                    cleaned = [
+                        (sc, re.sub(r"\s+", " ", sc.text).strip()) for sc in batch
+                    ]
+                    cleaned = [(sc, t) for sc, t in cleaned if t]
+                    if not cleaned:
+                        continue
+                    batch, texts = zip(*cleaned)  # type: ignore[assignment]
 
                     vectors, usage = await embed_texts(
                         texts, api_url=api_url, model=model, api_key=api_key

@@ -131,12 +131,15 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             select(Book.id).where(Book.id.notin_(has_text)).order_by(Book.created_at)
         )
     elif job_type == "embedding":
-        # All books without embeddings (orchestrator handles text extraction as prerequisite)
+        # Only books that already have text chunks but no embeddings
+        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
         )
         result = await db.execute(
-            select(Book.id).where(Book.id.notin_(has_embed)).order_by(Book.created_at)
+            select(Book.id)
+            .where(Book.id.in_(has_text), Book.id.notin_(has_embed))
+            .order_by(Book.created_at)
         )
     elif job_type == "summarize":
         # Books without text, plus books with unsummarized text chunks

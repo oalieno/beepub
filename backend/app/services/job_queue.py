@@ -157,8 +157,7 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             BookEmbeddingChunk.book_id
         )
         missing_result = await db.execute(
-            select(func.count())
-            .select_from(has_text.except_(has_embed).subquery())
+            select(func.count()).select_from(has_text.except_(has_embed).subquery())
         )
     elif job_type == "summarize":
         # Books with text chunks that have unsummarized content
@@ -171,21 +170,15 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             select(func.count()).select_from(has_unsummarized.subquery())
         )
     elif job_type == "auto_tag":
-        # Books with text chunks but no AI tags
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+        # Books without any AI tags (uses metadata, not text chunks)
         has_tags = select(AiBookTag.book_id).group_by(AiBookTag.book_id)
         missing_result = await db.execute(
-            select(func.count())
-            .select_from(has_text.except_(has_tags).subquery())
+            select(func.count(Book.id)).where(Book.id.notin_(has_tags))
         )
     elif job_type == "word_count":
-        # Books with text chunks but no word_count
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+        # Books where word_count is NULL (reads EPUB file directly)
         missing_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.in_(has_text),
-                Book.word_count.is_(None),
-            )
+            select(func.count(Book.id)).where(Book.word_count.is_(None))
         )
     elif job_type == "summary_embedding":
         # Books with summaries but no BookSummaryEmbedding
@@ -198,8 +191,7 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         )
         has_embed = select(BookSummaryEmbedding.book_id)
         missing_result = await db.execute(
-            select(func.count())
-            .select_from(has_summary.except_(has_embed).subquery())
+            select(func.count()).select_from(has_summary.except_(has_embed).subquery())
         )
     else:
         return total, 0
