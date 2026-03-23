@@ -52,7 +52,10 @@ async def get_jobs_status(
     for key, job_type in JOB_TYPES.items():
         total, missing = await count_missing_books(db, key)
         progress = statuses.get(key)
-        active = progress is not None and progress.get("status") in ("running", "pending")
+        active = progress is not None and progress.get("status") in (
+            "running",
+            "pending",
+        )
 
         jobs.append(
             JobStatusOut(

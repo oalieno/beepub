@@ -131,6 +131,10 @@ def embed_book(self, book_id: str) -> None:
 
             logger.info("Embedded %d sub-chunks for book %s", total_embedded, book_id)
 
+            # Compute book-level average embedding from chunks
+            if total_embedded > 0:
+                await _upsert_chunk_avg_embedding(db, bid, model)
+
     try:
         from app.celeryapp import run_async
 
@@ -143,6 +147,51 @@ def embed_book(self, book_id: str) -> None:
         else:
             countdown = 30 * (2**self.request.retries)
         raise self.retry(exc=exc, countdown=countdown)
+
+
+async def _upsert_chunk_avg_embedding(db, bid: uuid.UUID, model: str) -> None:
+    """Compute AVG(embedding) over a book's chunks and upsert into book_embeddings.
+
+    Only inserts/updates if the existing row is NOT source='summary'
+    (summary embeddings are higher quality and should not be overwritten).
+    """
+    from sqlalchemy import select
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from app.models.book_embedding import BookEmbeddingChunk
+    from app.models.book_embedding_unified import BookEmbedding
+
+    avg_result = await db.execute(
+        select(
+            func.avg(BookEmbeddingChunk.embedding).label("avg_emb"),
+            func.count().label("cnt"),
+        ).where(BookEmbeddingChunk.book_id == bid)
+    )
+    row = avg_result.one()
+    if not row.cnt or row.cnt == 0:
+        return
+
+    stmt = pg_insert(BookEmbedding).values(
+        book_id=bid,
+        embedding=row.avg_emb,
+        embedding_model=model,
+        source_summary_count=row.cnt,
+        source="chunk_avg",
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["book_id"],
+        set_={
+            "embedding": stmt.excluded.embedding,
+            "embedding_model": stmt.excluded.embedding_model,
+            "source_summary_count": stmt.excluded.source_summary_count,
+            "source": stmt.excluded.source,
+            "updated_at": func.now(),
+        },
+        where=BookEmbedding.source != "summary",
+    )
+    await db.execute(stmt)
+    await db.commit()
+    logger.info("Upserted chunk-avg embedding for book %s (%d chunks)", bid, row.cnt)
 
 
 # Max token input for Qwen3-Embedding (context_length=4096)
@@ -193,7 +242,7 @@ def embed_book_summary(self, book_id: str) -> None:
         from sqlalchemy.dialects.postgresql import insert
 
         from app.database import create_task_session
-        from app.models.book_summary_embedding import BookSummaryEmbedding
+        from app.models.book_embedding_unified import BookEmbedding
         from app.models.book_text import BookTextChunk
         from app.services.embedding import embed_text
         from app.services.settings import get_all_settings
@@ -244,12 +293,13 @@ def embed_book_summary(self, book_id: str) -> None:
                 summary_text, api_url=api_url, model=model, api_key=api_key
             )
 
-            # Upsert — one embedding per book
-            stmt = insert(BookSummaryEmbedding).values(
+            # Upsert — one embedding per book, summary always wins
+            stmt = insert(BookEmbedding).values(
                 book_id=bid,
                 embedding=vector,
                 embedding_model=model,
                 source_summary_count=valid_count,
+                source="summary",
             )
             stmt = stmt.on_conflict_do_update(
                 index_elements=["book_id"],
@@ -257,6 +307,7 @@ def embed_book_summary(self, book_id: str) -> None:
                     "embedding": stmt.excluded.embedding,
                     "embedding_model": stmt.excluded.embedding_model,
                     "source_summary_count": stmt.excluded.source_summary_count,
+                    "source": stmt.excluded.source,
                     "updated_at": func.now(),
                 },
             )
@@ -311,7 +362,7 @@ def backfill_summary_embeddings(self) -> None:
         from sqlalchemy.dialects.postgresql import insert
 
         from app.database import create_task_session
-        from app.models.book_summary_embedding import BookSummaryEmbedding
+        from app.models.book_embedding_unified import BookEmbedding
         from app.models.book_text import BookTextChunk
         from app.models.reading import UserBookInteraction
         from app.services.embedding import embed_texts
@@ -339,7 +390,7 @@ def backfill_summary_embeddings(self) -> None:
                 await set_job_status(job_type, status="completed", total=0, processed=0)
                 return
 
-            # Find books with summaries but no BookSummaryEmbedding
+            # Find books with summaries but no BookEmbedding
             # Order by interaction count DESC (most-used books first)
             interaction_count = (
                 select(
@@ -354,9 +405,7 @@ def backfill_summary_embeddings(self) -> None:
                 select(BookTextChunk.book_id)
                 .where(
                     BookTextChunk.summary.isnot(None),
-                    ~BookTextChunk.book_id.in_(
-                        select(BookSummaryEmbedding.book_id)
-                    ),
+                    ~BookTextChunk.book_id.in_(select(BookEmbedding.book_id)),
                 )
                 .group_by(BookTextChunk.book_id)
                 .outerjoin(
@@ -426,7 +475,7 @@ def backfill_summary_embeddings(self) -> None:
 
                 async with session_factory() as db:
                     for (bid, count), vector in zip(batch_meta, vectors):
-                        stmt = insert(BookSummaryEmbedding).values(
+                        stmt = insert(BookEmbedding).values(
                             book_id=bid,
                             embedding=vector,
                             embedding_model=model,

@@ -598,15 +598,13 @@ async def get_similarity_debug(
              WHERE lb1.book_id = :book_a AND lb2.book_id = :book_b) AS shared_libraries
     """)
 
-    result = await db.execute(
-        query, {"book_a": str(book_a), "book_b": str(book_b)}
-    )
+    result = await db.execute(query, {"book_a": str(book_a), "book_b": str(book_b)})
     row = result.fetchone()
 
     # Semantic similarity
     semantic_query = text("""
         SELECT 1 - (a.embedding <=> b.embedding) AS cosine_similarity
-        FROM book_summary_embeddings a, book_summary_embeddings b
+        FROM book_embeddings a, book_embeddings b
         WHERE a.book_id = :book_a AND b.book_id = :book_b
     """)
     sem_result = await db.execute(

@@ -176,20 +176,6 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
         result = await db.execute(
             select(Book.id).where(Book.word_count.is_(None)).order_by(Book.created_at)
         )
-    elif job_type == "summary_embedding":
-        from app.models.book_summary_embedding import BookSummaryEmbedding
-
-        has_summary = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.isnot(None))
-            .group_by(BookTextChunk.book_id)
-        )
-        has_embed = select(BookSummaryEmbedding.book_id)
-        result = await db.execute(
-            select(Book.id)
-            .where(Book.id.in_(has_summary.except_(has_embed)))
-            .order_by(Book.created_at)
-        )
     else:
         return []
 
@@ -228,8 +214,3 @@ def _dispatch_single(job_type: str, book_id: str) -> None:
         from app.tasks.wordcount import compute_word_count
 
         compute_word_count(book_id)
-
-    elif job_type == "summary_embedding":
-        from app.tasks.embed import embed_book_summary
-
-        embed_book_summary(book_id)

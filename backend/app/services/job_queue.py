@@ -47,11 +47,6 @@ JOB_TYPES: dict[str, JobType] = {
         label="Summarize",
         description="Generate AI summaries for book chapters",
     ),
-    "summary_embedding": JobType(
-        key="summary_embedding",
-        label="Summary Embedding",
-        description="Generate book-level embeddings from chapter summaries for semantic similar books",
-    ),
     "auto_tag": JobType(
         key="auto_tag",
         label="Auto Tag",
@@ -179,19 +174,6 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         # Books where word_count is NULL (reads EPUB file directly)
         missing_result = await db.execute(
             select(func.count(Book.id)).where(Book.word_count.is_(None))
-        )
-    elif job_type == "summary_embedding":
-        # Books with summaries but no BookSummaryEmbedding
-        from app.models.book_summary_embedding import BookSummaryEmbedding
-
-        has_summary = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.isnot(None))
-            .group_by(BookTextChunk.book_id)
-        )
-        has_embed = select(BookSummaryEmbedding.book_id)
-        missing_result = await db.execute(
-            select(func.count()).select_from(has_summary.except_(has_embed).subquery())
         )
     else:
         return total, 0

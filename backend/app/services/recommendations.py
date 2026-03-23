@@ -46,7 +46,7 @@ async def get_similar_books(
     # 2. Score only those candidates
     #
     # Semantic similarity architecture:
-    #   book_summary_embeddings (one 1024-dim vector per book)
+    #   book_embeddings (one 1024-dim vector per book)
     #       │
     #       ▼ CROSS JOIN LATERAL (HNSW ANN scan)
     #   semantic_candidates CTE → cosine similarity × weight → all_scores UNION ALL
@@ -126,9 +126,9 @@ async def get_similar_books(
             SELECT bse2.book_id,
                    (1 - (bse1.embedding <=> bse2.embedding)) * :semantic_weight AS score,
                    (1 - (bse1.embedding <=> bse2.embedding)) AS cosine_sim
-            FROM book_summary_embeddings bse1
+            FROM book_embeddings bse1
             CROSS JOIN LATERAL (
-                SELECT book_id, embedding FROM book_summary_embeddings
+                SELECT book_id, embedding FROM book_embeddings
                 WHERE book_id != :book_id
                 ORDER BY embedding <=> bse1.embedding
                 LIMIT :semantic_limit
@@ -225,9 +225,7 @@ async def get_personalized_recommendations(
     all_scores: dict[uuid.UUID, tuple[float, uuid.UUID, float]] = {}
     for seed_id in seed_book_ids:
         sid = uuid.UUID(str(seed_id))
-        similar = await get_similar_books(
-            db, sid, user_id, is_admin, limit=20
-        )
+        similar = await get_similar_books(db, sid, user_id, is_admin, limit=20)
         for item in similar:
             bid = item["book_id"]
             score = item["score"]

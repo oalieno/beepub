@@ -331,51 +331,45 @@ class TestAttributionTracking:
 # ---------------------------------------------------------------------------
 
 
-class TestBookSummaryEmbeddingModel:
+class TestBookEmbeddingModel:
     def test_model_has_expected_columns(self):
-        from app.models.book_summary_embedding import BookSummaryEmbedding
+        from app.models.book_embedding_unified import BookEmbedding
 
-        columns = BookSummaryEmbedding.__table__.columns
+        columns = BookEmbedding.__table__.columns
         expected = {
             "id",
             "book_id",
             "embedding",
             "embedding_model",
             "source_summary_count",
+            "source",
             "created_at",
             "updated_at",
         }
         assert set(columns.keys()) == expected
 
     def test_book_id_is_unique(self):
-        from app.models.book_summary_embedding import BookSummaryEmbedding
+        from app.models.book_embedding_unified import BookEmbedding
 
-        col = BookSummaryEmbedding.__table__.columns["book_id"]
+        col = BookEmbedding.__table__.columns["book_id"]
         assert col.unique is True
 
     def test_tablename(self):
-        from app.models.book_summary_embedding import BookSummaryEmbedding
+        from app.models.book_embedding_unified import BookEmbedding
 
-        assert BookSummaryEmbedding.__tablename__ == "book_summary_embeddings"
+        assert BookEmbedding.__tablename__ == "book_embeddings"
 
+    def test_source_column_default(self):
+        from app.models.book_embedding_unified import BookEmbedding
 
-# ---------------------------------------------------------------------------
-# 7. Job queue — summary_embedding type registered
-# ---------------------------------------------------------------------------
+        col = BookEmbedding.__table__.columns["source"]
+        assert col.server_default.arg == "summary"
 
-
-class TestSummaryEmbeddingJobType:
-    def test_job_type_registered(self):
+    def test_summary_embedding_job_removed(self):
+        """summary_embedding job type was removed — embed_book auto-creates chunk_avg."""
         from app.services.job_queue import JOB_TYPES
 
-        assert "summary_embedding" in JOB_TYPES
-
-    def test_job_type_has_label(self):
-        from app.services.job_queue import JOB_TYPES
-
-        jt = JOB_TYPES["summary_embedding"]
-        assert jt.label == "Summary Embedding"
-        assert jt.key == "summary_embedding"
+        assert "summary_embedding" not in JOB_TYPES
 
 
 # ---------------------------------------------------------------------------
