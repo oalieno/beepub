@@ -60,107 +60,125 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
     """
 
     async def _run() -> None:
+        import redis.asyncio as aioredis
+
         from sqlalchemy import select
 
+        from app.config import settings
         from app.database import create_task_session
         from app.models.book import Book
         from app.models.book_text import BookTextChunk
         from app.services.llm import LLMNotConfiguredError, get_tag_provider
         from app.services.settings import get_all_settings
 
-        session_factory = create_task_session()
-        async with session_factory() as db:
-            bid = uuid.UUID(book_id)
+        # Prevent duplicate summarization of the same book
+        client = aioredis.from_url(settings.redis_url)
+        lock = client.lock(f"summarize:{book_id}", timeout=600)
+        if not await lock.acquire(blocking=False):
+            logger.info("Summarize already running for book %s, skipping", book_id)
+            await client.aclose()
+            return
 
-            # Get book language for summary prompt
-            book_result = await db.execute(
-                select(Book.epub_language).where(Book.id == bid)
-            )
-            epub_lang = book_result.scalar_one_or_none()
-            if epub_lang and epub_lang.startswith("zh"):
-                book_lang = "Traditional Chinese (繁體中文)"
-            elif epub_lang and epub_lang.startswith("ja"):
-                book_lang = "Japanese (日本語)"
-            elif epub_lang and epub_lang.startswith("ko"):
-                book_lang = "Korean (한국어)"
-            elif epub_lang:
-                book_lang = epub_lang
-            else:
-                book_lang = None  # will detect per-chunk below
+        try:
+            session_factory = create_task_session()
+            async with session_factory() as db:
+                bid = uuid.UUID(book_id)
 
-            # Get chunks that need summaries
-            result = await db.execute(
-                select(BookTextChunk)
-                .where(
-                    BookTextChunk.book_id == bid,
-                    BookTextChunk.spine_index <= up_to_spine_index,
-                    BookTextChunk.summary.is_(None),
+                # Get book language for summary prompt
+                book_result = await db.execute(
+                    select(Book.epub_language).where(Book.id == bid)
                 )
-                .order_by(BookTextChunk.spine_index)
-            )
-            chunks = result.scalars().all()
+                epub_lang = book_result.scalar_one_or_none()
+                if epub_lang and epub_lang.startswith("zh"):
+                    book_lang = "Traditional Chinese (繁體中文)"
+                elif epub_lang and epub_lang.startswith("ja"):
+                    book_lang = "Japanese (日本語)"
+                elif epub_lang and epub_lang.startswith("ko"):
+                    book_lang = "Korean (한국어)"
+                elif epub_lang:
+                    book_lang = epub_lang
+                else:
+                    book_lang = None  # will detect per-chunk below
 
-            if not chunks:
-                return
+                # Get chunks that need summaries
+                result = await db.execute(
+                    select(BookTextChunk)
+                    .where(
+                        BookTextChunk.book_id == bid,
+                        BookTextChunk.spine_index <= up_to_spine_index,
+                        BookTextChunk.summary.is_(None),
+                    )
+                    .order_by(BookTextChunk.spine_index)
+                )
+                chunks = result.scalars().all()
 
-            # Get LLM provider
-            db_settings = await get_all_settings(db)
-            try:
-                provider = get_tag_provider(db_settings)
-            except LLMNotConfiguredError:
-                logger.warning("Tag AI not configured, skipping summarization")
-                return
+                if not chunks:
+                    return
 
-            for chunk in chunks:
-                stripped = chunk.text.strip()
-                # Skip short/non-content sections (title pages, copyright, TOC, etc.)
-                if len(stripped) < 1000:
-                    chunk.summary = stripped[:200]
-                    continue
-
-                # Truncate very long sections for the summary prompt
-                text = chunk.text
-                if len(text) > 12_000:
-                    text = text[:12_000] + "\n\n[...truncated...]"
-
+                # Get LLM provider
+                db_settings = await get_all_settings(db)
                 try:
-                    lang = book_lang or _detect_language(text)
-                    result = await provider.generate(
-                        SUMMARY_PROMPT.format(language=lang, text=text),
-                    )
-                    chunk.summary = result.text.strip()
+                    provider = get_tag_provider(db_settings)
+                except LLMNotConfiguredError:
+                    logger.warning("Tag AI not configured, skipping summarization")
+                    return
 
-                    # Log usage (fire-and-forget)
-                    from app.services.llm_usage import log_llm_usage
+                for chunk in chunks:
+                    stripped = chunk.text.strip()
+                    # Skip short/non-content sections (title pages, copyright, TOC, etc.)
+                    if len(stripped) < 1000:
+                        chunk.summary = stripped[:200]
+                        continue
 
-                    await log_llm_usage(
-                        feature="summarize",
-                        provider=db_settings.get("tag_provider", ""),
-                        model=db_settings.get("tag_model", ""),
-                        usage=result.usage,
-                        book_id=bid,
-                        session_factory=session_factory,
-                    )
-                except Exception:
-                    logger.warning(
-                        "Failed to summarize chunk %s (spine %d) of book %s",
-                        chunk.id,
-                        chunk.spine_index,
-                        book_id,
-                        exc_info=True,
-                    )
-                    # Don't fail the whole task — skip this chunk
-                    continue
+                    # Truncate very long sections for the summary prompt
+                    text = chunk.text
+                    if len(text) > 12_000:
+                        text = text[:12_000] + "\n\n[...truncated...]"
 
-            await db.commit()
-            summarized = sum(1 for c in chunks if c.summary is not None)
-            logger.info(
-                "Summarized %d/%d chunks for book %s (up to spine %d)",
-                summarized,
-                len(chunks),
-                book_id,
-                up_to_spine_index,
-            )
+                    try:
+                        lang = book_lang or _detect_language(text)
+                        result = await provider.generate(
+                            SUMMARY_PROMPT.format(language=lang, text=text),
+                        )
+                        chunk.summary = result.text.strip()
+
+                        # Log usage (fire-and-forget)
+                        from app.services.llm_usage import log_llm_usage
+
+                        await log_llm_usage(
+                            feature="summarize",
+                            provider=db_settings.get("tag_provider", ""),
+                            model=db_settings.get("tag_model", ""),
+                            usage=result.usage,
+                            book_id=bid,
+                            session_factory=session_factory,
+                        )
+                    except Exception:
+                        logger.warning(
+                            "Failed to summarize chunk %s (spine %d) of book %s",
+                            chunk.id,
+                            chunk.spine_index,
+                            book_id,
+                            exc_info=True,
+                        )
+                        # Don't fail the whole task — skip this chunk
+                        continue
+
+                await db.commit()
+                summarized = sum(1 for c in chunks if c.summary is not None)
+                logger.info(
+                    "Summarized %d/%d chunks for book %s (up to spine %d)",
+                    summarized,
+                    len(chunks),
+                    book_id,
+                    up_to_spine_index,
+                )
+        finally:
+            try:
+                await lock.release()
+            except Exception:
+                pass
+            await client.aclose()
 
     try:
         from app.celeryapp import run_async

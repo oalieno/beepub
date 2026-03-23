@@ -29,8 +29,8 @@ def create_task_session() -> async_sessionmaker[AsyncSession]:
     task_engine = create_async_engine(
         settings.database_url,
         echo=False,
-        pool_size=1,
-        max_overflow=0,
+        pool_size=2,
+        max_overflow=1,
     )
     return async_sessionmaker(
         task_engine,
