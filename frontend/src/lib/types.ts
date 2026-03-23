@@ -221,6 +221,8 @@ export interface AdminSettings {
   image_model: string;
   embedding_provider: string;
   embedding_model: string;
+  embedding_api_url: string;
+  embedding_api_key: string;
 }
 
 export interface AiStatus {

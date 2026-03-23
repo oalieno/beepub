@@ -38,6 +38,8 @@
   let imageModel = $state("");
   let embeddingProvider = $state("");
   let embeddingModel = $state("");
+  let embeddingApiUrl = $state("");
+  let embeddingApiKey = $state("");
 
   // Derived: which providers have credentials configured
   let hasGemini = $derived(geminiApiKey.trim().length > 0);
@@ -182,6 +184,8 @@
       imageModel = settings.image_model || "";
       embeddingProvider = settings.embedding_provider || "";
       embeddingModel = settings.embedding_model || "";
+      embeddingApiUrl = settings.embedding_api_url || "";
+      embeddingApiKey = settings.embedding_api_key || "";
 
       // Fetch model lists for configured providers
       const fetches: Promise<void>[] = [];
@@ -217,6 +221,8 @@
           image_model: imageModel,
           embedding_provider: embeddingProvider,
           embedding_model: embeddingModel,
+          embedding_api_url: embeddingApiUrl,
+          embedding_api_key: embeddingApiKey,
         },
         $authStore.token,
       );
@@ -560,19 +566,44 @@
         <Card.Header>
           <Card.Title>Embedding AI</Card.Title>
           <Card.Description>
-            For semantic search across your library. Uses embedding models to
-            search book content by meaning.
+            For semantic search and similar book recommendations. Connects to
+            any OpenAI-compatible embedding API (LM Studio, Ollama, etc).
           </Card.Description>
         </Card.Header>
-        <Card.Content>
-          {@render featureProviderFields(
-            "embedding",
-            embeddingProvider,
-            embeddingModel,
-            "gemini-embedding-001",
-            (v) => (embeddingProvider = v),
-            (v) => (embeddingModel = v),
-          )}
+        <Card.Content class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div class="space-y-1.5">
+              <Label for="embedding-api-url">API Base URL</Label>
+              <Input
+                id="embedding-api-url"
+                placeholder="http://localhost:1234/v1"
+                value={embeddingApiUrl}
+                oninput={(e) => (embeddingApiUrl = e.currentTarget.value)}
+              />
+              <p class="text-xs text-muted-foreground">
+                OpenAI-compatible /v1/embeddings endpoint
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="embedding-model">Model</Label>
+              <Input
+                id="embedding-model"
+                placeholder="text-embedding-qwen3-embedding-0.6b"
+                value={embeddingModel}
+                oninput={(e) => (embeddingModel = e.currentTarget.value)}
+              />
+            </div>
+          </div>
+          <div class="max-w-sm space-y-1.5">
+            <Label for="embedding-api-key">API Key</Label>
+            <Input
+              id="embedding-api-key"
+              type="password"
+              placeholder="Optional — not needed for local servers"
+              value={embeddingApiKey}
+              oninput={(e) => (embeddingApiKey = e.currentTarget.value)}
+            />
+          </div>
         </Card.Content>
       </Card.Root>
 

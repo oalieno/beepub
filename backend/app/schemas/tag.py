@@ -25,6 +25,7 @@ class TagWithCount(BaseModel):
 
 class SimilarBookOut(BookOut):
     similarity_score: float
+    cosine_similarity: float | None = None
 
 
 class TagBrowseSection(BaseModel):

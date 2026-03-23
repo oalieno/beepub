@@ -91,25 +91,27 @@ async def semantic_search(
     """Search across all accessible books by semantic similarity."""
     # Load embedding settings
     settings = await get_all_settings(db)
-    provider = settings.get("embedding_provider", "")
+    api_url = settings.get("embedding_api_url", "")
     model = settings.get("embedding_model", "")
-    api_key = settings.get("gemini_api_key", "")
+    api_key = settings.get("embedding_api_key", "")
 
-    if provider != "gemini" or not api_key or not model:
+    if not api_url or not model:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Semantic search is not configured",
         )
 
     # Embed the query
-    query_vector, embed_usage = await embed_text(text=q, api_key=api_key, model=model)
+    query_vector, embed_usage = await embed_text(
+        text=q, api_url=api_url, model=model, api_key=api_key
+    )
 
     # Log usage (fire-and-forget)
     from app.services.llm_usage import log_llm_usage
 
     await log_llm_usage(
         feature="search",
-        provider=provider,
+        provider="openai_compatible",
         model=model,
         usage=embed_usage,
         user_id=current_user.id,

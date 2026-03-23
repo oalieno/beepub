@@ -14,20 +14,42 @@ async def get_similar_books(
     user_id: uuid.UUID,
     is_admin: bool,
     limit: int = 10,
+    semantic_weight: float | None = None,
+    semantic_limit: int | None = None,
 ) -> list[dict]:
     """Return books similar to the given book, respecting user access.
 
-    Scoring:
+    Scoring (metadata signals):
     - AI tag overlap: +3 per shared tag
     - Manual/epub tag overlap: +3 per shared tag
     - Author overlap: +5 per shared author
     - Same publisher: +2
     - Same language: +1
     - Library co-occurrence: +1 per shared library
+
+    Scoring (semantic signal):
+    - Cosine similarity × semantic_weight (default 10.0)
+
+    Returns list of dicts with book_id, score, and cosine_similarity (if available).
     """
+    if semantic_weight is None:
+        from app.services.settings import get_all_settings
+
+        settings = await get_all_settings(db)
+        semantic_weight = float(settings.get("similar_books_semantic_weight", "10.0"))
+        semantic_limit = int(settings.get("similar_books_semantic_limit", "50"))
+    if semantic_limit is None:
+        semantic_limit = 50
+
     # Two-phase approach for large libraries:
     # 1. Gather candidates via indexed lookups (only books sharing a signal)
     # 2. Score only those candidates
+    #
+    # Semantic similarity architecture:
+    #   book_summary_embeddings (one 1024-dim vector per book)
+    #       │
+    #       ▼ CROSS JOIN LATERAL (HNSW ANN scan)
+    #   semantic_candidates CTE → cosine similarity × weight → all_scores UNION ALL
     query = text("""
         WITH target AS (
             SELECT
@@ -98,6 +120,21 @@ async def get_similar_books(
               AND lb2.book_id != :book_id
             GROUP BY lb2.book_id
         ),
+        -- Semantic similarity (cosine distance on book-level summary embeddings)
+        -- Returns empty if the target book has no embedding (graceful degradation)
+        semantic_candidates AS (
+            SELECT bse2.book_id,
+                   (1 - (bse1.embedding <=> bse2.embedding)) * :semantic_weight AS score,
+                   (1 - (bse1.embedding <=> bse2.embedding)) AS cosine_sim
+            FROM book_summary_embeddings bse1
+            CROSS JOIN LATERAL (
+                SELECT book_id, embedding FROM book_summary_embeddings
+                WHERE book_id != :book_id
+                ORDER BY embedding <=> bse1.embedding
+                LIMIT :semantic_limit
+            ) bse2
+            WHERE bse1.book_id = :book_id
+        ),
         -- Phase 2: union all scores, filter to accessible, aggregate
         all_scores AS (
             SELECT book_id, score FROM author_candidates
@@ -111,6 +148,8 @@ async def get_similar_books(
             SELECT book_id, score FROM language_candidates
             UNION ALL
             SELECT book_id, score FROM lib_candidates
+            UNION ALL
+            SELECT book_id, score FROM semantic_candidates
         ),
         aggregated AS (
             SELECT a.book_id, SUM(a.score) AS total_score
@@ -121,9 +160,13 @@ async def get_similar_books(
             )
             GROUP BY a.book_id
         )
-        SELECT book_id, total_score
+        SELECT
+            aggregated.book_id,
+            aggregated.total_score,
+            semantic_candidates.cosine_sim
         FROM aggregated
-        ORDER BY total_score DESC
+        LEFT JOIN semantic_candidates ON aggregated.book_id = semantic_candidates.book_id
+        ORDER BY aggregated.total_score DESC
         LIMIT :limit
     """)
 
@@ -134,10 +177,16 @@ async def get_similar_books(
             "user_id": str(user_id),
             "is_admin": is_admin,
             "limit": limit,
+            "semantic_weight": semantic_weight,
+            "semantic_limit": semantic_limit,
         },
     )
     return [
-        {"book_id": uuid.UUID(str(row[0])), "score": row[1]}
+        {
+            "book_id": uuid.UUID(str(row[0])),
+            "score": row[1],
+            "cosine_similarity": float(row[2]) if row[2] is not None else None,
+        }
         for row in result.fetchall()
     ]
 
@@ -172,14 +221,26 @@ async def get_personalized_recommendations(
         return []
 
     # Get similar books for each seed, aggregate scores
-    all_scores: dict[uuid.UUID, float] = {}
+    # Track (total_score, best_seed_id, best_seed_contribution) per candidate
+    all_scores: dict[uuid.UUID, tuple[float, uuid.UUID, float]] = {}
     for seed_id in seed_book_ids:
+        sid = uuid.UUID(str(seed_id))
         similar = await get_similar_books(
-            db, uuid.UUID(str(seed_id)), user_id, is_admin, limit=20
+            db, sid, user_id, is_admin, limit=20
         )
         for item in similar:
             bid = item["book_id"]
-            all_scores[bid] = all_scores.get(bid, 0) + item["score"]
+            score = item["score"]
+            if bid in all_scores:
+                prev_total, prev_seed, prev_contrib = all_scores[bid]
+                new_total = prev_total + score
+                # Keep the seed with the highest contribution
+                if score > prev_contrib:
+                    all_scores[bid] = (new_total, sid, score)
+                else:
+                    all_scores[bid] = (new_total, prev_seed, prev_contrib)
+            else:
+                all_scores[bid] = (score, sid, score)
 
     # Remove books user has already read or is currently reading
     read_result = await db.execute(
@@ -195,8 +256,12 @@ async def get_personalized_recommendations(
     # Also remove seed books themselves
     exclude_ids = read_ids | {uuid.UUID(str(sid)) for sid in seed_book_ids}
     filtered = [
-        {"book_id": bid, "score": score}
-        for bid, score in all_scores.items()
+        {
+            "book_id": bid,
+            "score": total,
+            "seed_book_id": seed_id,
+        }
+        for bid, (total, seed_id, _) in all_scores.items()
         if bid not in exclude_ids
     ]
 

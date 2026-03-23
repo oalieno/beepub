@@ -1,12 +1,13 @@
 """Add pg_trgm extension and GIN index on book_embedding_chunks.text for keyword search.
 
-Revision ID: 018
+Revision ID: 019
+Revises: 018
 """
 
 from alembic import op
 
-revision = "018"
-down_revision = "017"
+revision = "019"
+down_revision = "018"
 branch_labels = None
 depends_on = None
 

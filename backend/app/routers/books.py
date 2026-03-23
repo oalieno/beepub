@@ -545,6 +545,9 @@ async def get_discover_recommendations(
     )
     interactions = {i.book_id: i for i in interaction_result.scalars().all()}
 
+    # Build seed_book_id map for "Because you read X" attribution
+    seed_map = {r["book_id"]: r.get("seed_book_id") for r in recs}
+
     items = []
     for bid in book_ids:
         book = books.get(bid)
@@ -558,6 +561,7 @@ async def get_discover_recommendations(
             progress = interaction.reading_progress or {}
             item.reading_percentage = progress.get("percentage")
             item.last_read_at = progress.get("last_read_at")
+        item.seed_book_id = seed_map.get(bid)
         items.append(item)
 
     return items
@@ -751,14 +755,14 @@ async def refresh_book_metadata(
     return {"status": "queued"}
 
 
-@router.get("/{book_id}/similar", response_model=list[BookOut])
+@router.get("/{book_id}/similar")
 async def get_similar_books_endpoint(
     book_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: int = Query(10, ge=1, le=50),
 ):
-    """Get books similar to this one."""
+    """Get books similar to this one, with similarity scores."""
     from app.services.recommendations import get_similar_books
 
     await _get_book_with_access(book_id, current_user, db)
@@ -777,10 +781,24 @@ async def get_similar_books_endpoint(
     )
     books = {b.id: b for b in result.scalars().all()}
 
-    # Return in score order
-    score_map = {s["book_id"]: s["score"] for s in similar}
-    ordered = sorted(books.values(), key=lambda b: score_map.get(b.id, 0), reverse=True)
-    return ordered
+    # Build response with scores, ordered by total_score
+    similar_map = {s["book_id"]: s for s in similar}
+    ordered = sorted(
+        books.values(),
+        key=lambda b: similar_map.get(b.id, {}).get("score", 0),
+        reverse=True,
+    )
+
+    from app.schemas.tag import SimilarBookOut
+
+    return [
+        SimilarBookOut(
+            **BookOut.model_validate(book, from_attributes=True).model_dump(),
+            similarity_score=similar_map.get(book.id, {}).get("score", 0),
+            cosine_similarity=similar_map.get(book.id, {}).get("cosine_similarity"),
+        )
+        for book in ordered
+    ]
 
 
 @router.post("/{book_id}/retag")

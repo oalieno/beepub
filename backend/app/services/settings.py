@@ -23,6 +23,11 @@ DEFAULTS = {
     # Embedding config (shared by semantic search + companion RAG)
     "embedding_provider": "",
     "embedding_model": "",
+    "embedding_api_url": "",
+    "embedding_api_key": "",
+    # Similar books — semantic similarity blend
+    "similar_books_semantic_weight": "10.0",
+    "similar_books_semantic_limit": "50",
 }
 
 

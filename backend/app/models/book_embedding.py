@@ -34,7 +34,7 @@ class BookEmbeddingChunk(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     char_offset_start: Mapped[int] = mapped_column(Integer, nullable=False)
     char_offset_end: Mapped[int] = mapped_column(Integer, nullable=False)
-    embedding = mapped_column(Vector(768), nullable=False)
+    embedding = mapped_column(Vector(1024), nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[str] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -1,11 +1,16 @@
-"""Tests for app.services.embedding — vector normalization and API calls."""
+"""Tests for app.services.embedding — vector normalization and OpenAI-compatible API calls."""
 
 import math
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.embedding import _normalize, embed_text, embed_texts
+from app.services.embedding import (
+    EMBEDDING_DIMENSIONS,
+    _normalize,
+    embed_text,
+    embed_texts,
+)
 
 # ---------------------------------------------------------------------------
 # _normalize
@@ -20,7 +25,7 @@ class TestNormalize:
         assert abs(norm - 1.0) < 1e-9
 
     def test_high_dimensional_vector(self):
-        vec = [float(i) for i in range(1, 769)]  # 768-dim like real embeddings
+        vec = [float(i) for i in range(1, 1025)]  # 1024-dim like real embeddings
         result = _normalize(vec)
         norm = math.sqrt(sum(x * x for x in result))
         assert abs(norm - 1.0) < 1e-9
@@ -50,35 +55,21 @@ class TestNormalize:
 
 
 # ---------------------------------------------------------------------------
-# embed_texts
+# embed_texts (OpenAI-compatible /v1/embeddings)
 # ---------------------------------------------------------------------------
 
 
-def _fake_embed_response(vectors: list[list[float]]) -> MagicMock:
-    """Build a mock httpx.Response for batchEmbedContents."""
+def _fake_openai_response(
+    vectors: list[list[float]], total_tokens: int = 42
+) -> MagicMock:
+    """Build a mock httpx.Response for /v1/embeddings."""
     resp = MagicMock()
     resp.raise_for_status = MagicMock()
-    resp.json.return_value = {"embeddings": [{"values": v} for v in vectors]}
+    resp.json.return_value = {
+        "data": [{"index": i, "embedding": v} for i, v in enumerate(vectors)],
+        "usage": {"prompt_tokens": total_tokens, "total_tokens": total_tokens},
+    }
     return resp
-
-
-def _fake_count_response(total_tokens: int = 42) -> MagicMock:
-    """Build a mock httpx.Response for countTokens."""
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.json.return_value = {"totalTokens": total_tokens}
-    return resp
-
-
-def _make_mock_post(vectors: list[list[float]], total_tokens: int = 42) -> AsyncMock:
-    """Mock post that routes by URL: embed vs countTokens."""
-
-    async def _side_effect(url, **kwargs):
-        if "countTokens" in url:
-            return _fake_count_response(total_tokens)
-        return _fake_embed_response(vectors)
-
-    return AsyncMock(side_effect=_side_effect)
 
 
 def _make_mock_client(mock_post: AsyncMock) -> AsyncMock:
@@ -89,69 +80,64 @@ def _make_mock_client(mock_post: AsyncMock) -> AsyncMock:
     return mock_client
 
 
-def _get_embed_call(mock_post: AsyncMock):
-    """Return the call_args for the batchEmbedContents call (first call)."""
-    for call in mock_post.call_args_list:
-        url = call[0][0]
-        if "batchEmbedContents" in url:
-            return call
-    return mock_post.call_args_list[0]
-
-
 class TestEmbedTexts:
     @pytest.mark.asyncio
     async def test_returns_empty_list_for_empty_input(self):
-        result, usage = await embed_texts([], api_key="fake-key")
+        result, usage = await embed_texts(
+            [], api_url="http://localhost:1234/v1", model="test"
+        )
         assert result == []
         assert usage.total_tokens == 0
 
     @pytest.mark.asyncio
     async def test_single_text_request_formation(self):
         raw_vector = [3.0, 4.0, 0.0]
-        mock_post = _make_mock_post([raw_vector], total_tokens=5)
+        mock_post = AsyncMock(
+            return_value=_fake_openai_response([raw_vector], total_tokens=5)
+        )
         mock_client = _make_mock_client(mock_post)
 
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
             result, usage = await embed_texts(
-                ["hello world"], api_key="test-key", model="gemini-embedding-001"
+                ["hello world"],
+                api_url="http://localhost:1234/v1",
+                model="qwen3-embedding",
             )
 
-        # Verify the embed POST was called with correct URL and body
-        call_args = _get_embed_call(mock_post)
+        # Verify the POST was called with correct URL and body
+        call_args = mock_post.call_args
         url = call_args[0][0]
-        assert "gemini-embedding-001:batchEmbedContents" in url
+        assert url == "http://localhost:1234/v1/embeddings"
 
         body = call_args[1]["json"]
-        assert len(body["requests"]) == 1
-        assert body["requests"][0]["content"]["parts"][0]["text"] == "hello world"
-        assert body["requests"][0]["outputDimensionality"] == 768
-
-        # Verify API key header
-        headers = call_args[1]["headers"]
-        assert headers["x-goog-api-key"] == "test-key"
+        assert body["model"] == "qwen3-embedding"
+        assert body["input"] == ["hello world"]
 
         # Verify result is normalized
         assert len(result) == 1
         norm = math.sqrt(sum(x * x for x in result[0]))
         assert abs(norm - 1.0) < 1e-9
 
-        # Verify usage from countTokens
-        assert usage.input_tokens == 5
+        # Verify usage
         assert usage.total_tokens == 5
 
     @pytest.mark.asyncio
     async def test_batch_multiple_texts(self):
         raw_vectors = [[1.0, 0.0], [0.0, 2.0], [3.0, 4.0]]
-        mock_post = _make_mock_post(raw_vectors, total_tokens=15)
+        mock_post = AsyncMock(
+            return_value=_fake_openai_response(raw_vectors, total_tokens=15)
+        )
         mock_client = _make_mock_client(mock_post)
 
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
             result, usage = await embed_texts(
-                ["text one", "text two", "text three"], api_key="k"
+                ["text one", "text two", "text three"],
+                api_url="http://localhost:1234/v1",
+                model="m",
             )
 
         assert len(result) == 3
@@ -162,32 +148,45 @@ class TestEmbedTexts:
             assert abs(norm - 1.0) < 1e-9
 
         # Verify all three texts were sent in one request
-        call_args = _get_embed_call(mock_post)
-        body = call_args[1]["json"]
-        assert len(body["requests"]) == 3
+        body = mock_post.call_args[1]["json"]
+        assert body["input"] == ["text one", "text two", "text three"]
 
-        assert usage.input_tokens == 15
         assert usage.total_tokens == 15
 
     @pytest.mark.asyncio
-    async def test_custom_model_and_dimensionality(self):
-        mock_post = _make_mock_post([[1.0, 0.0, 0.0, 0.0]])
+    async def test_passes_api_key_as_bearer(self):
+        mock_post = AsyncMock(return_value=_fake_openai_response([[1.0, 0.0]]))
         mock_client = _make_mock_client(mock_post)
 
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
             await embed_texts(
-                ["test"], api_key="k", model="custom-model", dimensionality=256
+                ["test"],
+                api_url="http://localhost:1234/v1",
+                model="m",
+                api_key="secret-key",
             )
 
-        call_args = _get_embed_call(mock_post)
-        url = call_args[0][0]
-        assert "custom-model:batchEmbedContents" in url
+        headers = mock_post.call_args[1]["headers"]
+        assert headers["Authorization"] == "Bearer secret-key"
 
-        body = call_args[1]["json"]
-        assert body["requests"][0]["model"] == "models/custom-model"
-        assert body["requests"][0]["outputDimensionality"] == 256
+    @pytest.mark.asyncio
+    async def test_no_auth_header_when_no_api_key(self):
+        mock_post = AsyncMock(return_value=_fake_openai_response([[1.0, 0.0]]))
+        mock_client = _make_mock_client(mock_post)
+
+        with patch(
+            "app.services.embedding.httpx.AsyncClient", return_value=mock_client
+        ):
+            await embed_texts(
+                ["test"],
+                api_url="http://localhost:1234/v1",
+                model="m",
+            )
+
+        headers = mock_post.call_args[1]["headers"]
+        assert "Authorization" not in headers
 
     @pytest.mark.asyncio
     async def test_raises_on_http_error(self):
@@ -201,11 +200,44 @@ class TestEmbedTexts:
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
             with pytest.raises(Exception, match="HTTP 500"):
-                await embed_texts(["fail"], api_key="k")
+                await embed_texts(
+                    ["fail"],
+                    api_url="http://localhost:1234/v1",
+                    model="m",
+                )
+
+    @pytest.mark.asyncio
+    async def test_sorts_by_index(self):
+        """Verify embeddings are returned in input order even if API returns out of order."""
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json.return_value = {
+            "data": [
+                {"index": 1, "embedding": [0.0, 1.0]},
+                {"index": 0, "embedding": [1.0, 0.0]},
+            ],
+            "usage": {"total_tokens": 10},
+        }
+        mock_post = AsyncMock(return_value=resp)
+        mock_client = _make_mock_client(mock_post)
+
+        with patch(
+            "app.services.embedding.httpx.AsyncClient", return_value=mock_client
+        ):
+            result, _ = await embed_texts(
+                ["first", "second"],
+                api_url="http://localhost:1234/v1",
+                model="m",
+            )
+
+        # index 0 should be [1.0, 0.0] normalized
+        assert result[0][0] > result[0][1]
+        # index 1 should be [0.0, 1.0] normalized
+        assert result[1][1] > result[1][0]
 
 
 # ---------------------------------------------------------------------------
-# embed_text  (single-text convenience wrapper)
+# embed_text (single-text convenience wrapper)
 # ---------------------------------------------------------------------------
 
 
@@ -213,13 +245,19 @@ class TestEmbedText:
     @pytest.mark.asyncio
     async def test_returns_single_vector(self):
         raw_vector = [0.0, 5.0]
-        mock_post = _make_mock_post([raw_vector], total_tokens=3)
+        mock_post = AsyncMock(
+            return_value=_fake_openai_response([raw_vector], total_tokens=3)
+        )
         mock_client = _make_mock_client(mock_post)
 
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
-            result, usage = await embed_text("single text", api_key="k")
+            result, usage = await embed_text(
+                "single text",
+                api_url="http://localhost:1234/v1",
+                model="m",
+            )
 
         # Should return a flat list, not a list of lists
         assert isinstance(result, list)
@@ -229,16 +267,30 @@ class TestEmbedText:
         assert abs(norm - 1.0) < 1e-9
 
     @pytest.mark.asyncio
-    async def test_passes_model_and_dimensionality(self):
-        mock_post = _make_mock_post([[1.0]], total_tokens=1)
+    async def test_passes_model(self):
+        mock_post = AsyncMock(
+            return_value=_fake_openai_response([[1.0]], total_tokens=1)
+        )
         mock_client = _make_mock_client(mock_post)
 
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
-            await embed_text("x", api_key="k", model="m", dimensionality=32)
+            await embed_text(
+                "x",
+                api_url="http://localhost:1234/v1",
+                model="custom-model",
+            )
 
-        call_args = _get_embed_call(mock_post)
-        body = call_args[1]["json"]
-        assert body["requests"][0]["model"] == "models/m"
-        assert body["requests"][0]["outputDimensionality"] == 32
+        body = mock_post.call_args[1]["json"]
+        assert body["model"] == "custom-model"
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+
+class TestConstants:
+    def test_embedding_dimensions(self):
+        assert EMBEDDING_DIMENSIONS == 1024

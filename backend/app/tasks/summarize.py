@@ -184,6 +184,11 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
         from app.celeryapp import run_async
 
         run_async(_run())
+
+        # Auto-embed book summary after summarization completes
+        from app.tasks.embed import embed_book_summary
+
+        embed_book_summary.delay(book_id)
     except Exception as exc:
         logger.exception("summarize_chunks failed for book %s", book_id)
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

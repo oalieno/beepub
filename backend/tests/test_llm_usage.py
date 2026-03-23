@@ -209,24 +209,17 @@ class TestOpenAIProviderUsage:
 
 class TestEmbeddingUsage:
     @pytest.mark.asyncio
-    async def test_embed_texts_returns_usage_from_count_tokens(self):
+    async def test_embed_texts_returns_usage(self):
         from app.services.embedding import embed_texts
 
-        embed_resp = MagicMock()
-        embed_resp.raise_for_status = MagicMock()
-        embed_resp.json.return_value = {
-            "embeddings": [{"values": [1.0, 0.0, 0.0]}],
+        resp = MagicMock()
+        resp.raise_for_status = MagicMock()
+        resp.json.return_value = {
+            "data": [{"index": 0, "embedding": [1.0, 0.0, 0.0]}],
+            "usage": {"prompt_tokens": 42, "total_tokens": 42},
         }
-        count_resp = MagicMock()
-        count_resp.status_code = 200
-        count_resp.json.return_value = {"totalTokens": 42}
 
-        async def _side_effect(url, **kwargs):
-            if "countTokens" in url:
-                return count_resp
-            return embed_resp
-
-        mock_post = AsyncMock(side_effect=_side_effect)
+        mock_post = AsyncMock(return_value=resp)
         mock_client = AsyncMock()
         mock_client.post = mock_post
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -235,12 +228,13 @@ class TestEmbeddingUsage:
         with patch(
             "app.services.embedding.httpx.AsyncClient", return_value=mock_client
         ):
-            vectors, usage = await embed_texts(["test"], api_key="k")
+            vectors, usage = await embed_texts(
+                ["test"], api_url="http://localhost:1234/v1", model="m"
+            )
 
         assert len(vectors) == 1
-        assert usage.input_tokens == 42
-        assert usage.output_tokens == 0
         assert usage.total_tokens == 42
+        assert usage.output_tokens == 0
 
 
 # ---------------------------------------------------------------------------

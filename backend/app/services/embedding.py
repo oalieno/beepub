@@ -1,4 +1,4 @@
-"""Embedding service — calls Gemini embedding API to produce vector embeddings."""
+"""Embedding service — calls OpenAI-compatible embedding API."""
 
 from __future__ import annotations
 
@@ -11,12 +11,12 @@ from app.services.llm import TokenUsage
 
 logger = logging.getLogger(__name__)
 
-# Gemini embedding API base URL
-_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
+# Output dimensionality (Qwen3-Embedding-0.6B default)
+EMBEDDING_DIMENSIONS = 1024
 
 
 def _normalize(vector: list[float]) -> list[float]:
-    """L2-normalize a vector (required for Matryoshka-reduced dimensions)."""
+    """L2-normalize a vector."""
     norm = math.sqrt(sum(x * x for x in vector))
     if norm == 0:
         return vector
@@ -26,54 +26,41 @@ def _normalize(vector: list[float]) -> list[float]:
 async def embed_texts(
     texts: list[str],
     *,
-    api_key: str,
-    model: str = "gemini-embedding-001",
-    dimensionality: int = 768,
+    api_url: str,
+    model: str,
+    api_key: str = "",
 ) -> tuple[list[list[float]], TokenUsage]:
-    """Embed a batch of texts using Gemini embedding API.
+    """Embed a batch of texts using an OpenAI-compatible /v1/embeddings endpoint.
 
     Returns (embeddings, usage) where embeddings is a list of normalized vectors.
-    Max batch size for Gemini is 100 texts per request.
     """
     if not texts:
         return [], TokenUsage()
 
-    url = f"{_GEMINI_BASE}/models/{model}:batchEmbedContents"
-    requests_body = [
-        {
-            "model": f"models/{model}",
-            "content": {"parts": [{"text": t}]},
-            "outputDimensionality": dimensionality,
-        }
-        for t in texts
-    ]
+    url = f"{api_url}/embeddings"
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
 
-    headers = {"x-goog-api-key": api_key}
+    body = {"model": model, "input": texts}
 
     async with httpx.AsyncClient(timeout=120.0) as client:
-        # Embed
-        resp = await client.post(url, headers=headers, json={"requests": requests_body})
+        resp = await client.post(url, headers=headers, json=body)
         resp.raise_for_status()
         data = resp.json()
 
-        # Count tokens (free API) — batchEmbedContents doesn't return usage
-        count_url = f"{_GEMINI_BASE}/models/{model}:countTokens"
-        count_resp = await client.post(
-            count_url,
-            headers=headers,
-            json={
-                "contents": [{"parts": [{"text": t}]} for t in texts],
-            },
-        )
-        if count_resp.status_code == 200:
-            token_count = count_resp.json().get("totalTokens", 0)
-        else:
-            token_count = 0
-
     embeddings = []
-    for emb in data["embeddings"]:
-        vector = emb["values"]
+    for item in sorted(data["data"], key=lambda x: x["index"]):
+        vector = item["embedding"]
         embeddings.append(_normalize(vector))
+
+    # OpenAI-compatible usage
+    usage_data = data.get("usage", {})
+    token_count = usage_data.get("total_tokens") or usage_data.get("prompt_tokens") or 0
+
+    # Some local servers (e.g. LM Studio) report 0 tokens — estimate from input
+    if not token_count:
+        token_count = sum(len(t) for t in texts)
 
     usage = TokenUsage(
         input_tokens=token_count,
@@ -87,12 +74,12 @@ async def embed_texts(
 async def embed_text(
     text: str,
     *,
-    api_key: str,
-    model: str = "gemini-embedding-001",
-    dimensionality: int = 768,
+    api_url: str,
+    model: str,
+    api_key: str = "",
 ) -> tuple[list[float], TokenUsage]:
     """Embed a single text. Convenience wrapper around embed_texts."""
     results, usage = await embed_texts(
-        [text], api_key=api_key, model=model, dimensionality=dimensionality
+        [text], api_url=api_url, model=model, api_key=api_key
     )
     return results[0], usage
