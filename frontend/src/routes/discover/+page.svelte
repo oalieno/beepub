@@ -11,7 +11,10 @@
     TagBrowseSection,
   } from "$lib/types";
   import { Compass, Sparkles } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import {
+    BookGridSkeleton,
+    BrowseSectionSkeleton,
+  } from "$lib/components/skeletons";
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);
@@ -109,9 +112,7 @@
     </div>
 
     {#if loadingRecs}
-      <div class="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
+      <BookGridSkeleton count={12} />
     {:else if recommendations.length === 0}
       <div
         class="bg-card card-soft rounded-2xl p-8 text-center text-muted-foreground"
@@ -156,9 +157,7 @@
     </div>
 
     {#if loadingBrowse}
-      <div class="flex items-center justify-center py-12">
-        <Spinner size="lg" />
-      </div>
+      <BrowseSectionSkeleton sections={3} />
     {:else if browseSections.length === 0}
       <div
         class="bg-card card-soft rounded-2xl p-8 text-center text-muted-foreground"

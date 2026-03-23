@@ -15,7 +15,7 @@
     Heart,
     BookOpen,
   } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { BookGridSkeleton } from "$lib/components/skeletons";
 
   type TabKey =
     | "currently_reading"
@@ -111,9 +111,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <BookGridSkeleton count={12} />
   {:else if books.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
       <BookOpen class="mx-auto mb-4 text-muted-foreground/30" size={48} />

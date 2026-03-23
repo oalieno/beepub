@@ -13,6 +13,7 @@
   import * as Select from "$lib/components/ui/select";
   import { Save } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
+  import { FormSkeleton } from "$lib/components/skeletons";
 
   let settings = $state<AdminSettings | null>(null);
   let loading = $state(true);
@@ -330,9 +331,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <FormSkeleton cards={6} />
   {:else}
     <div class="space-y-6">
       <!-- Timezone -->

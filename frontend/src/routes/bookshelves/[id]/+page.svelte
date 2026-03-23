@@ -6,7 +6,8 @@
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { BookGridSkeleton } from "$lib/components/skeletons";
+  import { Skeleton } from "$lib/components/ui/skeleton";
   import type { BookshelfOut, BookOut } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
@@ -57,9 +58,11 @@
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
-    <div class="flex items-center justify-center h-64">
-      <Spinner size="lg" />
+    <div class="mb-8">
+      <Skeleton class="h-4 w-20 mb-1" />
+      <Skeleton class="h-9 w-48" />
     </div>
+    <BookGridSkeleton count={12} />
   {:else if shelf}
     <div class="mb-8">
       <a

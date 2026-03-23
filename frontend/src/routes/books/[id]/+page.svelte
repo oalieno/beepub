@@ -18,7 +18,7 @@
     SeriesNeighborsOut,
   } from "$lib/types";
   import HighlightList from "$lib/components/HighlightList.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { BookDetailSkeleton } from "$lib/components/skeletons";
   import { UserRole } from "$lib/types";
   import {
     Heart,
@@ -517,9 +517,7 @@
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
-    <div class="flex items-center justify-center h-64">
-      <Spinner size="lg" />
-    </div>
+    <BookDetailSkeleton />
   {:else if book}
     <!-- Back Button -->
     <button

@@ -8,7 +8,7 @@
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import type { HighlightOut } from "$lib/types";
   import { Highlighter } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { HighlightListSkeleton } from "$lib/components/skeletons";
 
   let highlights = $state<HighlightOut[]>([]);
   let bookData = $state<Record<string, { title: string; authors: string[] }>>(
@@ -101,9 +101,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner />
-    </div>
+    <HighlightListSkeleton groups={3} />
   {:else if highlights.length === 0}
     <div class="text-center py-16">
       <Highlighter size={40} class="text-muted-foreground/30 mx-auto mb-3" />

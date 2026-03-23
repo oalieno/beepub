@@ -7,7 +7,7 @@
   import type { UserOut } from "$lib/types";
   import { UserRole } from "$lib/types";
   import { Trash2, Shield, User } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { TableSkeleton } from "$lib/components/skeletons";
 
   let users = $state<UserOut[]>([]);
   let loading = $state(true);
@@ -75,9 +75,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <TableSkeleton rows={5} columns={5} />
   {:else}
     <div class="bg-card card-soft rounded-2xl overflow-hidden overflow-x-auto">
       <table class="w-full min-w-[600px]">

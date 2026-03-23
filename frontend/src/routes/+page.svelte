@@ -15,7 +15,7 @@
   } from "$lib/types";
   import { goto } from "$app/navigation";
   import { BookOpen } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { HomeSkeleton } from "$lib/components/skeletons";
 
   let libraries = $state<LibraryOut[]>([]);
   let recentBooks = $state<BookOut[]>([]);
@@ -27,21 +27,20 @@
 
   onMount(async () => {
     try {
-      const [libs, activity, stats, currentlyReading] =
-        await Promise.all([
-          librariesApi.list($authStore.token!),
-          booksApi
-            .getReadingActivity(currentYear, $authStore.token!)
-            .catch(() => []),
-          booksApi.getReadingStats($authStore.token!).catch(() => null),
-          booksApi
-            .getMyBooks($authStore.token!, {
-              status: "currently_reading",
-              sort: "last_read_at",
-              limit: 12,
-            })
-            .catch(() => ({ items: [], total: 0 })),
-        ]);
+      const [libs, activity, stats, currentlyReading] = await Promise.all([
+        librariesApi.list($authStore.token!),
+        booksApi
+          .getReadingActivity(currentYear, $authStore.token!)
+          .catch(() => []),
+        booksApi.getReadingStats($authStore.token!).catch(() => null),
+        booksApi
+          .getMyBooks($authStore.token!, {
+            status: "currently_reading",
+            sort: "last_read_at",
+            limit: 12,
+          })
+          .catch(() => ({ items: [], total: 0 })),
+      ]);
       libraries = libs;
       readingActivity = activity;
       readingStats = stats;
@@ -83,9 +82,7 @@
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
-    <div class="flex items-center justify-center h-64">
-      <Spinner size="lg" />
-    </div>
+    <HomeSkeleton />
   {:else}
     <!-- Hero greeting -->
     <section class="mb-12">
@@ -243,6 +240,5 @@
         <BookGrid books={recentBooks} enableInteractions />
       {/if}
     </section>
-
   {/if}
 </div>

@@ -16,7 +16,7 @@
     ListChecks,
     Activity,
   } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { DashboardSkeleton } from "$lib/components/skeletons";
 
   let stats = $state<AdminStats | null>(null);
   let loading = $state(true);
@@ -47,9 +47,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <DashboardSkeleton />
   {:else}
     <!-- Stats -->
     <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">

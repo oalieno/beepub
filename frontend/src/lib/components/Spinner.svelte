@@ -22,6 +22,8 @@
 </script>
 
 <div
+  role="status"
+  aria-label="Loading"
   class="animate-spin rounded-full border-2 border-t-transparent {sizes[
     size
   ]} {className || colors[color]}"

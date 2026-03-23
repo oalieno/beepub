@@ -18,7 +18,7 @@
     Square,
     Clock,
   } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { FormSkeleton } from "$lib/components/skeletons";
 
   let jobs = $state<JobStatus[]>([]);
   let loading = $state(true);
@@ -109,9 +109,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <FormSkeleton cards={6} />
   {:else}
     <div class="space-y-3">
       {#each jobs as job (job.key)}
@@ -144,7 +142,10 @@
               {#if job.progress?.status === "pending"}
                 <Clock class="text-primary shrink-0" size={15} />
               {:else if job.active}
-                <LoaderCircle class="text-primary animate-spin shrink-0" size={15} />
+                <LoaderCircle
+                  class="text-primary animate-spin shrink-0"
+                  size={15}
+                />
               {:else if job.progress?.status === "failed"}
                 <span class="text-xs text-destructive font-medium">Failed</span>
               {/if}
@@ -158,8 +159,12 @@
             <div
               class="inline-flex items-stretch rounded-lg overflow-hidden border border-border/50"
             >
-              <div class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50">
-                <span class="text-xs sm:text-sm text-muted-foreground">Active</span>
+              <div
+                class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50"
+              >
+                <span class="text-xs sm:text-sm text-muted-foreground"
+                  >Active</span
+                >
                 <span
                   class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
                 >
@@ -171,8 +176,12 @@
                 </span>
               </div>
               <div class="w-px bg-border/50"></div>
-              <div class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2">
-                <span class="text-xs sm:text-sm text-muted-foreground">Missing</span>
+              <div
+                class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2"
+              >
+                <span class="text-xs sm:text-sm text-muted-foreground"
+                  >Missing</span
+                >
                 <span
                   class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
                 >
@@ -200,7 +209,10 @@
                 title="Stop this job"
               >
                 {#if stoppingJob === job.key}
-                  <LoaderCircle class="text-destructive animate-spin" size={18} />
+                  <LoaderCircle
+                    class="text-destructive animate-spin"
+                    size={18}
+                  />
                 {:else}
                   <Square size={16} class="text-destructive fill-destructive" />
                 {/if}

@@ -13,6 +13,7 @@
   import { Upload, Search, X, HardDrive, ArrowUpDown } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import Spinner from "$lib/components/Spinner.svelte";
+  import { LibraryDetailSkeleton } from "$lib/components/skeletons";
   import type { Snapshot } from "./$types";
 
   const SORT_OPTIONS = [
@@ -38,13 +39,9 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let searchQuery = $state((page.url.searchParams.get("search") ?? "").trim());
-  let filterAuthor = $state(
-    (page.url.searchParams.get("author") ?? "").trim(),
-  );
+  let filterAuthor = $state((page.url.searchParams.get("author") ?? "").trim());
   let filterTag = $state((page.url.searchParams.get("tag") ?? "").trim());
-  let filterSeries = $state(
-    (page.url.searchParams.get("series") ?? "").trim(),
-  );
+  let filterSeries = $state((page.url.searchParams.get("series") ?? "").trim());
   let sortValue = $state(page.url.searchParams.get("sort") || "added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -262,9 +259,7 @@
 
 <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
   {#if loading}
-    <div class="flex items-center justify-center h-64">
-      <Spinner size="lg" />
-    </div>
+    <LibraryDetailSkeleton />
   {:else if library}
     <div
       class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-8"

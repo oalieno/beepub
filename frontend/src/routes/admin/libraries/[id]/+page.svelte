@@ -13,7 +13,7 @@
   import type { LibraryOut, UserOut } from "$lib/types";
   import { UserRole, LibraryVisibility } from "$lib/types";
   import { Trash2, UserPlus, Save } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { FormSkeleton } from "$lib/components/skeletons";
 
   let libraryId = $derived(page.params.id as string);
 
@@ -137,9 +137,7 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
-    </div>
+    <FormSkeleton cards={2} />
   {:else if library}
     <!-- Edit form -->
     <div class="bg-card card-soft rounded-2xl p-6 mb-6">

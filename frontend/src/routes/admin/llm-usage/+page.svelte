@@ -7,7 +7,8 @@
   import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
   import { UserRole } from "$lib/types";
   import { ArrowLeft } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { TableSkeleton } from "$lib/components/skeletons";
 
   let data = $state<LlmUsageResponse | null>(null);
   let loading = $state(true);
@@ -94,8 +95,28 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
+    <div role="status" aria-label="Loading">
+      <!-- 5 stat cards -->
+      <div class="grid grid-cols-2 sm:grid-cols-5 gap-4 mb-8">
+        {#each Array(5) as _}
+          <div
+            class="bg-card card-soft rounded-2xl p-5 flex flex-col items-center"
+          >
+            <Skeleton class="h-7 w-20 mb-1.5" />
+            <Skeleton class="h-4 w-16" />
+          </div>
+        {/each}
+      </div>
+      <!-- By User table -->
+      <div class="mb-8">
+        <Skeleton class="h-6 w-20 mb-4" />
+        <TableSkeleton rows={3} columns={5} />
+      </div>
+      <!-- By Feature table -->
+      <div class="mb-8">
+        <Skeleton class="h-6 w-24 mb-4" />
+        <TableSkeleton rows={6} columns={7} />
+      </div>
     </div>
   {:else if data}
     <!-- Totals -->

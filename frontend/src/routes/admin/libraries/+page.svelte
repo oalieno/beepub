@@ -19,7 +19,7 @@
     Settings,
     HardDrive,
   } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import { Skeleton } from "$lib/components/ui/skeleton";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -111,8 +111,24 @@
   </div>
 
   {#if loading}
-    <div class="flex items-center justify-center h-40">
-      <Spinner size="lg" />
+    <div role="status" aria-label="Loading" class="space-y-3">
+      {#each Array(6) as _}
+        <div
+          class="bg-card card-soft rounded-2xl p-5 flex items-center justify-between"
+        >
+          <div class="flex items-center gap-3.5">
+            <Skeleton class="w-10 h-10 rounded-xl shrink-0" />
+            <div class="flex items-center gap-2">
+              <Skeleton class="h-5 w-28" />
+              <Skeleton class="h-5 w-16 rounded-full" />
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <Skeleton class="w-8 h-8 rounded-full" />
+            <Skeleton class="w-8 h-8 rounded-full" />
+          </div>
+        </div>
+      {/each}
     </div>
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
