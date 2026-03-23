@@ -161,9 +161,11 @@ async def _upsert_chunk_avg_embedding(db, bid: uuid.UUID, model: str) -> None:
     from app.models.book_embedding import BookEmbeddingChunk
     from app.models.book_embedding_unified import BookEmbedding
 
+    from pgvector.sqlalchemy import Vector as VectorType
+
     avg_result = await db.execute(
         select(
-            func.avg(BookEmbeddingChunk.embedding).label("avg_emb"),
+            func.avg(BookEmbeddingChunk.embedding).cast(VectorType(1024)).label("avg_emb"),
             func.count().label("cnt"),
         ).where(BookEmbeddingChunk.book_id == bid)
     )
