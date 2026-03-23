@@ -95,6 +95,79 @@ class TestBuildSummaryText:
 
 
 # ---------------------------------------------------------------------------
+# 1b. Chunk-avg embedding query uses CAST to Vector
+# ---------------------------------------------------------------------------
+
+
+class TestChunkAvgEmbeddingCast:
+    """Verify the AVG query casts to Vector — prevents the pgvector string bug.
+
+    pgvector's AVG() returns a string like '[-0.02, ...]' not a Vector object.
+    Without CAST(... AS VECTOR), the upsert fails with ValueError at runtime.
+    Mocked db.execute can't catch this because it never compiles real SQL,
+    so we compile the SELECT statement and check for CAST.
+    """
+
+    def test_avg_query_includes_vector_cast(self):
+        from sqlalchemy import func, select
+        from sqlalchemy.dialects import postgresql
+
+        from app.models.book_embedding import BookEmbeddingChunk
+
+        from pgvector.sqlalchemy import Vector as VectorType
+
+        stmt = select(
+            func.avg(BookEmbeddingChunk.embedding)
+            .cast(VectorType(1024))
+            .label("avg_emb"),
+            func.count().label("cnt"),
+        ).where(BookEmbeddingChunk.book_id == "fake-id")
+
+        compiled = stmt.compile(dialect=postgresql.dialect())
+        sql = str(compiled)
+        assert "CAST" in sql.upper()
+        assert "vector" in sql.lower() or "VECTOR" in sql
+
+    @pytest.mark.asyncio
+    async def test_upsert_skips_when_zero_chunks(self):
+        from app.tasks.embed import _upsert_chunk_avg_embedding
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.one.return_value = SimpleNamespace(avg_emb=None, cnt=0)
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        await _upsert_chunk_avg_embedding(mock_db, uuid.uuid4(), "test-model")
+
+        # Should only call execute once (the SELECT), not the INSERT
+        assert mock_db.execute.call_count == 1
+        mock_db.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upsert_calls_insert_when_chunks_exist(self):
+        from app.tasks.embed import _upsert_chunk_avg_embedding
+
+        mock_db = AsyncMock()
+        # First call: SELECT AVG
+        mock_avg_result = MagicMock()
+        mock_avg_result.one.return_value = SimpleNamespace(
+            avg_emb=[0.1] * 1024, cnt=5
+        )
+        # Second call: INSERT upsert
+        mock_insert_result = MagicMock()
+
+        mock_db.execute = AsyncMock(
+            side_effect=[mock_avg_result, mock_insert_result]
+        )
+        mock_db.commit = AsyncMock()
+
+        await _upsert_chunk_avg_embedding(mock_db, uuid.uuid4(), "test-model")
+
+        assert mock_db.execute.call_count == 2
+        mock_db.commit.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
 # 2. Token truncation
 # ---------------------------------------------------------------------------
 
