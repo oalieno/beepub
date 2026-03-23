@@ -97,6 +97,7 @@
   });
 
   let isReaderPage = $derived(page.url.pathname.endsWith("/read"));
+  let isAuthenticated = $derived(!!data.user || !!$authStore.user);
 </script>
 
 {#if authRecovering}
@@ -104,14 +105,14 @@
     <div class="animate-pulse text-muted-foreground text-lg">Loading…</div>
   </div>
 {:else}
-  {#if !isReaderPage && $authStore.user}
+  {#if !isReaderPage && isAuthenticated}
     <Navbar />
   {/if}
 
   <main
     class="{isReaderPage
       ? ''
-      : $authStore.user
+      : isAuthenticated
         ? 'pt-16'
         : ''} min-h-screen bg-background text-foreground"
   >
