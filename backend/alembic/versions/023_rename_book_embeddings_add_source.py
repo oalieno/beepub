@@ -3,8 +3,8 @@
 The table now holds both summary-derived and chunk-average embeddings.
 source = 'summary' (from concatenated chapter summaries) or 'chunk_avg' (from AVG of chunk vectors).
 
-Revision ID: 022
-Revises: 021
+Revision ID: 023
+Revises: 022
 """
 
 from collections.abc import Sequence
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 from alembic import op
 
-revision: str = "022"
-down_revision: str | None = "021"
+revision: str = "023"
+down_revision: str | None = "022"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
