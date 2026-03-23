@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { Flame, ChevronDown, X, Check } from "@lucide/svelte";
+  import { Flame, Check, Pencil, Target, Minus, Plus } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
-  import { Input } from "$lib/components/ui/input";
   import type { ReadingStats } from "$lib/types";
 
   let {
@@ -15,7 +14,6 @@
   } = $props();
 
   let goalOpen = $state(false);
-  let customMinutes = $state("");
   let saving = $state(false);
 
   let goalMinutes = $derived(
@@ -61,29 +59,46 @@
     return days;
   });
 
-  const PRESETS = [
-    { mins: 5, label: "5m" },
-    { mins: 15, label: "15m" },
-    { mins: 30, label: "30m" },
-    { mins: 60, label: "1h" },
-  ];
+  const STEP_VALUES = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+
+  let pendingMinutes = $state(15);
+
+  // Sync pendingMinutes when popover opens
+  $effect(() => {
+    if (goalOpen) {
+      pendingMinutes = goalMinutes ?? 15;
+    }
+  });
 
   async function setGoal(minutes: number | null) {
     saving = true;
     try {
       await onGoalUpdate(minutes != null ? minutes * 60 : null);
       goalOpen = false;
-      customMinutes = "";
     } finally {
       saving = false;
     }
   }
 
-  function handleCustomGoal() {
-    const mins = parseInt(customMinutes);
-    if (mins > 0 && mins <= 1440) {
-      setGoal(mins);
+  function stepGoal(delta: number) {
+    const current = pendingMinutes;
+    // Find next preset value in direction
+    if (delta > 0) {
+      const next = STEP_VALUES.find((p) => p > current);
+      pendingMinutes = next ?? Math.min(current + 15, 480);
+    } else {
+      const prev = [...STEP_VALUES].reverse().find((p) => p < current);
+      pendingMinutes = prev ?? Math.max(current - 5, 1);
     }
+  }
+
+  function formatGoalDisplay(mins: number): string {
+    if (mins >= 60) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+    return `${mins}m`;
   }
 
   function formatTime(seconds: number): string {
@@ -94,7 +109,7 @@
   }
 </script>
 
-<div class="flex flex-col sm:flex-row sm:items-center gap-4">
+<div class="group flex flex-col sm:flex-row sm:items-center gap-4">
   <!-- Left: Streak + Today -->
   <div class="flex items-center gap-5">
     <!-- Streak -->
@@ -120,15 +135,87 @@
     <!-- Divider -->
     <div class="w-px h-10 bg-border"></div>
 
-    <!-- Today's reading -->
+    <!-- Today's reading + inline goal -->
     <div>
       <div class="flex items-baseline gap-1.5">
         <p class="text-2xl font-bold leading-none text-foreground">
           {formatTime(stats.today_seconds)}
         </p>
-        {#if goalMinutes != null}
-          <span class="text-xs text-muted-foreground">/ {goalMinutes}m</span>
-        {/if}
+        <Popover.Root bind:open={goalOpen}>
+          <Popover.Trigger>
+            {#snippet child({ props })}
+              {#if goalMinutes != null}
+                <button
+                  {...props}
+                  class="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5 cursor-pointer rounded px-1 -mx-1 hover:bg-muted"
+                >
+                  / {goalMinutes}m
+                  <Pencil
+                    size={10}
+                    class="opacity-0 group-hover:opacity-100 transition-opacity"
+                  />
+                </button>
+              {:else}
+                <button
+                  {...props}
+                  class="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors inline-flex items-center gap-1 cursor-pointer rounded px-1 -mx-1 hover:bg-muted"
+                >
+                  <Target size={12} />
+                  set goal
+                </button>
+              {/if}
+            {/snippet}
+          </Popover.Trigger>
+          <Popover.Content class="w-56 p-0 overflow-hidden" align="start">
+            <!-- Stepper -->
+            <div class="px-5 pt-5 pb-4">
+              <p class="text-xs text-muted-foreground text-center mb-3">
+                Daily goal
+              </p>
+              <div class="flex items-center justify-center gap-4">
+                <button
+                  class="size-8 rounded-full bg-secondary hover:bg-secondary/70 text-secondary-foreground flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30"
+                  onclick={() => stepGoal(-1)}
+                  disabled={saving || pendingMinutes <= 1}
+                >
+                  <Minus size={14} />
+                </button>
+                <span
+                  class="text-2xl font-bold text-foreground tabular-nums min-w-[5ch] text-center whitespace-nowrap"
+                >
+                  {formatGoalDisplay(pendingMinutes)}
+                </span>
+                <button
+                  class="size-8 rounded-full bg-secondary hover:bg-secondary/70 text-secondary-foreground flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30"
+                  onclick={() => stepGoal(1)}
+                  disabled={saving || pendingMinutes >= 480}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-5 pb-4 flex flex-col gap-1.5">
+              <button
+                class="w-full h-9 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer disabled:opacity-50"
+                onclick={() => setGoal(pendingMinutes)}
+                disabled={saving || pendingMinutes === goalMinutes}
+              >
+                {goalMinutes != null ? "Update goal" : "Set goal"}
+              </button>
+              {#if goalMinutes != null}
+                <button
+                  class="w-full h-9 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors cursor-pointer"
+                  onclick={() => setGoal(null)}
+                  disabled={saving}
+                >
+                  Remove goal
+                </button>
+              {/if}
+            </div>
+          </Popover.Content>
+        </Popover.Root>
       </div>
       {#if goalMinutes != null && progressPercent != null}
         <div class="flex items-center gap-2 mt-1">
@@ -144,15 +231,14 @@
           </div>
           <span class="text-xs text-muted-foreground">{progressPercent}%</span>
         </div>
-      {:else}
+      {:else if goalMinutes == null}
         <p class="text-xs text-muted-foreground mt-0.5">today</p>
       {/if}
     </div>
   </div>
 
-  <!-- Right: Week indicator + Goal setting -->
-  <div class="sm:ml-auto flex items-center gap-4">
-    <!-- Week days -->
+  <!-- Right: Week indicator -->
+  <div class="sm:ml-auto flex items-center">
     <div class="flex items-center gap-2">
       {#each weekDays as day}
         <div
@@ -176,93 +262,5 @@
         </div>
       {/each}
     </div>
-
-    <!-- Goal setting -->
-    <Popover.Root bind:open={goalOpen}>
-      <Popover.Trigger>
-        {#snippet child({ props })}
-          <button
-            {...props}
-            class="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-0.5 cursor-pointer"
-          >
-            {goalMinutes != null ? "Goal" : "Set goal"}
-            <ChevronDown size={12} />
-          </button>
-        {/snippet}
-      </Popover.Trigger>
-      <Popover.Content class="w-64 p-0 overflow-hidden" align="end">
-        <!-- Header -->
-        <div class="px-4 pt-4 pb-3">
-          <p
-            class="text-sm font-semibold text-foreground"
-            style="font-family: var(--font-heading)"
-          >
-            Daily Reading Goal
-          </p>
-          <p class="text-xs text-muted-foreground mt-0.5">
-            How long do you want to read each day?
-          </p>
-        </div>
-
-        <!-- Preset pills -->
-        <div class="px-4 pb-3">
-          <div class="grid grid-cols-4 gap-1.5">
-            {#each PRESETS as preset}
-              <button
-                class="h-8 rounded-lg text-sm font-medium transition-all cursor-pointer
-                  {goalMinutes === preset.mins
-                  ? 'bg-primary text-primary-foreground shadow-sm'
-                  : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'}"
-                onclick={() => setGoal(preset.mins)}
-                disabled={saving}
-              >
-                {preset.label}
-              </button>
-            {/each}
-          </div>
-        </div>
-
-        <!-- Custom input -->
-        <div class="px-4 pb-3">
-          <form
-            class="flex gap-1.5"
-            onsubmit={(e) => {
-              e.preventDefault();
-              handleCustomGoal();
-            }}
-          >
-            <Input
-              type="number"
-              placeholder="Custom minutes"
-              class="h-9 text-sm"
-              bind:value={customMinutes}
-              min="1"
-              max="1440"
-            />
-            <button
-              type="submit"
-              class="h-9 px-3 rounded-lg text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors shrink-0 cursor-pointer disabled:opacity-50"
-              disabled={saving || !customMinutes}
-            >
-              Set
-            </button>
-          </form>
-        </div>
-
-        <!-- Remove goal -->
-        {#if goalMinutes != null}
-          <div class="border-t border-border">
-            <button
-              class="w-full py-2.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 transition-colors flex items-center justify-center gap-1 cursor-pointer"
-              onclick={() => setGoal(null)}
-              disabled={saving}
-            >
-              <X size={12} />
-              Remove goal
-            </button>
-          </div>
-        {/if}
-      </Popover.Content>
-    </Popover.Root>
   </div>
 </div>
