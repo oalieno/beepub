@@ -61,7 +61,6 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
     async def _run() -> None:
         import redis.asyncio as aioredis
-
         from sqlalchemy import select
 
         from app.config import settings
