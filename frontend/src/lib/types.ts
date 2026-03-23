@@ -75,6 +75,27 @@ export interface BookOut {
   library_id: string | null;
 }
 
+export interface SeriesBookBrief {
+  id: string;
+  title: string | null;
+  authors: string[] | null;
+  cover_path: string | null;
+  series_index: number | null;
+}
+
+export interface SeriesProgress {
+  total_in_library: number;
+  read_count: number;
+}
+
+export interface SeriesNeighborsOut {
+  series_name: string | null;
+  current_index: number | null;
+  next: SeriesBookBrief | null;
+  previous: SeriesBookBrief | null;
+  progress: SeriesProgress | null;
+}
+
 export interface TagBrowseSection {
   tag: string;
   label: string;

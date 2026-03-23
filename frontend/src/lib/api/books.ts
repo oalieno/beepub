@@ -14,6 +14,7 @@ import type {
   ReadingStats,
   ReadingStatus,
   ReferenceImageInput,
+  SeriesNeighborsOut,
   StylePromptOut,
   TagBrowseSection,
 } from "$lib/types";
@@ -38,6 +39,12 @@ export const booksApi = {
 
   get: (bookId: string, token: string) =>
     get(`/books/${bookId}`, token) as Promise<BookOut>,
+
+  getSeriesNeighbors: (bookId: string, token: string) =>
+    get(
+      `/books/${bookId}/series-neighbors`,
+      token,
+    ) as Promise<SeriesNeighborsOut>,
 
   updateMetadata: (
     bookId: string,

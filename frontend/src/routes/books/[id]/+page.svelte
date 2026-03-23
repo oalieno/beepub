@@ -15,6 +15,7 @@
     InteractionOut,
     HighlightOut,
     ReadingStatus,
+    SeriesNeighborsOut,
   } from "$lib/types";
   import HighlightList from "$lib/components/HighlightList.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -36,6 +37,8 @@
     CircleX,
     ArrowLeft,
     Undo2,
+    ChevronLeft,
+    ChevronRight,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -142,6 +145,7 @@
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
   let similarBooks = $state<BookOut[]>([]);
+  let seriesNeighbors = $state<SeriesNeighborsOut | null>(null);
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
@@ -225,6 +229,15 @@
         similarBooks = await booksApi.getSimilar(bookId, $authStore.token!, 10);
       } catch {
         similarBooks = [];
+      }
+      // Load series neighbors
+      try {
+        seriesNeighbors = await booksApi.getSeriesNeighbors(
+          bookId,
+          $authStore.token!,
+        );
+      } catch {
+        seriesNeighbors = null;
       }
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -876,6 +889,32 @@
                 {book.display_series}{#if book.display_series_index != null}
                   [{formatSeriesIndex(book.display_series_index)}]{/if}
               </button>
+              {#if seriesNeighbors?.previous || seriesNeighbors?.next}
+                <div class="flex flex-col gap-1 mt-2">
+                  {#if seriesNeighbors?.previous}
+                    <a
+                      href="/books/{seriesNeighbors.previous.id}"
+                      class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <ChevronLeft class="w-3.5 h-3.5 flex-shrink-0" />
+                      <span class="truncate"
+                        >{seriesNeighbors.previous.title ?? "Previous"}</span
+                      >
+                    </a>
+                  {/if}
+                  {#if seriesNeighbors?.next}
+                    <a
+                      href="/books/{seriesNeighbors.next.id}"
+                      class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      <ChevronRight class="w-3.5 h-3.5 flex-shrink-0" />
+                      <span class="truncate"
+                        >{seriesNeighbors.next.title ?? "Next"}</span
+                      >
+                    </a>
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/if}
           {#if book.publisher ?? book.epub_publisher}

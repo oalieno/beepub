@@ -37,6 +37,9 @@ from app.schemas.book import (
     ExternalMetadataUrlUpdate,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
+    SeriesBookBrief,
+    SeriesNeighborsOut,
+    SeriesProgress,
 )
 from app.schemas.reading import (
     BatchInteractionItem,
@@ -799,6 +802,122 @@ async def get_similar_books_endpoint(
         )
         for book in ordered
     ]
+
+
+@router.get("/{book_id}/series-neighbors", response_model=SeriesNeighborsOut)
+async def get_series_neighbors(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get next/previous books in the same series, with series progress."""
+    book = await _get_book_with_access(book_id, current_user, db)
+
+    series_name = book.display_series
+    current_index = book.display_series_index
+    if not series_name:
+        return SeriesNeighborsOut()
+
+    is_admin = current_user.role == UserRole.admin
+    series_col = coalesce(Book.series, Book.epub_series)
+    index_col = coalesce(Book.series_index, Book.epub_series_index)
+
+    # Accessible libraries subquery
+    accessible_libs = (
+        select(Library.id)
+        .where(
+            or_(
+                is_admin,
+                Library.visibility == LibraryVisibility.public,
+                Library.id.in_(
+                    select(LibraryAccess.library_id).where(
+                        LibraryAccess.user_id == current_user.id
+                    )
+                ),
+            )
+        )
+        .scalar_subquery()
+    )
+
+    # Subquery: book IDs accessible to this user
+    accessible_book_ids = (
+        select(LibraryBook.book_id)
+        .where(LibraryBook.library_id.in_(accessible_libs))
+        .scalar_subquery()
+    )
+
+    # Base: books in same series within accessible libraries (excluding current)
+    base = select(Book).where(
+        series_col == series_name,
+        index_col.isnot(None),
+        Book.id != book_id,
+        Book.id.in_(accessible_book_ids),
+    )
+
+    next_book = None
+    prev_book = None
+
+    if current_index is not None:
+        # Next: smallest index > current
+        result = await db.execute(
+            base.where(index_col > current_index).order_by(index_col.asc()).limit(1)
+        )
+        next_book = result.scalar_one_or_none()
+
+        # Previous: largest index < current
+        result = await db.execute(
+            base.where(index_col < current_index).order_by(index_col.desc()).limit(1)
+        )
+        prev_book = result.scalar_one_or_none()
+
+    # Series progress: total books in series (accessible) and how many are read
+    total_result = await db.execute(
+        select(func.count(func.distinct(Book.id)))
+        .select_from(Book)
+        .join(LibraryBook, LibraryBook.book_id == Book.id)
+        .where(
+            series_col == series_name,
+            LibraryBook.library_id.in_(accessible_libs),
+        )
+    )
+    total_in_library = total_result.scalar() or 0
+
+    read_result = await db.execute(
+        select(func.count(func.distinct(Book.id)))
+        .select_from(Book)
+        .join(LibraryBook, LibraryBook.book_id == Book.id)
+        .join(
+            UserBookInteraction,
+            (UserBookInteraction.book_id == Book.id)
+            & (UserBookInteraction.user_id == current_user.id),
+        )
+        .where(
+            series_col == series_name,
+            LibraryBook.library_id.in_(accessible_libs),
+            UserBookInteraction.reading_status == "read",
+        )
+    )
+    read_count = read_result.scalar() or 0
+
+    def _brief(b: Book) -> SeriesBookBrief:
+        return SeriesBookBrief(
+            id=b.id,
+            title=b.display_title,
+            authors=b.display_authors,
+            cover_path=b.cover_path,
+            series_index=b.display_series_index,
+        )
+
+    return SeriesNeighborsOut(
+        series_name=series_name,
+        current_index=current_index,
+        next=_brief(next_book) if next_book else None,
+        previous=_brief(prev_book) if prev_book else None,
+        progress=SeriesProgress(
+            total_in_library=total_in_library,
+            read_count=read_count,
+        ),
+    )
 
 
 @router.post("/{book_id}/retag")

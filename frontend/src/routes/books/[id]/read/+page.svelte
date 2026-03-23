@@ -24,6 +24,7 @@
     HighlightOut,
     IllustrationOut,
     InteractionOut,
+    SeriesNeighborsOut,
     StylePromptOut,
   } from "$lib/types";
 
@@ -58,6 +59,11 @@
   let showIllustrationModal = $state(false);
   let illustrationModalCfi = $state("");
   let illustrationModalText = $state("");
+
+  // Series navigation overlay
+  let seriesNeighbors: SeriesNeighborsOut | null = $state(null);
+  let seriesFetchPromise: Promise<void> | null = null;
+  let showSeriesOverlay = $state(false);
   let viewingIllustration = $state<IllustrationOut | null>(null);
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
@@ -187,6 +193,27 @@
       autoMarkAsRead();
     }
   });
+
+  function prefetchSeriesNeighbors() {
+    if (seriesNeighbors || seriesFetchPromise || !$authStore.token) return;
+    seriesFetchPromise = booksApi
+      .getSeriesNeighbors(bookId, $authStore.token)
+      .then((data) => {
+        seriesNeighbors = data;
+      })
+      .catch(() => {
+        // Silently fail — no overlay if prefetch fails
+      });
+  }
+
+  async function handleBookEnd() {
+    if (seriesFetchPromise) {
+      await seriesFetchPromise;
+    }
+    if (seriesNeighbors?.next || seriesNeighbors?.progress) {
+      showSeriesOverlay = true;
+    }
+  }
 
   function handleFontToggle() {
     fontFamily = fontFamily === "serif" ? "sans-serif" : "serif";
@@ -412,6 +439,8 @@
         onshare={handleShareHighlight}
         oncompanion={handleCompanion}
         onready={() => (epubLoaded = true)}
+        onatend={prefetchSeriesNeighbors}
+        onbookend={handleBookEnd}
       />
     {/if}
 
@@ -551,4 +580,115 @@
       shareHighlight = null;
     }}
   />
+
+  {#if showSeriesOverlay && seriesNeighbors}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onkeydown={(e) => {
+        if (e.key === "Escape") showSeriesOverlay = false;
+      }}
+      onclick={(e) => {
+        if (e.target === e.currentTarget) showSeriesOverlay = false;
+      }}
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="mx-3 sm:mx-4 w-full max-w-[85vw] sm:max-w-sm md:max-w-md overflow-hidden rounded-2xl shadow-2xl {darkMode
+          ? 'bg-gray-800 text-gray-100'
+          : 'bg-white text-gray-900'}"
+        onclick={(e) => e.stopPropagation()}
+      >
+        {#if seriesNeighbors.next}
+          <!-- Cover as hero banner -->
+          <div
+            class="relative flex items-center justify-center py-10 {darkMode
+              ? 'bg-gray-900/60'
+              : 'bg-gray-50'}"
+          >
+            {#if seriesNeighbors.next.cover_path}
+              <img
+                src="/covers/{seriesNeighbors.next.id}.jpg"
+                alt={seriesNeighbors.next.title ?? "Next book"}
+                class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
+              />
+            {:else}
+              <div
+                class="h-52 sm:h-64 md:h-96 w-48 rounded-md shadow-xl flex items-center justify-center {darkMode
+                  ? 'bg-gray-700 text-gray-400'
+                  : 'bg-gray-200 text-muted-foreground'}"
+              >
+                No cover
+              </div>
+            {/if}
+          </div>
+
+          <!-- Info + actions -->
+          <div class="px-6 py-6">
+            <p
+              class="text-center text-xs font-medium uppercase tracking-widest {darkMode
+                ? 'text-gray-500'
+                : 'text-muted-foreground'}"
+            >
+              Up next in {seriesNeighbors.series_name}
+            </p>
+            <p class="mt-3 text-center text-xl font-semibold">
+              {seriesNeighbors.next.title ?? "Untitled"}
+            </p>
+            {#if seriesNeighbors.next.series_index != null}
+              <p
+                class="mt-1 text-center text-sm {darkMode
+                  ? 'text-gray-400'
+                  : 'text-muted-foreground'}"
+              >
+                Book {seriesNeighbors.next.series_index} of {seriesNeighbors
+                  .progress?.total_in_library ?? "?"}
+              </p>
+            {/if}
+            <div class="mt-6 flex gap-3">
+              <button
+                class="flex-1 rounded-lg px-4 py-3 font-medium transition-colors {darkMode
+                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
+                onclick={() => (showSeriesOverlay = false)}
+              >
+                Close
+              </button>
+              <button
+                class="flex-1 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                onclick={() => {
+                  window.location.href = `/books/${seriesNeighbors!.next!.id}/read`;
+                }}
+              >
+                Start reading
+              </button>
+            </div>
+          </div>
+        {:else if seriesNeighbors.progress && seriesNeighbors.progress.read_count >= seriesNeighbors.progress.total_in_library}
+          <div class="flex flex-col items-center gap-6 px-10 py-14">
+            <span class="text-6xl">🎉</span>
+            <div class="text-center">
+              <p class="text-2xl font-semibold">Series Complete!</p>
+              <p
+                class="mt-2 {darkMode
+                  ? 'text-gray-400'
+                  : 'text-muted-foreground'}"
+              >
+                You've finished all {seriesNeighbors.progress.total_in_library} books
+                in {seriesNeighbors.series_name}
+              </p>
+            </div>
+            <button
+              class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
+                ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
+                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
+              onclick={() => (showSeriesOverlay = false)}
+            >
+              Close
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>

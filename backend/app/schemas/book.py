@@ -101,6 +101,29 @@ class BookMetadataUpdate(BaseModel):
     tags: list[str] | None = None
 
 
+class SeriesBookBrief(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    authors: list[str] | None
+    cover_path: str | None
+    series_index: float | None
+
+    model_config = {"from_attributes": True}
+
+
+class SeriesProgress(BaseModel):
+    total_in_library: int
+    read_count: int
+
+
+class SeriesNeighborsOut(BaseModel):
+    series_name: str | None = None
+    current_index: float | None = None
+    next: SeriesBookBrief | None = None
+    previous: SeriesBookBrief | None = None
+    progress: SeriesProgress | None = None
+
+
 class ExternalMetadataUrlUpdate(BaseModel):
     source_url: str | None = None
 

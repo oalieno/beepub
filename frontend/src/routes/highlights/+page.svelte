@@ -6,7 +6,7 @@
   import { toastStore } from "$lib/stores/toast";
   import HighlightList from "$lib/components/HighlightList.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
-  import type { HighlightOut, BookOut } from "$lib/types";
+  import type { HighlightOut } from "$lib/types";
   import { Highlighter } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 

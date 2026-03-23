@@ -24,6 +24,8 @@
     onhrefchange,
     onready,
     oncompanion,
+    onatend,
+    onbookend,
   }: {
     bookId: string;
     token: string;
@@ -42,9 +44,12 @@
     onhrefchange?: (href: string) => void;
     onready?: () => void;
     oncompanion?: (detail: { cfiRange: string; text: string }) => void;
+    onatend?: () => void;
+    onbookend?: () => void;
   } = $props();
 
   let isRtl = $state(false);
+  let isAtEnd = $state(false);
 
   let container: HTMLDivElement;
   let epubBook: any = $state(null);
@@ -365,6 +370,13 @@
       debouncedSave();
       updateIllustrationOverlays();
       prefetchSections();
+
+      // Track end-of-book state for series navigation
+      const wasAtEnd = isAtEnd;
+      isAtEnd = !!location.atEnd;
+      if (isAtEnd && !wasAtEnd) {
+        onatend?.();
+      }
 
       // Cache progress in localStorage for offline/resume fallback
       try {
@@ -763,9 +775,9 @@
               if (Math.abs(dx) > SWIPE_THRESHOLD) {
                 const swipeLeft = dx < 0;
                 if (swipeLeft) {
-                  isRtl ? rendition?.prev() : rendition?.next();
+                  isRtl ? _doPrev() : _doNext();
                 } else {
-                  isRtl ? rendition?.next() : rendition?.prev();
+                  isRtl ? _doNext() : _doPrev();
                 }
               }
             } else if (touchState === "waiting" && showHighlightMenu) {
@@ -1173,8 +1185,8 @@
       (e.target as HTMLElement)?.isContentEditable
     )
       return;
-    if (e.key === "ArrowLeft") isRtl ? rendition?.next() : rendition?.prev();
-    if (e.key === "ArrowRight") isRtl ? rendition?.prev() : rendition?.next();
+    if (e.key === "ArrowLeft") isRtl ? _doNext() : _doPrev();
+    if (e.key === "ArrowRight") isRtl ? _doPrev() : _doNext();
   }
 
   let wheelDebounce = 0;
@@ -1188,24 +1200,20 @@
     const nextByX = isRtl ? e.deltaX < 0 : e.deltaX > 0;
     const prevByX = isRtl ? e.deltaX > 0 : e.deltaX < 0;
     if (nextByY || nextByX) {
-      showFootnote = false;
-      rendition?.next();
+      _doNext();
     } else if (prevByY || prevByX) {
-      showFootnote = false;
-      rendition?.prev();
+      _doPrev();
     }
   }
 
   function handleLeftTapNav() {
     if (showFootnote || showHighlightMenu) return;
-    showFootnote = false;
-    isRtl ? rendition?.next() : rendition?.prev();
+    isRtl ? _doNext() : _doPrev();
   }
 
   function handleRightTapNav() {
     if (showFootnote || showHighlightMenu) return;
-    showFootnote = false;
-    isRtl ? rendition?.prev() : rendition?.next();
+    isRtl ? _doPrev() : _doNext();
   }
 
   function debouncedSave() {
@@ -1442,14 +1450,26 @@
     updateIllustrationOverlays();
   }
 
-  export function prev() {
+  function _doPrev() {
     showFootnote = false;
     rendition?.prev();
   }
 
-  export function next() {
+  function _doNext() {
+    if (isAtEnd) {
+      onbookend?.();
+      return;
+    }
     showFootnote = false;
     rendition?.next();
+  }
+
+  export function prev() {
+    _doPrev();
+  }
+
+  export function next() {
+    _doNext();
   }
 
   export function displayChapter(href: string) {
