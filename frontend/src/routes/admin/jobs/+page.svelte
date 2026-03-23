@@ -158,10 +158,10 @@
             <div
               class="inline-flex items-stretch rounded-lg overflow-hidden border border-border/50"
             >
-              <div class="flex items-center gap-5 px-3.5 py-2 bg-muted/50">
-                <span class="text-sm text-muted-foreground">Active</span>
+              <div class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50">
+                <span class="text-xs sm:text-sm text-muted-foreground">Active</span>
                 <span
-                  class="text-sm font-semibold text-foreground font-sans tabular-nums"
+                  class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
                 >
                   {#if job.active && job.progress}
                     {job.progress.processed.toLocaleString()}/{job.progress.total.toLocaleString()}
@@ -171,10 +171,10 @@
                 </span>
               </div>
               <div class="w-px bg-border/50"></div>
-              <div class="flex items-center gap-5 px-3.5 py-2">
-                <span class="text-sm text-muted-foreground">Missing</span>
+              <div class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2">
+                <span class="text-xs sm:text-sm text-muted-foreground">Missing</span>
                 <span
-                  class="text-sm font-semibold text-foreground font-sans tabular-nums"
+                  class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
                 >
                   {job.missing.toLocaleString()}
                 </span>
