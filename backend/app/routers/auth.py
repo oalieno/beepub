@@ -1,6 +1,5 @@
 from typing import Annotated
 
-import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
@@ -18,13 +17,10 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]):
-    # Check username/email uniqueness
-    conditions = [User.username == body.username]
-    if body.email is not None:
-        conditions.append(User.email == body.email)
-    existing = await db.execute(select(User).where(sa.or_(*conditions)))
+    # Check username uniqueness
+    existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username or email already exists")
+        raise HTTPException(status_code=400, detail="Username already exists")
 
     # First user becomes admin
     count_result = await db.execute(select(func.count(User.id)))
@@ -33,7 +29,6 @@ async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
 
     user = User(
         username=body.username,
-        email=body.email,
         password_hash=hash_password(body.password),
         role=role,
     )

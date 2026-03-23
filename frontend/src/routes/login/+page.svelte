@@ -12,7 +12,6 @@
 
   let username = $state("");
   let password = $state("");
-  let email = $state("");
   let showRegister = $state(false);
   let loading = $state(false);
   let showPassword = $state(false);
@@ -37,10 +36,9 @@
     if (!username || !password) return;
     loading = true;
     try {
-      await authApi.register({ username, password, email: email || undefined });
+      await authApi.register({ username, password });
       toastStore.success("Account created! Please log in.");
       showRegister = false;
-      email = "";
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -160,18 +158,6 @@
                 bind:value={username}
                 placeholder="Choose username"
                 required
-                class="rounded-xl h-11"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="reg-email" class="text-sm font-medium"
-                >Email (optional)</Label
-              >
-              <Input
-                id="reg-email"
-                type="email"
-                bind:value={email}
-                placeholder="Enter email"
                 class="rounded-xl h-11"
               />
             </div>

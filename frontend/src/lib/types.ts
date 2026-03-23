@@ -11,7 +11,6 @@ export enum LibraryVisibility {
 export interface UserOut {
   id: string; // UUID
   username: string;
-  email: string;
   role: UserRole;
   is_active: boolean;
   created_at: string;

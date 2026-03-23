@@ -87,10 +87,6 @@
             >
             <th
               class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >Email</th
-            >
-            <th
-              class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >Role</th
             >
             <th
@@ -105,9 +101,6 @@
             <tr class="hover:bg-secondary/30 transition-colors">
               <td class="px-5 py-3.5 font-medium text-foreground"
                 >{user.username}</td
-              >
-              <td class="px-5 py-3.5 text-muted-foreground text-sm"
-                >{user.email}</td
               >
               <td class="px-5 py-3.5">
                 <span

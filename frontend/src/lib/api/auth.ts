@@ -2,7 +2,7 @@ import { get, post } from "./client";
 import type { TokenResponse, UserOut } from "$lib/types";
 
 export const authApi = {
-  register: (body: { username: string; password: string; email?: string }) =>
+  register: (body: { username: string; password: string }) =>
     post("/auth/register", body) as Promise<UserOut>,
 
   login: (username: string, password: string) =>
