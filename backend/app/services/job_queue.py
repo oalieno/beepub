@@ -47,6 +47,11 @@ JOB_TYPES: dict[str, JobType] = {
         label="Summarize",
         description="Generate AI summaries for book chapters",
     ),
+    "summary_embedding": JobType(
+        key="summary_embedding",
+        label="Summary Embedding",
+        description="Generate book-level embeddings from chapter summaries for semantic similar books",
+    ),
     "auto_tag": JobType(
         key="auto_tag",
         label="Auto Tag",
@@ -56,11 +61,6 @@ JOB_TYPES: dict[str, JobType] = {
         key="word_count",
         label="Word Count",
         description="Compute word counts for books",
-    ),
-    "summary_embedding": JobType(
-        key="summary_embedding",
-        label="Summary Embedding",
-        description="Generate book-level embeddings from chapter summaries for semantic similar books",
     ),
 }
 

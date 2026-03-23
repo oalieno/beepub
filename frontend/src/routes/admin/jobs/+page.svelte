@@ -30,6 +30,7 @@
     text_extraction: FileText,
     embedding: Search,
     summarize: BookOpen,
+    summary_embedding: ScanSearch,
     auto_tag: Tags,
     word_count: Hash,
   };
