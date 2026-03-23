@@ -15,7 +15,7 @@ services:
       - books_data:/data/books
       - covers_data:/data/covers
     command: >
-      sh -c "uv sync --frozen --no-install-project && exec uv run --with watchfiles watchfiles --filter python 'celery -A app.celeryapp:celery worker --loglevel=info --concurrency=2' /app/app"
+      sh -c "uv sync --frozen --no-install-project && exec uv run --with watchfiles watchfiles --filter python 'celery -A app.celeryapp:celery worker --loglevel=info --concurrency=3' /app/app"
 
   beat:
     volumes:

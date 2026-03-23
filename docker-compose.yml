@@ -60,7 +60,7 @@ services:
         "app.celeryapp:celery",
         "worker",
         "--loglevel=info",
-        "--concurrency=2",
+        "--concurrency=3",
       ]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
