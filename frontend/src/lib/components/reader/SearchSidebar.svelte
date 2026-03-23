@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Search, X, Loader2 } from "@lucide/svelte";
+  import { Search, X, LoaderCircle } from "@lucide/svelte";
   import type { SearchResult } from "./EpubReader.svelte";
 
   let {
@@ -177,7 +177,7 @@
   <div class="flex-1 overflow-y-auto">
     {#if searching}
       <div class="flex items-center justify-center gap-2 py-8">
-        <Loader2
+        <LoaderCircle
           size={16}
           class="animate-spin {darkMode
             ? 'text-gray-400'

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Trash2, Loader2, AlertCircle } from "@lucide/svelte";
+  import { X, Trash2, LoaderCircle, AlertCircle } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
 
@@ -146,7 +146,7 @@
                     class="w-full h-full object-cover"
                   />
                 {:else if ill.status === "generating"}
-                  <Loader2
+                  <LoaderCircle
                     size={16}
                     class="animate-spin {darkMode
                       ? 'text-purple-400'
@@ -155,7 +155,7 @@
                 {:else if ill.status === "failed"}
                   <AlertCircle size={16} class="text-red-400" />
                 {:else}
-                  <Loader2
+                  <LoaderCircle
                     size={16}
                     class="animate-spin {darkMode
                       ? 'text-gray-600'

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { browser } from "$app/environment";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import EpubReader from "$lib/components/reader/EpubReader.svelte";
@@ -27,7 +27,7 @@
     StylePromptOut,
   } from "$lib/types";
 
-  let bookId = $derived($page.params.id as string);
+  let bookId = $derived(page.params.id as string);
 
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);

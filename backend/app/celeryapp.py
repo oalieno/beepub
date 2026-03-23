@@ -3,6 +3,7 @@ import os
 
 from celery import Celery
 from celery.signals import setup_logging as celery_setup_logging
+from celery.signals import worker_ready
 
 from app.config import settings
 
@@ -32,6 +33,28 @@ def configure_celery_logging(**kwargs):
     from app.logging import setup_logging
 
     setup_logging(log_format=os.environ.get("LOG_FORMAT", "console"))
+
+
+@worker_ready.connect
+def clear_stale_jobs(**kwargs):
+    """Clear any 'running' or 'pending' job statuses left from a previous worker lifecycle."""
+    import json
+    import logging
+
+    import redis
+
+    logger = logging.getLogger(__name__)
+    client = redis.from_url(settings.redis_url)
+    try:
+        for key in client.scan_iter("beepub:job:*"):
+            data = client.get(key)
+            if data:
+                status = json.loads(data).get("status")
+                if status in ("running", "pending"):
+                    client.delete(key)
+                    logger.info("Cleared stale job status: %s (was %s)", key, status)
+    finally:
+        client.close()
 
 
 celery = Celery("beepub")

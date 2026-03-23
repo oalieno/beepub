@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
 </script>
 
 <svelte:head>
-  <title>{$page.status} - BeePub</title>
+  <title>{page.status} - BeePub</title>
 </svelte:head>
 
 <div
@@ -16,7 +16,7 @@
     class="mb-4 sm:!max-w-96"
   />
   <p class="text-muted-foreground text-lg mb-6">
-    {$page.error?.message || "Page not found"}
+    {page.error?.message || "Page not found"}
   </p>
   <a
     href="/"

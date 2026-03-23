@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import Navbar from "$lib/components/Navbar.svelte";
   import Toast from "$lib/components/Toast.svelte";
@@ -96,7 +96,7 @@
     return () => document.removeEventListener("visibilitychange", onVisibility);
   });
 
-  let isReaderPage = $derived($page.url.pathname.endsWith("/read"));
+  let isReaderPage = $derived(page.url.pathname.endsWith("/read"));
 </script>
 
 {#if authRecovering}

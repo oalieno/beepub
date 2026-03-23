@@ -14,7 +14,7 @@
     Hash,
     Infinity,
     ScanSearch,
-    Loader2,
+    LoaderCircle,
     Square,
     Clock,
   } from "@lucide/svelte";
@@ -143,7 +143,9 @@
               {#if job.progress?.status === "pending"}
                 <Clock class="text-primary shrink-0" size={15} />
               {:else if job.active}
-                <Loader2 class="text-primary animate-spin shrink-0" size={15} />
+                <LoaderCircle class="text-primary animate-spin shrink-0" size={15} />
+              {:else if job.progress?.status === "failed"}
+                <span class="text-xs text-destructive font-medium">Failed</span>
               {/if}
             </div>
 
@@ -197,7 +199,7 @@
                 title="Stop this job"
               >
                 {#if stoppingJob === job.key}
-                  <Loader2 class="text-destructive animate-spin" size={18} />
+                  <LoaderCircle class="text-destructive animate-spin" size={18} />
                 {:else}
                   <Square size={16} class="text-destructive fill-destructive" />
                 {/if}

@@ -276,7 +276,7 @@ export interface CompanionConversationSummary {
 }
 
 export interface JobProgress {
-  status: "running" | "completed" | "failed";
+  status: "running" | "completed" | "failed" | "pending" | "cancelled";
   total: number;
   processed: number;
   failed: number;

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
@@ -15,7 +15,7 @@
   import { Trash2, UserPlus, Save } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
-  let libraryId = $derived($page.params.id as string);
+  let libraryId = $derived(page.params.id as string);
 
   let library = $state<LibraryOut | null>(null);
   let members = $state<

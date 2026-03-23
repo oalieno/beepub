@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
@@ -26,7 +26,7 @@
 
   const PAGE_SIZE = 60;
 
-  let libraryId = $derived($page.params.id as string);
+  let libraryId = $derived(page.params.id as string);
 
   let library = $state<LibraryOut | null>(null);
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
@@ -37,15 +37,15 @@
   let hasMore = $derived(books.length < totalBooks);
   let loading = $state(true);
   let loadingMore = $state(false);
-  let searchQuery = $state(($page.url.searchParams.get("search") ?? "").trim());
+  let searchQuery = $state((page.url.searchParams.get("search") ?? "").trim());
   let filterAuthor = $state(
-    ($page.url.searchParams.get("author") ?? "").trim(),
+    (page.url.searchParams.get("author") ?? "").trim(),
   );
-  let filterTag = $state(($page.url.searchParams.get("tag") ?? "").trim());
+  let filterTag = $state((page.url.searchParams.get("tag") ?? "").trim());
   let filterSeries = $state(
-    ($page.url.searchParams.get("series") ?? "").trim(),
+    (page.url.searchParams.get("series") ?? "").trim(),
   );
-  let sortValue = $state($page.url.searchParams.get("sort") || "added_at:desc");
+  let sortValue = $state(page.url.searchParams.get("sort") || "added_at:desc");
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
   let sortLabel = $derived(
@@ -184,7 +184,7 @@
   }
 
   function syncUrlParams() {
-    const url = new URL($page.url);
+    const url = new URL(page.url);
     if (searchQuery) url.searchParams.set("search", searchQuery);
     else url.searchParams.delete("search");
     if (filterAuthor) url.searchParams.set("author", filterAuthor);

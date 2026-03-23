@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import { UserRole } from "$lib/types";
   import { LogOut, Menu, X, Dices, Search } from "@lucide/svelte";
@@ -30,38 +30,38 @@
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   const navLinks = $derived([
-    { href: "/", label: "Home", active: $page.url.pathname === "/" },
+    { href: "/", label: "Home", active: page.url.pathname === "/" },
     {
       href: "/my-books",
       label: "My Books",
-      active: $page.url.pathname.startsWith("/my-books"),
+      active: page.url.pathname.startsWith("/my-books"),
     },
     {
       href: "/libraries",
       label: "Libraries",
-      active: $page.url.pathname.startsWith("/libraries"),
+      active: page.url.pathname.startsWith("/libraries"),
     },
     {
       href: "/bookshelves",
       label: "Shelves",
-      active: $page.url.pathname.startsWith("/bookshelves"),
+      active: page.url.pathname.startsWith("/bookshelves"),
     },
     {
       href: "/highlights",
       label: "Highlights",
-      active: $page.url.pathname.startsWith("/highlights"),
+      active: page.url.pathname.startsWith("/highlights"),
     },
     {
       href: "/discover",
       label: "Discover",
-      active: $page.url.pathname.startsWith("/discover"),
+      active: page.url.pathname.startsWith("/discover"),
     },
     ...(isAdmin
       ? [
           {
             href: "/admin",
             label: "Admin",
-            active: $page.url.pathname.startsWith("/admin"),
+            active: page.url.pathname.startsWith("/admin"),
           },
         ]
       : []),
@@ -120,7 +120,7 @@
       </button>
       <a
         href="/gacha"
-        class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
+        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
         title="抽書"
@@ -166,7 +166,7 @@
       </button>
       <a
         href="/gacha"
-        class="p-2 rounded-lg transition-colors {$page.url.pathname === '/gacha'
+        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
           ? 'bg-primary/10 text-primary'
           : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
       >

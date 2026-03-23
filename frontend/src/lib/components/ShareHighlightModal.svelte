@@ -1,6 +1,6 @@
 <script lang="ts">
   import html2canvas from "html2canvas";
-  import { X, Download, Share2, Loader2 } from "@lucide/svelte";
+  import { X, Download, Share2, LoaderCircle } from "@lucide/svelte";
   import ShareHighlightCard from "./ShareHighlightCard.svelte";
   import type { HighlightOut } from "$lib/types";
 
@@ -189,7 +189,7 @@
           disabled={downloading || sharing}
         >
           {#if downloading}
-            <Loader2 size={16} class="animate-spin" />
+            <LoaderCircle size={16} class="animate-spin" />
           {:else}
             <Download size={16} />
           {/if}
@@ -202,7 +202,7 @@
             disabled={downloading || sharing}
           >
             {#if sharing}
-              <Loader2 size={16} class="animate-spin" />
+              <LoaderCircle size={16} class="animate-spin" />
             {:else}
               <Share2 size={16} />
             {/if}

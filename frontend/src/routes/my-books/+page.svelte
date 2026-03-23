@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
@@ -42,7 +42,7 @@
 
   // Derive active tab from URL so back/forward navigation works
   let urlTab = $derived(
-    ($page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
+    (page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
   );
   let activeTab = $derived(
     tabs.some((t) => t.key === urlTab) ? urlTab : "currently_reading",

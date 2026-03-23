@@ -14,7 +14,7 @@
     Link,
     CheckCircle,
     AlertCircle,
-    Loader2,
+    LoaderCircle,
   } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
@@ -238,7 +238,7 @@
                 <div
                   class="flex items-center gap-2 text-sm text-muted-foreground mb-2"
                 >
-                  <Loader2 size={14} class="animate-spin" />
+                  <LoaderCircle size={14} class="animate-spin" />
                   Syncing... {syncInfo.processed} / {syncInfo.total}
                 </div>
                 <div class="w-full bg-secondary rounded-full h-2">

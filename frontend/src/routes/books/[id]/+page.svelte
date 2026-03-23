@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
@@ -23,10 +23,9 @@
     Heart,
     BookOpen,
     Trash2,
-    Edit,
+    Pencil,
     RefreshCw,
     BookMarked,
-    ExternalLink,
     Star,
     StarHalf,
     EllipsisVertical,
@@ -135,7 +134,7 @@
     handleStatusChange(value as ReadingStatus);
   }
 
-  let bookId = $derived($page.params.id as string);
+  let bookId = $derived(page.params.id as string);
 
   let book = $state<BookOut | null>(null);
   let interaction = $state<InteractionOut | null>(null);
@@ -651,7 +650,7 @@
                     onclick={() => startEditUrl(meta.source, meta.source_url)}
                     title="Edit source URL"
                   >
-                    <Edit size={12} />
+                    <Pencil size={12} />
                   </button>
                 {/if}
               {/if}
@@ -830,7 +829,7 @@
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="start" side="top">
                 <DropdownMenu.Item onclick={() => (showEditModal = true)}>
-                  <Edit size={14} />
+                  <Pencil size={14} />
                   Edit metadata
                 </DropdownMenu.Item>
                 <DropdownMenu.Item onclick={handleRefreshMeta}>

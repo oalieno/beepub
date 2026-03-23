@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
+  import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { bookshelvesApi } from "$lib/api/bookshelves";
@@ -9,7 +9,7 @@
   import Spinner from "$lib/components/Spinner.svelte";
   import type { BookshelfOut, BookOut } from "$lib/types";
 
-  let shelfId = $derived($page.params.id as string);
+  let shelfId = $derived(page.params.id as string);
 
   let shelf = $state<BookshelfOut | null>(null);
   let books = $state<BookOut[]>([]);

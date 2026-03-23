@@ -4,7 +4,7 @@
     Sparkles,
     Check,
     ImageIcon,
-    Loader2,
+    LoaderCircle,
     Settings,
   } from "@lucide/svelte";
   import type {
@@ -318,7 +318,7 @@
                       ? 'text-gray-500'
                       : 'text-muted-foreground'}"
                   >
-                    <Loader2 size={14} class="animate-spin" />
+                    <LoaderCircle size={14} class="animate-spin" />
                     <span class="text-xs">Loading...</span>
                   </div>
                 {:else if epubImages.length === 0}
