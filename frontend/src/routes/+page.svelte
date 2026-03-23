@@ -2,26 +2,22 @@
   import { onMount } from "svelte";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
   import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
-  import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { booksApi } from "$lib/api/books";
   import type {
     BookOut,
-    BookshelfOut,
     BookWithInteractionOut,
     LibraryOut,
     ReadingStats,
   } from "$lib/types";
   import { goto } from "$app/navigation";
-  import { BookOpen, BookMarked } from "@lucide/svelte";
+  import { BookOpen } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
 
   let libraries = $state<LibraryOut[]>([]);
-  let bookshelves = $state<BookshelfOut[]>([]);
   let recentBooks = $state<BookOut[]>([]);
   let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
@@ -31,10 +27,9 @@
 
   onMount(async () => {
     try {
-      const [libs, shelves, activity, stats, currentlyReading] =
+      const [libs, activity, stats, currentlyReading] =
         await Promise.all([
           librariesApi.list($authStore.token!),
-          bookshelvesApi.list($authStore.token!),
           booksApi
             .getReadingActivity(currentYear, $authStore.token!)
             .catch(() => []),
@@ -48,7 +43,6 @@
             .catch(() => ({ items: [], total: 0 })),
         ]);
       libraries = libs;
-      bookshelves = shelves;
       readingActivity = activity;
       readingStats = stats;
       continueReadingBooks = currentlyReading.items;
@@ -124,11 +118,6 @@
                 .toLocaleString()}
             </p>
             <p class="text-muted-foreground text-xs mt-0.5">Books</p>
-          </div>
-          <div class="w-px h-8 bg-border"></div>
-          <div>
-            <p class="text-3xl font-bold text-primary">{bookshelves.length}</p>
-            <p class="text-muted-foreground text-xs mt-0.5">Shelves</p>
           </div>
         </div>
       </div>
@@ -255,52 +244,5 @@
       {/if}
     </section>
 
-    <!-- Bookshelves -->
-    <section>
-      <div class="flex items-end justify-between mb-6">
-        <div>
-          <h2 class="text-2xl font-bold text-foreground">My Shelves</h2>
-          <p class="text-muted-foreground text-sm mt-1">
-            Your curated collections
-          </p>
-        </div>
-        <a
-          href="/bookshelves"
-          class="text-primary hover:text-primary/80 text-sm font-medium"
-          >View all →</a
-        >
-      </div>
-      {#if bookshelves.length === 0}
-        <div class="bg-card card-soft rounded-2xl p-12 text-center">
-          <BookMarked class="mx-auto text-muted-foreground/30 mb-4" size={48} />
-          <p class="text-muted-foreground text-lg">No shelves yet</p>
-          <p class="text-muted-foreground/70 text-sm mt-1">
-            Create a bookshelf to organize your reading.
-          </p>
-        </div>
-      {:else}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-4">
-          {#each bookshelves.slice(0, 6) as shelf}
-            <CollectionCard
-              href="/bookshelves/{shelf.id}"
-              name={shelf.name}
-              previewBookIds={shelf.preview_book_ids}
-              bookCount={shelf.book_count}
-              badgeLabel={shelf.is_public ? "Public" : "Private"}
-              badgeClass={shelf.is_public
-                ? "bg-primary/15 text-primary"
-                : "bg-secondary text-muted-foreground"}
-            >
-              {#snippet icon()}
-                <BookMarked
-                  class="text-muted-foreground/50 shrink-0"
-                  size={16}
-                />
-              {/snippet}
-            </CollectionCard>
-          {/each}
-        </div>
-      {/if}
-    </section>
   {/if}
 </div>
