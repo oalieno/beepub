@@ -13,6 +13,9 @@ logger = logging.getLogger(__name__)
 
 # Max texts per batch embedding call
 _EMBED_BATCH_SIZE = 100
+# Skip text chunks shorter than this — page numbers, titles, dedications, etc.
+# produce low-quality embeddings and waste API calls.
+_MIN_CHUNK_CHARS = 200
 
 
 @celery.task(
@@ -72,6 +75,8 @@ def embed_book(self, book_id: str) -> None:
             total_embedded = 0
 
             for text_chunk in text_chunks:
+                if len(text_chunk.text.strip()) < _MIN_CHUNK_CHARS:
+                    continue
                 sub_chunks = split_text_into_chunks(text_chunk.text)
                 if not sub_chunks:
                     continue

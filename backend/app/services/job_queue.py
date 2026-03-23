@@ -151,40 +151,41 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             select(func.count(Book.id)).where(Book.id.notin_(has_text))
         )
     elif job_type == "embedding":
-        # Books without embedding chunks (orchestrator handles text extraction as prerequisite)
+        # Books with text chunks but no embedding chunks
+        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
         )
         missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(has_embed))
+            select(func.count())
+            .select_from(has_text.except_(has_embed).subquery())
         )
     elif job_type == "summarize":
-        # Books without any text chunks, plus books with unsummarized text chunks
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+        # Books with text chunks that have unsummarized content
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
             .group_by(BookTextChunk.book_id)
         )
-        # Count books that either have no text at all, or have unsummarized chunks
-        no_text_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(has_text))
-        )
-        unsummarized_result = await db.execute(
+        missing_result = await db.execute(
             select(func.count()).select_from(has_unsummarized.subquery())
         )
-        missing = (no_text_result.scalar() or 0) + (unsummarized_result.scalar() or 0)
-        return total, missing
     elif job_type == "auto_tag":
-        # Books without any AI tags
+        # Books with text chunks but no AI tags
+        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_tags = select(AiBookTag.book_id).group_by(AiBookTag.book_id)
         missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(has_tags))
+            select(func.count())
+            .select_from(has_text.except_(has_tags).subquery())
         )
     elif job_type == "word_count":
-        # Books where word_count is NULL
+        # Books with text chunks but no word_count
+        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.word_count.is_(None))
+            select(func.count(Book.id)).where(
+                Book.id.in_(has_text),
+                Book.word_count.is_(None),
+            )
         )
     elif job_type == "summary_embedding":
         # Books with summaries but no BookSummaryEmbedding
