@@ -2,9 +2,9 @@
   import { onMount, onDestroy } from "svelte";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
-  import { adminApi } from "$lib/api/bookshelves";
+  import { adminApi, aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
-  import type { JobStatus } from "$lib/types";
+  import type { AiStatus, JobStatus } from "$lib/types";
   import { UserRole } from "$lib/types";
   import {
     FileText,
@@ -12,15 +12,14 @@
     BookOpen,
     Tags,
     Hash,
-    Infinity,
     ScanSearch,
     LoaderCircle,
     Square,
-    Clock,
   } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
 
   let jobs = $state<JobStatus[]>([]);
+  let aiStatus = $state<AiStatus | null>(null);
   let loading = $state(true);
   let triggeringJob = $state<string | null>(null);
   let stoppingJob = $state<string | null>(null);
@@ -33,6 +32,19 @@
     auto_tag: Tags,
     word_count: Hash,
   };
+
+  /** Maps job keys that require AI to their corresponding AiStatus field. */
+  const JOB_AI_FEATURE: Record<string, keyof AiStatus> = {
+    embedding: "embedding",
+    summarize: "tag",
+    auto_tag: "tag",
+  };
+
+  function isAiReady(jobKey: string): boolean {
+    const feature = JOB_AI_FEATURE[jobKey];
+    if (!feature) return true; // non-AI job, always ready
+    return aiStatus?.[feature] ?? false;
+  }
 
   async function fetchJobs() {
     if (!$authStore.token) return;
@@ -62,12 +74,12 @@
     }
   }
 
-  async function triggerJob(jobType: string, mode: string) {
+  async function triggerJob(jobType: string) {
     if (!$authStore.token) return;
-    triggeringJob = `${jobType}:${mode}`;
+    triggeringJob = jobType;
     try {
-      await adminApi.triggerJob(jobType, mode, $authStore.token);
-      toastStore.success(`Job started: ${jobType} (${mode})`);
+      await adminApi.triggerJob(jobType, $authStore.token);
+      toastStore.success(`Job started: ${jobType}`);
       await fetchJobs();
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -81,7 +93,10 @@
       goto("/");
       return;
     }
-    await fetchJobs();
+    await Promise.all([
+      fetchJobs(),
+      aiApi.getStatus($authStore.token!).then((s) => (aiStatus = s)),
+    ]);
     pollInterval = setInterval(fetchJobs, 3000);
   });
 
@@ -113,13 +128,7 @@
     <div class="space-y-3">
       {#each jobs as job (job.key)}
         {@const Icon = JOB_ICONS[job.key] ?? FileText}
-        {@const isTriggering =
-          triggeringJob === `${job.key}:all` ||
-          triggeringJob === `${job.key}:missing`}
-        {@const progressPct =
-          job.progress && job.progress.total > 0
-            ? Math.round((job.progress.processed / job.progress.total) * 100)
-            : 0}
+        {@const isTriggering = triggeringJob === job.key}
 
         <div
           class="bg-card card-soft rounded-2xl overflow-hidden flex border border-border/50"
@@ -138,15 +147,18 @@
               >
                 {job.label}
               </span>
-              {#if job.progress?.status === "pending"}
-                <Clock class="text-primary shrink-0" size={15} />
-              {:else if job.active}
+              {#if job.requires_ai}
+                <span
+                  class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 leading-none"
+                >
+                  AI
+                </span>
+              {/if}
+              {#if job.active}
                 <LoaderCircle
                   class="text-primary animate-spin shrink-0"
                   size={15}
                 />
-              {:else if job.progress?.status === "failed"}
-                <span class="text-xs text-destructive font-medium">Failed</span>
               {/if}
             </div>
 
@@ -159,23 +171,6 @@
               class="inline-flex items-stretch rounded-lg overflow-hidden border border-border/50"
             >
               <div
-                class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50"
-              >
-                <span class="text-xs sm:text-sm text-muted-foreground"
-                  >Active</span
-                >
-                <span
-                  class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
-                >
-                  {#if job.active && job.progress}
-                    {job.progress.processed.toLocaleString()}/{job.progress.total.toLocaleString()}
-                  {:else}
-                    0
-                  {/if}
-                </span>
-              </div>
-              <div class="w-px bg-border/50"></div>
-              <div
                 class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2"
               >
                 <span class="text-xs sm:text-sm text-muted-foreground"
@@ -187,13 +182,22 @@
                   {job.missing.toLocaleString()}
                 </span>
               </div>
+              {#if job.blocked > 0}
+                <div class="w-px bg-border/50"></div>
+                <div
+                  class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50"
+                >
+                  <span class="text-xs sm:text-sm text-muted-foreground"
+                    >Needs Text</span
+                  >
+                  <span
+                    class="text-xs sm:text-sm font-semibold text-muted-foreground font-sans tabular-nums"
+                  >
+                    {job.blocked.toLocaleString()}
+                  </span>
+                </div>
+              {/if}
             </div>
-
-            {#if job.active && job.progress && job.progress.failed > 0}
-              <p class="text-xs text-muted-foreground mt-3">
-                {job.progress.failed} failed
-              </p>
-            {/if}
           </div>
 
           <!-- Action buttons -->
@@ -222,27 +226,20 @@
             {:else}
               <button
                 class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                disabled={isTriggering}
-                onclick={() => triggerJob(job.key, "all")}
-                title="Process all books"
+                disabled={isTriggering || job.missing === 0 || !isAiReady(job.key)}
+                onclick={() => triggerJob(job.key)}
+                title={!isAiReady(job.key)
+                  ? "AI provider not configured — check Admin Settings"
+                  : "Process unprocessed books"}
               >
-                <Infinity size={18} class="text-muted-foreground" />
+                {#if isTriggering}
+                  <LoaderCircle class="text-primary animate-spin" size={18} />
+                {:else}
+                  <ScanSearch size={18} class="text-muted-foreground" />
+                {/if}
                 <span
                   class="text-xs text-muted-foreground font-sans font-medium"
-                  >All</span
-                >
-              </button>
-              <div class="h-px bg-border/50"></div>
-              <button
-                class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                disabled={isTriggering || job.missing === 0}
-                onclick={() => triggerJob(job.key, "missing")}
-                title="Process only unprocessed books"
-              >
-                <ScanSearch size={18} class="text-muted-foreground" />
-                <span
-                  class="text-xs text-muted-foreground font-sans font-medium"
-                  >Missing</span
+                  >Run</span
                 >
               </button>
             {/if}

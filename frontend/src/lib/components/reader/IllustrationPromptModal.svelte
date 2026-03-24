@@ -24,7 +24,7 @@
     darkMode = false,
     bookId = "",
     token = "",
-    aiStatus = { companion: false, tag: false, image: false },
+    aiStatus = { companion: false, tag: false, image: false, embedding: false },
     isAdmin = false,
     completedIllustrations = [],
     oncreate,

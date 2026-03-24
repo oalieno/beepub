@@ -249,6 +249,7 @@ export interface AiStatus {
   companion: boolean;
   tag: boolean;
   image: boolean;
+  embedding: boolean;
 }
 
 export interface CalibreLibraryInfo {
@@ -297,21 +298,15 @@ export interface CompanionConversationSummary {
   updated_at: string;
 }
 
-export interface JobProgress {
-  status: "running" | "completed" | "failed" | "pending" | "cancelled";
-  total: number;
-  processed: number;
-  failed: number;
-}
-
 export interface JobStatus {
   key: string;
   label: string;
   description: string;
   total: number;
   missing: number;
+  blocked: number;
   active: boolean;
-  progress: JobProgress | null;
+  requires_ai: boolean;
 }
 
 export interface AllJobsResponse {

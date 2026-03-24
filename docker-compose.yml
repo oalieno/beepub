@@ -51,6 +51,7 @@ services:
   worker:
     build: ./backend
     restart: unless-stopped
+    mem_limit: 4g
     command:
       [
         "uv",
@@ -60,7 +61,8 @@ services:
         "app.celeryapp:celery",
         "worker",
         "--loglevel=info",
-        "--concurrency=3",
+        "--concurrency=2",
+        "--max-tasks-per-child=50",
       ]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}

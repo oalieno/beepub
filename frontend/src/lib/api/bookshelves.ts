@@ -98,11 +98,10 @@ export const adminApi = {
   getJobs: (token: string) =>
     get("/admin/jobs", token) as Promise<import("$lib/types").AllJobsResponse>,
 
-  triggerJob: (jobType: string, mode: string, token: string) =>
-    post(`/admin/jobs/${jobType}`, { mode }, token) as Promise<{
+  triggerJob: (jobType: string, token: string) =>
+    post(`/admin/jobs/${jobType}`, {}, token) as Promise<{
       status: string;
       job_type: string;
-      mode: string;
     }>,
 
   stopJob: (jobType: string, token: string) =>

@@ -40,48 +40,48 @@ async def _run(
 ) -> None:
     from sqlalchemy import select
 
-    from app.database import create_task_session
+    from app.database import create_task_engine
     from app.models.illustration import Illustration
     from app.services.gemini import generate_illustration
     from app.services.settings import get_all_settings
 
-    # Read image provider settings from DB
-    SessionLocal = create_task_session()
-    async with SessionLocal() as db:
-        db_settings = await get_all_settings(db)
-        # Get user_id and book_id for usage logging
-        ill_result = await db.execute(
-            select(Illustration.user_id, Illustration.book_id).where(
-                Illustration.id == uuid.UUID(illustration_id)
+    async with create_task_engine() as (_engine, session_factory):
+        # Read image provider settings from DB
+        async with session_factory() as db:
+            db_settings = await get_all_settings(db)
+            # Get user_id and book_id for usage logging
+            ill_result = await db.execute(
+                select(Illustration.user_id, Illustration.book_id).where(
+                    Illustration.id == uuid.UUID(illustration_id)
+                )
             )
+            ill_row = ill_result.one_or_none()
+
+        ref_bytes = _load_reference_images(reference_images)
+        image_bytes, usage = await generate_illustration(
+            text,
+            style_prompt,
+            custom_prompt,
+            reference_images=ref_bytes,
+            db_settings=db_settings,
         )
-        ill_row = ill_result.one_or_none()
+        os.makedirs(os.path.dirname(image_path), exist_ok=True)
+        with open(image_path, "wb") as f:
+            f.write(image_bytes)
+        logger.info("Illustration %s image saved", illustration_id)
 
-    ref_bytes = _load_reference_images(reference_images)
-    image_bytes, usage = await generate_illustration(
-        text,
-        style_prompt,
-        custom_prompt,
-        reference_images=ref_bytes,
-        db_settings=db_settings,
-    )
-    os.makedirs(os.path.dirname(image_path), exist_ok=True)
-    with open(image_path, "wb") as f:
-        f.write(image_bytes)
-    logger.info("Illustration %s image saved", illustration_id)
+        # Log usage (fire-and-forget)
+        from app.services.llm_usage import log_llm_usage
 
-    # Log usage (fire-and-forget)
-    from app.services.llm_usage import log_llm_usage
-
-    await log_llm_usage(
-        feature="illustration",
-        provider=db_settings.get("image_provider", ""),
-        model=db_settings.get("image_model", ""),
-        usage=usage,
-        user_id=ill_row.user_id if ill_row else None,
-        book_id=ill_row.book_id if ill_row else None,
-        session_factory=SessionLocal,
-    )
+        await log_llm_usage(
+            feature="illustration",
+            provider=db_settings.get("image_provider", ""),
+            model=db_settings.get("image_model", ""),
+            usage=usage,
+            user_id=ill_row.user_id if ill_row else None,
+            book_id=ill_row.book_id if ill_row else None,
+            session_factory=session_factory,
+        )
 
 
 async def _mark_status(
@@ -89,19 +89,21 @@ async def _mark_status(
 ) -> None:
     from sqlalchemy import select
 
-    from app.database import create_task_session
+    from app.database import create_task_engine
     from app.models.illustration import Illustration
 
-    SessionLocal = create_task_session()
-    async with SessionLocal() as db:
-        result = await db.execute(
-            select(Illustration).where(Illustration.id == uuid.UUID(illustration_id))
-        )
-        ill = result.scalar_one()
-        ill.status = status
-        if error_message is not None:
-            ill.error_message = error_message[:500]
-        await db.commit()
+    async with create_task_engine() as (_engine, session_factory):
+        async with session_factory() as db:
+            result = await db.execute(
+                select(Illustration).where(
+                    Illustration.id == uuid.UUID(illustration_id)
+                )
+            )
+            ill = result.scalar_one()
+            ill.status = status
+            if error_message is not None:
+                ill.error_message = error_message[:500]
+            await db.commit()
 
 
 def _safe_mark(

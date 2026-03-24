@@ -14,9 +14,9 @@ from app.models.user import User
 from app.services.job_queue import (
     JOB_TYPES,
     count_missing_books,
-    get_all_job_statuses,
-    get_job_status,
-    set_job_status,
+    get_active_run_id,
+    start_job_run,
+    stop_job_run,
 )
 
 router = APIRouter(prefix="/api/admin/jobs", tags=["jobs"])
@@ -28,16 +28,13 @@ class JobStatusOut(BaseModel):
     description: str
     total: int
     missing: int
+    blocked: int
     active: bool
-    progress: dict | None  # {status, total, processed, failed} or None
+    requires_ai: bool
 
 
 class AllJobsResponse(BaseModel):
     jobs: list[JobStatusOut]
-
-
-class TriggerRequest(BaseModel):
-    mode: str = "missing"  # "all" or "missing"
 
 
 @router.get("", response_model=AllJobsResponse)
@@ -46,16 +43,10 @@ async def get_jobs_status(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get status of all job types with missing counts."""
-    statuses = await get_all_job_statuses()
-
     jobs = []
     for key, job_type in JOB_TYPES.items():
-        total, missing = await count_missing_books(db, key)
-        progress = statuses.get(key)
-        active = progress is not None and progress.get("status") in (
-            "running",
-            "pending",
-        )
+        total, missing, blocked = await count_missing_books(db, key)
+        run_id = await get_active_run_id(key)
 
         jobs.append(
             JobStatusOut(
@@ -64,8 +55,9 @@ async def get_jobs_status(
                 description=job_type.description,
                 total=total,
                 missing=missing,
-                active=active,
-                progress=progress,
+                blocked=blocked,
+                active=run_id is not None,
+                requires_ai=job_type.requires_ai,
             )
         )
 
@@ -75,32 +67,22 @@ async def get_jobs_status(
 @router.post("/{job_type}", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_job(
     job_type: str,
-    body: TriggerRequest,
     _admin: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Trigger a bulk job. Mode: 'all' reprocesses everything, 'missing' only unprocessed."""
+    """Trigger a bulk job that dispatches per-book tasks for all missing books."""
     if job_type not in JOB_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown job type: {job_type}",
         )
 
-    # Check if already running or pending
-    current = await get_job_status(job_type)
-    if current and current.get("status") in ("running", "pending"):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Job '{job_type}' is already running",
-        )
-
-    # Mark as pending immediately to prevent duplicate triggers
-    await set_job_status(job_type, status="pending")
+    # Start a new run (overwrites any previous run_id, effectively stopping it)
+    run_id = await start_job_run(job_type)
 
     from app.tasks.bulk_jobs import run_bulk_job
 
-    run_bulk_job.delay(job_type, body.mode)
-    return {"status": "accepted", "job_type": job_type, "mode": body.mode}
+    run_bulk_job.delay(job_type, run_id)
+    return {"status": "accepted", "job_type": job_type}
 
 
 @router.delete("/{job_type}", status_code=status.HTTP_200_OK)
@@ -108,25 +90,18 @@ async def stop_job(
     job_type: str,
     _admin: Annotated[User, Depends(require_admin)],
 ):
-    """Stop a running bulk job by setting its status to cancelled."""
+    """Stop a running bulk job by clearing its run_id."""
     if job_type not in JOB_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown job type: {job_type}",
         )
 
-    current = await get_job_status(job_type)
-    if not current or current.get("status") not in ("running", "pending"):
+    was_active = await stop_job_run(job_type)
+    if not was_active:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Job '{job_type}' is not running",
         )
 
-    await set_job_status(
-        job_type,
-        status="cancelled",
-        total=current.get("total", 0),
-        processed=current.get("processed", 0),
-        failed=current.get("failed", 0),
-    )
-    return {"status": "cancelled", "job_type": job_type}
+    return {"status": "stopped", "job_type": job_type}

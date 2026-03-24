@@ -72,6 +72,7 @@
     companion: false,
     tag: false,
     image: false,
+    embedding: false,
   });
   let epubLoaded = $state(false);
   let prevHtmlOverflow = "";

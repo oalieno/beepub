@@ -268,6 +268,9 @@ async def get_ai_status(
         ),
         "tag": bool(settings.get("tag_provider") and settings.get("tag_model")),
         "image": bool(settings.get("image_provider") and settings.get("image_model")),
+        "embedding": bool(
+            settings.get("embedding_provider") and settings.get("embedding_model")
+        ),
     }
 
 

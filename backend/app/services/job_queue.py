@@ -1,9 +1,9 @@
-"""Job queue service — Redis-based progress tracking for bulk Celery tasks."""
+"""Job queue service — run_id tracking and missing book counts for admin jobs."""
 
 from __future__ import annotations
 
-import json
 import logging
+import uuid
 from dataclasses import dataclass
 
 import redis.asyncio as aioredis
@@ -18,10 +18,8 @@ from app.models.tag import AiBookTag
 
 logger = logging.getLogger(__name__)
 
-JOB_KEY_PREFIX = "beepub:job"
-
-# TTL for progress keys — prevents stuck state if worker crashes
-JOB_TTL_SECONDS = 86400  # 24 hours
+RUN_ID_KEY_PREFIX = "beepub:job:run_id"
+RUN_ID_TTL_SECONDS = 86400  # 24 hours
 
 
 @dataclass
@@ -29,6 +27,7 @@ class JobType:
     key: str
     label: str
     description: str
+    requires_ai: bool = False
 
 
 JOB_TYPES: dict[str, JobType] = {
@@ -41,16 +40,19 @@ JOB_TYPES: dict[str, JobType] = {
         key="embedding",
         label="Embedding",
         description="Generate vector embeddings for semantic search",
+        requires_ai=True,
     ),
     "summarize": JobType(
         key="summarize",
         label="Summarize",
         description="Generate AI summaries for book chapters",
+        requires_ai=True,
     ),
     "auto_tag": JobType(
         key="auto_tag",
         label="Auto Tag",
         description="Generate AI tags for books based on content and metadata",
+        requires_ai=True,
     ),
     "word_count": JobType(
         key="word_count",
@@ -60,102 +62,101 @@ JOB_TYPES: dict[str, JobType] = {
 }
 
 
-def _job_key(job_type: str) -> str:
-    return f"{JOB_KEY_PREFIX}:{job_type}"
+def _run_id_key(job_type: str) -> str:
+    return f"{RUN_ID_KEY_PREFIX}:{job_type}"
 
 
-async def get_job_status(job_type: str) -> dict | None:
-    """Get current job status from Redis."""
+async def start_job_run(job_type: str) -> str:
+    """Generate a new run_id for a job and store it in Redis. Returns the run_id."""
+    run_id = str(uuid.uuid4())
     client = aioredis.from_url(settings.redis_url)
     try:
-        data = await client.get(_job_key(job_type))
-        if data:
-            return json.loads(data)
-        return None
-    except Exception:
-        logger.warning("Failed to read job status for %s", job_type, exc_info=True)
-        return None
+        await client.set(_run_id_key(job_type), run_id, ex=RUN_ID_TTL_SECONDS)
+    finally:
+        await client.aclose()
+    return run_id
+
+
+STOPPED_SENTINEL = "stopped"
+
+
+async def stop_job_run(job_type: str) -> bool:
+    """Mark a job as stopped. Returns True if there was an active run."""
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        current = await client.get(_run_id_key(job_type))
+        if not current or current.decode() == STOPPED_SENTINEL:
+            return False
+        await client.set(_run_id_key(job_type), STOPPED_SENTINEL, ex=RUN_ID_TTL_SECONDS)
+        return True
     finally:
         await client.aclose()
 
 
-async def set_job_status(
-    job_type: str,
-    *,
-    status: str,
-    total: int = 0,
-    processed: int = 0,
-    failed: int = 0,
-) -> None:
-    """Set job status in Redis with TTL."""
+async def get_active_run_id(job_type: str) -> str | None:
+    """Get the current active run_id, or None if no run is active."""
     client = aioredis.from_url(settings.redis_url)
     try:
-        data = json.dumps(
-            {
-                "status": status,
-                "total": total,
-                "processed": processed,
-                "failed": failed,
-            }
-        )
-        await client.set(_job_key(job_type), data, ex=JOB_TTL_SECONDS)
+        data = await client.get(_run_id_key(job_type))
+        if not data:
+            return None
+        value = data.decode()
+        return None if value == STOPPED_SENTINEL else value
     finally:
         await client.aclose()
 
 
-async def clear_job_status(job_type: str) -> None:
-    """Clear job status from Redis."""
+async def is_run_active(job_type: str, run_id: str) -> bool:
+    """Check if the given run_id is still the active run.
+
+    Returns True only if the key exists and matches this run_id.
+    Returns False if key is missing (expired), stopped, or a different run_id.
+    """
     client = aioredis.from_url(settings.redis_url)
     try:
-        await client.delete(_job_key(job_type))
+        data = await client.get(_run_id_key(job_type))
+        if not data:
+            return False
+        value = data.decode()
+        if value == STOPPED_SENTINEL:
+            return False
+        return value == run_id
     finally:
         await client.aclose()
 
 
-async def get_all_job_statuses() -> dict[str, dict]:
-    """Get status for all job types in a single Redis connection."""
-    client = aioredis.from_url(settings.redis_url)
-    try:
-        result = {}
-        for job_type in JOB_TYPES:
-            data = await client.get(_job_key(job_type))
-            if data:
-                result[job_type] = json.loads(data)
-            else:
-                result[job_type] = None
-        return result
-    except Exception:
-        logger.warning("Failed to read job statuses from Redis", exc_info=True)
-        return {job_type: None for job_type in JOB_TYPES}
-    finally:
-        await client.aclose()
+async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int, int]:
+    """Return (total_books, missing_count, blocked_count) for a job type.
 
-
-async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int]:
-    """Return (total_books, missing_count) for a job type.
-
-    'missing' = books that haven't been processed by this job type yet.
+    'missing' = books ready to process (prerequisites met but not yet done).
+    'blocked' = books that need a prerequisite first (e.g. text extraction).
     """
     total_result = await db.execute(select(func.count(Book.id)))
     total = total_result.scalar() or 0
+    blocked = 0
+
+    has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
 
     if job_type == "text_extraction":
         # Books without any BookTextChunk rows
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         missing_result = await db.execute(
             select(func.count(Book.id)).where(Book.id.notin_(has_text))
         )
     elif job_type == "embedding":
-        # Books with text chunks but no embedding chunks
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+        # Missing: books with text but no embeddings
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
         )
         missing_result = await db.execute(
             select(func.count()).select_from(has_text.except_(has_embed).subquery())
         )
+        # Blocked: books without text (need text extraction first)
+        blocked_result = await db.execute(
+            select(func.count(Book.id)).where(Book.id.notin_(has_text))
+        )
+        blocked = blocked_result.scalar() or 0
     elif job_type == "summarize":
-        # Books with text chunks that have unsummarized content
+        # Missing: books with text chunks that have unsummarized content
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
@@ -164,6 +165,11 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         missing_result = await db.execute(
             select(func.count()).select_from(has_unsummarized.subquery())
         )
+        # Blocked: books without text (need text extraction first)
+        blocked_result = await db.execute(
+            select(func.count(Book.id)).where(Book.id.notin_(has_text))
+        )
+        blocked = blocked_result.scalar() or 0
     elif job_type == "auto_tag":
         # Books without any AI tags (uses metadata, not text chunks)
         has_tags = select(AiBookTag.book_id).group_by(AiBookTag.book_id)
@@ -176,7 +182,7 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             select(func.count(Book.id)).where(Book.word_count.is_(None))
         )
     else:
-        return total, 0
+        return total, 0, 0
 
     missing = missing_result.scalar() or 0
-    return total, missing
+    return total, missing, blocked

@@ -27,7 +27,7 @@ async def log_llm_usage(
     Uses its own DB session (fire-and-forget) so that usage is always recorded
     even if the caller's transaction rolls back. Failures are logged but never raised.
 
-    Pass session_factory from create_task_session() when calling from Celery tasks.
+    Pass session_factory from create_task_engine() when calling from Celery tasks.
     Defaults to AsyncSessionLocal for FastAPI request context.
     """
     try:

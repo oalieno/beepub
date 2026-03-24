@@ -109,12 +109,11 @@ class TestChunkAvgEmbeddingCast:
     """
 
     def test_avg_query_includes_vector_cast(self):
+        from pgvector.sqlalchemy import Vector as VectorType
         from sqlalchemy import func, select
         from sqlalchemy.dialects import postgresql
 
         from app.models.book_embedding import BookEmbeddingChunk
-
-        from pgvector.sqlalchemy import Vector as VectorType
 
         stmt = select(
             func.avg(BookEmbeddingChunk.embedding)
@@ -150,15 +149,11 @@ class TestChunkAvgEmbeddingCast:
         mock_db = AsyncMock()
         # First call: SELECT AVG
         mock_avg_result = MagicMock()
-        mock_avg_result.one.return_value = SimpleNamespace(
-            avg_emb=[0.1] * 1024, cnt=5
-        )
+        mock_avg_result.one.return_value = SimpleNamespace(avg_emb=[0.1] * 1024, cnt=5)
         # Second call: INSERT upsert
         mock_insert_result = MagicMock()
 
-        mock_db.execute = AsyncMock(
-            side_effect=[mock_avg_result, mock_insert_result]
-        )
+        mock_db.execute = AsyncMock(side_effect=[mock_avg_result, mock_insert_result])
         mock_db.commit = AsyncMock()
 
         await _upsert_chunk_avg_embedding(mock_db, uuid.uuid4(), "test-model")

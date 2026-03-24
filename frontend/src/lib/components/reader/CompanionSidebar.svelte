@@ -25,7 +25,7 @@
     bookId,
     token,
     darkMode = false,
-    aiStatus = { companion: false, tag: false, image: false },
+    aiStatus = { companion: false, tag: false, image: false, embedding: false },
     isAdmin = false,
     selectedText = null,
     selectedCfi = null,
