@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
-from app.deps import get_current_user, get_current_user_or_cookie, require_admin
+from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata, MetadataSource
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
@@ -682,7 +682,7 @@ async def get_book_file(
 async def get_book_content(
     book_id: uuid.UUID,
     path: str,
-    current_user: Annotated[User, Depends(get_current_user_or_cookie)],
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Serve individual files from within the EPUB zip (for epubjs reader)."""
@@ -1145,7 +1145,7 @@ async def get_progress(
 async def update_progress(
     book_id: uuid.UUID,
     body: ProgressUpdate,
-    current_user: Annotated[User, Depends(get_current_user_or_cookie)],
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)

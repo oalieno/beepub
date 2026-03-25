@@ -23,7 +23,7 @@
   async function loadData() {
     loading = true;
     try {
-      users = await adminApi.getUsers($authStore.token!);
+      users = await adminApi.getUsers();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -32,11 +32,10 @@
   }
 
   async function toggleRole(user: UserOut) {
-    if (!$authStore.token) return;
     const newRole =
       user.role === UserRole.Admin ? UserRole.User : UserRole.Admin;
     try {
-      await adminApi.updateRole(user.id, newRole, $authStore.token);
+      await adminApi.updateRole(user.id, newRole);
       users = users.map((u) =>
         u.id === user.id ? { ...u, role: newRole } : u,
       );
@@ -47,10 +46,9 @@
   }
 
   async function handleDelete(user: UserOut) {
-    if (!confirm(`Delete user "${user.username}"?`) || !$authStore.token)
-      return;
+    if (!confirm(`Delete user "${user.username}"?`)) return;
     try {
-      await adminApi.deleteUser(user.id, $authStore.token);
+      await adminApi.deleteUser(user.id);
       users = users.filter((u) => u.id !== user.id);
       toastStore.success(`Deleted user ${user.username}`);
     } catch (e) {

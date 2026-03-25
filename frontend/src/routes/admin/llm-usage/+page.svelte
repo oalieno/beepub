@@ -36,10 +36,9 @@
   }
 
   async function loadUsage() {
-    if (!$authStore.token) return;
     loading = true;
     try {
-      data = await adminApi.getLlmUsage($authStore.token, period);
+      data = await adminApi.getLlmUsage(period);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {

@@ -8,7 +8,6 @@
 
   let {
     bookId,
-    token,
     fontFamily = "serif",
     fontSize = 16,
     darkMode = false,
@@ -28,7 +27,6 @@
     onbookend,
   }: {
     bookId: string;
-    token: string;
     fontFamily?: string;
     fontSize?: number;
     darkMode?: boolean;
@@ -315,9 +313,6 @@
 
   onMount(async () => {
     const Epub = (await import("$lib/epubjs/epub.js")).default;
-
-    // Set token cookie so the browser can authenticate resource requests (images, fonts)
-    document.cookie = `token=${token}; path=/; SameSite=Lax`;
 
     // Use content endpoint as directory — epubjs will fetch individual files from the EPUB
     epubBook = Epub(`/api/books/${bookId}/content/`, {
@@ -1002,7 +997,7 @@
 
     // Load highlights
     try {
-      highlights = await booksApi.getHighlights(bookId, token);
+      highlights = await booksApi.getHighlights(bookId);
       onhighlightschange?.(highlights);
     } catch {
       // ignore
@@ -1010,7 +1005,7 @@
 
     // Load illustrations
     try {
-      illustrations = await booksApi.getIllustrations(bookId, token);
+      illustrations = await booksApi.getIllustrations(bookId);
       onillustrationschange?.(illustrations);
     } catch {
       // ignore
@@ -1019,7 +1014,7 @@
     // Load saved progress & display
     let savedProgress: any = null;
     try {
-      savedProgress = await booksApi.getProgress(bookId, token);
+      savedProgress = await booksApi.getProgress(bookId);
     } catch {
       // API unreachable (e.g. iOS PWA resume with no network) — try localStorage
       try {
@@ -1224,18 +1219,14 @@
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
     try {
-      await booksApi.updateProgress(
-        bookId,
-        {
-          cfi: currentCfi,
-          percentage: currentPercentage,
-          font_size: fontSize,
-          section_index: currentSectionIndex,
-          section_page: currentSectionPage,
-          track_activity: trackActivity,
-        },
-        token,
-      );
+      await booksApi.updateProgress(bookId, {
+        cfi: currentCfi,
+        percentage: currentPercentage,
+        font_size: fontSize,
+        section_index: currentSectionIndex,
+        section_page: currentSectionPage,
+        track_activity: trackActivity,
+      });
     } catch {}
   }
 
@@ -1589,11 +1580,11 @@
     if (!selectedCfi || !selectedText) return;
 
     try {
-      const created = await booksApi.createHighlight(
-        bookId,
-        { cfi_range: selectedCfi, text: selectedText, color: "yellow" },
-        token,
-      );
+      const created = await booksApi.createHighlight(bookId, {
+        cfi_range: selectedCfi,
+        text: selectedText,
+        color: "yellow",
+      });
       highlights = [...highlights, created];
 
       rendition?.annotations.highlight(selectedCfi, {}, () => {}, "hl", {
@@ -1645,7 +1636,7 @@
     clearIOSSelection();
     if (!existingHighlight) return;
     try {
-      await booksApi.deleteHighlight(bookId, existingHighlight.id, token);
+      await booksApi.deleteHighlight(bookId, existingHighlight.id);
       highlights = highlights.filter((h) => h.id !== existingHighlight!.id);
       rendition?.annotations.remove(selectedCfi, "highlight");
       onhighlightschange?.(highlights);

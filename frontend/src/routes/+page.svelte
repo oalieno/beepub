@@ -13,7 +13,6 @@
     LibraryOut,
     ReadingStats,
   } from "$lib/types";
-  import { goto } from "$app/navigation";
   import { BookOpen } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
 
@@ -28,13 +27,11 @@
   onMount(async () => {
     try {
       const [libs, activity, stats, currentlyReading] = await Promise.all([
-        librariesApi.list($authStore.token!),
+        librariesApi.list(),
+        booksApi.getReadingActivity(currentYear).catch(() => []),
+        booksApi.getReadingStats().catch(() => null),
         booksApi
-          .getReadingActivity(currentYear, $authStore.token!)
-          .catch(() => []),
-        booksApi.getReadingStats($authStore.token!).catch(() => null),
-        booksApi
-          .getMyBooks($authStore.token!, {
+          .getMyBooks({
             status: "currently_reading",
             sort: "last_read_at",
             limit: 12,
@@ -51,11 +48,10 @@
       await Promise.all(
         libraries.map(async (lib) => {
           try {
-            const result = await librariesApi.getBooks(
-              lib.id,
-              $authStore.token!,
-              { sort: "added_at", limit: 12 },
-            );
+            const result = await librariesApi.getBooks(lib.id, {
+              sort: "added_at",
+              limit: 12,
+            });
             allBooks.push(...result.items);
           } catch {
             // skip
@@ -198,10 +194,7 @@
               stats={readingStats}
               {readingActivity}
               onGoalUpdate={async (goalSeconds) => {
-                const updated = await booksApi.updateReadingGoal(
-                  goalSeconds,
-                  $authStore.token!,
-                );
+                const updated = await booksApi.updateReadingGoal(goalSeconds);
                 readingStats = updated;
               }}
             />

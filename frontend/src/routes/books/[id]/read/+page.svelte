@@ -2,7 +2,6 @@
   import { onDestroy, onMount } from "svelte";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import EpubReader from "$lib/components/reader/EpubReader.svelte";
   import Toolbar from "$lib/components/reader/Toolbar.svelte";
@@ -84,10 +83,6 @@
     document.documentElement.style.overflow = "hidden";
     document.body.style.overflow = "hidden";
 
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     const savedFont = localStorage.getItem("reader-font");
     const savedSize = localStorage.getItem("reader-size");
     const savedTheme = localStorage.getItem("reader-dark");
@@ -98,7 +93,7 @@
 
     // Fetch AI feature status
     aiApi
-      .getStatus($authStore.token!)
+      .getStatus()
       .then((s) => (aiStatus = s))
       .catch(() => {});
 
@@ -106,14 +101,12 @@
     fetchInteractionAndStartTimer();
 
     // Fetch book authors for share card
-    if ($authStore.token) {
-      booksApi
-        .get(bookId, $authStore.token)
-        .then((book) => {
-          bookAuthors = book.display_authors ?? book.epub_authors ?? [];
-        })
-        .catch(() => {});
-    }
+    booksApi
+      .get(bookId)
+      .then((book) => {
+        bookAuthors = book.display_authors ?? book.epub_authors ?? [];
+      })
+      .catch(() => {});
   });
 
   onDestroy(() => {
@@ -124,9 +117,8 @@
   });
 
   async function fetchInteractionAndStartTimer() {
-    if (!$authStore.token) return;
     try {
-      interaction = await booksApi.getInteraction(bookId, $authStore.token);
+      interaction = await booksApi.getInteraction(bookId);
     } catch {
       /* ignore */
     }
@@ -137,17 +129,12 @@
       interaction.reading_status === "want_to_read"
     ) {
       readingTimer = setTimeout(async () => {
-        if (!$authStore.token) return;
         const today = new Date().toISOString().slice(0, 10);
         try {
-          await booksApi.updateReadingStatus(
-            bookId,
-            {
-              reading_status: "currently_reading",
-              started_at: today,
-            },
-            $authStore.token,
-          );
+          await booksApi.updateReadingStatus(bookId, {
+            reading_status: "currently_reading",
+            started_at: today,
+          });
           if (interaction) {
             interaction.reading_status = "currently_reading";
             interaction.started_at = today;
@@ -160,7 +147,7 @@
   }
 
   async function autoMarkAsRead() {
-    if (!$authStore.token || !interaction) return;
+    if (!interaction) return;
     if (
       interaction.reading_status === "read" ||
       interaction.reading_status === "did_not_finish"
@@ -168,15 +155,11 @@
       return;
     const today = new Date().toISOString().slice(0, 10);
     try {
-      await booksApi.updateReadingStatus(
-        bookId,
-        {
-          reading_status: "read",
-          started_at: interaction.started_at || today,
-          finished_at: today,
-        },
-        $authStore.token,
-      );
+      await booksApi.updateReadingStatus(bookId, {
+        reading_status: "read",
+        started_at: interaction.started_at || today,
+        finished_at: today,
+      });
       interaction.reading_status = "read";
       interaction.finished_at = today;
     } catch {
@@ -196,9 +179,9 @@
   });
 
   function prefetchSeriesNeighbors() {
-    if (seriesNeighbors || seriesFetchPromise || !$authStore.token) return;
+    if (seriesNeighbors || seriesFetchPromise) return;
     seriesFetchPromise = booksApi
-      .getSeriesNeighbors(bookId, $authStore.token)
+      .getSeriesNeighbors(bookId)
       .then((data) => {
         seriesNeighbors = data;
       })
@@ -244,9 +227,9 @@
     illustrationModalCfi = detail.cfiRange;
     illustrationModalText = detail.text;
     // Load style prompts if not cached
-    if (stylePrompts.length === 0 && $authStore.token) {
+    if (stylePrompts.length === 0) {
       try {
-        stylePrompts = await booksApi.getStylePrompts(bookId, $authStore.token);
+        stylePrompts = await booksApi.getStylePrompts(bookId);
       } catch {
         /* ignore */
       }
@@ -260,17 +243,13 @@
     reference_images?: Array<{ source: "epub" | "illustration"; path: string }>;
   }) {
     showIllustrationModal = false;
-    if (!$authStore.token) return;
+
     try {
-      const ill = await booksApi.createIllustration(
-        bookId,
-        {
-          cfi_range: illustrationModalCfi,
-          text: illustrationModalText,
-          ...detail,
-        },
-        $authStore.token,
-      );
+      const ill = await booksApi.createIllustration(bookId, {
+        cfi_range: illustrationModalCfi,
+        text: illustrationModalText,
+        ...detail,
+      });
       illustrations = [...illustrations, ill];
       reader?.addIllustrationAnnotation(ill);
       toastStore.success("Generating illustration...");
@@ -281,16 +260,11 @@
   }
 
   async function pollIllustration(illustrationId: string) {
-    if (!$authStore.token) return;
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 3000));
-      if (!$authStore.token) return;
+
       try {
-        const ill = await booksApi.getIllustration(
-          bookId,
-          illustrationId,
-          $authStore.token,
-        );
+        const ill = await booksApi.getIllustration(bookId, illustrationId);
         if (ill.status === "completed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           reader?.addIllustrationAnnotation(ill);
@@ -319,9 +293,8 @@
   }
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
-    if (!$authStore.token) return;
     try {
-      await booksApi.deleteIllustration(bookId, ill.id, $authStore.token);
+      await booksApi.deleteIllustration(bookId, ill.id);
       illustrations = illustrations.filter((x) => x.id !== ill.id);
       reader?.removeIllustrationAnnotation(ill.cfi_range);
       toastStore.success("Illustration deleted");
@@ -418,11 +391,10 @@
   />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
-    {#if ready && $authStore.token}
+    {#if ready}
       <EpubReader
         bind:this={reader}
         {bookId}
-        token={$authStore.token}
         {fontFamily}
         {fontSize}
         {darkMode}
@@ -504,9 +476,8 @@
           showHighlightSidebar = false;
         }}
         ondelete={async (hl) => {
-          if (!$authStore.token) return;
           try {
-            await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
+            await booksApi.deleteHighlight(bookId, hl.id);
             highlights = highlights.filter((h) => h.id !== hl.id);
             reader?.removeHighlightAnnotation(hl.cfi_range);
             toastStore.success("Highlight removed");
@@ -530,10 +501,9 @@
       />
     {/if}
 
-    {#if showCompanionSidebar && $authStore.token}
+    {#if showCompanionSidebar}
       <CompanionSidebar
         {bookId}
-        token={$authStore.token}
         {darkMode}
         {aiStatus}
         isAdmin={$authStore.user?.role === UserRole.Admin}
@@ -551,7 +521,6 @@
       styles={stylePrompts}
       {darkMode}
       {bookId}
-      token={$authStore.token ?? ""}
       {aiStatus}
       isAdmin={$authStore.user?.role === UserRole.Admin}
       completedIllustrations={illustrations.filter(

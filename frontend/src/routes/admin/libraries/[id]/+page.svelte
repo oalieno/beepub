@@ -48,9 +48,9 @@
     loading = true;
     try {
       [library, members, allUsers] = await Promise.all([
-        librariesApi.get(libraryId, $authStore.token!),
-        librariesApi.getMembers(libraryId, $authStore.token!).catch(() => []),
-        adminApi.getUsers($authStore.token!),
+        librariesApi.get(libraryId),
+        librariesApi.getMembers(libraryId).catch(() => []),
+        adminApi.getUsers(),
       ]);
       if (library) {
         editForm = {
@@ -67,18 +67,13 @@
   }
 
   async function handleSave() {
-    if (!$authStore.token) return;
     saving = true;
     try {
-      library = await librariesApi.update(
-        libraryId,
-        {
-          name: editForm.name,
-          description: editForm.description,
-          visibility: editForm.visibility,
-        },
-        $authStore.token,
-      );
+      library = await librariesApi.update(libraryId, {
+        name: editForm.name,
+        description: editForm.description,
+        visibility: editForm.visibility,
+      });
       toastStore.success("Library updated");
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -88,10 +83,10 @@
   }
 
   async function handleAddMember() {
-    if (!addUserId || !$authStore.token) return;
+    if (!addUserId) return;
     try {
-      await librariesApi.addMember(libraryId, addUserId, $authStore.token);
-      members = await librariesApi.getMembers(libraryId, $authStore.token);
+      await librariesApi.addMember(libraryId, addUserId);
+      members = await librariesApi.getMembers(libraryId);
       addUserId = "";
       toastStore.success("Member added");
     } catch (e) {
@@ -100,9 +95,8 @@
   }
 
   async function handleRemoveMember(userId: string) {
-    if (!$authStore.token) return;
     try {
-      await librariesApi.removeMember(libraryId, userId, $authStore.token);
+      await librariesApi.removeMember(libraryId, userId);
       members = members.filter((m) => m.user_id !== userId);
       toastStore.success("Member removed");
     } catch (e) {

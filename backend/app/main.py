@@ -36,10 +36,15 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             "path": request.url.path,
         }
 
-        # Extract user_id from JWT if present
+        # Extract user_id from JWT (Authorization header or cookie)
+        jwt_token = None
         auth_header = request.headers.get("Authorization", "")
         if auth_header.startswith("Bearer "):
-            payload = decode_token(auth_header[7:])
+            jwt_token = auth_header[7:]
+        else:
+            jwt_token = request.cookies.get("token")
+        if jwt_token:
+            payload = decode_token(jwt_token)
             if payload and payload.get("sub"):
                 ctx["user_id"] = payload["sub"]
 

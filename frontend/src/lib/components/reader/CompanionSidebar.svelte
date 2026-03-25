@@ -23,7 +23,6 @@
 
   let {
     bookId,
-    token,
     darkMode = false,
     aiStatus = { companion: false, tag: false, image: false, embedding: false },
     isAdmin = false,
@@ -33,7 +32,6 @@
     onclose,
   }: {
     bookId: string;
-    token: string;
     darkMode?: boolean;
     aiStatus?: AiStatus;
     isAdmin?: boolean;
@@ -82,7 +80,7 @@
   async function loadConversationList() {
     loadingList = true;
     try {
-      conversations = await booksApi.listCompanionConversations(bookId, token);
+      conversations = await booksApi.listCompanionConversations(bookId);
       // Auto-open the most recent conversation, or show list if multiple
       if (conversations.length === 1) {
         await selectConversation(conversations[0].id);
@@ -103,11 +101,7 @@
     loading = true;
     messages = [];
     try {
-      const conv = await booksApi.getCompanionConversation(
-        bookId,
-        convId,
-        token,
-      );
+      const conv = await booksApi.getCompanionConversation(bookId, convId);
       messages = conv.messages;
     } catch {
       toastStore.error("Failed to load conversation");
@@ -162,17 +156,13 @@
     scrollToBottom();
 
     try {
-      const res = await booksApi.sendCompanionMessage(
-        bookId,
-        {
-          message: text,
-          selected_text: selText,
-          cfi_range: selCfi,
-          current_cfi: currentCfi,
-          conversation_id: activeConversationId,
-        },
-        token,
-      );
+      const res = await booksApi.sendCompanionMessage(bookId, {
+        message: text,
+        selected_text: selText,
+        cfi_range: selCfi,
+        current_cfi: currentCfi,
+        conversation_id: activeConversationId,
+      });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -213,7 +203,7 @@
                   activeConversationId = data.conversation_id;
                   // Refresh the conversation list
                   booksApi
-                    .listCompanionConversations(bookId, token)
+                    .listCompanionConversations(bookId)
                     .then((c) => (conversations = c))
                     .catch(() => {});
                 }
@@ -247,7 +237,7 @@
 
   async function deleteConversation(convId: string) {
     try {
-      await booksApi.deleteCompanionConversation(bookId, convId, token);
+      await booksApi.deleteCompanionConversation(bookId, convId);
       conversations = conversations.filter((c) => c.id !== convId);
       if (activeConversationId === convId) {
         activeConversationId = null;
@@ -275,12 +265,7 @@
       return;
     }
     try {
-      await booksApi.renameCompanionConversation(
-        bookId,
-        renamingId,
-        title,
-        token,
-      );
+      await booksApi.renameCompanionConversation(bookId, renamingId, title);
       conversations = conversations.map((c) =>
         c.id === renamingId ? { ...c, title } : c,
       );

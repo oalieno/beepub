@@ -6,7 +6,6 @@
     type SemanticSearchResult,
     type KeywordSearchResult,
   } from "$lib/api/search";
-  import { authStore } from "$lib/stores/auth";
   import type { BookOut } from "$lib/types";
   import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
 
@@ -49,12 +48,9 @@
       bookTotal = 0;
       return;
     }
-    const token = $authStore.token;
-    if (!token) return;
-
     bookLoading = true;
     booksApi
-      .search(q, token)
+      .search(q)
       .then((resp) => {
         bookResults = resp.items;
         bookTotal = resp.total;
@@ -76,13 +72,10 @@
       contentError = "";
       return;
     }
-    const token = $authStore.token;
-    if (!token) return;
-
     contentLoading = true;
     contentError = "";
     searchApi
-      .semantic(q, token)
+      .semantic(q)
       .then((resp) => {
         contentResults = resp.results;
         selectedIndex = -1;
@@ -107,13 +100,10 @@
       keywordError = "";
       return;
     }
-    const token = $authStore.token;
-    if (!token) return;
-
     keywordLoading = true;
     keywordError = "";
     searchApi
-      .keyword(q, token)
+      .keyword(q)
       .then((resp) => {
         keywordResults = resp.results;
         keywordTotal = resp.total;
@@ -316,7 +306,10 @@
       {#if activeTab === "books"}
         <!-- Books tab results -->
         {#if query.trim()}
-          <div class="max-h-[60vh] overflow-y-auto" onmouseleave={() => (selectedIndex = -1)}>
+          <div
+            class="max-h-[60vh] overflow-y-auto"
+            onmouseleave={() => (selectedIndex = -1)}
+          >
             {#if bookLoading && bookResults.length === 0}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
                 Searching...
@@ -410,7 +403,11 @@
             books have been indexed.
           </div>
         {:else}
-          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel" onmouseleave={() => (selectedIndex = -1)}>
+          <div
+            class="max-h-[60vh] overflow-y-auto"
+            role="tabpanel"
+            onmouseleave={() => (selectedIndex = -1)}
+          >
             {#each contentResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
@@ -448,7 +445,10 @@
                   <p
                     class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 leading-relaxed"
                   >
-                    {normalizePassage(result.passage).slice(0, 200)}{normalizePassage(result.passage).length > 200
+                    {normalizePassage(result.passage).slice(
+                      0,
+                      200,
+                    )}{normalizePassage(result.passage).length > 200
                       ? "..."
                       : ""}
                   </p>
@@ -500,7 +500,11 @@
             books have been indexed.
           </div>
         {:else}
-          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel" onmouseleave={() => (selectedIndex = -1)}>
+          <div
+            class="max-h-[60vh] overflow-y-auto"
+            role="tabpanel"
+            onmouseleave={() => (selectedIndex = -1)}
+          >
             {#each keywordResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
@@ -535,7 +539,10 @@
                   <p
                     class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 leading-relaxed"
                   >
-                    {normalizePassage(result.passage).slice(0, 200)}{normalizePassage(result.passage).length > 200
+                    {normalizePassage(result.passage).slice(
+                      0,
+                      200,
+                    )}{normalizePassage(result.passage).length > 200
                       ? "..."
                       : ""}
                   </p>

@@ -8,27 +8,22 @@ export interface LibraryMemberOut {
 }
 
 export const librariesApi = {
-  list: (token: string) => get("/libraries", token) as Promise<LibraryOut[]>,
+  list: () => get("/libraries") as Promise<LibraryOut[]>,
 
-  get: (id: string, token: string) =>
-    get(`/libraries/${id}`, token) as Promise<LibraryOut>,
+  get: (id: string) => get(`/libraries/${id}`) as Promise<LibraryOut>,
 
-  create: (
-    data: { name: string; description?: string; visibility?: string },
-    token: string,
-  ) => post("/libraries", data, token) as Promise<LibraryOut>,
+  create: (data: { name: string; description?: string; visibility?: string }) =>
+    post("/libraries", data) as Promise<LibraryOut>,
 
   update: (
     id: string,
     data: { name?: string; description?: string; visibility?: string },
-    token: string,
-  ) => put(`/libraries/${id}`, data, token) as Promise<LibraryOut>,
+  ) => put(`/libraries/${id}`, data) as Promise<LibraryOut>,
 
-  delete: (id: string, token: string) => del(`/libraries/${id}`, token),
+  delete: (id: string) => del(`/libraries/${id}`),
 
   getBooks: (
     id: string,
-    token: string,
     options?: {
       search?: string;
       author?: string;
@@ -52,22 +47,21 @@ export const librariesApi = {
     const qs = params.toString();
     return get(
       `/libraries/${id}/books${qs ? `?${qs}` : ""}`,
-      token,
     ) as Promise<PaginatedBooks>;
   },
 
-  getMembers: (id: string, token: string) =>
-    get(`/libraries/${id}/members`, token) as Promise<LibraryMemberOut[]>,
+  getMembers: (id: string) =>
+    get(`/libraries/${id}/members`) as Promise<LibraryMemberOut[]>,
 
-  addMember: (id: string, userId: string, token: string) =>
-    post(`/libraries/${id}/members`, { user_id: userId }, token),
+  addMember: (id: string, userId: string) =>
+    post(`/libraries/${id}/members`, { user_id: userId }),
 
-  removeMember: (id: string, userId: string, token: string) =>
-    del(`/libraries/${id}/members/${userId}`, token),
+  removeMember: (id: string, userId: string) =>
+    del(`/libraries/${id}/members/${userId}`),
 
-  addBook: (id: string, bookId: string, token: string) =>
-    post(`/libraries/${id}/books`, { book_id: bookId }, token),
+  addBook: (id: string, bookId: string) =>
+    post(`/libraries/${id}/books`, { book_id: bookId }),
 
-  removeBook: (id: string, bookId: string, token: string) =>
-    del(`/libraries/${id}/books/${bookId}`, token),
+  removeBook: (id: string, bookId: string) =>
+    del(`/libraries/${id}/books/${bookId}`),
 };

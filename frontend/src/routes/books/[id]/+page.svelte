@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
@@ -168,30 +167,20 @@
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
-  onMount(() => {
-    if (!$authStore.token) {
-      goto("/login");
-    }
-  });
-
   $effect(() => {
     // Re-load data when bookId changes (e.g. navigating from similar books)
     bookId;
-    if ($authStore.token) {
-      loadData();
-      window.scrollTo(0, 0);
-    }
+    loadData();
+    window.scrollTo(0, 0);
   });
 
   async function loadData() {
     loading = true;
     try {
       const [b, ext, shelves] = await Promise.all([
-        booksApi.get(bookId, $authStore.token!),
-        booksApi
-          .getExternal(bookId, $authStore.token!)
-          .catch(() => [] as ExternalMetadataOut[]),
-        bookshelvesApi.list($authStore.token!),
+        booksApi.get(bookId),
+        booksApi.getExternal(bookId).catch(() => [] as ExternalMetadataOut[]),
+        bookshelvesApi.list(),
       ]);
       book = b;
       externalMeta = ext;
@@ -211,31 +200,25 @@
       }
       // Load user interaction (rating, favorite, progress)
       try {
-        interaction = await booksApi.getInteraction(bookId, $authStore.token!);
+        interaction = await booksApi.getInteraction(bookId);
       } catch {
         // ignore
       }
       // Load highlights
       try {
-        bookHighlights = await booksApi.getHighlights(
-          bookId,
-          $authStore.token!,
-        );
+        bookHighlights = await booksApi.getHighlights(bookId);
       } catch {
         // ignore
       }
       // Load similar books
       try {
-        similarBooks = await booksApi.getSimilar(bookId, $authStore.token!, 10);
+        similarBooks = await booksApi.getSimilar(bookId, 10);
       } catch {
         similarBooks = [];
       }
       // Load series neighbors
       try {
-        seriesNeighbors = await booksApi.getSeriesNeighbors(
-          bookId,
-          $authStore.token!,
-        );
+        seriesNeighbors = await booksApi.getSeriesNeighbors(bookId);
       } catch {
         seriesNeighbors = null;
       }
@@ -247,9 +230,9 @@
   }
 
   async function handleRating(rating: number) {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     try {
-      await booksApi.updateRating(bookId, rating, $authStore.token);
+      await booksApi.updateRating(bookId, rating);
       if (interaction) interaction = { ...interaction, rating };
       else
         interaction = {
@@ -269,10 +252,10 @@
   }
 
   async function toggleFavorite() {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     const newVal = !interaction?.is_favorite;
     try {
-      await booksApi.updateFavorite(bookId, newVal, $authStore.token);
+      await booksApi.updateFavorite(bookId, newVal);
       if (interaction) interaction = { ...interaction, is_favorite: newVal };
       else
         interaction = {
@@ -294,37 +277,33 @@
   }
 
   async function handleSaveEdit() {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     try {
       const parsedTags = editForm.tags
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean);
-      const updated = await booksApi.updateMetadata(
-        bookId,
-        {
-          title: editForm.title || null,
-          authors:
-            editForm.authors
-              .split(",")
-              .map((a) => a.trim())
-              .filter(Boolean).length > 0
-              ? editForm.authors
-                  .split(",")
-                  .map((a) => a.trim())
-                  .filter(Boolean)
-              : null,
-          description: editForm.description || null,
-          publisher: editForm.publisher || null,
-          published_date: editForm.published_date || null,
-          series: editForm.series || null,
-          series_index: editForm.series_index
-            ? parseFloat(editForm.series_index)
+      const updated = await booksApi.updateMetadata(bookId, {
+        title: editForm.title || null,
+        authors:
+          editForm.authors
+            .split(",")
+            .map((a) => a.trim())
+            .filter(Boolean).length > 0
+            ? editForm.authors
+                .split(",")
+                .map((a) => a.trim())
+                .filter(Boolean)
             : null,
-          tags: parsedTags.length > 0 ? parsedTags : null,
-        },
-        $authStore.token,
-      );
+        description: editForm.description || null,
+        publisher: editForm.publisher || null,
+        published_date: editForm.published_date || null,
+        series: editForm.series || null,
+        series_index: editForm.series_index
+          ? parseFloat(editForm.series_index)
+          : null,
+        tags: parsedTags.length > 0 ? parsedTags : null,
+      });
       book = updated;
       showEditModal = false;
       toastStore.success("Metadata updated");
@@ -334,9 +313,9 @@
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this book permanently?") || !$authStore.token) return;
+    if (!confirm("Delete this book permanently?")) return;
     try {
-      await booksApi.delete(bookId, $authStore.token);
+      await booksApi.delete(bookId);
       toastStore.success("Book deleted");
       goto("/");
     } catch (e) {
@@ -345,9 +324,8 @@
   }
 
   async function handleRefreshMeta() {
-    if (!$authStore.token) return;
     try {
-      await booksApi.refreshMetadata(bookId, $authStore.token);
+      await booksApi.refreshMetadata(bookId);
       toastStore.success("Metadata refresh queued");
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -369,7 +347,7 @@
   }
 
   async function saveExternalUrl() {
-    if (!editingUrlSource || !$authStore.token) return;
+    if (!editingUrlSource) return;
     try {
       const id = editingUrlValue.trim();
       if (id) {
@@ -380,23 +358,13 @@
         }
         const prefix = meta?.urlPrefix ?? "";
         const fullUrl = prefix + id;
-        await booksApi.updateExternalUrl(
-          bookId,
-          editingUrlSource,
-          fullUrl,
-          $authStore.token,
-        );
+        await booksApi.updateExternalUrl(bookId, editingUrlSource, fullUrl);
       } else {
-        await booksApi.updateExternalUrl(
-          bookId,
-          editingUrlSource,
-          null,
-          $authStore.token,
-        );
+        await booksApi.updateExternalUrl(bookId, editingUrlSource, null);
       }
       // Reload external metadata after a short delay for the refresh
       externalMeta = await booksApi
-        .getExternal(bookId, $authStore.token)
+        .getExternal(bookId)
         .catch(() => [] as ExternalMetadataOut[]);
       editingUrlSource = null;
       toastStore.success(
@@ -408,7 +376,7 @@
   }
 
   async function handleStatusChange(newStatus: ReadingStatus | null) {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     savingStatus = true;
     try {
       const shouldClearDates = newStatus === null;
@@ -423,7 +391,7 @@
           ? null
           : (interaction?.finished_at ?? null),
       };
-      await booksApi.updateReadingStatus(bookId, data, $authStore.token);
+      await booksApi.updateReadingStatus(bookId, data);
       if (interaction) {
         interaction = {
           ...interaction,
@@ -453,7 +421,7 @@
     field: "started_at" | "finished_at",
     value: string,
   ) {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     const dateVal = value || null;
     try {
       const data = {
@@ -465,7 +433,7 @@
             ? dateVal
             : (interaction?.finished_at ?? null),
       };
-      await booksApi.updateReadingStatus(bookId, data, $authStore.token);
+      await booksApi.updateReadingStatus(bookId, data);
       if (interaction) interaction = { ...interaction, [field]: dateVal };
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -473,10 +441,10 @@
   }
 
   async function handleSaveNotes() {
-    if (!book || !$authStore.token) return;
+    if (!book) return;
     savingNotes = true;
     try {
-      await booksApi.updateNotes(bookId, notesText || null, $authStore.token);
+      await booksApi.updateNotes(bookId, notesText || null);
       if (interaction)
         interaction = { ...interaction, notes: notesText || null };
       else
@@ -500,9 +468,8 @@
   }
 
   async function addToShelf(shelfId: string) {
-    if (!$authStore.token) return;
     try {
-      await bookshelvesApi.addBook(shelfId, bookId, $authStore.token);
+      await bookshelvesApi.addBook(shelfId, bookId);
       toastStore.success("Added to bookshelf");
       showAddToShelf = false;
     } catch (e) {
@@ -1055,9 +1022,8 @@
             highlights={bookHighlights}
             onselect={(hl) => goto(`/books/${bookId}/read`)}
             ondelete={async (hl) => {
-              if (!$authStore.token) return;
               try {
-                await booksApi.deleteHighlight(bookId, hl.id, $authStore.token);
+                await booksApi.deleteHighlight(bookId, hl.id);
                 bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
                 toastStore.success("Highlight removed");
               } catch (e) {

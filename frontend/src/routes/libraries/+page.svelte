@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import type { LibraryOut } from "$lib/types";
@@ -14,12 +12,8 @@
   let loading = $state(true);
 
   onMount(async () => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     try {
-      libraries = await librariesApi.list($authStore.token);
+      libraries = await librariesApi.list();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {

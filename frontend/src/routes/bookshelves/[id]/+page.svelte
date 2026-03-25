@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
@@ -17,10 +15,6 @@
   let loading = $state(true);
 
   onMount(async () => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     await loadData();
   });
 
@@ -28,8 +22,8 @@
     loading = true;
     try {
       const [s, b] = await Promise.all([
-        bookshelvesApi.get(shelfId, $authStore.token!),
-        bookshelvesApi.getBooks(shelfId, $authStore.token!),
+        bookshelvesApi.get(shelfId),
+        bookshelvesApi.getBooks(shelfId),
       ]);
       shelf = s;
       books = b;
@@ -41,9 +35,8 @@
   }
 
   async function removeBook(bookId: string) {
-    if (!$authStore.token) return;
     try {
-      await bookshelvesApi.removeBook(shelfId, bookId, $authStore.token);
+      await bookshelvesApi.removeBook(shelfId, bookId);
       books = books.filter((b) => b.id !== bookId);
       toastStore.success("Book removed from shelf");
     } catch (e) {

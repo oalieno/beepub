@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { booksApi } from "$lib/api/books";
   import type { BookOut } from "$lib/types";
@@ -34,7 +33,7 @@
 
   async function prefetch() {
     try {
-      const books = await booksApi.getRandomBooks($authStore.token!, 1);
+      const books = await booksApi.getRandomBooks(1);
       if (books.length === 0) {
         nextBook = null;
         return;

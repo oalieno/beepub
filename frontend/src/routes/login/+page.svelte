@@ -20,9 +20,8 @@
     if (!username || !password) return;
     loading = true;
     try {
-      const token = await authApi.login(username, password);
-      const user = await authApi.me(token.access_token);
-      authStore.login(user, token.access_token);
+      const user = await authApi.login(username, password);
+      authStore.login(user);
       toastStore.success("Welcome back, " + user.username + "!");
       goto("/");
     } catch (e) {

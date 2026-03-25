@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import HighlightList from "$lib/components/HighlightList.svelte";
@@ -40,12 +39,8 @@
   });
 
   onMount(async () => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     try {
-      highlights = await booksApi.getAllHighlights($authStore.token);
+      highlights = await booksApi.getAllHighlights();
 
       // Fetch book data for all unique book IDs
       const bookIds = [...new Set(highlights.map((h) => h.book_id))];
@@ -53,7 +48,7 @@
       await Promise.all(
         bookIds.map(async (id) => {
           try {
-            const book = await booksApi.get(id, $authStore.token!);
+            const book = await booksApi.get(id);
             data[id] = {
               title: book.display_title ?? book.epub_title ?? "Untitled",
               authors: book.display_authors ?? book.epub_authors ?? [],
@@ -72,9 +67,8 @@
   });
 
   async function handleDelete(hl: HighlightOut) {
-    if (!$authStore.token) return;
     try {
-      await booksApi.deleteHighlight(hl.book_id, hl.id, $authStore.token);
+      await booksApi.deleteHighlight(hl.book_id, hl.id);
       highlights = highlights.filter((h) => h.id !== hl.id);
       toastStore.success("Highlight removed");
     } catch (e) {

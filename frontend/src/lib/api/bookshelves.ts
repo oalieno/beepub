@@ -2,125 +2,108 @@ import { get, post, put, del } from "./client";
 import type { BookshelfOut, BookOut } from "$lib/types";
 
 export const bookshelvesApi = {
-  list: (token: string) =>
-    get("/bookshelves", token) as Promise<BookshelfOut[]>,
+  list: () => get("/bookshelves") as Promise<BookshelfOut[]>,
 
-  get: (id: string, token: string) =>
-    get(`/bookshelves/${id}`, token) as Promise<BookshelfOut>,
+  get: (id: string) => get(`/bookshelves/${id}`) as Promise<BookshelfOut>,
 
-  create: (
-    data: { name: string; description?: string; is_public?: boolean },
-    token: string,
-  ) => post("/bookshelves", data, token) as Promise<BookshelfOut>,
+  create: (data: { name: string; description?: string; is_public?: boolean }) =>
+    post("/bookshelves", data) as Promise<BookshelfOut>,
 
   update: (
     id: string,
     data: { name?: string; description?: string; is_public?: boolean },
-    token: string,
-  ) => put(`/bookshelves/${id}`, data, token) as Promise<BookshelfOut>,
+  ) => put(`/bookshelves/${id}`, data) as Promise<BookshelfOut>,
 
-  delete: (id: string, token: string) => del(`/bookshelves/${id}`, token),
+  delete: (id: string) => del(`/bookshelves/${id}`),
 
-  getBooks: (id: string, token: string) =>
-    get(`/bookshelves/${id}/books`, token) as Promise<BookOut[]>,
+  getBooks: (id: string) =>
+    get(`/bookshelves/${id}/books`) as Promise<BookOut[]>,
 
-  addBook: (id: string, bookId: string, token: string) =>
-    post(`/bookshelves/${id}/books`, { book_id: bookId }, token),
+  addBook: (id: string, bookId: string) =>
+    post(`/bookshelves/${id}/books`, { book_id: bookId }),
 
-  removeBook: (id: string, bookId: string, token: string) =>
-    del(`/bookshelves/${id}/books/${bookId}`, token),
+  removeBook: (id: string, bookId: string) =>
+    del(`/bookshelves/${id}/books/${bookId}`),
 
-  reorder: (id: string, bookIds: string[], token: string) =>
-    put(`/bookshelves/${id}/books/reorder`, { book_ids: bookIds }, token),
+  reorder: (id: string, bookIds: string[]) =>
+    put(`/bookshelves/${id}/books/reorder`, { book_ids: bookIds }),
 };
 
 export const adminApi = {
-  getUsers: (token: string) =>
-    get("/admin/users", token) as Promise<import("$lib/types").UserOut[]>,
+  getUsers: () =>
+    get("/admin/users") as Promise<import("$lib/types").UserOut[]>,
 
-  updateRole: (userId: string, role: string, token: string) =>
-    put(`/admin/users/${userId}/role`, { role }, token),
+  updateRole: (userId: string, role: string) =>
+    put(`/admin/users/${userId}/role`, { role }),
 
-  deleteUser: (userId: string, token: string) =>
-    del(`/admin/users/${userId}`, token),
+  deleteUser: (userId: string) => del(`/admin/users/${userId}`),
 
-  getStats: (token: string) =>
-    get("/admin/stats", token) as Promise<import("$lib/types").AdminStats>,
+  getStats: () =>
+    get("/admin/stats") as Promise<import("$lib/types").AdminStats>,
 
   // Calibre integration
-  getCalibreLibraries: (token: string) =>
-    get("/admin/calibre/libraries", token) as Promise<
+  getCalibreLibraries: () =>
+    get("/admin/calibre/libraries") as Promise<
       import("$lib/types").CalibreLibraryInfo[]
     >,
 
-  linkCalibreLibrary: (
-    data: { calibre_path: string; name?: string },
-    token: string,
-  ) =>
-    post("/admin/calibre/libraries", data, token) as Promise<{
+  linkCalibreLibrary: (data: { calibre_path: string; name?: string }) =>
+    post("/admin/calibre/libraries", data) as Promise<{
       library_id: string;
     }>,
 
-  syncCalibreLibrary: (libraryId: string, token: string) =>
-    post(`/admin/calibre/libraries/${libraryId}/sync`, {}, token),
+  syncCalibreLibrary: (libraryId: string) =>
+    post(`/admin/calibre/libraries/${libraryId}/sync`, {}),
 
-  getCalibreLibraryStatus: (libraryId: string, token: string) =>
-    get(`/admin/calibre/libraries/${libraryId}/status`, token) as Promise<
+  getCalibreLibraryStatus: (libraryId: string) =>
+    get(`/admin/calibre/libraries/${libraryId}/status`) as Promise<
       import("$lib/types").CalibreLibraryStatus
     >,
 
   // App Settings
-  getSettings: (token: string) =>
-    get("/admin/settings", token) as Promise<
-      import("$lib/types").AdminSettings
-    >,
+  getSettings: () =>
+    get("/admin/settings") as Promise<import("$lib/types").AdminSettings>,
 
-  updateSettings: (
-    data: Partial<import("$lib/types").AdminSettings>,
-    token: string,
-  ) =>
-    put("/admin/settings", data, token) as Promise<
-      import("$lib/types").AdminSettings
-    >,
+  updateSettings: (data: Partial<import("$lib/types").AdminSettings>) =>
+    put("/admin/settings", data) as Promise<import("$lib/types").AdminSettings>,
 
-  getAiModels: (provider: string, token: string) =>
-    get(`/admin/ai/models?provider=${provider}`, token) as Promise<
+  getAiModels: (provider: string) =>
+    get(`/admin/ai/models?provider=${provider}`) as Promise<
       { id: string; name: string }[]
     >,
 
-  buildSearchIndex: (token: string) =>
-    post("/search/build-index", undefined, token) as Promise<{
+  buildSearchIndex: () =>
+    post("/search/build-index") as Promise<{
       status: string;
       message: string;
     }>,
 
   // Job Queue
-  getJobs: (token: string) =>
-    get("/admin/jobs", token) as Promise<import("$lib/types").AllJobsResponse>,
+  getJobs: () =>
+    get("/admin/jobs") as Promise<import("$lib/types").AllJobsResponse>,
 
-  triggerJob: (jobType: string, token: string) =>
-    post(`/admin/jobs/${jobType}`, {}, token) as Promise<{
+  triggerJob: (jobType: string) =>
+    post(`/admin/jobs/${jobType}`, {}) as Promise<{
       status: string;
       job_type: string;
     }>,
 
-  stopJob: (jobType: string, token: string) =>
-    del(`/admin/jobs/${jobType}`, token) as Promise<{
+  stopJob: (jobType: string) =>
+    del(`/admin/jobs/${jobType}`) as Promise<{
       status: string;
       job_type: string;
     }>,
 
   // LLM Usage
-  getLlmUsage: (token: string, period: string = "month", feature?: string) => {
+  getLlmUsage: (period: string = "month", feature?: string) => {
     const params = new URLSearchParams({ period });
     if (feature) params.set("feature", feature);
-    return get(`/admin/llm-usage?${params}`, token) as Promise<
+    return get(`/admin/llm-usage?${params}`) as Promise<
       import("$lib/types").LlmUsageResponse
     >;
   },
 };
 
 export const aiApi = {
-  getStatus: (token: string) =>
-    get("/ai/status", token) as Promise<import("$lib/types").AiStatus>,
+  getStatus: () => get("/ai/status") as Promise<import("$lib/types").AiStatus>,
 };

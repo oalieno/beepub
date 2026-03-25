@@ -33,25 +33,15 @@ export interface KeywordSearchResponse {
 }
 
 export const searchApi = {
-  semantic(
-    q: string,
-    token: string,
-    limit = 10,
-  ): Promise<SemanticSearchResponse> {
+  semantic(q: string, limit = 10): Promise<SemanticSearchResponse> {
     return get(
       `/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`,
-      token,
     ) as Promise<SemanticSearchResponse>;
   },
 
-  keyword(
-    q: string,
-    token: string,
-    limit = 10,
-  ): Promise<KeywordSearchResponse> {
+  keyword(q: string, limit = 10): Promise<KeywordSearchResponse> {
     return get(
       `/search/keyword?q=${encodeURIComponent(q)}&limit=${limit}`,
-      token,
     ) as Promise<KeywordSearchResponse>;
   },
 };

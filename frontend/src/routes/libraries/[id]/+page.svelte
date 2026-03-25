@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount, tick } from "svelte";
+  import { tick } from "svelte";
   import { page } from "$app/state";
-  import { goto, replaceState, afterNavigate } from "$app/navigation";
+  import { replaceState, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
@@ -93,13 +93,6 @@
     },
   };
 
-  onMount(() => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
-  });
-
   afterNavigate(async () => {
     if (restoredFromSnapshot) {
       restoredFromSnapshot = false;
@@ -135,8 +128,8 @@
     loading = true;
     try {
       const [lib, result] = await Promise.all([
-        librariesApi.get(libraryId, $authStore.token!),
-        librariesApi.getBooks(libraryId, $authStore.token!, {
+        librariesApi.get(libraryId),
+        librariesApi.getBooks(libraryId, {
           search: search || undefined,
           author: filterAuthor || undefined,
           tag: filterTag || undefined,
@@ -158,10 +151,10 @@
   }
 
   async function loadMore() {
-    if (!$authStore.token || loadingMore || !hasMore) return;
+    if (loadingMore || !hasMore) return;
     loadingMore = true;
     try {
-      const result = await librariesApi.getBooks(libraryId, $authStore.token, {
+      const result = await librariesApi.getBooks(libraryId, {
         search: searchQuery || undefined,
         author: filterAuthor || undefined,
         tag: filterTag || undefined,
@@ -204,10 +197,9 @@
   }
 
   async function handleSearch() {
-    if (!$authStore.token) return;
     syncUrlParams();
     try {
-      const result = await librariesApi.getBooks(libraryId, $authStore.token, {
+      const result = await librariesApi.getBooks(libraryId, {
         search: searchQuery || undefined,
         author: filterAuthor || undefined,
         tag: filterTag || undefined,
@@ -225,12 +217,12 @@
   }
 
   async function handleUpload(files: FileList | null) {
-    if (!files || files.length === 0 || !$authStore.token) return;
+    if (!files || files.length === 0) return;
     uploading = true;
     let successCount = 0;
     for (const file of Array.from(files)) {
       try {
-        await booksApi.upload(file, $authStore.token, libraryId);
+        await booksApi.upload(file, libraryId);
         successCount++;
       } catch (e) {
         toastStore.error(

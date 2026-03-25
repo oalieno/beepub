@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import Modal from "$lib/components/Modal.svelte";
@@ -19,17 +17,13 @@
   let isPublic = $state(false);
 
   onMount(async () => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     await loadData();
   });
 
   async function loadData() {
     loading = true;
     try {
-      bookshelves = await bookshelvesApi.list($authStore.token!);
+      bookshelves = await bookshelvesApi.list();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -38,13 +32,14 @@
   }
 
   async function handleCreate() {
-    if (!createName || !$authStore.token) return;
+    if (!createName) return;
     creating = true;
     try {
-      const shelf = await bookshelvesApi.create(
-        { name: createName, description: createDesc, is_public: isPublic },
-        $authStore.token,
-      );
+      const shelf = await bookshelvesApi.create({
+        name: createName,
+        description: createDesc,
+        is_public: isPublic,
+      });
       bookshelves = [
         ...bookshelves,
         { ...shelf, book_count: 0, preview_book_ids: [] },
@@ -62,9 +57,9 @@
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"?`) || !$authStore.token) return;
+    if (!confirm(`Delete "${name}"?`)) return;
     try {
-      await bookshelvesApi.delete(id, $authStore.token);
+      await bookshelvesApi.delete(id);
       bookshelves = bookshelves.filter((s) => s.id !== id);
       toastStore.success("Bookshelf deleted");
     } catch (e) {

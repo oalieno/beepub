@@ -47,7 +47,7 @@
   async function loadData() {
     loading = true;
     try {
-      libraries = await librariesApi.list($authStore.token!);
+      libraries = await librariesApi.list();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -56,10 +56,10 @@
   }
 
   async function handleCreate() {
-    if (!createForm.name || !$authStore.token) return;
+    if (!createForm.name) return;
     creating = true;
     try {
-      const lib = await librariesApi.create(createForm, $authStore.token);
+      const lib = await librariesApi.create(createForm);
       libraries = [...libraries, lib];
       showCreateModal = false;
       createForm = {
@@ -76,9 +76,9 @@
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete library "${name}"?`) || !$authStore.token) return;
+    if (!confirm(`Delete library "${name}"?`)) return;
     try {
-      await librariesApi.delete(id, $authStore.token);
+      await librariesApi.delete(id);
       libraries = libraries.filter((l) => l.id !== id);
       toastStore.success("Library deleted");
     } catch (e) {

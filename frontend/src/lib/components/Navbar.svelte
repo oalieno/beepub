@@ -22,8 +22,8 @@
     menuOpen = false;
   }
 
-  function logout() {
-    authStore.logout();
+  async function logout() {
+    await authStore.logout();
     goto("/login");
   }
 

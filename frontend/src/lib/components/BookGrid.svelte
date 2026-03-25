@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { BookOut, ReadingStatus } from "$lib/types";
   import { booksApi } from "$lib/api/books";
-  import { authStore } from "$lib/stores/auth";
   import { onMount } from "svelte";
   import BookCard from "./BookCard.svelte";
 
@@ -22,10 +21,9 @@
   let activeMap = $derived(externalMap ?? internalMap);
 
   async function fetchInteractions(bookIds: string[]) {
-    const token = $authStore.token;
-    if (!token || bookIds.length === 0) return;
+    if (bookIds.length === 0) return;
     try {
-      const resp = await booksApi.getBatchInteractions(bookIds, token);
+      const resp = await booksApi.getBatchInteractions(bookIds);
       const newMap: Record<string, ReadingStatus | null> = {};
       for (const [id, item] of Object.entries(resp.interactions)) {
         newMap[id] = (item.reading_status as ReadingStatus) ?? null;

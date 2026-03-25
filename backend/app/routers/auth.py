@@ -1,18 +1,33 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User, UserRole
-from app.schemas.auth import RegisterRequest, TokenResponse
+from app.schemas.auth import RegisterRequest
 from app.schemas.user import UserOut
 from app.services.auth import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+COOKIE_MAX_AGE = settings.access_token_expire_minutes * 60  # seconds
+
+
+def _set_token_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key="token",
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=COOKIE_MAX_AGE,
+        path="/",
+    )
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -38,8 +53,9 @@ async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=UserOut)
 async def login(
+    response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -54,7 +70,14 @@ async def login(
         raise HTTPException(status_code=400, detail="Account is disabled")
 
     token = create_access_token({"sub": str(user.id)})
-    return {"access_token": token, "token_type": "bearer"}
+    _set_token_cookie(response, token)
+    return user
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie(key="token", httponly=True, secure=True, samesite="lax", path="/")
+    return {"ok": True}
 
 
 @router.get("/me", response_model=UserOut)

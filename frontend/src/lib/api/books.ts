@@ -20,13 +20,12 @@ import type {
 } from "$lib/types";
 
 export const booksApi = {
-  upload: (file: File, token: string, libraryId?: string) => {
+  upload: (file: File, libraryId?: string) => {
     const formData = new FormData();
     formData.append("file", file);
     if (libraryId) formData.append("library_id", libraryId);
     return fetch("/api/books", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {
@@ -37,14 +36,10 @@ export const booksApi = {
     });
   },
 
-  get: (bookId: string, token: string) =>
-    get(`/books/${bookId}`, token) as Promise<BookOut>,
+  get: (bookId: string) => get(`/books/${bookId}`) as Promise<BookOut>,
 
-  getSeriesNeighbors: (bookId: string, token: string) =>
-    get(
-      `/books/${bookId}/series-neighbors`,
-      token,
-    ) as Promise<SeriesNeighborsOut>,
+  getSeriesNeighbors: (bookId: string) =>
+    get(`/books/${bookId}/series-neighbors`) as Promise<SeriesNeighborsOut>,
 
   updateMetadata: (
     bookId: string,
@@ -58,43 +53,36 @@ export const booksApi = {
       series_index?: number | null;
       tags?: string[] | null;
     },
-    token: string,
-  ) => put(`/books/${bookId}/metadata`, data, token) as Promise<BookOut>,
+  ) => put(`/books/${bookId}/metadata`, data) as Promise<BookOut>,
 
-  delete: (bookId: string, token: string) => del(`/books/${bookId}`, token),
+  delete: (bookId: string) => del(`/books/${bookId}`),
 
   getFileUrl: (bookId: string) => `/api/books/${bookId}/file`,
 
   getCoverUrl: (bookId: string) => `/api/books/${bookId}/cover`,
 
-  refreshMetadata: (bookId: string, token: string) =>
-    post(`/books/${bookId}/refresh`, undefined, token),
+  refreshMetadata: (bookId: string) => post(`/books/${bookId}/refresh`),
 
-  getExternal: (bookId: string, token: string) =>
-    get(`/books/${bookId}/external`, token) as Promise<ExternalMetadataOut[]>,
+  getExternal: (bookId: string) =>
+    get(`/books/${bookId}/external`) as Promise<ExternalMetadataOut[]>,
 
   updateExternalUrl: (
     bookId: string,
     source: string,
     sourceUrl: string | null,
-    token: string,
   ) =>
-    put(
-      `/books/${bookId}/external/${source}/url`,
-      {
-        source_url: sourceUrl,
-      },
-      token,
-    ) as Promise<ExternalMetadataOut>,
+    put(`/books/${bookId}/external/${source}/url`, {
+      source_url: sourceUrl,
+    }) as Promise<ExternalMetadataOut>,
 
-  getInteraction: (bookId: string, token: string) =>
-    get(`/books/${bookId}/interaction`, token) as Promise<InteractionOut>,
+  getInteraction: (bookId: string) =>
+    get(`/books/${bookId}/interaction`) as Promise<InteractionOut>,
 
-  updateRating: (bookId: string, rating: number | null, token: string) =>
-    put(`/books/${bookId}/rating`, { rating }, token),
+  updateRating: (bookId: string, rating: number | null) =>
+    put(`/books/${bookId}/rating`, { rating }),
 
-  updateFavorite: (bookId: string, isFavorite: boolean, token: string) =>
-    put(`/books/${bookId}/favorite`, { is_favorite: isFavorite }, token),
+  updateFavorite: (bookId: string, isFavorite: boolean) =>
+    put(`/books/${bookId}/favorite`, { is_favorite: isFavorite }),
 
   updateReadingStatus: (
     bookId: string,
@@ -103,14 +91,13 @@ export const booksApi = {
       started_at?: string | null;
       finished_at?: string | null;
     },
-    token: string,
-  ) => put(`/books/${bookId}/reading-status`, data, token),
+  ) => put(`/books/${bookId}/reading-status`, data),
 
-  updateNotes: (bookId: string, notes: string | null, token: string) =>
-    put(`/books/${bookId}/notes`, { notes }, token),
+  updateNotes: (bookId: string, notes: string | null) =>
+    put(`/books/${bookId}/notes`, { notes }),
 
-  getProgress: (bookId: string, token: string) =>
-    get(`/books/${bookId}/progress`, token) as Promise<ProgressOut>,
+  getProgress: (bookId: string) =>
+    get(`/books/${bookId}/progress`) as Promise<ProgressOut>,
 
   updateProgress: (
     bookId: string,
@@ -122,40 +109,34 @@ export const booksApi = {
       section_page?: number;
       track_activity?: boolean;
     },
-    token: string,
-  ) => put(`/books/${bookId}/progress`, data, token),
+  ) => put(`/books/${bookId}/progress`, data),
 
-  getHighlights: (bookId: string, token: string) =>
-    get(`/books/${bookId}/highlights`, token) as Promise<HighlightOut[]>,
+  getHighlights: (bookId: string) =>
+    get(`/books/${bookId}/highlights`) as Promise<HighlightOut[]>,
 
   createHighlight: (
     bookId: string,
     data: { cfi_range: string; text: string; color: string; note?: string },
-    token: string,
-  ) =>
-    post(`/books/${bookId}/highlights`, data, token) as Promise<HighlightOut>,
+  ) => post(`/books/${bookId}/highlights`, data) as Promise<HighlightOut>,
 
   updateHighlight: (
     bookId: string,
     highlightId: string,
     data: { color?: string; note?: string },
-    token: string,
   ) =>
     put(
       `/books/${bookId}/highlights/${highlightId}`,
       data,
-      token,
     ) as Promise<HighlightOut>,
 
-  deleteHighlight: (bookId: string, highlightId: string, token: string) =>
-    del(`/books/${bookId}/highlights/${highlightId}`, token),
+  deleteHighlight: (bookId: string, highlightId: string) =>
+    del(`/books/${bookId}/highlights/${highlightId}`),
 
-  getAllHighlights: (token: string) =>
-    get("/highlights", token) as Promise<HighlightOut[]>,
+  getAllHighlights: () => get("/highlights") as Promise<HighlightOut[]>,
 
   // Illustrations
-  getIllustrations: (bookId: string, token: string) =>
-    get(`/books/${bookId}/illustrations`, token) as Promise<IllustrationOut[]>,
+  getIllustrations: (bookId: string) =>
+    get(`/books/${bookId}/illustrations`) as Promise<IllustrationOut[]>,
 
   createIllustration: (
     bookId: string,
@@ -166,58 +147,46 @@ export const booksApi = {
       custom_prompt?: string;
       reference_images?: ReferenceImageInput[];
     },
-    token: string,
-  ) =>
-    post(
-      `/books/${bookId}/illustrations`,
-      data,
-      token,
-    ) as Promise<IllustrationOut>,
+  ) => post(`/books/${bookId}/illustrations`, data) as Promise<IllustrationOut>,
 
-  getIllustration: (bookId: string, illustrationId: string, token: string) =>
+  getIllustration: (bookId: string, illustrationId: string) =>
     get(
       `/books/${bookId}/illustrations/${illustrationId}`,
-      token,
     ) as Promise<IllustrationOut>,
 
-  deleteIllustration: (bookId: string, illustrationId: string, token: string) =>
-    del(`/books/${bookId}/illustrations/${illustrationId}`, token),
+  deleteIllustration: (bookId: string, illustrationId: string) =>
+    del(`/books/${bookId}/illustrations/${illustrationId}`),
 
-  getStylePrompts: (bookId: string, token: string) =>
-    get(`/books/${bookId}/illustrations/styles`, token) as Promise<
-      StylePromptOut[]
-    >,
+  getStylePrompts: (bookId: string) =>
+    get(`/books/${bookId}/illustrations/styles`) as Promise<StylePromptOut[]>,
 
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
     `/api/books/${bookId}/illustrations/${illustrationId}/image`,
 
-  getEpubImages: (bookId: string, token: string) =>
-    get(`/books/${bookId}/images`, token) as Promise<EpubImageInfo[]>,
+  getEpubImages: (bookId: string) =>
+    get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
 
-  getBatchInteractions: (bookIds: string[], token: string) =>
-    post("/books/interactions/batch", { book_ids: bookIds }, token) as Promise<{
+  getBatchInteractions: (bookIds: string[]) =>
+    post("/books/interactions/batch", { book_ids: bookIds }) as Promise<{
       interactions: Record<string, { reading_status: string | null }>;
     }>,
 
-  search: (query: string, token: string, limit: number = 20) => {
+  search: (query: string, limit: number = 20) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
-    return get(`/books/search?${params}`, token) as Promise<{
+    return get(`/books/search?${params}`) as Promise<{
       items: (BookOut & { library_name: string | null })[];
       total: number;
     }>;
   },
 
-  getMyBooks: (
-    token: string,
-    options?: {
-      status?: ReadingStatus;
-      favorite?: boolean;
-      sort?: string;
-      order?: string;
-      limit?: number;
-      offset?: number;
-    },
-  ) => {
+  getMyBooks: (options?: {
+    status?: ReadingStatus;
+    favorite?: boolean;
+    sort?: string;
+    order?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
     const params = new URLSearchParams();
     if (options?.status) params.set("status", options.status);
     if (options?.favorite !== undefined)
@@ -229,48 +198,41 @@ export const booksApi = {
     const qs = params.toString();
     return get(
       `/books/me${qs ? `?${qs}` : ""}`,
-      token,
     ) as Promise<PaginatedBooksWithInteraction>;
   },
 
-  getReadingActivity: (year: number, token: string) =>
-    get(`/books/reading-activity?year=${year}`, token) as Promise<
+  getReadingActivity: (year: number) =>
+    get(`/books/reading-activity?year=${year}`) as Promise<
       { date: string; seconds: number }[]
     >,
 
-  getRandomBooks: (token: string, count: number = 8) =>
-    get(`/books/random?count=${count}`, token) as Promise<BookOut[]>,
+  getRandomBooks: (count: number = 8) =>
+    get(`/books/random?count=${count}`) as Promise<BookOut[]>,
 
-  getSimilar: (bookId: string, token: string, limit: number = 10) =>
-    get(`/books/${bookId}/similar?limit=${limit}`, token) as Promise<BookOut[]>,
+  getSimilar: (bookId: string, limit: number = 10) =>
+    get(`/books/${bookId}/similar?limit=${limit}`) as Promise<BookOut[]>,
 
-  retag: (bookId: string, token: string) =>
-    post(`/books/${bookId}/retag`, undefined, token),
+  retag: (bookId: string) => post(`/books/${bookId}/retag`),
 
-  getRecommendations: (token: string, limit: number = 20) =>
-    get(`/books/discover/recommendations?limit=${limit}`, token) as Promise<
+  getRecommendations: (limit: number = 20) =>
+    get(`/books/discover/recommendations?limit=${limit}`) as Promise<
       BookWithInteractionOut[]
     >,
 
-  getBrowseByCategory: (category: string, token: string) =>
-    get(`/books/discover/browse?category=${category}`, token) as Promise<
+  getBrowseByCategory: (category: string) =>
+    get(`/books/discover/browse?category=${category}`) as Promise<
       TagBrowseSection[]
     >,
 
   // Companion
-  listCompanionConversations: (bookId: string, token: string) =>
-    get(`/books/${bookId}/companion`, token) as Promise<
+  listCompanionConversations: (bookId: string) =>
+    get(`/books/${bookId}/companion`) as Promise<
       CompanionConversationSummary[]
     >,
 
-  getCompanionConversation: (
-    bookId: string,
-    conversationId: string,
-    token: string,
-  ) =>
+  getCompanionConversation: (bookId: string, conversationId: string) =>
     get(
       `/books/${bookId}/companion/${conversationId}`,
-      token,
     ) as Promise<CompanionConversationOut>,
 
   sendCompanionMessage: (
@@ -282,14 +244,10 @@ export const booksApi = {
       current_cfi?: string | null;
       conversation_id?: string | null;
     },
-    token: string,
   ) =>
     fetch(`/api/books/${bookId}/companion`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     }),
 
@@ -297,22 +255,15 @@ export const booksApi = {
     bookId: string,
     conversationId: string,
     title: string,
-    token: string,
-  ) => patch(`/books/${bookId}/companion/${conversationId}`, { title }, token),
+  ) => patch(`/books/${bookId}/companion/${conversationId}`, { title }),
 
-  deleteCompanionConversation: (
-    bookId: string,
-    conversationId: string,
-    token: string,
-  ) => del(`/books/${bookId}/companion/${conversationId}`, token),
+  deleteCompanionConversation: (bookId: string, conversationId: string) =>
+    del(`/books/${bookId}/companion/${conversationId}`),
 
-  getReadingStats: (token: string) =>
-    get("/books/reading-stats", token) as Promise<ReadingStats>,
+  getReadingStats: () => get("/books/reading-stats") as Promise<ReadingStats>,
 
-  updateReadingGoal: (goalSeconds: number | null, token: string) =>
-    put(
-      "/books/reading-goal",
-      { goal_seconds: goalSeconds },
-      token,
-    ) as Promise<ReadingStats>,
+  updateReadingGoal: (goalSeconds: number | null) =>
+    put("/books/reading-goal", {
+      goal_seconds: goalSeconds,
+    }) as Promise<ReadingStats>,
 };

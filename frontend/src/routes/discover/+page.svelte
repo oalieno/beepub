@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import BookCard from "$lib/components/BookCard.svelte";
@@ -26,10 +24,6 @@
   let browseInteractions = $state<Record<string, ReadingStatus | null>>({});
 
   onMount(async () => {
-    if (!$authStore.token) {
-      goto("/login");
-      return;
-    }
     loadRecommendations();
     loadBrowse();
   });
@@ -37,10 +31,7 @@
   async function loadRecommendations() {
     loadingRecs = true;
     try {
-      recommendations = await booksApi.getRecommendations(
-        $authStore.token!,
-        20,
-      );
+      recommendations = await booksApi.getRecommendations(20);
     } catch (e) {
       console.error("Failed to load recommendations:", e);
     } finally {
@@ -51,20 +42,14 @@
   async function loadBrowse() {
     loadingBrowse = true;
     try {
-      browseSections = await booksApi.getBrowseByCategory(
-        activeCategory,
-        $authStore.token!,
-      );
+      browseSections = await booksApi.getBrowseByCategory(activeCategory);
       // Fetch interactions for all browse books
       const allBookIds = browseSections.flatMap((s) =>
         s.books.map((b) => b.id),
       );
-      if (allBookIds.length > 0 && $authStore.token) {
+      if (allBookIds.length > 0) {
         try {
-          const resp = await booksApi.getBatchInteractions(
-            allBookIds,
-            $authStore.token,
-          );
+          const resp = await booksApi.getBatchInteractions(allBookIds);
           const newMap: Record<string, ReadingStatus | null> = {};
           for (const [id, item] of Object.entries(resp.interactions)) {
             newMap[id] = (item.reading_status as ReadingStatus) ?? null;

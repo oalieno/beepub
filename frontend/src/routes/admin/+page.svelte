@@ -27,7 +27,7 @@
       return;
     }
     try {
-      stats = await adminApi.getStats($authStore.token!);
+      stats = await adminApi.getStats();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {

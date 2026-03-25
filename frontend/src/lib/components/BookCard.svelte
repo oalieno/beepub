@@ -3,7 +3,6 @@
   import type { BookOut, ReadingStatus } from "$lib/types";
   import { BookOpen, Bookmark, Check } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
-  import { authStore } from "$lib/stores/auth";
 
   let {
     book,
@@ -22,19 +21,14 @@
     e.preventDefault();
     if (loading) return;
 
-    const token = $authStore.token;
-    if (!token) return;
-
     const newStatus: ReadingStatus | null =
       readingStatus === "want_to_read" ? null : "want_to_read";
 
     loading = true;
     try {
-      await booksApi.updateReadingStatus(
-        book.id,
-        { reading_status: newStatus },
-        token,
-      );
+      await booksApi.updateReadingStatus(book.id, {
+        reading_status: newStatus,
+      });
       onStatusChange?.(book.id, newStatus);
     } finally {
       loading = false;

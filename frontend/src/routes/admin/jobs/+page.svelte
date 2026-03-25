@@ -47,9 +47,8 @@
   }
 
   async function fetchJobs() {
-    if (!$authStore.token) return;
     try {
-      const res = await adminApi.getJobs($authStore.token);
+      const res = await adminApi.getJobs();
       jobs = res.jobs;
     } catch (e) {
       if (loading) {
@@ -61,10 +60,9 @@
   }
 
   async function stopJob(jobType: string) {
-    if (!$authStore.token) return;
     stoppingJob = jobType;
     try {
-      await adminApi.stopJob(jobType, $authStore.token);
+      await adminApi.stopJob(jobType);
       toastStore.success(`Job stopped: ${jobType}`);
       await fetchJobs();
     } catch (e) {
@@ -75,10 +73,9 @@
   }
 
   async function triggerJob(jobType: string) {
-    if (!$authStore.token) return;
     triggeringJob = jobType;
     try {
-      await adminApi.triggerJob(jobType, $authStore.token);
+      await adminApi.triggerJob(jobType);
       toastStore.success(`Job started: ${jobType}`);
       await fetchJobs();
     } catch (e) {
@@ -95,7 +92,7 @@
     }
     await Promise.all([
       fetchJobs(),
-      aiApi.getStatus($authStore.token!).then((s) => (aiStatus = s)),
+      aiApi.getStatus().then((s) => (aiStatus = s)),
     ]);
     pollInterval = setInterval(fetchJobs, 3000);
   });
@@ -226,7 +223,9 @@
             {:else}
               <button
                 class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-muted/60 active:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                disabled={isTriggering || job.missing === 0 || !isAiReady(job.key)}
+                disabled={isTriggering ||
+                  job.missing === 0 ||
+                  !isAiReady(job.key)}
                 onclick={() => triggerJob(job.key)}
                 title={!isAiReady(job.key)
                   ? "AI provider not configured — check Admin Settings"

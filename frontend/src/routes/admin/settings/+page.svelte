@@ -53,11 +53,10 @@
   let loadingOpenaiModels = $state(false);
 
   async function fetchModels(provider: "gemini" | "openai") {
-    if (!$authStore.token) return;
     if (provider === "gemini") {
       loadingGeminiModels = true;
       try {
-        geminiModels = await adminApi.getAiModels("gemini", $authStore.token);
+        geminiModels = await adminApi.getAiModels("gemini");
       } catch {
         geminiModels = [];
       } finally {
@@ -66,7 +65,7 @@
     } else {
       loadingOpenaiModels = true;
       try {
-        openaiModels = await adminApi.getAiModels("openai", $authStore.token);
+        openaiModels = await adminApi.getAiModels("openai");
       } catch {
         openaiModels = [];
       } finally {
@@ -166,7 +165,7 @@
   async function loadSettings() {
     loading = true;
     try {
-      settings = await adminApi.getSettings($authStore.token!);
+      settings = await adminApi.getSettings();
       timezone = settings.timezone;
       metadataEnabled = settings.metadata_refresh_enabled === "true";
       metadataHour = parseInt(settings.metadata_refresh_hour) || 3;
@@ -201,32 +200,28 @@
   }
 
   async function handleSave() {
-    if (!$authStore.token) return;
     saving = true;
     try {
-      settings = await adminApi.updateSettings(
-        {
-          timezone,
-          metadata_refresh_enabled: metadataEnabled ? "true" : "false",
-          metadata_refresh_hour: String(metadataHour),
-          metadata_refresh_interval_days: String(metadataIntervalDays),
-          metadata_refresh_cooldown_days: String(metadataCooldownDays),
-          gemini_api_key: geminiApiKey,
-          openai_api_key: openaiApiKey,
-          openai_base_url: openaiBaseUrl,
-          companion_provider: companionProvider,
-          companion_model: companionModel,
-          tag_provider: tagProvider,
-          tag_model: tagModel,
-          image_provider: imageProvider,
-          image_model: imageModel,
-          embedding_provider: embeddingProvider,
-          embedding_model: embeddingModel,
-          embedding_api_url: embeddingApiUrl,
-          embedding_api_key: embeddingApiKey,
-        },
-        $authStore.token,
-      );
+      settings = await adminApi.updateSettings({
+        timezone,
+        metadata_refresh_enabled: metadataEnabled ? "true" : "false",
+        metadata_refresh_hour: String(metadataHour),
+        metadata_refresh_interval_days: String(metadataIntervalDays),
+        metadata_refresh_cooldown_days: String(metadataCooldownDays),
+        gemini_api_key: geminiApiKey,
+        openai_api_key: openaiApiKey,
+        openai_base_url: openaiBaseUrl,
+        companion_provider: companionProvider,
+        companion_model: companionModel,
+        tag_provider: tagProvider,
+        tag_model: tagModel,
+        image_provider: imageProvider,
+        image_model: imageModel,
+        embedding_provider: embeddingProvider,
+        embedding_model: embeddingModel,
+        embedding_api_url: embeddingApiUrl,
+        embedding_api_key: embeddingApiKey,
+      });
       toastStore.success("Settings saved");
     } catch (e) {
       toastStore.error((e as Error).message);

@@ -1,8 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
@@ -48,20 +46,13 @@
     tabs.some((t) => t.key === urlTab) ? urlTab : "currently_reading",
   );
 
-  onMount(() => {
-    if (!$authStore.token) {
-      goto("/login");
-    }
-  });
-
   // Load books whenever activeTab changes (including back/forward navigation)
   $effect(() => {
     const tab = activeTab;
-    if (!$authStore.token) return;
     loading = true;
     const isFavoriteTab = tab === "favorites";
     booksApi
-      .getMyBooks($authStore.token!, {
+      .getMyBooks({
         status: isFavoriteTab ? undefined : (tab as ReadingStatus),
         favorite: isFavoriteTab ? true : undefined,
         sort: tab === "currently_reading" ? "last_read_at" : "updated_at",

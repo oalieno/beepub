@@ -23,7 +23,6 @@
     styles = [],
     darkMode = false,
     bookId = "",
-    token = "",
     aiStatus = { companion: false, tag: false, image: false, embedding: false },
     isAdmin = false,
     completedIllustrations = [],
@@ -34,7 +33,6 @@
     styles?: StylePromptOut[];
     darkMode?: boolean;
     bookId?: string;
-    token?: string;
     aiStatus?: AiStatus;
     isAdmin?: boolean;
     completedIllustrations?: IllustrationOut[];
@@ -86,10 +84,10 @@
 
   async function toggleRefs() {
     showRefs = !showRefs;
-    if (showRefs && !epubImagesLoaded && token && bookId) {
+    if (showRefs && !epubImagesLoaded && bookId) {
       loadingEpubImages = true;
       try {
-        epubImages = await booksApi.getEpubImages(bookId, token);
+        epubImages = await booksApi.getEpubImages(bookId);
       } catch {
         epubImages = [];
       } finally {

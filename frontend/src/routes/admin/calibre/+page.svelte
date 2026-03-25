@@ -44,7 +44,7 @@
   async function loadLibraries() {
     loading = true;
     try {
-      libraries = await adminApi.getCalibreLibraries($authStore.token!);
+      libraries = await adminApi.getCalibreLibraries();
       // Load status for linked libraries
       for (const lib of libraries) {
         if (lib.linked && lib.library_id) {
@@ -60,10 +60,7 @@
 
   async function loadStatus(libraryId: string) {
     try {
-      const status = await adminApi.getCalibreLibraryStatus(
-        libraryId,
-        $authStore.token!,
-      );
+      const status = await adminApi.getCalibreLibraryStatus(libraryId);
       syncStatuses[libraryId] = status;
       // If sync is running, start polling
       if (status.sync?.status === "running") {
@@ -78,10 +75,7 @@
     if (pollingIntervals[libraryId]) return;
     pollingIntervals[libraryId] = setInterval(async () => {
       try {
-        const status = await adminApi.getCalibreLibraryStatus(
-          libraryId,
-          $authStore.token!,
-        );
+        const status = await adminApi.getCalibreLibraryStatus(libraryId);
         syncStatuses[libraryId] = status;
         if (status.sync?.status !== "running") {
           clearInterval(pollingIntervals[libraryId]);
@@ -97,13 +91,12 @@
   }
 
   async function handleLink(path: string) {
-    if (!$authStore.token) return;
     const name = linkName || path.split("/").pop() || "Calibre";
     try {
-      const result = await adminApi.linkCalibreLibrary(
-        { calibre_path: path, name },
-        $authStore.token,
-      );
+      const result = await adminApi.linkCalibreLibrary({
+        calibre_path: path,
+        name,
+      });
       toastStore.success(`Library "${name}" linked and sync started`);
       linkingPath = null;
       linkName = "";
@@ -117,9 +110,8 @@
   }
 
   async function handleSync(libraryId: string) {
-    if (!$authStore.token) return;
     try {
-      await adminApi.syncCalibreLibrary(libraryId, $authStore.token);
+      await adminApi.syncCalibreLibrary(libraryId);
       toastStore.success("Sync started");
       startPolling(libraryId);
     } catch (e) {

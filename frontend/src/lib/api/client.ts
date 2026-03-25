@@ -4,16 +4,11 @@ async function request(
   method: string,
   path: string,
   body?: unknown,
-  token?: string | null,
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   const headers: Record<string, string> = {
     ...extraHeaders,
   };
-
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
 
   let bodyContent: string | URLSearchParams | undefined;
   if (body instanceof URLSearchParams) {
@@ -38,13 +33,9 @@ async function request(
       // ignore
     }
 
-    // Auto-logout on expired/invalid token — but only if not on /login already
-    // (avoids redirect loops on iOS PWA resume where stale requests may 401)
+    // Auto-redirect on expired/invalid token
     if (res.status === 401 && typeof window !== "undefined") {
       if (window.location.pathname !== "/login") {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        document.cookie = "token=; Max-Age=0; path=/";
         window.location.href = "/login";
       }
     }
@@ -62,35 +53,26 @@ async function request(
   return res.text();
 }
 
-export function get(path: string, token?: string | null): Promise<unknown> {
-  return request("GET", path, undefined, token);
+export function get(path: string): Promise<unknown> {
+  return request("GET", path);
 }
 
 export function post(
   path: string,
   body?: unknown,
-  token?: string | null,
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
-  return request("POST", path, body, token, extraHeaders);
+  return request("POST", path, body, extraHeaders);
 }
 
-export function put(
-  path: string,
-  body?: unknown,
-  token?: string | null,
-): Promise<unknown> {
-  return request("PUT", path, body, token);
+export function put(path: string, body?: unknown): Promise<unknown> {
+  return request("PUT", path, body);
 }
 
-export function patch(
-  path: string,
-  body?: unknown,
-  token?: string | null,
-): Promise<unknown> {
-  return request("PATCH", path, body, token);
+export function patch(path: string, body?: unknown): Promise<unknown> {
+  return request("PATCH", path, body);
 }
 
-export function del(path: string, token?: string | null): Promise<unknown> {
-  return request("DELETE", path, undefined, token);
+export function del(path: string): Promise<unknown> {
+  return request("DELETE", path);
 }

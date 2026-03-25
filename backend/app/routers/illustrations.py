@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_user, get_current_user_or_cookie
+from app.deps import get_current_user
 from app.models.illustration import Illustration
 from app.models.user import User
 from app.routers.books import _get_book_with_access
@@ -170,7 +170,7 @@ async def get_illustration(
 async def get_illustration_image(
     book_id: uuid.UUID,
     illustration_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user_or_cookie)],
+    current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
