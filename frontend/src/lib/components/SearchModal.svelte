@@ -12,6 +12,10 @@
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
+  function normalizePassage(text: string): string {
+    return text.replace(/[\u3000\s]+/g, " ").trim();
+  }
+
   type Tab = "books" | "content" | "keyword";
   type BookSearchResult = BookOut & { library_name: string | null };
 
@@ -312,7 +316,7 @@
       {#if activeTab === "books"}
         <!-- Books tab results -->
         {#if query.trim()}
-          <div class="max-h-[60vh] overflow-y-auto">
+          <div class="max-h-[60vh] overflow-y-auto" onmouseleave={() => (selectedIndex = -1)}>
             {#if bookLoading && bookResults.length === 0}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
                 Searching...
@@ -406,7 +410,7 @@
             books have been indexed.
           </div>
         {:else}
-          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel">
+          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel" onmouseleave={() => (selectedIndex = -1)}>
             {#each contentResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
@@ -444,7 +448,7 @@
                   <p
                     class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 leading-relaxed"
                   >
-                    {result.passage.slice(0, 200)}{result.passage.length > 200
+                    {normalizePassage(result.passage).slice(0, 200)}{normalizePassage(result.passage).length > 200
                       ? "..."
                       : ""}
                   </p>
@@ -496,7 +500,7 @@
             books have been indexed.
           </div>
         {:else}
-          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel">
+          <div class="max-h-[60vh] overflow-y-auto" role="tabpanel" onmouseleave={() => (selectedIndex = -1)}>
             {#each keywordResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
@@ -531,7 +535,7 @@
                   <p
                     class="text-xs text-muted-foreground/80 mt-1 line-clamp-2 leading-relaxed"
                   >
-                    {result.passage.slice(0, 200)}{result.passage.length > 200
+                    {normalizePassage(result.passage).slice(0, 200)}{normalizePassage(result.passage).length > 200
                       ? "..."
                       : ""}
                   </p>
