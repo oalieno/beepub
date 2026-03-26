@@ -15,11 +15,25 @@ from app.services.job_queue import (
     JOB_TYPES,
     count_missing_books,
     get_active_run_id,
+    get_job_progress,
     start_job_run,
     stop_job_run,
 )
 
+BLOCKED_LABELS: dict[str, str] = {
+    "embedding": "Needs Text",
+    "summarize": "Needs Text",
+    "book_embedding": "Needs Summary",
+}
+
 router = APIRouter(prefix="/api/admin/jobs", tags=["jobs"])
+
+
+class JobProgressOut(BaseModel):
+    total: int
+    completed: int
+    failed: int
+    last_activity: float | None
 
 
 class JobStatusOut(BaseModel):
@@ -29,12 +43,15 @@ class JobStatusOut(BaseModel):
     total: int
     missing: int
     blocked: int
+    blocked_label: str
     active: bool
     requires_ai: bool
+    progress: JobProgressOut | None = None
 
 
 class AllJobsResponse(BaseModel):
     jobs: list[JobStatusOut]
+    image_book_count: int = 0
 
 
 @router.get("", response_model=AllJobsResponse)
@@ -42,11 +59,33 @@ async def get_jobs_status(
     _admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Get status of all job types with missing counts."""
+    """Get status of all job types with missing counts and progress."""
+    from sqlalchemy import func, select
+
+    from app.models.book import Book
+
+    # Count image books
+    img_result = await db.execute(
+        select(func.count(Book.id)).where(Book.is_image_book.is_(True))
+    )
+    image_book_count = img_result.scalar() or 0
+
     jobs = []
     for key, job_type in JOB_TYPES.items():
         total, missing, blocked = await count_missing_books(db, key)
         run_id = await get_active_run_id(key)
+
+        # Fetch progress if there's an active run
+        progress_out = None
+        if run_id is not None:
+            progress = await get_job_progress(run_id)
+            if progress is not None:
+                progress_out = JobProgressOut(
+                    total=progress.total,
+                    completed=progress.completed,
+                    failed=progress.failed,
+                    last_activity=progress.last_activity,
+                )
 
         jobs.append(
             JobStatusOut(
@@ -56,12 +95,14 @@ async def get_jobs_status(
                 total=total,
                 missing=missing,
                 blocked=blocked,
+                blocked_label=BLOCKED_LABELS.get(key, "Needs Text"),
                 active=run_id is not None,
                 requires_ai=job_type.requires_ai,
+                progress=progress_out,
             )
         )
 
-    return AllJobsResponse(jobs=jobs)
+    return AllJobsResponse(jobs=jobs, image_book_count=image_book_count)
 
 
 @router.post("/{job_type}", status_code=status.HTTP_202_ACCEPTED)

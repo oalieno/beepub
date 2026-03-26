@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 
-from celery.exceptions import Ignore
-
 from app.celeryapp import celery
 
 logger = logging.getLogger(__name__)
@@ -21,7 +19,7 @@ def run_bulk_job(self, job_type: str, run_id: str) -> None:
 
 async def _run_bulk_job(job_type: str, run_id: str) -> None:
     from app.database import create_task_engine
-    from app.services.job_queue import is_run_active
+    from app.services.job_queue import init_job_progress, is_run_active
 
     # Check if this run is still active (may have been stopped before worker picked it up)
     if not await is_run_active(job_type, run_id):
@@ -37,6 +35,9 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
         logger.info("bulk_job %s: nothing to do", job_type)
         return
 
+    # Initialize progress counters in Redis
+    await init_job_progress(job_type, run_id, total)
+
     logger.info("bulk_job %s: dispatching %d tasks (run %s)", job_type, total, run_id)
 
     for bid in book_ids:
@@ -51,14 +52,61 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
     logger.info("bulk_job %s: dispatched %d tasks", job_type, total)
 
 
-@celery.task(name="app.tasks.bulk_jobs.check_run_id")
-def check_run_id(job_type: str, run_id: str) -> None:
-    """Guard task: skip the rest of the chain if the run has been stopped."""
+@celery.task(name="app.tasks.bulk_jobs.run_book_job", bind=True, max_retries=2)
+def run_book_job(self, job_type: str, book_id: str, run_id: str) -> None:
+    """Run a single book job: guard check, work, and progress tracking."""
     from app.celeryapp import run_async
-    from app.services.job_queue import is_run_active
+    from app.services.job_queue import is_run_active, record_task_completion
 
     if not run_async(is_run_active(job_type, run_id)):
-        raise Ignore()
+        return
+
+    try:
+        _execute_book_task(job_type, book_id)
+    except Exception as exc:
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+        run_async(record_task_completion(run_id, job_type, success=False))
+        logger.exception(
+            "run_book_job %s failed for book %s after retries", job_type, book_id
+        )
+        return
+
+    run_async(record_task_completion(run_id, job_type, success=True))
+
+
+def _execute_book_task(job_type: str, book_id: str) -> None:
+    """Run the actual work for a book. Called inline — no Celery dispatch."""
+    from app.celeryapp import run_async
+
+    if job_type == "text_extraction":
+        from app.tasks.text_extract import _run_text_extract
+
+        run_async(_run_text_extract(book_id))
+
+    elif job_type == "embedding":
+        from app.tasks.embed import _run_embed_book
+        from app.tasks.text_extract import _run_text_extract
+
+        run_async(_run_text_extract(book_id))
+        run_async(_run_embed_book(book_id))
+
+    elif job_type == "summarize":
+        from app.tasks.summarize import _run_summarize_chunks
+        from app.tasks.text_extract import _run_text_extract
+
+        run_async(_run_text_extract(book_id))
+        run_async(_run_summarize_chunks(book_id, 999999))
+
+    elif job_type == "auto_tag":
+        from app.tasks.auto_tag import _run_auto_tag_book
+
+        run_async(_run_auto_tag_book(book_id))
+
+    elif job_type == "book_embedding":
+        from app.tasks.embed import _run_embed_book_summary
+
+        run_async(_run_embed_book_summary(book_id))
 
 
 async def _get_missing_book_ids(db, job_type: str) -> list:
@@ -71,23 +119,42 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
     from app.models.tag import AiBookTag
 
     if job_type == "text_extraction":
+        # Books without text chunks OR books with chunks but not yet classified
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
-        result = await db.execute(
+        no_text_result = await db.execute(
             select(Book.id).where(Book.id.notin_(has_text)).order_by(Book.created_at)
         )
+        unclassified_result = await db.execute(
+            select(Book.id)
+            .where(Book.id.in_(has_text), Book.is_image_book.is_(None))
+            .order_by(Book.created_at)
+        )
+        no_text_ids = [row[0] for row in no_text_result.all()]
+        unclassified_ids = [row[0] for row in unclassified_result.all()]
+        seen = set()
+        book_ids = []
+        for bid in no_text_ids + unclassified_ids:
+            if bid not in seen:
+                seen.add(bid)
+                book_ids.append(bid)
+        return book_ids
     elif job_type == "embedding":
-        # Only books that already have text chunks but no embeddings
+        # Only non-image books that already have text chunks but no embeddings
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
         )
         result = await db.execute(
             select(Book.id)
-            .where(Book.id.in_(has_text), Book.id.notin_(has_embed))
+            .where(
+                Book.id.in_(has_text),
+                Book.id.notin_(has_embed),
+                Book.is_image_book.isnot(True),
+            )
             .order_by(Book.created_at)
         )
     elif job_type == "summarize":
-        # Books without text, plus books with unsummarized text chunks
+        # Non-image books without text, plus non-image books with unsummarized chunks
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_unsummarized = (
             select(BookTextChunk.book_id)
@@ -95,11 +162,13 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             .group_by(BookTextChunk.book_id)
         )
         no_text_result = await db.execute(
-            select(Book.id).where(Book.id.notin_(has_text)).order_by(Book.created_at)
+            select(Book.id)
+            .where(Book.id.notin_(has_text), Book.is_image_book.isnot(True))
+            .order_by(Book.created_at)
         )
         unsummarized_result = await db.execute(
             select(Book.id)
-            .where(Book.id.in_(has_unsummarized))
+            .where(Book.id.in_(has_unsummarized), Book.is_image_book.isnot(True))
             .order_by(Book.created_at)
         )
         no_text_ids = [row[0] for row in no_text_result.all()]
@@ -117,9 +186,29 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
         result = await db.execute(
             select(Book.id).where(Book.id.notin_(has_tags)).order_by(Book.created_at)
         )
-    elif job_type == "word_count":
+    elif job_type == "book_embedding":
+        # Books with ALL chunks summarized but no BookEmbedding row, excluding image books
+        from app.models.book_embedding_unified import BookEmbedding
+
+        has_unsummarized = (
+            select(BookTextChunk.book_id)
+            .where(BookTextChunk.summary.is_(None))
+            .group_by(BookTextChunk.book_id)
+        )
+        fully_summarized = (
+            select(BookTextChunk.book_id)
+            .group_by(BookTextChunk.book_id)
+            .except_(has_unsummarized)
+        )
+        has_book_embed = select(BookEmbedding.book_id)
         result = await db.execute(
-            select(Book.id).where(Book.word_count.is_(None)).order_by(Book.created_at)
+            select(Book.id)
+            .where(
+                Book.id.in_(fully_summarized),
+                Book.id.notin_(has_book_embed),
+                Book.is_image_book.isnot(True),
+            )
+            .order_by(Book.created_at)
         )
     else:
         return []
@@ -128,36 +217,5 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
 
 
 def _dispatch_single(job_type: str, book_id: str, run_id: str) -> None:
-    """Dispatch a per-book task via .delay(), with a run_id guard in front."""
-    from celery import chain
-
-    guard = check_run_id.si(job_type, run_id)
-
-    if job_type == "text_extraction":
-        from app.tasks.text_extract import extract_book_text
-
-        chain(guard, extract_book_text.si(book_id)).delay()
-
-    elif job_type == "embedding":
-        from app.tasks.embed import embed_book
-        from app.tasks.text_extract import extract_book_text
-
-        chain(guard, extract_book_text.si(book_id), embed_book.si(book_id)).delay()
-
-    elif job_type == "summarize":
-        from app.tasks.summarize import summarize_chunks
-        from app.tasks.text_extract import extract_book_text
-
-        chain(
-            guard, extract_book_text.si(book_id), summarize_chunks.si(book_id, 999999)
-        ).delay()
-
-    elif job_type == "auto_tag":
-        from app.tasks.auto_tag import auto_tag_book
-
-        chain(guard, auto_tag_book.si(book_id)).delay()
-
-    elif job_type == "word_count":
-        from app.tasks.wordcount import compute_word_count
-
-        chain(guard, compute_word_count.si(book_id)).delay()
+    """Dispatch a single book job task."""
+    run_book_job.delay(job_type, book_id, run_id)
