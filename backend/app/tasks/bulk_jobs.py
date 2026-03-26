@@ -119,25 +119,12 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
     from app.models.tag import AiBookTag
 
     if job_type == "text_extraction":
-        # Books without text chunks OR books with chunks but not yet classified
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
-        no_text_result = await db.execute(
-            select(Book.id).where(Book.id.notin_(has_text)).order_by(Book.created_at)
-        )
-        unclassified_result = await db.execute(
+        # Books not yet classified (is_image_book IS NULL)
+        result = await db.execute(
             select(Book.id)
-            .where(Book.id.in_(has_text), Book.is_image_book.is_(None))
+            .where(Book.is_image_book.is_(None))
             .order_by(Book.created_at)
         )
-        no_text_ids = [row[0] for row in no_text_result.all()]
-        unclassified_ids = [row[0] for row in unclassified_result.all()]
-        seen = set()
-        book_ids = []
-        for bid in no_text_ids + unclassified_ids:
-            if bid not in seen:
-                seen.add(bid)
-                book_ids.append(bid)
-        return book_ids
     elif job_type == "embedding":
         # Only non-image books that already have text chunks but no embeddings
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)

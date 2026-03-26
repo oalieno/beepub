@@ -43,11 +43,31 @@ async def _run_text_extract(book_id: str) -> None:
             if existing.scalar_one_or_none() is not None:
                 # Chunks exist — check if classification is needed
                 book_row = await db.execute(
-                    select(Book.word_count).where(Book.id == bid)
+                    select(Book.word_count, Book.is_image_book).where(Book.id == bid)
                 )
-                current_wc = book_row.scalar_one_or_none()
+                row = book_row.one_or_none()
+                current_wc = row[0] if row else None
+                current_is_image = row[1] if row else None
+
+                if current_wc is not None and current_is_image is not None:
+                    # Already fully classified, nothing to do
+                    return
+
                 if current_wc is not None:
-                    # Already classified, nothing to do
+                    # word_count exists but is_image_book is NULL — backfill
+                    is_image = current_wc < _IMAGE_BOOK_THRESHOLD
+                    await db.execute(
+                        update(Book)
+                        .where(Book.id == bid)
+                        .values(is_image_book=is_image)
+                    )
+                    await db.commit()
+                    logger.info(
+                        "Backfilled is_image_book for book %s: word_count=%d, is_image_book=%s",
+                        book_id,
+                        current_wc,
+                        is_image,
+                    )
                     return
 
                 # word_count is NULL — classify from stored DB chunks
@@ -85,7 +105,14 @@ async def _run_text_extract(book_id: str) -> None:
             )
 
             if not chunks:
-                logger.warning("No text extracted from book %s", book_id)
+                # No text at all — classify as image book
+                await db.execute(
+                    update(Book)
+                    .where(Book.id == bid)
+                    .values(word_count=0, is_image_book=True)
+                )
+                await db.commit()
+                logger.info("Book %s has no text, classified as image book", book_id)
                 return
 
             for chunk in chunks:

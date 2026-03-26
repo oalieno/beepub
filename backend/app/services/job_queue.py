@@ -262,13 +262,10 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
     has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
 
     if job_type == "text_extraction":
-        # Books without text chunks OR books with chunks but not yet classified
-        no_text = select(Book.id).where(Book.id.notin_(has_text))
-        unclassified = select(Book.id).where(
-            Book.id.in_(has_text), Book.is_image_book.is_(None)
-        )
+        # Books not yet classified (is_image_book IS NULL) — either no chunks or unclassified
+        # Excludes books already classified (even image books with 0 chunks)
         missing_result = await db.execute(
-            select(func.count()).select_from(no_text.union(unclassified).subquery())
+            select(func.count(Book.id)).where(Book.is_image_book.is_(None))
         )
     elif job_type == "embedding":
         # Missing: non-image books with text but no embeddings
