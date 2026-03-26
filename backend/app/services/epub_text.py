@@ -71,7 +71,7 @@ def extract_full_text(file_path: str, max_chars: int = 500_000) -> list[TextChun
     Returns a list of TextChunk objects, each representing one spine section.
     Stops accumulating once max_chars is reached.
     """
-    book = epub.read_epub(file_path, options={"ignore_ncx": True})
+    book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
     chunks: list[TextChunk] = []
     total_chars = 0
 
@@ -123,7 +123,7 @@ def extract_text_up_to(
         n = int(cfi_match.group(2))
         spine_cutoff = (n // 2) - 1
 
-    book = epub.read_epub(file_path, options={"ignore_ncx": True})
+    book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
     parts: list[str] = []
     total_chars = 0
 
@@ -148,6 +148,23 @@ def extract_text_up_to(
     return "\n\n".join(parts)
 
 
+def _count_words_in_text(text: str) -> int:
+    """Count words in a single text string (CJK-aware)."""
+    cjk_count = len(_CJK_RE.findall(text))
+    non_cjk = _CJK_RE.sub("", text)
+    return cjk_count + len(_WORD_SPLIT_RE.findall(non_cjk))
+
+
+def count_words_from_chunks(chunks: list[TextChunk]) -> int:
+    """Count words from already-extracted TextChunk objects."""
+    return sum(_count_words_in_text(chunk.text) for chunk in chunks)
+
+
+def count_words_from_texts(texts: list[str]) -> int:
+    """Count words from a list of plain text strings."""
+    return sum(_count_words_in_text(text) for text in texts)
+
+
 def count_words(file_path: str) -> int | None:
     """Count words in an epub file.
 
@@ -156,7 +173,7 @@ def count_words(file_path: str) -> int | None:
     Returns None if the file cannot be parsed.
     """
     try:
-        book = epub.read_epub(file_path, options={"ignore_ncx": True})
+        book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
     except Exception:
         return None
 

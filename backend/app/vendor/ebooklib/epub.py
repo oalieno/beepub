@@ -1769,18 +1769,20 @@ class EpubReader(object):  # noqa: UP004
                     ei = EpubCover(uid=r.get("id"), file_name=unquote(r.get("href")))
 
                     ei.media_type = media_type
-                    ei.content = self.read_file(
-                        zip_path.join(self.opf_dir, ei.get_name())
-                    )
+                    if not self.options.get("ignore_images"):
+                        ei.content = self.read_file(
+                            zip_path.join(self.opf_dir, ei.get_name())
+                        )
                 else:
                     ei = EpubImage()
 
                     ei.id = r.get("id")
                     ei.file_name = unquote(r.get("href"))
                     ei.media_type = media_type
-                    ei.content = self.read_file(
-                        zip_path.join(self.opf_dir, ei.get_name())
-                    )
+                    if not self.options.get("ignore_images"):
+                        ei.content = self.read_file(
+                            zip_path.join(self.opf_dir, ei.get_name())
+                        )
                 ei.properties = properties
             else:
                 # different types
