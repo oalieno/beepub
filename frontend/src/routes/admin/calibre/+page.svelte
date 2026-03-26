@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { adminApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import type { CalibreLibraryInfo, CalibreLibraryStatus } from "$lib/types";
-  import { UserRole } from "$lib/types";
   import {
     HardDrive,
     RefreshCw,
@@ -28,11 +25,6 @@
   );
 
   onMount(() => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
-
     void loadLibraries();
 
     return () => {

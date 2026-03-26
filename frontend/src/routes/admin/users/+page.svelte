@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { adminApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
@@ -13,10 +12,6 @@
   let loading = $state(true);
 
   onMount(async () => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
     await loadData();
   });
 

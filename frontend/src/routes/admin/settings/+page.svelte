@@ -1,11 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { adminApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import type { AdminSettings } from "$lib/types";
-  import { UserRole } from "$lib/types";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Button } from "$lib/components/ui/button";
@@ -155,10 +152,6 @@
   }
 
   onMount(async () => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
     await loadSettings();
   });
 

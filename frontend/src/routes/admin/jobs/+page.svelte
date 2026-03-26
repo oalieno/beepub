@@ -1,11 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { adminApi, aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import type { AiStatus, JobStatus } from "$lib/types";
-  import { UserRole } from "$lib/types";
   import {
     FileText,
     Search,
@@ -86,10 +83,6 @@
   }
 
   onMount(async () => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
     await Promise.all([
       fetchJobs(),
       aiApi.getStatus().then((s) => (aiStatus = s)),

@@ -1,8 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { adminApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
@@ -11,7 +9,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import type { LibraryOut, UserOut } from "$lib/types";
-  import { UserRole, LibraryVisibility } from "$lib/types";
+  import { LibraryVisibility } from "$lib/types";
   import { Trash2, UserPlus, Save } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
 
@@ -37,10 +35,6 @@
   ];
 
   onMount(async () => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
     await loadData();
   });
 

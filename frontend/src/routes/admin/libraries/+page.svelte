@@ -1,7 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import Modal from "$lib/components/Modal.svelte";
@@ -10,7 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import type { LibraryOut } from "$lib/types";
-  import { UserRole, LibraryVisibility } from "$lib/types";
+  import { LibraryVisibility } from "$lib/types";
   import {
     Plus,
     Trash2,
@@ -37,10 +35,6 @@
   ];
 
   onMount(async () => {
-    if (!$authStore.user || $authStore.user.role !== UserRole.Admin) {
-      goto("/");
-      return;
-    }
     await loadData();
   });
 
