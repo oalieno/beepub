@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -72,6 +73,7 @@ class Book(Base, TimestampMixin):
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
 
     word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    is_image_book: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     calibre_added_at: Mapped[datetime | None] = mapped_column(

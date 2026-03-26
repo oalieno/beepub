@@ -44,6 +44,7 @@ class BookOut(BaseModel):
     series_index: float | None = None
     tags: list[str] | None = None
     word_count: int | None = None
+    is_image_book: bool | None = None
     display_title: str | None
     display_authors: list[str] | None
     display_series: str | None = None
