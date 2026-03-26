@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { BookOut, ReadingStatus } from "$lib/types";
-  import { BookOpen, Bookmark, Check } from "@lucide/svelte";
+  import { BookOpen, Bookmark, Check, Image } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
 
   let {
@@ -65,6 +65,13 @@
             class="text-muted-foreground/60 text-xs text-center line-clamp-3"
             >{book.display_title ?? "Untitled"}</span
           >
+        </div>
+      {/if}
+
+      <!-- Image book badge — top-left -->
+      {#if book.is_image_book}
+        <div class="absolute top-2 left-2 p-1 bg-secondary/80 backdrop-blur-sm rounded-full">
+          <Image size={13} class="text-muted-foreground" />
         </div>
       {/if}
 

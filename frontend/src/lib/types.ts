@@ -61,6 +61,7 @@ export interface BookOut {
   series_index: number | null;
   tags: string[] | null;
   word_count: number | null;
+  is_image_book: boolean | null;
   display_title: string | null;
   display_authors: string[] | null;
   display_series: string | null;
@@ -298,6 +299,13 @@ export interface CompanionConversationSummary {
   updated_at: string;
 }
 
+export interface JobProgress {
+  total: number;
+  completed: number;
+  failed: number;
+  last_activity: number | null;
+}
+
 export interface JobStatus {
   key: string;
   label: string;
@@ -305,8 +313,10 @@ export interface JobStatus {
   total: number;
   missing: number;
   blocked: number;
+  blocked_label: string;
   active: boolean;
   requires_ai: boolean;
+  progress: JobProgress | null;
 }
 
 export interface AllJobsResponse {

@@ -24,6 +24,7 @@
     darkMode = false,
     toc = [],
     isRtl = false,
+    isImageBook = false,
     highlightCount = 0,
     illustrationCount = 0,
     onprev,
@@ -47,6 +48,7 @@
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
+    isImageBook?: boolean;
     highlightCount?: number;
     illustrationCount?: number;
     onprev?: () => void;
@@ -92,58 +94,60 @@
     <List size={18} />
   </button>
 
-  <!-- Search button -->
-  <button
-    class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-    title="Search in book"
-    onclick={() => onsearch?.()}
-  >
-    <Search size={18} />
-  </button>
+  {#if !isImageBook}
+    <!-- Search button -->
+    <button
+      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      title="Search in book"
+      onclick={() => onsearch?.()}
+    >
+      <Search size={18} />
+    </button>
 
-  <!-- Highlights button -->
-  <button
-    class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
-    title="Highlights"
-    onclick={() => onhighlights?.()}
-  >
-    <Highlighter size={18} />
-    {#if highlightCount > 0}
-      <span
-        class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode
-          ? 'bg-amber-500 text-gray-900'
-          : 'bg-primary text-primary-foreground'}"
-      >
-        {highlightCount > 99 ? "99" : highlightCount}
-      </span>
-    {/if}
-  </button>
+    <!-- Highlights button -->
+    <button
+      class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
+      title="Highlights"
+      onclick={() => onhighlights?.()}
+    >
+      <Highlighter size={18} />
+      {#if highlightCount > 0}
+        <span
+          class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode
+            ? 'bg-amber-500 text-gray-900'
+            : 'bg-primary text-primary-foreground'}"
+        >
+          {highlightCount > 99 ? "99" : highlightCount}
+        </span>
+      {/if}
+    </button>
 
-  <!-- Illustrations button -->
-  <button
-    class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
-    title="AI Illustrations"
-    onclick={() => onillustrations?.()}
-  >
-    <Sparkles size={18} />
-    {#if illustrationCount > 0}
-      <span
-        class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center"
-        style="background: linear-gradient(135deg, #a855f7, #3b82f6); color: white;"
-      >
-        {illustrationCount > 99 ? "99" : illustrationCount}
-      </span>
-    {/if}
-  </button>
+    <!-- Illustrations button -->
+    <button
+      class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
+      title="AI Illustrations"
+      onclick={() => onillustrations?.()}
+    >
+      <Sparkles size={18} />
+      {#if illustrationCount > 0}
+        <span
+          class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center"
+          style="background: linear-gradient(135deg, #a855f7, #3b82f6); color: white;"
+        >
+          {illustrationCount > 99 ? "99" : illustrationCount}
+        </span>
+      {/if}
+    </button>
 
-  <!-- Companion button -->
-  <button
-    class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-    title="AI Companion"
-    onclick={() => oncompanion?.()}
-  >
-    <MessageCircle size={18} />
-  </button>
+    <!-- Companion button -->
+    <button
+      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      title="AI Companion"
+      onclick={() => oncompanion?.()}
+    >
+      <MessageCircle size={18} />
+    </button>
+  {/if}
 
   <div
     class="flex-1 basis-full sm:basis-auto min-w-0 order-last sm:order-none text-center sm:text-left"
@@ -159,47 +163,49 @@
   </div>
 
   <div class="ml-auto flex items-center gap-1">
-    <button
-      class="hidden sm:inline-flex px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(
-        darkMode,
-      )}"
-      title="Toggle font family"
-      onclick={() => onfontToggle?.()}
-    >
-      {fontFamily === "serif" ? "Serif" : "Sans"}
-    </button>
+    {#if !isImageBook}
+      <button
+        class="hidden sm:inline-flex px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(
+          darkMode,
+        )}"
+        title="Toggle font family"
+        onclick={() => onfontToggle?.()}
+      >
+        {fontFamily === "serif" ? "Serif" : "Sans"}
+      </button>
 
-    <div
-      class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
-    ></div>
+      <div
+        class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
+      ></div>
 
-    <button
-      class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
-        darkMode,
-      )}"
-      onclick={() => onfontDecrease?.()}
-      disabled={fontSize <= 10}
-    >
-      <Minus size={14} />
-    </button>
-    <span
-      class="hidden sm:inline text-[11px] w-8 text-center {darkMode
-        ? 'text-gray-500'
-        : 'text-muted-foreground'}">{fontSize}px</span
-    >
-    <button
-      class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
-        darkMode,
-      )}"
-      onclick={() => onfontIncrease?.()}
-      disabled={fontSize >= 32}
-    >
-      <Plus size={14} />
-    </button>
+      <button
+        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+          darkMode,
+        )}"
+        onclick={() => onfontDecrease?.()}
+        disabled={fontSize <= 10}
+      >
+        <Minus size={14} />
+      </button>
+      <span
+        class="hidden sm:inline text-[11px] w-8 text-center {darkMode
+          ? 'text-gray-500'
+          : 'text-muted-foreground'}">{fontSize}px</span
+      >
+      <button
+        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+          darkMode,
+        )}"
+        onclick={() => onfontIncrease?.()}
+        disabled={fontSize >= 32}
+      >
+        <Plus size={14} />
+      </button>
 
-    <div
-      class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
-    ></div>
+      <div
+        class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
+      ></div>
+    {/if}
 
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"

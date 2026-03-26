@@ -8,10 +8,11 @@
     Search,
     BookOpen,
     Tags,
-    Hash,
     ScanSearch,
+    LibraryBig,
     LoaderCircle,
     Square,
+    AlertTriangle,
   } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
 
@@ -27,7 +28,7 @@
     embedding: Search,
     summarize: BookOpen,
     auto_tag: Tags,
-    word_count: Hash,
+    book_embedding: LibraryBig,
   };
 
   /** Maps job keys that require AI to their corresponding AiStatus field. */
@@ -35,12 +36,20 @@
     embedding: "embedding",
     summarize: "tag",
     auto_tag: "tag",
+    book_embedding: "embedding",
   };
+
+  const STALE_THRESHOLD_S = 7200; // 2 hours
 
   function isAiReady(jobKey: string): boolean {
     const feature = JOB_AI_FEATURE[jobKey];
     if (!feature) return true; // non-AI job, always ready
     return aiStatus?.[feature] ?? false;
+  }
+
+  function isStale(job: JobStatus): boolean {
+    if (!job.progress?.last_activity) return false;
+    return Date.now() / 1000 - job.progress.last_activity > STALE_THRESHOLD_S;
   }
 
   async function fetchJobs() {
@@ -119,6 +128,13 @@
       {#each jobs as job (job.key)}
         {@const Icon = JOB_ICONS[job.key] ?? FileText}
         {@const isTriggering = triggeringJob === job.key}
+        {@const running = job.active && job.missing > 0}
+        {@const p = job.progress}
+        {@const stale = isStale(job)}
+        {@const pct =
+          p && p.total > 0
+            ? Math.round(((p.completed + p.failed) / p.total) * 100)
+            : 0}
 
         <div
           class="bg-card card-soft rounded-2xl overflow-hidden flex border border-border/50"
@@ -144,9 +160,15 @@
                   AI
                 </span>
               {/if}
-              {#if job.active}
+              {#if running && !stale}
                 <LoaderCircle
                   class="text-primary animate-spin shrink-0"
+                  size={15}
+                />
+              {/if}
+              {#if stale && running}
+                <AlertTriangle
+                  class="text-amber-500 shrink-0"
                   size={15}
                 />
               {/if}
@@ -155,6 +177,48 @@
             <p class="text-muted-foreground text-sm mt-1 mb-4 ml-[1.75rem]">
               {job.description}
             </p>
+
+            <!-- Progress bar (when running with progress data) -->
+            {#if running && p && p.total > 0}
+              <div class="ml-[1.75rem] mb-3">
+                <div class="flex items-center gap-3 mb-1.5">
+                  <span
+                    class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
+                  >
+                    {p.completed.toLocaleString()}/{p.total.toLocaleString()}
+                  </span>
+                  {#if p.failed > 0}
+                    <span
+                      class="text-xs font-medium text-destructive font-sans tabular-nums"
+                    >
+                      {p.failed.toLocaleString()} failed
+                    </span>
+                  {/if}
+                  {#if stale}
+                    <span
+                      class="text-xs font-medium text-amber-500"
+                    >
+                      Stalled
+                    </span>
+                  {/if}
+                  <span
+                    class="text-xs text-muted-foreground font-sans tabular-nums ml-auto"
+                  >
+                    {pct}%
+                  </span>
+                </div>
+                <div
+                  class="h-1.5 rounded-full bg-muted overflow-hidden"
+                >
+                  <div
+                    class="h-full rounded-full transition-all duration-500 ease-out {stale
+                      ? 'bg-amber-500'
+                      : 'bg-primary'}"
+                    style="width: {pct}%"
+                  ></div>
+                </div>
+              </div>
+            {/if}
 
             <!-- Status bar -->
             <div
@@ -178,7 +242,7 @@
                   class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-muted/50"
                 >
                   <span class="text-xs sm:text-sm text-muted-foreground"
-                    >Needs Text</span
+                    >{job.blocked_label}</span
                   >
                   <span
                     class="text-xs sm:text-sm font-semibold text-muted-foreground font-sans tabular-nums"
@@ -194,7 +258,7 @@
           <div
             class="flex flex-col border-l border-border/50 shrink-0 w-[4.5rem] sm:w-20"
           >
-            {#if job.active}
+            {#if running}
               <button
                 class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-destructive/10 active:bg-destructive/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 disabled={stoppingJob === job.key}

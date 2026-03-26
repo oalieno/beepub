@@ -67,6 +67,7 @@
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
+  let isImageBook = $state(false);
   let aiStatus = $state<AiStatus>({
     companion: false,
     tag: false,
@@ -105,6 +106,7 @@
       .get(bookId)
       .then((book) => {
         bookAuthors = book.display_authors ?? book.epub_authors ?? [];
+        isImageBook = book.is_image_book === true;
       })
       .catch(() => {});
   });
@@ -342,6 +344,7 @@
     {darkMode}
     {toc}
     {isRtl}
+    {isImageBook}
     highlightCount={highlights.length}
     illustrationCount={illustrations.length}
     onprev={() => reader?.prev()}
@@ -398,6 +401,7 @@
         {fontFamily}
         {fontSize}
         {darkMode}
+        {isImageBook}
         ontitle={(t) => (title = t)}
         onprogress={(p) => {
           percentage = p.percentage;
@@ -455,7 +459,7 @@
       />
     {/if}
 
-    {#if showSearchSidebar}
+    {#if showSearchSidebar && !isImageBook}
       <SearchSidebar
         {darkMode}
         onselect={(cfi) => {
@@ -467,7 +471,7 @@
       />
     {/if}
 
-    {#if showHighlightSidebar}
+    {#if showHighlightSidebar && !isImageBook}
       <HighlightSidebar
         {highlights}
         {darkMode}
@@ -490,7 +494,7 @@
       />
     {/if}
 
-    {#if showIllustrationSidebar}
+    {#if showIllustrationSidebar && !isImageBook}
       <IllustrationSidebar
         {illustrations}
         {bookId}
@@ -501,7 +505,7 @@
       />
     {/if}
 
-    {#if showCompanionSidebar}
+    {#if showCompanionSidebar && !isImageBook}
       <CompanionSidebar
         {bookId}
         {darkMode}

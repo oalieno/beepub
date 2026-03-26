@@ -11,6 +11,7 @@
     fontFamily = "serif",
     fontSize = 16,
     darkMode = false,
+    isImageBook = false,
     onprogress,
     ontitle,
     ontoc,
@@ -30,6 +31,7 @@
     fontFamily?: string;
     fontSize?: number;
     darkMode?: boolean;
+    isImageBook?: boolean;
     onprogress?: (detail: { cfi: string; percentage: number }) => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
@@ -670,6 +672,7 @@
 
         /** Show the highlight menu for a given range and its text */
         function showMenuForRange(range: Range, text: string) {
+          if (isImageBook) return;
           const cfi = rendition?.manager
             ?.getContents?.()?.[0]
             ?.cfiFromRange?.(range);
@@ -857,6 +860,8 @@
       (cfiRange: string, contents: { window: Window }) => {
         // On iOS, our custom touch handler manages selection and menu
         if (isIOSDevice) return;
+        // Suppress text selection context menu for image books
+        if (isImageBook) return;
 
         const selection = contents.window.getSelection();
         if (!selection || selection.toString().trim() === "") return;
