@@ -538,29 +538,7 @@ async def get_llm_usage(
     }
 
 
-@router.post("/recompute-word-counts", status_code=status.HTTP_202_ACCEPTED)
-async def recompute_word_counts(
-    current_user: Annotated[User, Depends(require_admin)],
-):
-    """Legacy wrapper — delegates to the unified bulk job system."""
-    from app.tasks.bulk_jobs import run_bulk_job
-
-    run_bulk_job.delay("word_count", "missing")
-    return {"status": "accepted"}
-
-
 # --- Semantic Similar Books ---
-
-
-@router.post("/backfill-summary-embeddings", status_code=status.HTTP_202_ACCEPTED)
-async def trigger_backfill_summary_embeddings(
-    current_user: Annotated[User, Depends(require_admin)],
-):
-    """Backfill summary embeddings for all books with summaries but no embedding."""
-    from app.tasks.embed import backfill_summary_embeddings
-
-    backfill_summary_embeddings.delay()
-    return {"status": "accepted"}
 
 
 @router.get("/similarity-debug")

@@ -49,7 +49,6 @@ celery.conf.update(
     task_default_queue="default",
     imports=[
         "app.tasks.metadata",
-        "app.tasks.wordcount",
         "app.tasks.illustration",
         "app.tasks.auto_tag",
         "app.tasks.text_extract",

@@ -70,7 +70,6 @@ from app.services.storage import (
 from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_metadata
 from app.tasks.text_extract import extract_book_text
-from app.tasks.wordcount import compute_word_count
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -145,7 +144,6 @@ async def upload_book(
     await db.refresh(book)
 
     fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
-    compute_word_count.delay(str(book_id))
     extract_book_text.delay(str(book_id))
     return book
 
@@ -200,7 +198,6 @@ async def upload_books_bulk(
         fetch_metadata.apply_async(
             args=[str(book_id)], link=auto_tag_book.si(str(book_id))
         )
-        compute_word_count.delay(str(book_id))
         extract_book_text.delay(str(book_id))
 
     await db.commit()
