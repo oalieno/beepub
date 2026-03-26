@@ -59,7 +59,7 @@
     return days;
   });
 
-  const STEP_VALUES = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+  const STEP_VALUES = [5, 10, 15, 20, 30];
 
   let pendingMinutes = $state(15);
 
@@ -82,13 +82,14 @@
 
   function stepGoal(delta: number) {
     const current = pendingMinutes;
-    // Find next preset value in direction
-    if (delta > 0) {
+    if (current > 30 || (current === 30 && delta > 0)) {
+      pendingMinutes = Math.min(Math.max(current + delta * 15, 30), 480);
+    } else if (delta > 0) {
       const next = STEP_VALUES.find((p) => p > current);
-      pendingMinutes = next ?? Math.min(current + 15, 480);
+      pendingMinutes = next ?? 30;
     } else {
       const prev = [...STEP_VALUES].reverse().find((p) => p < current);
-      pendingMinutes = prev ?? Math.max(current - 5, 1);
+      pendingMinutes = prev ?? 5;
     }
   }
 
