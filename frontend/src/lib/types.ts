@@ -62,6 +62,7 @@ export interface BookOut {
   tags: string[] | null;
   word_count: number | null;
   is_image_book: boolean | null;
+  has_unresolved_reports: boolean;
   display_title: string | null;
   display_authors: string[] | null;
   display_series: string | null;
@@ -379,4 +380,19 @@ export interface LlmUsageResponse {
     call_count: number;
     estimated_cost: number;
   };
+}
+
+export interface BookReport {
+  id: string;
+  book_id: string;
+  reported_by: string | null;
+  issue_type: string;
+  description: string | null;
+  resolved: boolean;
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  book_title: string | null;
+  book_cover: string | null;
+  reporter_name: string | null;
 }

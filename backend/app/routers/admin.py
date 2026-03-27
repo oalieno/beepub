@@ -626,3 +626,68 @@ async def get_similarity_debug(
         "semantic_score": semantic_score,
         "total_score": total_score,
     }
+
+
+# --- Book Reports ---
+
+
+@router.get("/reports")
+async def list_reports(
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    resolved: bool = False,
+):
+    """List book reports. Defaults to unresolved only."""
+    from app.models.book_report import BookReport
+
+    query = (
+        select(BookReport)
+        .where(BookReport.resolved == resolved)
+        .order_by(BookReport.created_at.desc())
+    )
+    result = await db.execute(query)
+    reports = result.scalars().all()
+
+    items = []
+    for r in reports:
+        item = {
+            "id": r.id,
+            "book_id": r.book_id,
+            "reported_by": r.reported_by,
+            "issue_type": r.issue_type,
+            "description": r.description,
+            "resolved": r.resolved,
+            "resolved_by": r.resolved_by,
+            "created_at": r.created_at,
+            "resolved_at": r.resolved_at,
+            "book_title": (r.book.title or r.book.epub_title) if r.book else None,
+            "book_cover": r.book.cover_path if r.book else None,
+            "reporter_name": r.reporter.username if r.reporter else None,
+        }
+        items.append(item)
+    return items
+
+
+@router.put("/reports/{report_id}/resolve")
+async def resolve_report(
+    report_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Mark a report as resolved."""
+    from datetime import UTC, datetime
+
+    from app.models.book_report import BookReport
+
+    result = await db.execute(select(BookReport).where(BookReport.id == report_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+
+    if not report.resolved:
+        report.resolved = True
+        report.resolved_by = current_user.id
+        report.resolved_at = datetime.now(UTC)
+        await db.commit()
+
+    return {"status": "resolved"}

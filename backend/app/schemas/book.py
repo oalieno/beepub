@@ -45,6 +45,7 @@ class BookOut(BaseModel):
     tags: list[str] | None = None
     word_count: int | None = None
     is_image_book: bool | None = None
+    has_unresolved_reports: bool = False
     display_title: str | None
     display_authors: list[str] | None
     display_series: str | None = None
@@ -123,6 +124,28 @@ class SeriesNeighborsOut(BaseModel):
     next: SeriesBookBrief | None = None
     previous: SeriesBookBrief | None = None
     progress: SeriesProgress | None = None
+
+
+class BookReportCreate(BaseModel):
+    issue_type: str
+    description: str | None = None
+
+
+class BookReportOut(BaseModel):
+    id: uuid.UUID
+    book_id: uuid.UUID
+    reported_by: uuid.UUID | None
+    issue_type: str
+    description: str | None
+    resolved: bool
+    resolved_by: uuid.UUID | None
+    created_at: datetime
+    resolved_at: datetime | None
+    book_title: str | None = None
+    book_cover: str | None = None
+    reporter_name: str | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class ExternalMetadataUrlUpdate(BaseModel):

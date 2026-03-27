@@ -38,6 +38,8 @@
     Undo2,
     ChevronLeft,
     ChevronRight,
+    Flag,
+    AlertTriangle,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -149,6 +151,9 @@
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
   let showNotesModal = $state(false);
+  let showReportModal = $state(false);
+  let reportForm = $state({ issue_type: "", description: "" });
+  let submittingReport = $state(false);
   let editForm = $state({
     title: "",
     authors: "",
@@ -464,6 +469,25 @@
       toastStore.error((e as Error).message);
     } finally {
       savingNotes = false;
+    }
+  }
+
+  async function handleSubmitReport() {
+    if (!book || !reportForm.issue_type) return;
+    submittingReport = true;
+    try {
+      await booksApi.reportIssue(bookId, {
+        issue_type: reportForm.issue_type,
+        description: reportForm.description || undefined,
+      });
+      showReportModal = false;
+      reportForm = { issue_type: "", description: "" };
+      book = { ...book, has_unresolved_reports: true };
+      toastStore.success("Report submitted");
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      submittingReport = false;
     }
   }
 
@@ -795,6 +819,15 @@
               class={interaction?.notes ? "text-primary" : ""}
             />
           </button>
+          <button
+            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {book.has_unresolved_reports
+              ? 'text-destructive'
+              : 'text-foreground'}"
+            onclick={() => (showReportModal = true)}
+            title="Report issue"
+          >
+            <Flag size={16} />
+          </button>
           {#if isAdmin}
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
@@ -825,6 +858,17 @@
         </div>
       </div>
     </div>
+
+    {#if book.has_unresolved_reports}
+      <div
+        class="flex items-center gap-3 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-xl mt-6"
+      >
+        <AlertTriangle size={18} class="text-destructive shrink-0" />
+        <p class="text-sm text-destructive">
+          This book's file may be corrupted or unreadable.
+        </p>
+      </div>
+    {/if}
 
     <!-- Separator -->
     <div class="border-t border-border my-8"></div>
@@ -1377,3 +1421,65 @@
     </div>
   </Modal>
 {/if}
+
+<Modal
+  title="Report Issue"
+  open={showReportModal}
+  onclose={() => (showReportModal = false)}
+>
+  <div class="space-y-4">
+    <div class="space-y-1">
+      <p class="text-sm text-muted-foreground">Issue type</p>
+      <Select.Root
+        type="single"
+        value={reportForm.issue_type || undefined}
+        onValueChange={(v) => (reportForm.issue_type = v)}
+      >
+        <Select.Trigger>
+          {#if reportForm.issue_type}
+            {{
+              corrupt_file: "Corrupt file",
+              wrong_metadata: "Wrong metadata",
+              cant_open: "Can't open",
+              other: "Other",
+            }[reportForm.issue_type]}
+          {:else}
+            Select an issue...
+          {/if}
+        </Select.Trigger>
+        <Select.Content>
+          <Select.Item value="corrupt_file">Corrupt file</Select.Item>
+          <Select.Item value="wrong_metadata">Wrong metadata</Select.Item>
+          <Select.Item value="cant_open">Can't open</Select.Item>
+          <Select.Item value="other">Other</Select.Item>
+        </Select.Content>
+      </Select.Root>
+    </div>
+    <div class="space-y-1">
+      <label class="block text-sm text-muted-foreground" for="report-desc"
+        >Description (optional)</label
+      >
+      <textarea
+        id="report-desc"
+        bind:value={reportForm.description}
+        rows={4}
+        maxlength={2000}
+        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-sm"
+        placeholder="Describe the issue..."
+      ></textarea>
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <button
+        class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+        onclick={() => (showReportModal = false)}>Cancel</button
+      >
+      <button
+        class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl disabled:opacity-50"
+        onclick={handleSubmitReport}
+        disabled={submittingReport || !reportForm.issue_type}
+      >
+        {submittingReport ? "Submitting..." : "Submit Report"}
+      </button>
+    </div>
+  </div>
+</Modal>

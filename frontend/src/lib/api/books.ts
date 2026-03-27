@@ -1,6 +1,7 @@
 import { get, post, put, patch, del } from "./client";
 import type {
   BookOut,
+  BookReport,
   BookWithInteractionOut,
   CompanionConversationOut,
   CompanionConversationSummary,
@@ -266,4 +267,12 @@ export const booksApi = {
     put("/books/reading-goal", {
       goal_seconds: goalSeconds,
     }) as Promise<ReadingStats>,
+
+  reportIssue: (
+    bookId: string,
+    data: { issue_type: string; description?: string },
+  ) => post(`/books/${bookId}/reports`, data) as Promise<BookReport>,
+
+  getReports: (bookId: string) =>
+    get(`/books/${bookId}/reports`) as Promise<BookReport[]>,
 };

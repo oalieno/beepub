@@ -100,9 +100,38 @@ async def _run_text_extract(book_id: str) -> None:
                 return
 
             file_path = row[0]
-            chunks = await asyncio.to_thread(
-                extract_full_text, file_path, max_chars=10_000_000
-            )
+            try:
+                chunks = await asyncio.to_thread(
+                    extract_full_text, file_path, max_chars=10_000_000
+                )
+            except Exception as exc:
+                # Corrupt/unreadable EPUB — classify and auto-report
+                logger.warning(
+                    "Failed to parse EPUB for book %s, classifying as image book",
+                    book_id,
+                    exc_info=True,
+                )
+                await db.execute(
+                    update(Book)
+                    .where(Book.id == bid)
+                    .values(word_count=0, is_image_book=True)
+                )
+                try:
+                    from app.models.book_report import BookReport
+
+                    db.add(
+                        BookReport(
+                            book_id=bid,
+                            issue_type="corrupt_file",
+                            description=str(exc)[:500],
+                        )
+                    )
+                except Exception:
+                    logger.warning(
+                        "Failed to create report for corrupt book %s", book_id
+                    )
+                await db.commit()
+                return
 
             if not chunks:
                 # No text at all — classify as image book

@@ -12,6 +12,7 @@
     Settings,
     ListChecks,
     Activity,
+    Flag,
   } from "@lucide/svelte";
   import { DashboardSkeleton } from "$lib/components/skeletons";
 
@@ -173,6 +174,32 @@
             </p>
             <p class="text-muted-foreground text-sm">
               Monitor and trigger background processing tasks
+            </p>
+          </div>
+        </div>
+        <ChevronRight
+          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
+          size={20}
+        />
+      </a>
+      <a
+        href="/admin/reports"
+        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+          >
+            <Flag class="text-primary" size={18} />
+          </div>
+          <div>
+            <p
+              class="font-semibold text-foreground group-hover:text-primary transition-colors"
+            >
+              Book Reports
+            </p>
+            <p class="text-muted-foreground text-sm">
+              Review user-reported and system-detected book issues
             </p>
           </div>
         </div>

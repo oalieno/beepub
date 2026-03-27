@@ -102,6 +102,15 @@ export const adminApi = {
       import("$lib/types").LlmUsageResponse
     >;
   },
+
+  // Book Reports
+  getReports: (resolved: boolean = false) =>
+    get(`/admin/reports?resolved=${resolved}`) as Promise<
+      import("$lib/types").BookReport[]
+    >,
+
+  resolveReport: (reportId: string) =>
+    put(`/admin/reports/${reportId}/resolve`, {}),
 };
 
 export const aiApi = {

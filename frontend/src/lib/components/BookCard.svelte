@@ -1,7 +1,13 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { BookOut, ReadingStatus } from "$lib/types";
-  import { BookOpen, Bookmark, Check, Image } from "@lucide/svelte";
+  import {
+    AlertTriangle,
+    BookOpen,
+    Bookmark,
+    Check,
+    Image,
+  } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
 
   let {
@@ -70,8 +76,20 @@
 
       <!-- Image book badge — top-left -->
       {#if book.is_image_book}
-        <div class="absolute top-2 left-2 p-1 bg-secondary/80 backdrop-blur-sm rounded-full">
+        <div
+          class="absolute top-2 left-2 p-1 bg-secondary/80 backdrop-blur-sm rounded-full"
+        >
           <Image size={13} class="text-muted-foreground" />
+        </div>
+      {/if}
+
+      <!-- Issue report badge — top-left, below image badge -->
+      {#if book.has_unresolved_reports}
+        <div
+          class="absolute left-2 p-1 bg-destructive/80 backdrop-blur-sm rounded-full"
+          style:top={book.is_image_book ? "2.25rem" : "0.5rem"}
+        >
+          <AlertTriangle size={13} class="text-destructive-foreground" />
         </div>
       {/if}
 

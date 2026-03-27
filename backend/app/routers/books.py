@@ -31,6 +31,8 @@ from app.models.user import User, UserRole
 from app.schemas.book import (
     BookMetadataUpdate,
     BookOut,
+    BookReportCreate,
+    BookReportOut,
     BookSearchResult,
     BookWithInteractionOut,
     ExternalMetadataOut,
@@ -622,6 +624,16 @@ async def get_book(
     library_id = lb_result.scalar_one_or_none()
     out = BookOut.model_validate(book)
     out.library_id = library_id
+
+    # Check for unresolved reports
+    from app.models.book_report import BookReport
+
+    report_result = await db.execute(
+        select(BookReport.id)
+        .where(BookReport.book_id == book_id, BookReport.resolved.is_(False))
+        .limit(1)
+    )
+    out.has_unresolved_reports = report_result.scalar_one_or_none() is not None
     return out
 
 
@@ -1331,3 +1343,62 @@ async def _get_or_create_interaction(
         db.add(interaction)
         await db.flush()
     return interaction
+
+
+# --- Book Reports ---
+
+
+@router.post(
+    "/{book_id}/reports",
+    response_model=BookReportOut,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_book_report(
+    book_id: uuid.UUID,
+    body: BookReportCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.book_report import ISSUE_TYPES, BookReport
+
+    book = await _get_book_with_access(book_id, current_user, db)
+    if body.issue_type not in ISSUE_TYPES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Invalid issue_type. Must be one of: {', '.join(sorted(ISSUE_TYPES))}",
+        )
+    if body.description and len(body.description) > 2000:
+        raise HTTPException(
+            status_code=422, detail="Description must be 2000 characters or less"
+        )
+    report = BookReport(
+        book_id=book.id,
+        reported_by=current_user.id,
+        issue_type=body.issue_type,
+        description=body.description,
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    out = BookReportOut.model_validate(report)
+    out.book_title = book.title or book.epub_title
+    out.book_cover = book.cover_path
+    return out
+
+
+@router.get("/{book_id}/reports", response_model=list[BookReportOut])
+async def get_book_reports(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.book_report import BookReport
+
+    await _get_book_with_access(book_id, current_user, db)
+    result = await db.execute(
+        select(BookReport)
+        .where(BookReport.book_id == book_id)
+        .order_by(BookReport.created_at.desc())
+    )
+    reports = result.scalars().all()
+    return [BookReportOut.model_validate(r) for r in reports]
