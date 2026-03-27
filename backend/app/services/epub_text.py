@@ -71,7 +71,9 @@ def extract_full_text(file_path: str, max_chars: int = 500_000) -> list[TextChun
     Returns a list of TextChunk objects, each representing one spine section.
     Stops accumulating once max_chars is reached.
     """
-    book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
+    book = epub.read_epub(
+        file_path, options={"ignore_ncx": True, "ignore_images": True}
+    )
     chunks: list[TextChunk] = []
     total_chars = 0
 
@@ -123,7 +125,9 @@ def extract_text_up_to(
         n = int(cfi_match.group(2))
         spine_cutoff = (n // 2) - 1
 
-    book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
+    book = epub.read_epub(
+        file_path, options={"ignore_ncx": True, "ignore_images": True}
+    )
     parts: list[str] = []
     total_chars = 0
 
@@ -173,7 +177,9 @@ def count_words(file_path: str) -> int | None:
     Returns None if the file cannot be parsed.
     """
     try:
-        book = epub.read_epub(file_path, options={"ignore_ncx": True, "ignore_images": True})
+        book = epub.read_epub(
+            file_path, options={"ignore_ncx": True, "ignore_images": True}
+        )
     except Exception:
         return None
 

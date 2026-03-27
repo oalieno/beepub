@@ -22,6 +22,7 @@ from app.services.auth import ALGORITHM, create_access_token, hash_password
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_user(
     username: str = "testuser",
     password: str = "testpass",
@@ -86,7 +87,9 @@ def _mock_db_session(users: list[User] | None = None, user_count: int = 1):
             return result
 
         if username_param is not None:
-            result.scalar_one_or_none.return_value = user_by_username.get(username_param)
+            result.scalar_one_or_none.return_value = user_by_username.get(
+                username_param
+            )
             return result
 
         if id_param is not None:
@@ -126,8 +129,10 @@ def inactive_user():
 
 def _override_db(session):
     """Override the get_db dependency to return our mock session."""
+
     async def override():
         yield session
+
     app.dependency_overrides[get_db] = override
 
 
@@ -261,7 +266,10 @@ class TestLogout:
             cookie_header = resp.headers.get("set-cookie", "")
             assert "token=" in cookie_header
             # Max-Age=0 or expires in the past means cookie deletion
-            assert 'max-age=0' in cookie_header.lower() or "expires=" in cookie_header.lower()
+            assert (
+                "max-age=0" in cookie_header.lower()
+                or "expires=" in cookie_header.lower()
+            )
         finally:
             _cleanup()
 
@@ -326,7 +334,10 @@ class TestMe:
         _override_db(session)
         try:
             expired_token = jwt.encode(
-                {"sub": str(test_user.id), "exp": datetime.now(UTC) - timedelta(hours=1)},
+                {
+                    "sub": str(test_user.id),
+                    "exp": datetime.now(UTC) - timedelta(hours=1),
+                },
                 settings.secret_key,
                 algorithm=ALGORITHM,
             )

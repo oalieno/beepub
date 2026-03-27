@@ -175,7 +175,9 @@
       </button>
 
       <div
-        class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
+        class="hidden sm:block w-px h-5 {darkMode
+          ? 'bg-gray-700'
+          : 'bg-border'}"
       ></div>
 
       <button
@@ -203,7 +205,9 @@
       </button>
 
       <div
-        class="hidden sm:block w-px h-5 {darkMode ? 'bg-gray-700' : 'bg-border'}"
+        class="hidden sm:block w-px h-5 {darkMode
+          ? 'bg-gray-700'
+          : 'bg-border'}"
       ></div>
     {/if}
 

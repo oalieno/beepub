@@ -167,10 +167,7 @@
                 />
               {/if}
               {#if stale && running}
-                <AlertTriangle
-                  class="text-amber-500 shrink-0"
-                  size={15}
-                />
+                <AlertTriangle class="text-amber-500 shrink-0" size={15} />
               {/if}
             </div>
 
@@ -195,9 +192,7 @@
                     </span>
                   {/if}
                   {#if stale}
-                    <span
-                      class="text-xs font-medium text-amber-500"
-                    >
+                    <span class="text-xs font-medium text-amber-500">
                       Stalled
                     </span>
                   {/if}
@@ -207,9 +202,7 @@
                     {pct}%
                   </span>
                 </div>
-                <div
-                  class="h-1.5 rounded-full bg-muted overflow-hidden"
-                >
+                <div class="h-1.5 rounded-full bg-muted overflow-hidden">
                   <div
                     class="h-full rounded-full transition-all duration-500 ease-out {stale
                       ? 'bg-amber-500'
