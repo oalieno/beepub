@@ -30,6 +30,17 @@
     >
       <IconComponent size={18} class="flex-shrink-0 mt-0.5" />
       <span class="text-sm flex-1">{toast.message}</span>
+      {#if toast.action}
+        <button
+          class="flex-shrink-0 text-sm font-semibold underline underline-offset-2 hover:opacity-80"
+          onclick={() => {
+            toast.action?.onclick();
+            toastStore.remove(toast.id);
+          }}
+        >
+          {toast.action.label}
+        </button>
+      {/if}
       <button
         class="flex-shrink-0 opacity-70 hover:opacity-100"
         onclick={() => toastStore.remove(toast.id)}

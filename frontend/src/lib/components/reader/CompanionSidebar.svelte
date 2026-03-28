@@ -10,6 +10,8 @@
     History,
     Pencil,
     Check,
+    ArrowLeft,
+    EllipsisVertical,
   } from "@lucide/svelte";
   import { onMount, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
@@ -20,6 +22,7 @@
     CompanionMessageOut,
   } from "$lib/types";
   import Spinner from "$lib/components/Spinner.svelte";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   let {
     bookId,
@@ -40,6 +43,12 @@
     getCurrentCfi?: () => string;
     onclose?: () => void;
   } = $props();
+
+  const suggestedPrompts = [
+    "Summarize what's happened so far",
+    "What are the main themes?",
+    "Who are the key characters?",
+  ];
 
   // Session list state
   let conversations = $state<CompanionConversationSummary[]>([]);
@@ -62,34 +71,68 @@
   let renamingId = $state<string | null>(null);
   let renameValue = $state("");
 
-  // Pick up selected text from highlight menu
+  // Animation state
+  let visible = $state(false);
+  let backdropVisible = $state(false);
+
+  // Swipe state
+  let swipingId = $state<string | null>(null);
+  let swipeX = $state(0);
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let isSwiping = false;
+
+  // Pending delete (for undo)
+  let pendingDeleteId = $state<string | null>(null);
+  let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Detect mobile
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
+
+  // Pick up selected text from highlight menu (only on initial mount or when selection changes)
+  let lastSelectedText: string | null = null;
   $effect(() => {
-    if (selectedText) {
+    if (selectedText && selectedText !== lastSelectedText) {
+      lastSelectedText = selectedText;
       pendingSelectedText = selectedText;
       pendingCfi = selectedCfi;
-      // If on session list, switch to chat
       showSessionList = false;
       inputEl?.focus();
     }
   });
 
   onMount(async () => {
+    // Trigger enter animation
+    backdropVisible = true;
+    requestAnimationFrame(() => {
+      visible = true;
+    });
+
     await loadConversationList();
+
+    // Focus input on desktop after animation
+    if (!isMobile) {
+      setTimeout(() => inputEl?.focus(), 220);
+    }
   });
+
+  function close() {
+    visible = false;
+    backdropVisible = false;
+    setTimeout(() => onclose?.(), 200);
+  }
 
   async function loadConversationList() {
     loadingList = true;
     try {
       conversations = await booksApi.listCompanionConversations(bookId);
-      // Auto-open the most recent conversation, or show list if multiple
       if (conversations.length === 1) {
         await selectConversation(conversations[0].id);
-      } else if (conversations.length > 1) {
+      } else if (conversations.length > 1 && !selectedText) {
         showSessionList = true;
       }
-      // If 0 conversations, show empty chat (will create on first message)
     } catch {
-      // ignore
+      toastStore.error("Failed to load conversations");
     } finally {
       loadingList = false;
     }
@@ -110,7 +153,7 @@
     }
     await tick();
     scrollToBottom();
-    inputEl?.focus();
+    if (!isMobile) inputEl?.focus();
   }
 
   function startNewConversation() {
@@ -134,12 +177,15 @@
     const selText = pendingSelectedText;
     const selCfi = pendingCfi;
 
-    // Clear input immediately
     inputText = "";
     pendingSelectedText = null;
     pendingCfi = null;
 
-    // Add user message to UI optimistically
+    // Reset textarea height
+    if (inputEl) {
+      inputEl.style.height = "auto";
+    }
+
     const userMsg: CompanionMessageOut = {
       id: crypto.randomUUID(),
       role: "user",
@@ -198,10 +244,8 @@
                 await tick();
                 scrollToBottom();
               } else if (data.message_id) {
-                // done event — capture conversation_id for new conversations
                 if (!activeConversationId && data.conversation_id) {
                   activeConversationId = data.conversation_id;
-                  // Refresh the conversation list
                   booksApi
                     .listCompanionConversations(bookId)
                     .then((c) => (conversations = c))
@@ -235,21 +279,42 @@
     }
   }
 
-  async function deleteConversation(convId: string) {
-    try {
-      await booksApi.deleteCompanionConversation(bookId, convId);
-      conversations = conversations.filter((c) => c.id !== convId);
-      if (activeConversationId === convId) {
-        activeConversationId = null;
-        messages = [];
-        if (conversations.length > 0) {
-          showSessionList = true;
+  function deleteConversation(convId: string) {
+    // Optimistically hide from UI
+    pendingDeleteId = convId;
+
+    // Clear any existing timer
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+
+    toastStore.info("Conversation deleted", {
+      action: {
+        label: "Undo",
+        onclick: () => {
+          if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+          pendingDeleteId = null;
+          pendingDeleteTimer = null;
+        },
+      },
+      duration: 5000,
+    });
+
+    pendingDeleteTimer = setTimeout(async () => {
+      try {
+        await booksApi.deleteCompanionConversation(bookId, convId);
+        conversations = conversations.filter((c) => c.id !== convId);
+        if (activeConversationId === convId) {
+          activeConversationId = null;
+          messages = [];
+          if (conversations.filter((c) => c.id !== convId).length > 0) {
+            showSessionList = true;
+          }
         }
+      } catch (e) {
+        toastStore.error((e as Error).message);
       }
-      toastStore.success("Conversation deleted");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
+      pendingDeleteId = null;
+      pendingDeleteTimer = null;
+    }, 5000);
   }
 
   function startRename(conv: CompanionConversationSummary) {
@@ -290,7 +355,7 @@
   function conversationLabel(conv: CompanionConversationSummary): string {
     if (conv.title) return conv.title;
     const d = new Date(conv.created_at);
-    return d.toLocaleDateString(undefined, {
+    return d.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -298,74 +363,200 @@
     });
   }
 
+  // Swipe handlers
+  function handleTouchStart(e: TouchEvent, convId: string) {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+    isSwiping = false;
+    swipingId = convId;
+    swipeX = 0;
+  }
+
+  function handleTouchMove(e: TouchEvent) {
+    if (!swipingId) return;
+    const dx = e.touches[0].clientX - touchStartX;
+    const dy = e.touches[0].clientY - touchStartY;
+
+    // Determine if swiping horizontally
+    if (!isSwiping && Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+      isSwiping = true;
+    }
+
+    if (isSwiping) {
+      e.preventDefault();
+      swipeX = Math.min(0, dx); // Only allow left swipe
+    }
+  }
+
+  function handleTouchEnd() {
+    if (!swipingId) return;
+    if (swipeX < -80) {
+      // Threshold reached — delete
+      deleteConversation(swipingId);
+    }
+    swipeX = 0;
+    swipingId = null;
+    isSwiping = false;
+  }
+
   let activeTitle = $derived(
     conversations.find((c) => c.id === activeConversationId)?.title || null,
+  );
+
+  let visibleConversations = $derived(
+    conversations.filter((c) => c.id !== pendingDeleteId),
   );
 </script>
 
 <!-- Backdrop -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="fixed inset-0 z-40 bg-black/20"
-  onclick={() => onclose?.()}
+  class="fixed inset-0 z-40 bg-black/20 transition-opacity duration-200 {backdropVisible
+    ? 'opacity-100'
+    : 'opacity-0'}"
+  role="presentation"
+  onclick={() => close()}
   onkeydown={(e) => {
-    if (e.key === "Escape") onclose?.();
+    if (e.key === "Escape") close();
   }}
 ></div>
 
-<!-- Sidebar (right) -->
+<!-- Sidebar / Full-screen sheet -->
 <div
-  class="fixed right-0 top-0 bottom-0 z-50 w-[28rem] max-w-[90vw] shadow-2xl flex flex-col {darkMode
-    ? 'bg-gray-900 border-l border-gray-800'
-    : 'bg-card border-l border-border'}"
+  class="fixed z-50 flex flex-col touch-manipulation
+    inset-0 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-[28rem]
+    shadow-2xl transition-transform duration-200 ease-out
+    {visible ? 'translate-x-0' : 'translate-x-full'}
+    {darkMode
+    ? 'bg-gray-900 sm:border-l sm:border-gray-800'
+    : 'bg-card sm:border-l sm:border-border'}"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Reading Companion"
 >
   <!-- Header -->
   <div
-    class="flex items-center justify-between px-4 py-3 border-b {darkMode
+    class="flex items-center justify-between px-3 sm:px-4 py-3 border-b {darkMode
       ? 'border-gray-800'
       : 'border-border'}"
   >
-    <p
-      class="text-sm font-semibold truncate {darkMode
-        ? 'text-gray-200'
-        : 'text-foreground'}"
-    >
+    <!-- Left: back/close on mobile, title on desktop -->
+    <div class="flex items-center gap-1 min-w-0 flex-1">
       {#if showSessionList}
-        Conversations
-      {:else if activeTitle}
-        {activeTitle}
-      {:else}
-        Reading Companion
-      {/if}
-    </p>
-    <div class="flex items-center gap-1">
-      {#if !showSessionList}
+        <!-- Session list: back to chat -->
         <button
-          class="p-1 rounded-md transition-colors {darkMode
+          class="p-2 -ml-1 rounded-lg transition-colors {darkMode
             ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-          title="New conversation"
+          aria-label="Back to chat"
+          onclick={() => (showSessionList = false)}
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <p
+          class="text-base font-semibold truncate {darkMode
+            ? 'text-gray-200'
+            : 'text-foreground'}"
+        >
+          Conversations
+        </p>
+      {:else}
+        <!-- Chat view -->
+        <button
+          class="p-2 -ml-1 rounded-lg sm:hidden transition-colors {darkMode
+            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+          aria-label="Close"
+          onclick={() => close()}
+        >
+          <ArrowLeft size={20} />
+        </button>
+        <p
+          class="text-base font-semibold truncate {darkMode
+            ? 'text-gray-200'
+            : 'text-foreground'}"
+        >
+          {#if activeTitle}
+            {activeTitle}
+          {:else}
+            Reading Companion
+          {/if}
+        </p>
+      {/if}
+    </div>
+
+    <!-- Right: actions -->
+    <div class="flex items-center gap-0.5">
+      {#if showSessionList}
+        <!-- Session list: new conversation -->
+        <button
+          class="p-2 rounded-lg transition-colors {darkMode
+            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+          aria-label="New conversation"
           onclick={startNewConversation}
         >
-          <Plus size={16} />
+          <Plus size={20} />
         </button>
-        <button
-          class="p-1 rounded-md transition-colors {darkMode
-            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-          title="Past conversations"
-          onclick={() => (showSessionList = true)}
-        >
-          <History size={16} />
-        </button>
+      {:else}
+        <!-- Chat view: mobile uses dropdown, desktop uses icon buttons -->
+        <div class="hidden sm:flex items-center gap-0.5">
+          <button
+            class="p-2 rounded-lg transition-colors {darkMode
+              ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+            aria-label="New conversation"
+            onclick={startNewConversation}
+          >
+            <Plus size={18} />
+          </button>
+          <button
+            class="p-2 rounded-lg transition-colors {darkMode
+              ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+            aria-label="Past conversations"
+            onclick={() => (showSessionList = true)}
+          >
+            <History size={18} />
+          </button>
+        </div>
+
+        <!-- Mobile: overflow menu -->
+        <div class="sm:hidden">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger
+              class="p-2 rounded-lg transition-colors {darkMode
+                ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
+              aria-label="More options"
+            >
+              <EllipsisVertical size={20} />
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end" class="w-48">
+              <DropdownMenu.Item onclick={startNewConversation} class="gap-2">
+                <Plus size={16} />
+                New conversation
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                onclick={() => (showSessionList = true)}
+                class="gap-2"
+              >
+                <History size={16} />
+                Past conversations
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </div>
       {/if}
+
+      <!-- Close button (desktop only, mobile uses back arrow) -->
       <button
-        class="p-1 rounded-md transition-colors {darkMode
+        class="hidden sm:flex p-2 rounded-lg transition-colors {darkMode
           ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-        onclick={() => onclose?.()}
+        aria-label="Close"
+        onclick={() => close()}
       >
-        <X size={16} />
+        <X size={18} />
       </button>
     </div>
   </div>
@@ -387,7 +578,7 @@
       </div>
       <div class="space-y-2">
         <p
-          class="text-sm font-medium {darkMode
+          class="text-base font-medium {darkMode
             ? 'text-gray-300'
             : 'text-foreground'}"
         >
@@ -395,7 +586,7 @@
         </p>
         {#if isAdmin}
           <p
-            class="text-xs {darkMode
+            class="text-sm {darkMode
               ? 'text-gray-500'
               : 'text-muted-foreground'}"
           >
@@ -403,16 +594,16 @@
           </p>
           <a
             href="/admin/settings"
-            class="inline-flex items-center gap-1.5 text-xs font-medium mt-1 {darkMode
+            class="inline-flex items-center gap-1.5 text-sm font-medium mt-1 {darkMode
               ? 'text-blue-400 hover:text-blue-300'
               : 'text-primary hover:text-primary/80'}"
           >
-            <Settings size={12} />
+            <Settings size={14} />
             Go to Settings
           </a>
         {:else}
           <p
-            class="text-xs {darkMode
+            class="text-sm {darkMode
               ? 'text-gray-500'
               : 'text-muted-foreground'}"
           >
@@ -428,99 +619,118 @@
   {:else if showSessionList}
     <!-- Session list -->
     <div class="flex-1 overflow-y-auto p-2">
-      {#if conversations.length === 0}
+      {#if visibleConversations.length === 0}
         <div
           class="flex flex-col items-center justify-center h-full text-center px-4 gap-3"
         >
           <p
-            class="text-sm {darkMode
+            class="text-base {darkMode
               ? 'text-gray-400'
               : 'text-muted-foreground'}"
           >
             No conversations yet. Start a new one!
           </p>
           <button
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg transition-colors {darkMode
+            class="inline-flex items-center gap-1.5 px-4 py-2.5 text-base rounded-lg transition-colors {darkMode
               ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
               : 'bg-muted text-foreground hover:bg-accent'}"
             onclick={startNewConversation}
           >
-            <Plus size={14} />
+            <Plus size={16} />
             New conversation
           </button>
         </div>
       {:else}
         <div class="flex flex-col gap-1">
-          {#each conversations as conv (conv.id)}
+          {#each visibleConversations as conv (conv.id)}
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
-              class="group flex items-center gap-1 rounded-lg transition-colors {darkMode
-                ? 'hover:bg-gray-800'
-                : 'hover:bg-accent'}"
+              class="relative overflow-hidden rounded-lg"
+              ontouchstart={(e) => handleTouchStart(e, conv.id)}
+              ontouchmove={(e) => handleTouchMove(e)}
+              ontouchend={() => handleTouchEnd()}
             >
-              {#if renamingId === conv.id}
-                <div class="flex-1 flex items-center gap-1 px-3 py-2">
-                  <input
-                    bind:value={renameValue}
-                    class="flex-1 text-sm px-1.5 py-0.5 rounded outline-none {darkMode
-                      ? 'bg-gray-700 text-gray-200'
-                      : 'bg-muted text-foreground'}"
-                    onkeydown={(e) => {
-                      if (e.key === "Enter") confirmRename();
-                      if (e.key === "Escape") renamingId = null;
-                    }}
-                  />
+              <!-- Delete zone (revealed by swipe) -->
+              <div
+                class="absolute inset-y-0 right-0 w-20 flex items-center justify-center bg-red-500 text-white"
+              >
+                <Trash2 size={18} />
+              </div>
+
+              <!-- Conversation item -->
+              <div
+                class="relative flex items-center gap-1 transition-colors {darkMode
+                  ? 'bg-gray-900 hover:bg-gray-800'
+                  : 'bg-card hover:bg-accent'}"
+                style={swipingId === conv.id
+                  ? `transform: translateX(${swipeX}px)`
+                  : ""}
+              >
+                {#if renamingId === conv.id}
+                  <div class="flex-1 flex items-center gap-1 px-3 py-3">
+                    <input
+                      bind:value={renameValue}
+                      class="flex-1 text-base px-2 py-1 rounded outline-none {darkMode
+                        ? 'bg-gray-700 text-gray-200'
+                        : 'bg-muted text-foreground'}"
+                      onkeydown={(e) => {
+                        if (e.key === "Enter") confirmRename();
+                        if (e.key === "Escape") renamingId = null;
+                      }}
+                    />
+                    <button
+                      class="p-2 rounded-lg {darkMode
+                        ? 'text-gray-400 hover:text-gray-200'
+                        : 'text-muted-foreground hover:text-foreground'}"
+                      aria-label="Confirm rename"
+                      onclick={confirmRename}
+                    >
+                      <Check size={16} />
+                    </button>
+                  </div>
+                {:else}
                   <button
-                    class="p-1 rounded-md {darkMode
-                      ? 'text-gray-400 hover:text-gray-200'
-                      : 'text-muted-foreground hover:text-foreground'}"
-                    onclick={confirmRename}
+                    class="flex-1 text-left px-3 py-3 min-w-0"
+                    onclick={() => selectConversation(conv.id)}
                   >
-                    <Check size={14} />
+                    <p
+                      class="text-base truncate {darkMode
+                        ? 'text-gray-200'
+                        : 'text-foreground'}"
+                    >
+                      {conversationLabel(conv)}
+                    </p>
+                    <p
+                      class="text-xs mt-0.5 {darkMode
+                        ? 'text-gray-500'
+                        : 'text-muted-foreground'}"
+                    >
+                      {new Date(conv.updated_at).toLocaleDateString()}
+                    </p>
                   </button>
-                </div>
-              {:else}
-                <button
-                  class="flex-1 text-left px-3 py-2 min-w-0"
-                  onclick={() => selectConversation(conv.id)}
-                >
-                  <p
-                    class="text-sm truncate {darkMode
-                      ? 'text-gray-200'
-                      : 'text-foreground'}"
-                  >
-                    {conversationLabel(conv)}
-                  </p>
-                  <p
-                    class="text-xs {darkMode
-                      ? 'text-gray-500'
-                      : 'text-muted-foreground'}"
-                  >
-                    {new Date(conv.updated_at).toLocaleDateString()}
-                  </p>
-                </button>
-                <div
-                  class="flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <button
-                    class="p-1 rounded-md {darkMode
-                      ? 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
-                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
-                    title="Rename"
-                    onclick={() => startRename(conv)}
-                  >
-                    <Pencil size={12} />
-                  </button>
-                  <button
-                    class="p-1 rounded-md {darkMode
-                      ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
-                      : 'text-muted-foreground hover:text-red-500 hover:bg-muted'}"
-                    title="Delete"
-                    onclick={() => deleteConversation(conv.id)}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              {/if}
+                  <!-- Always-visible actions -->
+                  <div class="flex items-center gap-0.5 pr-2">
+                    <button
+                      class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
+                        ? 'text-gray-400 hover:bg-gray-700'
+                        : 'text-muted-foreground hover:bg-muted'}"
+                      aria-label="Rename conversation"
+                      onclick={() => startRename(conv)}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
+                        ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
+                        : 'text-muted-foreground hover:text-red-500 hover:bg-muted'}"
+                      aria-label="Delete conversation"
+                      onclick={() => deleteConversation(conv.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                {/if}
+              </div>
             </div>
           {/each}
         </div>
@@ -538,17 +748,42 @@
           <Spinner size="md" class={darkMode ? "border-gray-400" : ""} />
         </div>
       {:else if messages.length === 0 && !isStreaming}
+        <!-- Empty state with suggested prompts -->
         <div
-          class="flex flex-col items-center justify-center h-full text-center px-4 gap-3"
+          class="flex flex-col items-center justify-center h-full text-center px-4 gap-5"
         >
+          <div
+            class="w-14 h-14 rounded-full flex items-center justify-center {darkMode
+              ? 'bg-gray-800'
+              : 'bg-muted'}"
+          >
+            <MessageCircle
+              size={28}
+              class={darkMode ? "text-gray-500" : "text-muted-foreground/40"}
+            />
+          </div>
           <p
-            class="text-sm {darkMode
+            class="text-base {darkMode
               ? 'text-gray-400'
               : 'text-muted-foreground'}"
           >
-            Select text and tap the chat icon, or just ask a question about the
-            book.
+            Ask anything about this book
           </p>
+          <div class="flex flex-col gap-2 w-full max-w-[18rem]">
+            {#each suggestedPrompts as prompt}
+              <button
+                class="text-left px-4 py-3 rounded-xl border text-sm transition-colors {darkMode
+                  ? 'border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-gray-600'
+                  : 'border-border text-foreground hover:bg-accent hover:border-ring'}"
+                onclick={() => {
+                  inputText = prompt;
+                  sendMessage();
+                }}
+              >
+                {prompt}
+              </button>
+            {/each}
+          </div>
         </div>
       {:else}
         {#each messages as msg (msg.id)}
@@ -556,7 +791,7 @@
             class="flex {msg.role === 'user' ? 'justify-end' : 'justify-start'}"
           >
             <div
-              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {msg.role ===
+              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-base leading-relaxed {msg.role ===
               'user'
                 ? darkMode
                   ? 'bg-blue-600 text-white'
@@ -576,8 +811,8 @@
                       ? 'border-gray-700'
                       : 'border-border'}"
                 >
-                  <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
-                  <p class="text-xs opacity-80 italic line-clamp-3">
+                  <Quote size={14} class="mt-0.5 shrink-0 opacity-60" />
+                  <p class="text-sm opacity-80 italic line-clamp-3">
                     {msg.selected_text}
                   </p>
                 </div>
@@ -590,7 +825,7 @@
         {#if isStreaming && streamingContent}
           <div class="flex justify-start">
             <div
-              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed {darkMode
+              class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-base leading-relaxed {darkMode
                 ? 'bg-gray-800 text-gray-200'
                 : 'bg-muted text-foreground'}"
             >
@@ -632,8 +867,11 @@
       {/if}
     </div>
 
-    <!-- Input area — unified container -->
-    <div class="p-3">
+    <!-- Input area -->
+    <div
+      class="p-3"
+      style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+    >
       <div
         class="rounded-2xl border transition-colors {darkMode
           ? 'border-gray-700 bg-gray-800/50 focus-within:border-gray-600'
@@ -641,17 +879,18 @@
       >
         {#if pendingSelectedText}
           <div
-            class="flex items-start gap-2 mx-3 mt-2.5 px-2.5 py-1.5 rounded-lg text-xs {darkMode
+            class="flex items-start gap-2 mx-3 mt-2.5 px-2.5 py-2 rounded-lg text-sm {darkMode
               ? 'bg-gray-700/60 text-gray-300'
               : 'bg-background text-muted-foreground'}"
           >
-            <Quote size={12} class="mt-0.5 shrink-0 opacity-60" />
+            <Quote size={14} class="mt-0.5 shrink-0 opacity-60" />
             <p class="flex-1 line-clamp-2 italic">{pendingSelectedText}</p>
             <button
-              class="shrink-0 p-0.5 rounded hover:opacity-70"
+              class="shrink-0 p-1 rounded hover:opacity-70"
+              aria-label="Clear selection"
               onclick={clearPendingSelection}
             >
-              <X size={12} />
+              <X size={14} />
             </button>
           </div>
         {/if}
@@ -660,7 +899,7 @@
           bind:value={inputText}
           placeholder="Ask about the book..."
           rows={1}
-          class="w-full resize-none bg-transparent px-3.5 py-2.5 text-sm outline-none overflow-hidden {darkMode
+          class="w-full resize-none bg-transparent px-3.5 py-2.5 text-base outline-none overflow-hidden {darkMode
             ? 'text-gray-200 placeholder:text-gray-500'
             : 'text-foreground placeholder:text-muted-foreground'}"
           style="max-height: 120px; overflow-y: {inputText.split('\n').length >
@@ -677,7 +916,7 @@
         ></textarea>
         <div class="flex items-center justify-end px-2.5 pb-2">
           <button
-            class="w-7 h-7 flex items-center justify-center rounded-full transition-colors {isStreaming ||
+            class="w-9 h-9 flex items-center justify-center rounded-full transition-colors {isStreaming ||
             !inputText.trim()
               ? darkMode
                 ? 'text-gray-600 bg-gray-700'
@@ -686,9 +925,10 @@
                 ? 'text-white bg-blue-600 hover:bg-blue-500'
                 : 'text-primary-foreground bg-primary hover:bg-primary/90'}"
             disabled={isStreaming || !inputText.trim()}
+            aria-label="Send message"
             onclick={sendMessage}
           >
-            <ArrowUp size={16} strokeWidth={2.5} />
+            <ArrowUp size={18} strokeWidth={2.5} />
           </button>
         </div>
       </div>
