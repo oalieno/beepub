@@ -151,3 +151,6 @@ package
 # End of https://www.toptal.com/developers/gitignore/api/node,svelte
 
 .pnpm-store
+
+# Capacitor build output
+build/
