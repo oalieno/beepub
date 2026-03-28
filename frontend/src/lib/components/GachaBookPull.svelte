@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { toastStore } from "$lib/stores/toast";
   import { booksApi } from "$lib/api/books";
+  import { coverUrl } from "$lib/api/client";
   import type { BookOut } from "$lib/types";
   import { BookOpen, RotateCcw } from "@lucide/svelte";
 
@@ -27,7 +28,7 @@
       const img = new Image();
       img.onload = () => resolve();
       img.onerror = () => resolve();
-      img.src = `/covers/${b.id}.jpg`;
+      img.src = coverUrl(b.id);
     });
   }
 
@@ -191,7 +192,7 @@
               <div class="book-face book-front">
                 {#if book.cover_path}
                   <img
-                    src="/covers/{book.id}.jpg"
+                    src={coverUrl(book.id)}
                     alt={book.display_title ?? "Book cover"}
                     class="w-full h-full object-cover"
                   />
@@ -240,7 +241,7 @@
             <div class="relative w-full h-full">
               {#if book.cover_path}
                 <img
-                  src="/covers/{book.id}.jpg"
+                  src={coverUrl(book.id)}
                   alt={book.display_title ?? "Book cover"}
                   class="w-full h-full object-cover"
                 />

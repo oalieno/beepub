@@ -8,6 +8,7 @@
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
+  import { coverUrl } from "$lib/api/client";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
@@ -582,7 +583,7 @@
           >
             {#if seriesNeighbors.next.cover_path}
               <img
-                src="/covers/{seriesNeighbors.next.id}.jpg"
+                src={coverUrl(seriesNeighbors.next.id)}
                 alt={seriesNeighbors.next.title ?? "Next book"}
                 class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
               />

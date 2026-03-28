@@ -23,6 +23,19 @@ export function apiBase(): string {
   return getServerUrl() + "/api";
 }
 
+/**
+ * Cover image URL. Web uses nginx fast path (/covers/), native uses API.
+ */
+export function coverUrl(bookId: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const native =
+    typeof window !== "undefined" &&
+    ((window as any).Capacitor?.isNativePlatform?.() ?? false);
+  return native
+    ? `${apiBase()}/books/${bookId}/cover`
+    : `/covers/${bookId}.jpg`;
+}
+
 export function getAuthHeader(): Record<string, string> {
   if (typeof window !== "undefined") {
     // Only send Authorization header in native (Capacitor) mode.

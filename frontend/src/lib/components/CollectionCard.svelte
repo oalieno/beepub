@@ -1,5 +1,6 @@
 <script lang="ts">
   import { BookOpen } from "@lucide/svelte";
+  import { coverUrl } from "$lib/api/client";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -38,7 +39,7 @@
       {#if previewBookIds.length > 0}
         <!-- Blurred background from first cover -->
         <img
-          src="/covers/{previewBookIds[0]}.jpg"
+          src={coverUrl(previewBookIds[0])}
           alt=""
           class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60"
         />
@@ -51,7 +52,7 @@
             {@const rotation = (i - (count - 1) / 2) * 6}
             {@const translateX = (i - (count - 1) / 2) * 60}
             <img
-              src="/covers/{bookId}.jpg"
+              src={coverUrl(bookId)}
               alt=""
               class="h-40 w-auto object-cover rounded-xs absolute"
               style="transform: rotate({rotation}deg) translateX({translateX}px); z-index: {i}; box-shadow: -10px 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3); border-right: 2px solid rgba(255, 255, 255, 0.5)"

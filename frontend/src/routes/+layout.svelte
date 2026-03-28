@@ -74,6 +74,7 @@
       : isAuthenticated
         ? 'pt-16'
         : ''} min-h-screen bg-background text-foreground"
+    style={!isReaderPage && isAuthenticated ? 'padding-top: calc(4rem + env(safe-area-inset-top, 0px));' : ''}
   >
     {@render children()}
   </main>

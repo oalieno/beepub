@@ -9,6 +9,7 @@
     Image,
   } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
+  import { coverUrl } from "$lib/api/client";
 
   let {
     book,
@@ -57,7 +58,7 @@
     >
       {#if book.cover_path}
         <img
-          src="/covers/{book.id}.jpg"
+          src={coverUrl(book.id)}
           alt="{book.display_title} cover"
           class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow"
           loading="lazy"
