@@ -25,6 +25,13 @@
     }
   });
 
+  // Clean up stale localStorage token in web mode (only native uses Bearer auth)
+  $effect(() => {
+    if (browser && !isNative() && localStorage.getItem("token")) {
+      localStorage.removeItem("token");
+    }
+  });
+
   // Client-side route guards for SPA (Capacitor) mode
   $effect(() => {
     if (browser && isNative()) {

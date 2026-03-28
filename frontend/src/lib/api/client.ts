@@ -25,6 +25,12 @@ export function apiBase(): string {
 
 export function getAuthHeader(): Record<string, string> {
   if (typeof window !== "undefined") {
+    // Only send Authorization header in native (Capacitor) mode.
+    // Web mode relies on HttpOnly cookies; a stale Bearer token would
+    // override the valid cookie (backend prioritises Bearer over cookie).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = (window as any).Capacitor?.isNativePlatform?.() ?? false;
+    if (!isNative) return {};
     const token = localStorage.getItem("token");
     if (token) return { Authorization: `Bearer ${token}` };
   }

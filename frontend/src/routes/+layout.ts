@@ -2,13 +2,15 @@ import { browser } from "$app/environment";
 import { getServerUrl } from "$lib/api/client";
 import type { LayoutLoad } from "./$types";
 
+const isCapacitor = import.meta.env.VITE_CAPACITOR === "true";
+
 // Capacitor build: disable SSR (all rendering is client-side)
-export const ssr = !(import.meta.env.VITE_CAPACITOR === "true");
+export const ssr = !isCapacitor;
 export const prerender = false;
 
 export const load: LayoutLoad = async ({ data }) => {
-  // SSR build: data comes from +layout.server.ts
-  if (data?.user !== undefined) return { user: data.user };
+  // SSR (web) build: data comes from +layout.server.ts
+  if (!isCapacitor && data?.user !== undefined) return { user: data.user };
 
   // SPA build (Capacitor): fetch user client-side
   if (browser) {
