@@ -1,9 +1,15 @@
 import { redirect, type Handle } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
+import { building } from "$app/environment";
 
 const BACKEND_URL = env.BACKEND_URL || "http://backend:8000";
 
 export const handle: Handle = async ({ event, resolve }) => {
+  // Skip auth during static build (adapter-static fallback page generation)
+  if (building) {
+    return resolve(event);
+  }
+
   const token = event.cookies.get("token") ?? null;
   event.locals.token = token;
   event.locals.user = null;
@@ -27,8 +33,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   const path = event.url.pathname;
 
-  // Redirect unauthenticated users to login (except the login page itself)
-  if (!event.locals.token && path !== "/login") {
+  // Redirect unauthenticated users to login (except login and setup pages)
+  if (!event.locals.token && path !== "/login" && path !== "/setup") {
     throw redirect(302, "/login");
   }
 

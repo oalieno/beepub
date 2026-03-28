@@ -9,7 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User, UserRole
-from app.schemas.auth import RegisterRequest
+from app.schemas.auth import LoginResponse, RegisterRequest
 from app.schemas.user import UserOut
 from app.services.auth import create_access_token, hash_password, verify_password
 
@@ -53,7 +53,7 @@ async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
     return user
 
 
-@router.post("/login", response_model=UserOut)
+@router.post("/login", response_model=LoginResponse)
 async def login(
     response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -71,7 +71,13 @@ async def login(
 
     token = create_access_token({"sub": str(user.id)})
     _set_token_cookie(response, token)
-    return user
+    return LoginResponse(
+        id=str(user.id),
+        username=user.username,
+        role=user.role.value,
+        is_active=user.is_active,
+        access_token=token,
+    )
 
 
 @router.post("/logout")

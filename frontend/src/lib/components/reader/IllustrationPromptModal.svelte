@@ -15,6 +15,7 @@
     ReferenceImageInput,
   } from "$lib/types";
   import { booksApi } from "$lib/api/books";
+  import { apiBase } from "$lib/api/client";
 
   const MAX_REFS = 4;
 
@@ -347,7 +348,7 @@
                         title={img.name}
                       >
                         <img
-                          src="/api/books/{bookId}/content/{img.path}"
+                          src="{apiBase()}/books/{bookId}/content/{img.path}"
                           alt={img.name}
                           class="w-full h-full object-cover"
                           loading="lazy"

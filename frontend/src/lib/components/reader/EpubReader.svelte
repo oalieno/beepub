@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { booksApi } from "$lib/api/books";
+  import { apiBase, getAuthHeader } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
   import HighlightMenu from "./HighlightMenu.svelte";
   import ImageViewer from "./ImageViewer.svelte";
@@ -317,7 +318,7 @@
     const Epub = (await import("$lib/epubjs/epub.js")).default;
 
     // Use content endpoint as directory — epubjs will fetch individual files from the EPUB
-    epubBook = Epub(`/api/books/${bookId}/content/`, {
+    epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
       openAs: "directory",
     });
 
@@ -1168,9 +1169,9 @@
       section_page: currentSectionPage,
       track_activity: false,
     };
-    fetch(`/api/books/${bookId}/progress`, {
+    fetch(`${apiBase()}/books/${bookId}/progress`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
       body: JSON.stringify(data),
       keepalive: true,
     });

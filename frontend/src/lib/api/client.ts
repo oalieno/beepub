@@ -1,4 +1,35 @@
-const baseURL = "/api";
+const SERVER_URL_KEY = "serverUrl";
+
+export function getServerUrl(): string {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(SERVER_URL_KEY);
+    if (stored) return stored;
+  }
+  return import.meta.env.VITE_API_BASE || "";
+}
+
+export function setServerUrl(url: string): void {
+  localStorage.setItem(SERVER_URL_KEY, url.replace(/\/$/, ""));
+}
+
+export function hasServerUrl(): boolean {
+  if (typeof window !== "undefined") {
+    return !!localStorage.getItem(SERVER_URL_KEY);
+  }
+  return !!(import.meta.env.VITE_API_BASE as string);
+}
+
+export function apiBase(): string {
+  return getServerUrl() + "/api";
+}
+
+export function getAuthHeader(): Record<string, string> {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
 
 async function request(
   method: string,
@@ -7,6 +38,7 @@ async function request(
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   const headers: Record<string, string> = {
+    ...getAuthHeader(),
     ...extraHeaders,
   };
 
@@ -18,7 +50,7 @@ async function request(
     bodyContent = JSON.stringify(body);
   }
 
-  const res = await fetch(`${baseURL}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers,
     body: bodyContent,
