@@ -99,10 +99,10 @@
           </p>
         </div>
         <div class="flex items-center gap-6 text-center">
-          <div>
+          <a href="/libraries" class="hover:opacity-80 transition-opacity">
             <p class="text-3xl font-bold text-primary">{libraries.length}</p>
             <p class="text-muted-foreground text-xs mt-0.5">Libraries</p>
-          </div>
+          </a>
           <div class="w-px h-8 bg-border"></div>
           <div>
             <p class="text-3xl font-bold text-primary">
