@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/bookshelves";
   import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import { toastStore } from "$lib/stores/toast";
   import type { BookReport } from "$lib/types";
   import { Check, Flag, CircleCheck } from "@lucide/svelte";
@@ -114,7 +115,7 @@
             {#if report.book_cover}
               <a href="/books/{report.book_id}" class="shrink-0">
                 <img
-                  src={coverUrl(report.book_id)}
+                  use:authedSrc={coverUrl(report.book_id)}
                   alt=""
                   class="w-12 h-[4.25rem] object-cover rounded-lg shadow-sm"
                 />

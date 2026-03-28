@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { apiBase, getAuthHeader } from "$lib/api/client";
+  import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
   import HighlightMenu from "./HighlightMenu.svelte";
   import ImageViewer from "./ImageViewer.svelte";
@@ -318,8 +319,14 @@
     const Epub = (await import("$lib/epubjs/epub.js")).default;
 
     // Use content endpoint as directory — epubjs will fetch individual files from the EPUB
+    const authHeaders = getAuthHeader();
     epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
       openAs: "directory",
+      // In native mode, epub.js needs auth headers on every request
+      // (cookies don't work cross-origin in Capacitor WebView)
+      ...(Object.keys(authHeaders).length > 0
+        ? { requestHeaders: authHeaders }
+        : {}),
     });
 
     rendition = epubBook.renderTo(container, {

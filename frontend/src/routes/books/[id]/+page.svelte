@@ -4,6 +4,7 @@
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import StarRating from "$lib/components/StarRating.svelte";
@@ -528,7 +529,7 @@
       >
         {#if book.cover_path}
           <img
-            src={coverUrl(book.id)}
+            use:authedSrc={coverUrl(book.id)}
             alt="{book.display_title} cover"
             class="max-w-full h-auto rounded-sm book-shadow"
           />
@@ -1093,7 +1094,7 @@
               >
                 {#if simBook.cover_path}
                   <img
-                    src={coverUrl(simBook.id)}
+                    use:authedSrc={coverUrl(simBook.id)}
                     alt={simBook.display_title ?? ""}
                     class="w-full h-full object-cover"
                     loading="lazy"

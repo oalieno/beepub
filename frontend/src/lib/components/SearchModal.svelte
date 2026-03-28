@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import {
     searchApi,
     type SemanticSearchResult,
@@ -332,7 +333,7 @@
                   >
                     {#if result.cover_path}
                       <img
-                        src={coverUrl(result.id)}
+                        use:authedSrc={coverUrl(result.id)}
                         alt=""
                         class="w-full h-full object-cover"
                         loading="lazy"
@@ -421,7 +422,7 @@
                   class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
                 >
                   <img
-                    src={coverUrl(result.book_id)}
+                    use:authedSrc={coverUrl(result.book_id)}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"
@@ -517,7 +518,7 @@
                   class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
                 >
                   <img
-                    src={coverUrl(result.book_id)}
+                    use:authedSrc={coverUrl(result.book_id)}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"

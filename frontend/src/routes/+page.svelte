@@ -8,6 +8,7 @@
   import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import type {
     BookOut,
     BookWithInteractionOut,
@@ -146,7 +147,7 @@
               >
                 {#if book.cover_path}
                   <img
-                    src={coverUrl(book.id)}
+                    use:authedSrc={coverUrl(book.id)}
                     alt={book.display_title ?? "Book cover"}
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   />
