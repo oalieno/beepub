@@ -1,4 +1,6 @@
 .env
 
 docker-compose.override.yml
+
 .gstack/
+.claude/
