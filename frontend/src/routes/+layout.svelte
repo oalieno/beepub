@@ -33,6 +33,9 @@
   });
 
   // Client-side route guards for SPA (Capacitor) mode
+  // Block rendering until navigation completes to prevent child components
+  // from running (and crashing) before redirect takes effect.
+  let nativeReady = $state(!isNative());
   $effect(() => {
     if (browser && isNative() && page.url) {
       const path = page.url.pathname;
@@ -49,26 +52,31 @@
         path !== "/setup"
       ) {
         goto("/login");
+        return;
       }
+      // All guards passed — safe to render
+      nativeReady = true;
     }
   });
 
-  let isReaderPage = $derived(page.url?.pathname?.endsWith("/read") ?? false);
-  let isAuthenticated = $derived(!!data?.user || !!$authStore.user);
+  let isReaderPage = $derived(page.url.pathname.endsWith("/read"));
+  let isAuthenticated = $derived(!!data.user || !!$authStore.user);
 </script>
 
-{#if !isReaderPage && isAuthenticated}
-  <Navbar />
+{#if nativeReady}
+  {#if !isReaderPage && isAuthenticated}
+    <Navbar />
+  {/if}
+
+  <main
+    class="{isReaderPage
+      ? ''
+      : isAuthenticated
+        ? 'pt-16'
+        : ''} min-h-screen bg-background text-foreground"
+  >
+    {@render children()}
+  </main>
+
+  <Toast />
 {/if}
-
-<main
-  class="{isReaderPage
-    ? ''
-    : isAuthenticated
-      ? 'pt-16'
-      : ''} min-h-screen bg-background text-foreground"
->
-  {@render children()}
-</main>
-
-<Toast />
