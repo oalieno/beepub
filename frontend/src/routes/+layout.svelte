@@ -34,7 +34,7 @@
 
   // Client-side route guards for SPA (Capacitor) mode
   $effect(() => {
-    if (browser && isNative()) {
+    if (browser && isNative() && page.url) {
       const path = page.url.pathname;
       // Must configure server URL before anything else
       if (!hasServerUrl() && path !== "/setup") {
@@ -53,8 +53,8 @@
     }
   });
 
-  let isReaderPage = $derived(page.url.pathname.endsWith("/read"));
-  let isAuthenticated = $derived(!!data.user || !!$authStore.user);
+  let isReaderPage = $derived(page.url?.pathname?.endsWith("/read") ?? false);
+  let isAuthenticated = $derived(!!data?.user || !!$authStore.user);
 </script>
 
 {#if !isReaderPage && isAuthenticated}
