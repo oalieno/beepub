@@ -154,3 +154,7 @@ package
 
 # Capacitor build output
 build/
+
+# Xcode user/machine-specific files
+ios/App/App.xcodeproj/project.xcworkspace/
+ios/App/App.xcodeproj/xcuserdata/
