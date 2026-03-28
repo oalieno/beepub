@@ -14,6 +14,11 @@ logger = logging.getLogger(__name__)
 # Output dimensionality (Qwen3-Embedding-0.6B default)
 EMBEDDING_DIMENSIONS = 1024
 
+# Qwen3-Embedding instruction prompt for query-side asymmetric retrieval.
+EMBEDDING_PROMPT_QUERY = (
+    "Instruct: Given a user search query, retrieve relevant book passages\nQuery: "
+)
+
 
 def _normalize(vector: list[float]) -> list[float]:
     """L2-normalize a vector."""
@@ -29,6 +34,7 @@ async def embed_texts(
     api_url: str,
     model: str,
     api_key: str = "",
+    prompt: str = "",
 ) -> tuple[list[list[float]], TokenUsage]:
     """Embed a batch of texts using an OpenAI-compatible /v1/embeddings endpoint.
 
@@ -42,7 +48,9 @@ async def embed_texts(
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    body = {"model": model, "input": texts}
+    body: dict = {"model": model, "input": texts}
+    if prompt:
+        body["prompt"] = prompt
 
     async with httpx.AsyncClient(timeout=120.0) as client:
         resp = await client.post(url, headers=headers, json=body)
@@ -77,9 +85,10 @@ async def embed_text(
     api_url: str,
     model: str,
     api_key: str = "",
+    prompt: str = "",
 ) -> tuple[list[float], TokenUsage]:
     """Embed a single text. Convenience wrapper around embed_texts."""
     results, usage = await embed_texts(
-        [text], api_url=api_url, model=model, api_key=api_key
+        [text], api_url=api_url, model=model, api_key=api_key, prompt=prompt
     )
     return results[0], usage

@@ -7,6 +7,7 @@ import pytest
 
 from app.services.embedding import (
     EMBEDDING_DIMENSIONS,
+    EMBEDDING_PROMPT_QUERY,
     _normalize,
     embed_text,
     embed_texts,
@@ -207,6 +208,41 @@ class TestEmbedTexts:
                 )
 
     @pytest.mark.asyncio
+    async def test_prompt_included_in_body_when_provided(self):
+        mock_post = AsyncMock(return_value=_fake_openai_response([[1.0, 0.0]]))
+        mock_client = _make_mock_client(mock_post)
+
+        with patch(
+            "app.services.embedding.httpx.AsyncClient", return_value=mock_client
+        ):
+            await embed_texts(
+                ["test"],
+                api_url="http://localhost:1234/v1",
+                model="m",
+                prompt="Instruct: test\nQuery: ",
+            )
+
+        body = mock_post.call_args[1]["json"]
+        assert body["prompt"] == "Instruct: test\nQuery: "
+
+    @pytest.mark.asyncio
+    async def test_prompt_omitted_from_body_when_empty(self):
+        mock_post = AsyncMock(return_value=_fake_openai_response([[1.0, 0.0]]))
+        mock_client = _make_mock_client(mock_post)
+
+        with patch(
+            "app.services.embedding.httpx.AsyncClient", return_value=mock_client
+        ):
+            await embed_texts(
+                ["test"],
+                api_url="http://localhost:1234/v1",
+                model="m",
+            )
+
+        body = mock_post.call_args[1]["json"]
+        assert "prompt" not in body
+
+    @pytest.mark.asyncio
     async def test_sorts_by_index(self):
         """Verify embeddings are returned in input order even if API returns out of order."""
         resp = MagicMock()
@@ -265,6 +301,26 @@ class TestEmbedText:
 
         norm = math.sqrt(sum(x * x for x in result))
         assert abs(norm - 1.0) < 1e-9
+
+    @pytest.mark.asyncio
+    async def test_passes_prompt_through(self):
+        mock_post = AsyncMock(
+            return_value=_fake_openai_response([[1.0]], total_tokens=1)
+        )
+        mock_client = _make_mock_client(mock_post)
+
+        with patch(
+            "app.services.embedding.httpx.AsyncClient", return_value=mock_client
+        ):
+            await embed_text(
+                "x",
+                api_url="http://localhost:1234/v1",
+                model="m",
+                prompt=EMBEDDING_PROMPT_QUERY,
+            )
+
+        body = mock_post.call_args[1]["json"]
+        assert body["prompt"] == EMBEDDING_PROMPT_QUERY
 
     @pytest.mark.asyncio
     async def test_passes_model(self):

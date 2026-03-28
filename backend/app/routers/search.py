@@ -15,7 +15,7 @@ from app.models.book import Book
 from app.models.book_embedding import BookEmbeddingChunk
 from app.models.library import Library, LibraryBook
 from app.models.user import User
-from app.services.embedding import embed_text
+from app.services.embedding import EMBEDDING_PROMPT_QUERY, embed_text
 from app.services.settings import get_all_settings
 
 router = APIRouter(prefix="/api/search", tags=["search"])
@@ -103,7 +103,11 @@ async def semantic_search(
 
     # Embed the query
     query_vector, embed_usage = await embed_text(
-        text=q, api_url=api_url, model=model, api_key=api_key
+        text=q,
+        api_url=api_url,
+        model=model,
+        api_key=api_key,
+        prompt=EMBEDDING_PROMPT_QUERY,
     )
 
     # Log usage (fire-and-forget)
