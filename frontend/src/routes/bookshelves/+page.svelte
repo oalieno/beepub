@@ -117,7 +117,7 @@
           {/snippet}
           {#snippet overlay()}
             <button
-              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 opacity-0 group-hover:opacity-100 transition-all"
+              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
               onclick={() => handleDelete(shelf.id, shelf.name)}
             >
               <Trash2 size={13} />
