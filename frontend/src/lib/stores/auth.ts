@@ -3,6 +3,35 @@ import { isNative } from "$lib/platform";
 import { apiBase } from "$lib/api/client";
 import type { LoginResponse, UserOut } from "$lib/types";
 
+const CACHED_USER_KEY = "cached-user";
+
+/** Cache user info to Preferences for offline access (native only). */
+async function cacheUser(user: UserOut): Promise<void> {
+  if (!isNative()) return;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    await Preferences.set({
+      key: CACHED_USER_KEY,
+      value: JSON.stringify(user),
+    });
+  } catch {
+    // Best-effort caching
+  }
+}
+
+/** Retrieve cached user from Preferences (native only). */
+export async function getCachedUser(): Promise<UserOut | null> {
+  if (!isNative()) return null;
+  try {
+    const { Preferences } = await import("@capacitor/preferences");
+    const { value } = await Preferences.get({ key: CACHED_USER_KEY });
+    if (!value) return null;
+    return JSON.parse(value) as UserOut;
+  } catch {
+    return null;
+  }
+}
+
 interface AuthState {
   user: UserOut | null;
 }
@@ -18,11 +47,18 @@ function createAuthStore() {
       }
       const { access_token, ...user } = loginResponse;
       set({ user: user as UserOut });
+      cacheUser(user as UserOut);
     },
     logout: async () => {
       set({ user: null });
       if (isNative()) {
         localStorage.removeItem("token");
+        try {
+          const { Preferences } = await import("@capacitor/preferences");
+          await Preferences.remove({ key: CACHED_USER_KEY });
+        } catch {
+          // ignore
+        }
       }
       try {
         await fetch(`${apiBase()}/auth/logout`, { method: "POST" });
@@ -32,6 +68,7 @@ function createAuthStore() {
     },
     setUser: (user: UserOut) => {
       update((s) => ({ ...s, user }));
+      cacheUser(user);
     },
   };
 }

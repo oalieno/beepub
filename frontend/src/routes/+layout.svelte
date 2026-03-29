@@ -1,11 +1,13 @@
 <script lang="ts">
   import "../app.css";
   import { browser } from "$app/environment";
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import { isNative } from "$lib/platform";
   import { hasServerUrl } from "$lib/api/client";
+  import { initNetworkWatcher } from "$lib/services/network";
   import Navbar from "$lib/components/Navbar.svelte";
   import Toast from "$lib/components/Toast.svelte";
   import type { Snippet } from "svelte";
@@ -18,6 +20,10 @@
     data: { user: UserOut | null };
     children: Snippet;
   } = $props();
+
+  onMount(() => {
+    initNetworkWatcher();
+  });
 
   $effect(() => {
     if (browser && data.user) {
@@ -74,7 +80,9 @@
       : isAuthenticated
         ? 'pt-16'
         : ''} min-h-screen bg-background text-foreground"
-    style={!isReaderPage && isAuthenticated ? 'padding-top: calc(4rem + env(safe-area-inset-top, 0px));' : ''}
+    style={!isReaderPage && isAuthenticated
+      ? "padding-top: calc(4rem + env(safe-area-inset-top, 0px));"
+      : ""}
   >
     {@render children()}
   </main>

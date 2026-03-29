@@ -4,6 +4,7 @@
  */
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
+import { Capacitor } from "@capacitor/core";
 import { apiBase, getAuthHeader } from "$lib/api/client";
 
 const MANIFEST_KEY = "offline-manifest";
@@ -11,6 +12,8 @@ const MANIFEST_KEY = "offline-manifest";
 export interface DownloadEntry {
   bookId: string;
   title: string;
+  authors: string[];
+  coverPath: string | null;
   filePath: string;
   downloadedAt: string;
   fileSize: number;
@@ -47,13 +50,69 @@ export async function getStorageUsage(): Promise<number> {
   return manifest.reduce((sum, e) => sum + e.fileSize, 0);
 }
 
+/** Convert a Uint8Array to base64 string. */
+function uint8ToBase64(uint8: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 8192;
+  for (let i = 0; i < uint8.length; i += chunkSize) {
+    binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/** Download and cache the book's cover image. Returns a WebView-safe URI. */
+async function downloadCover(bookId: string): Promise<string | null> {
+  try {
+    const url = `${apiBase()}/books/${bookId}/cover`;
+    const res = await fetch(url, { headers: getAuthHeader() });
+    if (!res.ok) return null;
+
+    const blob = await res.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64Data = uint8ToBase64(new Uint8Array(arrayBuffer));
+
+    const coverPath = `covers/${bookId}.jpg`;
+    await Filesystem.writeFile({
+      path: coverPath,
+      data: base64Data,
+      directory: Directory.Data,
+      recursive: true,
+    });
+
+    const uriResult = await Filesystem.getUri({
+      path: coverPath,
+      directory: Directory.Data,
+    });
+    return Capacitor.convertFileSrc(uriResult.uri);
+  } catch {
+    return null;
+  }
+}
+
+/** Get a WebView-safe cover URI for an existing entry. */
+export async function getCoverSrc(
+  entry: DownloadEntry,
+): Promise<string | null> {
+  if (entry.coverPath) return entry.coverPath;
+  try {
+    const uriResult = await Filesystem.getUri({
+      path: `covers/${entry.bookId}.jpg`,
+      directory: Directory.Data,
+    });
+    return Capacitor.convertFileSrc(uriResult.uri);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Download a book's EPUB file for offline reading.
- * Uses fetch + writeFile to stream the file to disk with auth headers.
+ * Also downloads and caches the cover image.
  */
 export async function downloadBook(
   bookId: string,
   title: string,
+  authors: string[],
   onProgress?: (loaded: number, total: number) => void,
 ): Promise<void> {
   const filePath = `books/${bookId}.epub`;
@@ -84,18 +143,10 @@ export async function downloadBook(
     onProgress?.(loaded, contentLength);
   }
 
-  // Combine chunks into a single ArrayBuffer
+  // Combine chunks and write to disk
   const blob = new Blob(chunks as BlobPart[]);
   const arrayBuffer = await blob.arrayBuffer();
-  const uint8 = new Uint8Array(arrayBuffer);
-
-  // Convert to base64 for Filesystem.writeFile
-  let binary = "";
-  const chunkSize = 8192;
-  for (let i = 0; i < uint8.length; i += chunkSize) {
-    binary += String.fromCharCode(...uint8.subarray(i, i + chunkSize));
-  }
-  const base64Data = btoa(binary);
+  const base64Data = uint8ToBase64(new Uint8Array(arrayBuffer));
 
   await Filesystem.writeFile({
     path: filePath,
@@ -104,12 +155,17 @@ export async function downloadBook(
     recursive: true,
   });
 
+  // Also cache the cover image
+  const coverPath = await downloadCover(bookId);
+
   // Update manifest
   const manifest = await getManifest();
   const existing = manifest.findIndex((e) => e.bookId === bookId);
   const entry: DownloadEntry = {
     bookId,
     title,
+    authors,
+    coverPath,
     filePath,
     downloadedAt: new Date().toISOString(),
     fileSize: loaded,
@@ -123,7 +179,7 @@ export async function downloadBook(
 }
 
 /**
- * Delete a downloaded book.
+ * Delete a downloaded book and its cached cover.
  */
 export async function deleteLocalBook(bookId: string): Promise<void> {
   const manifest = await getManifest();
@@ -136,6 +192,14 @@ export async function deleteLocalBook(bookId: string): Promise<void> {
       });
     } catch {
       // File may already be gone
+    }
+    try {
+      await Filesystem.deleteFile({
+        path: `covers/${bookId}.jpg`,
+        directory: Directory.Data,
+      });
+    } catch {
+      // Cover may not exist
     }
   }
   await saveManifest(manifest.filter((e) => e.bookId !== bookId));

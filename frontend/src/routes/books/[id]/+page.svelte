@@ -240,9 +240,7 @@
       // Check offline status (native only)
       if (isNative()) {
         try {
-          const { isBookDownloaded } = await import(
-            "$lib/services/offline"
-          );
+          const { isBookDownloaded } = await import("$lib/services/offline");
           offlineAvailable = await isBookDownloaded(bookId);
         } catch {
           offlineAvailable = false;
@@ -261,9 +259,14 @@
     downloadProgress = 0;
     try {
       const { downloadBook } = await import("$lib/services/offline");
-      await downloadBook(bookId, book.title ?? "Untitled", (loaded, total) => {
-        downloadProgress = total > 0 ? Math.round((loaded / total) * 100) : 0;
-      });
+      await downloadBook(
+        bookId,
+        book.title ?? "Untitled",
+        book.authors ?? [],
+        (loaded, total) => {
+          downloadProgress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        },
+      );
       offlineAvailable = true;
       toastStore.success("Book downloaded for offline reading");
     } catch (e) {
@@ -855,9 +858,7 @@
                   : "Download for offline"}
               >
                 {#if downloading}
-                  <span class="text-xs font-semibold"
-                    >{downloadProgress}%</span
-                  >
+                  <span class="text-xs font-semibold">{downloadProgress}%</span>
                 {:else}
                   <Download size={16} />
                 {/if}

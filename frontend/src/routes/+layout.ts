@@ -23,7 +23,14 @@ export const load: LayoutLoad = async ({ data }) => {
       });
       if (res.ok) return { user: await res.json() };
     } catch {
-      // Server unreachable
+      // Server unreachable — try cached user for offline mode
+      try {
+        const { getCachedUser } = await import("$lib/stores/auth");
+        const cached = await getCachedUser();
+        if (cached) return { user: cached };
+      } catch {
+        // ignore
+      }
     }
     return { user: null };
   }

@@ -84,9 +84,11 @@ async function request(
       // ignore
     }
 
-    // Auto-redirect on expired/invalid token
+    // Auto-redirect on expired/invalid token (only when online —
+    // offline 401s may be stale/proxy responses, token could still be valid)
     if (res.status === 401 && typeof window !== "undefined") {
-      if (window.location.pathname !== "/login") {
+      const { getIsOnline } = await import("$lib/services/network");
+      if (getIsOnline() && window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
     }

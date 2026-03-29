@@ -2,8 +2,9 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
+  import { isNative } from "$lib/platform";
   import { UserRole } from "$lib/types";
-  import { LogOut, Menu, X, Dices, Search } from "@lucide/svelte";
+  import { LogOut, Menu, X, Dices, Search, Download } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
@@ -56,6 +57,15 @@
       label: "Discover",
       active: page.url.pathname.startsWith("/discover"),
     },
+    ...(isNative()
+      ? [
+          {
+            href: "/downloads",
+            label: "Downloads",
+            active: page.url.pathname.startsWith("/downloads"),
+          },
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
