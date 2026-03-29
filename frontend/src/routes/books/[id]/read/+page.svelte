@@ -8,8 +8,11 @@
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
+  import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { isOnline } from "$lib/services/network";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
@@ -347,6 +350,7 @@
     {isImageBook}
     highlightCount={highlights.length}
     illustrationCount={illustrations.length}
+    offline={!$isOnline}
     onprev={() => reader?.prev()}
     onnext={() => reader?.next()}
     onfontToggle={handleFontToggle}
@@ -402,6 +406,7 @@
         {fontSize}
         {darkMode}
         {isImageBook}
+        offline={!$isOnline}
         ontitle={(t) => (title = t)}
         onprogress={(p) => {
           percentage = p.percentage;
@@ -582,7 +587,7 @@
           >
             {#if seriesNeighbors.next.cover_path}
               <img
-                src="/covers/{seriesNeighbors.next.id}.jpg"
+                use:authedSrc={coverUrl(seriesNeighbors.next.id)}
                 alt={seriesNeighbors.next.title ?? "Next book"}
                 class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
               />

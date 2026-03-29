@@ -3,7 +3,9 @@
   import { authApi } from "$lib/api/auth";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
-  import { BookOpen, Eye, EyeOff } from "@lucide/svelte";
+  import { BookOpen, Eye, EyeOff, Settings } from "@lucide/svelte";
+  import { isNative } from "$lib/platform";
+  import { getServerUrl } from "$lib/api/client";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -20,9 +22,9 @@
     if (!username || !password) return;
     loading = true;
     try {
-      const user = await authApi.login(username, password);
-      authStore.login(user);
-      toastStore.success("Welcome back, " + user.username + "!");
+      const loginResponse = await authApi.login(username, password);
+      authStore.login(loginResponse);
+      toastStore.success("Welcome back, " + loginResponse.username + "!");
       goto("/");
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -63,6 +65,15 @@
         BeePub
       </h1>
       <p class="text-muted-foreground mt-1">Your personal ebook library</p>
+      {#if isNative()}
+        <button
+          onclick={() => goto("/setup")}
+          class="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Settings size={12} />
+          {getServerUrl() || "No server configured"}
+        </button>
+      {/if}
     </div>
 
     <!-- Card -->

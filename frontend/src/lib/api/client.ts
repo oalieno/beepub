@@ -1,4 +1,54 @@
-const baseURL = "/api";
+const SERVER_URL_KEY = "serverUrl";
+
+export function getServerUrl(): string {
+  if (typeof window !== "undefined") {
+    const stored = localStorage.getItem(SERVER_URL_KEY);
+    if (stored) return stored;
+  }
+  return import.meta.env.VITE_API_BASE || "";
+}
+
+export function setServerUrl(url: string): void {
+  localStorage.setItem(SERVER_URL_KEY, url.replace(/\/$/, ""));
+}
+
+export function hasServerUrl(): boolean {
+  if (typeof window !== "undefined") {
+    return !!localStorage.getItem(SERVER_URL_KEY);
+  }
+  return !!(import.meta.env.VITE_API_BASE as string);
+}
+
+export function apiBase(): string {
+  return getServerUrl() + "/api";
+}
+
+/**
+ * Cover image URL. Web uses nginx fast path (/covers/), native uses API.
+ */
+export function coverUrl(bookId: string): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const native =
+    typeof window !== "undefined" &&
+    ((window as any).Capacitor?.isNativePlatform?.() ?? false);
+  return native
+    ? `${apiBase()}/books/${bookId}/cover`
+    : `/covers/${bookId}.jpg`;
+}
+
+export function getAuthHeader(): Record<string, string> {
+  if (typeof window !== "undefined") {
+    // Only send Authorization header in native (Capacitor) mode.
+    // Web mode relies on HttpOnly cookies; a stale Bearer token would
+    // override the valid cookie (backend prioritises Bearer over cookie).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isNative = (window as any).Capacitor?.isNativePlatform?.() ?? false;
+    if (!isNative) return {};
+    const token = localStorage.getItem("token");
+    if (token) return { Authorization: `Bearer ${token}` };
+  }
+  return {};
+}
 
 async function request(
   method: string,
@@ -7,6 +57,7 @@ async function request(
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   const headers: Record<string, string> = {
+    ...getAuthHeader(),
     ...extraHeaders,
   };
 
@@ -18,7 +69,7 @@ async function request(
     bodyContent = JSON.stringify(body);
   }
 
-  const res = await fetch(`${baseURL}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method,
     headers,
     body: bodyContent,
@@ -33,9 +84,11 @@ async function request(
       // ignore
     }
 
-    // Auto-redirect on expired/invalid token
+    // Auto-redirect on expired/invalid token (only when online —
+    // offline 401s may be stale/proxy responses, token could still be valid)
     if (res.status === 401 && typeof window !== "undefined") {
-      if (window.location.pathname !== "/login") {
+      const { getIsOnline } = await import("$lib/services/network");
+      if (getIsOnline() && window.location.pathname !== "/login") {
         window.location.href = "/login";
       }
     }

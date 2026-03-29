@@ -14,6 +14,7 @@
     MessageCircle,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
+  import { toastStore } from "$lib/stores/toast";
 
   let {
     bookId = "",
@@ -27,6 +28,7 @@
     isImageBook = false,
     highlightCount = 0,
     illustrationCount = 0,
+    offline = false,
     onprev,
     onnext,
     onfontToggle,
@@ -51,6 +53,7 @@
     isImageBook?: boolean;
     highlightCount?: number;
     illustrationCount?: number;
+    offline?: boolean;
     onprev?: () => void;
     onnext?: () => void;
     onfontToggle?: () => void;
@@ -73,9 +76,10 @@
 </script>
 
 <div
-  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-1 sm:gap-3 py-2 z-10 relative touch-manipulation {darkMode
+  class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-1 sm:gap-3 py-2 z-10 relative touch-manipulation select-none {darkMode
     ? 'bg-gray-900 border-gray-800 text-gray-200'
     : 'bg-background border-border text-foreground'}"
+  style="padding-top: env(safe-area-inset-top, 0px);"
 >
   <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
@@ -124,9 +128,20 @@
 
     <!-- Illustrations button -->
     <button
-      class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
-      title="AI Illustrations"
-      onclick={() => onillustrations?.()}
+      class="p-1.5 rounded-md transition-colors relative {offline
+        ? 'opacity-40'
+        : btnClass(darkMode)}"
+      title={offline
+        ? "AI features require an internet connection"
+        : "AI Illustrations"}
+      aria-disabled={offline || undefined}
+      onclick={() => {
+        if (offline) {
+          toastStore.info("AI features require an internet connection");
+          return;
+        }
+        onillustrations?.();
+      }}
     >
       <Sparkles size={18} />
       {#if illustrationCount > 0}
@@ -141,9 +156,20 @@
 
     <!-- Companion button -->
     <button
-      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-      title="AI Companion"
-      onclick={() => oncompanion?.()}
+      class="p-1.5 rounded-md transition-colors {offline
+        ? 'opacity-40'
+        : btnClass(darkMode)}"
+      title={offline
+        ? "AI features require an internet connection"
+        : "AI Companion"}
+      aria-disabled={offline || undefined}
+      onclick={() => {
+        if (offline) {
+          toastStore.info("AI features require an internet connection");
+          return;
+        }
+        oncompanion?.();
+      }}
     >
       <MessageCircle size={18} />
     </button>
@@ -181,7 +207,7 @@
       ></div>
 
       <button
-        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
           darkMode,
         )}"
         onclick={() => onfontDecrease?.()}
@@ -195,7 +221,7 @@
           : 'text-muted-foreground'}">{fontSize}px</span
       >
       <button
-        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
           darkMode,
         )}"
         onclick={() => onfontIncrease?.()}

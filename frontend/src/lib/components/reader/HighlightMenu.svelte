@@ -8,9 +8,11 @@
     Highlighter,
     MessageCircle,
   } from "@lucide/svelte";
+  import { toastStore } from "$lib/stores/toast";
 
   let {
     hasExisting = false,
+    offline = false,
     onhighlight,
     onremove,
     onillustrate,
@@ -20,6 +22,7 @@
     onclose,
   }: {
     hasExisting?: boolean;
+    offline?: boolean;
     onhighlight?: () => void;
     onremove?: () => void;
     onillustrate?: () => void;
@@ -65,18 +68,40 @@
 
   <div class="w-px h-4 bg-border"></div>
   <button
-    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-    title="AI Illustration"
-    onclick={() => onillustrate?.()}
+    class="p-0.5 transition-colors transform {offline
+      ? 'text-muted-foreground/40 cursor-not-allowed'
+      : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
+    title={offline
+      ? "AI features require an internet connection"
+      : "AI Illustration"}
+    aria-disabled={offline || undefined}
+    onclick={() => {
+      if (offline) {
+        toastStore.info("AI features require an internet connection");
+        return;
+      }
+      onillustrate?.();
+    }}
   >
     <Sparkles size={14} />
   </button>
 
   <div class="w-px h-4 bg-border"></div>
   <button
-    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-    title="Ask Companion"
-    onclick={() => oncompanion?.()}
+    class="p-0.5 transition-colors transform {offline
+      ? 'text-muted-foreground/40 cursor-not-allowed'
+      : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
+    title={offline
+      ? "AI features require an internet connection"
+      : "Ask Companion"}
+    aria-disabled={offline || undefined}
+    onclick={() => {
+      if (offline) {
+        toastStore.info("AI features require an internet connection");
+        return;
+      }
+      oncompanion?.();
+    }}
   >
     <MessageCircle size={14} />
   </button>

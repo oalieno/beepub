@@ -170,8 +170,10 @@ class TestLogin:
             assert "samesite=lax" in cookie_header.lower()
             assert "path=/" in cookie_header.lower()
 
-            # Should NOT have access_token in body (old format removed)
-            assert "access_token" not in body
+            # Login response includes access_token for SPA/Capacitor clients
+            assert "access_token" in body
+            assert isinstance(body["access_token"], str)
+            assert len(body["access_token"]) > 0
         finally:
             _cleanup()
 
@@ -226,7 +228,7 @@ class TestLogin:
             _cleanup()
 
     @pytest.mark.asyncio
-    async def test_login_returns_user_info(self, test_user):
+    async def test_login_returns_user_info_and_token(self, test_user):
         session = _mock_db_session(users=[test_user])
         _override_db(session)
         try:
@@ -242,7 +244,19 @@ class TestLogin:
             assert body["role"] == "user"
             assert body["is_active"] is True
             assert "id" in body
-            assert "created_at" in body
+            assert "access_token" in body
+
+            # Verify the token is a valid JWT that can auth /me
+            token = body["access_token"]
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                me_resp = await client.get(
+                    "/api/auth/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert me_resp.status_code == 200
+            assert me_resp.json()["username"] == "testuser"
         finally:
             _cleanup()
 

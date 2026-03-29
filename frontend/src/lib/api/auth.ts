@@ -1,5 +1,5 @@
 import { get, post } from "./client";
-import type { UserOut } from "$lib/types";
+import type { LoginResponse, UserOut } from "$lib/types";
 
 export const authApi = {
   register: (body: { username: string; password: string }) =>
@@ -10,7 +10,7 @@ export const authApi = {
       "/auth/login",
       new URLSearchParams({ username, password, grant_type: "password" }),
       { "Content-Type": "application/x-www-form-urlencoded" },
-    ) as Promise<UserOut>,
+    ) as Promise<LoginResponse>,
 
   me: () => get("/auth/me") as Promise<UserOut>,
 };

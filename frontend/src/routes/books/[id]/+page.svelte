@@ -3,6 +3,8 @@
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
+  import { coverUrl } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import StarRating from "$lib/components/StarRating.svelte";
@@ -40,7 +42,10 @@
     ChevronRight,
     Flag,
     AlertTriangle,
+    Download,
+    CheckCircle,
   } from "@lucide/svelte";
+  import { isNative } from "$lib/platform";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import DatePicker from "$lib/components/DatePicker.svelte";
@@ -170,6 +175,11 @@
   let editingUrlSource = $state<string | null>(null);
   let editingUrlValue = $state("");
 
+  // Offline download state (native only)
+  let offlineAvailable = $state(false);
+  let downloading = $state(false);
+  let downloadProgress = $state(0);
+
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   $effect(() => {
@@ -227,10 +237,54 @@
       } catch {
         seriesNeighbors = null;
       }
+      // Check offline status (native only)
+      if (isNative()) {
+        try {
+          const { isBookDownloaded } = await import("$lib/services/offline");
+          offlineAvailable = await isBookDownloaded(bookId);
+        } catch {
+          offlineAvailable = false;
+        }
+      }
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
       loading = false;
+    }
+  }
+
+  async function handleDownload() {
+    if (!book || downloading) return;
+    downloading = true;
+    downloadProgress = 0;
+    try {
+      const { downloadBook } = await import("$lib/services/offline");
+      await downloadBook(
+        bookId,
+        book.display_title ?? book.title ?? "Untitled",
+        book.display_authors ?? book.authors ?? [],
+        (loaded, total) => {
+          downloadProgress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        },
+      );
+      offlineAvailable = true;
+      toastStore.success("Book downloaded for offline reading");
+    } catch (e) {
+      toastStore.error(`Download failed: ${(e as Error).message}`);
+    } finally {
+      downloading = false;
+    }
+  }
+
+  async function handleDeleteDownload() {
+    if (!book) return;
+    try {
+      const { deleteLocalBook } = await import("$lib/services/offline");
+      await deleteLocalBook(bookId);
+      offlineAvailable = false;
+      toastStore.success("Offline copy removed");
+    } catch (e) {
+      toastStore.error((e as Error).message);
     }
   }
 
@@ -527,7 +581,7 @@
       >
         {#if book.cover_path}
           <img
-            src="/covers/{book.id}.jpg"
+            use:authedSrc={coverUrl(book.id)}
             alt="{book.display_title} cover"
             class="max-w-full h-auto rounded-sm book-shadow"
           />
@@ -785,6 +839,32 @@
             <BookOpen size={16} />
             Start Reading
           </button>
+          {#if isNative()}
+            {#if offlineAvailable}
+              <button
+                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-green-600 hover:shadow-md transition-all"
+                onclick={handleDeleteDownload}
+                title="Downloaded — tap to remove"
+              >
+                <CheckCircle size={16} />
+              </button>
+            {:else}
+              <button
+                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+                onclick={handleDownload}
+                disabled={downloading}
+                title={downloading
+                  ? `Downloading ${downloadProgress}%`
+                  : "Download for offline"}
+              >
+                {#if downloading}
+                  <span class="text-xs font-semibold">{downloadProgress}%</span>
+                {:else}
+                  <Download size={16} />
+                {/if}
+              </button>
+            {/if}
+          {/if}
           <button
             class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={toggleFavorite}
@@ -1092,7 +1172,7 @@
               >
                 {#if simBook.cover_path}
                   <img
-                    src="/covers/{simBook.id}.jpg"
+                    use:authedSrc={coverUrl(simBook.id)}
                     alt={simBook.display_title ?? ""}
                     class="w-full h-full object-cover"
                     loading="lazy"

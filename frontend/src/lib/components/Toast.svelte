@@ -19,7 +19,8 @@
 </script>
 
 <div
-  class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none"
+  class="fixed left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2 max-w-sm w-full pointer-events-none px-4"
+  style="bottom: calc(1rem + env(safe-area-inset-bottom, 0px));"
 >
   {#each $toastStore as toast (toast.id)}
     {@const IconComponent = icons[toast.type]}

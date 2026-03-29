@@ -2,8 +2,11 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
+  import { isNative } from "$lib/platform";
+  import { isOnline } from "$lib/services/network";
+  import { toastStore } from "$lib/stores/toast";
   import { UserRole } from "$lib/types";
-  import { LogOut, Menu, X, Dices, Search } from "@lucide/svelte";
+  import { LogOut, Menu, X, Dices, Search, Download } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
@@ -30,42 +33,70 @@
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   const navLinks = $derived([
-    { href: "/", label: "Home", active: page.url.pathname === "/" },
+    {
+      href: "/",
+      label: "Home",
+      active: page.url.pathname === "/",
+      requiresOnline: false,
+    },
     {
       href: "/my-books",
       label: "My Books",
       active: page.url.pathname.startsWith("/my-books"),
+      requiresOnline: true,
     },
     {
       href: "/libraries",
       label: "Libraries",
       active: page.url.pathname.startsWith("/libraries"),
+      requiresOnline: true,
     },
     {
       href: "/bookshelves",
       label: "Shelves",
       active: page.url.pathname.startsWith("/bookshelves"),
+      requiresOnline: true,
     },
     {
       href: "/highlights",
       label: "Highlights",
       active: page.url.pathname.startsWith("/highlights"),
+      requiresOnline: true,
     },
     {
       href: "/discover",
       label: "Discover",
       active: page.url.pathname.startsWith("/discover"),
+      requiresOnline: true,
     },
+    ...(isNative()
+      ? [
+          {
+            href: "/downloads",
+            label: "Downloads",
+            active: page.url.pathname.startsWith("/downloads"),
+            requiresOnline: false,
+          },
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
             href: "/admin",
             label: "Admin",
             active: page.url.pathname.startsWith("/admin"),
+            requiresOnline: true,
           },
         ]
       : []),
   ]);
+
+  let online = $derived($isOnline);
+
+  function handleDisabledClick(e: Event) {
+    e.preventDefault();
+    toastStore.info("Available when online");
+  }
 </script>
 
 <svelte:window
@@ -79,7 +110,8 @@
 />
 
 <nav
-  class="fixed top-0 left-0 right-0 z-50 h-16 bg-background/80 backdrop-blur-md border-b border-border/50"
+  class="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50"
+  style="padding-top: env(safe-area-inset-top, 0px); height: calc(4rem + env(safe-area-inset-top, 0px));"
 >
   <div
     class="max-w-6xl mx-auto px-4 sm:px-6 h-full flex items-center justify-between"
@@ -98,11 +130,17 @@
       class="hidden md:flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1"
     >
       {#each navLinks as link}
+        {@const disabled = !online && link.requiresOnline}
         <a
-          href={link.href}
-          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {link.active
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          href={disabled ? undefined : link.href}
+          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {disabled
+            ? 'opacity-25 cursor-default'
+            : link.active
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          aria-disabled={disabled || undefined}
+          title={disabled ? "Available when online" : undefined}
+          onclick={disabled ? handleDisabledClick : undefined}
         >
           {link.label}
         </a>
@@ -112,18 +150,31 @@
     <!-- Right side -->
     <div class="hidden md:flex items-center gap-3">
       <button
-        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-        onclick={() => (searchOpen = true)}
-        title="Search (⌘K)"
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        onclick={() => {
+          if (!online) {
+            toastStore.info("Available when online");
+            return;
+          }
+          searchOpen = true;
+        }}
+        title={!online ? "Available when online" : "Search (⌘K)"}
+        aria-disabled={!online || undefined}
       >
         <Search size={20} />
       </button>
       <a
-        href="/gacha"
-        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-        title="抽書"
+        href={!online ? undefined : "/gacha"}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : page.url.pathname === '/gacha'
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        title={!online ? "Available when online" : "抽書"}
+        aria-disabled={!online || undefined}
+        onclick={!online ? handleDisabledClick : undefined}
       >
         <Dices size={20} />
       </a>
@@ -159,16 +210,29 @@
     <!-- Mobile right side -->
     <div class="md:hidden flex items-center gap-1">
       <button
-        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-        onclick={() => (searchOpen = true)}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        onclick={() => {
+          if (!online) {
+            toastStore.info("Available when online");
+            return;
+          }
+          searchOpen = true;
+        }}
+        aria-disabled={!online || undefined}
       >
         <Search size={20} />
       </button>
       <a
-        href="/gacha"
-        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        href={!online ? undefined : "/gacha"}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : page.url.pathname === '/gacha'
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        aria-disabled={!online || undefined}
+        onclick={!online ? handleDisabledClick : undefined}
       >
         <Dices size={20} />
       </a>
@@ -193,12 +257,17 @@
       class="md:hidden bg-card card-soft mx-4 mt-2 rounded-2xl px-3 py-3 flex flex-col gap-1"
     >
       {#each navLinks as link}
+        {@const disabled = !online && link.requiresOnline}
         <a
-          href={link.href}
-          class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {link.active
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-          onclick={() => (menuOpen = false)}
+          href={disabled ? undefined : link.href}
+          class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {disabled
+            ? 'opacity-25 cursor-default'
+            : link.active
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          aria-disabled={disabled || undefined}
+          title={disabled ? "Available when online" : undefined}
+          onclick={disabled ? handleDisabledClick : () => (menuOpen = false)}
         >
           {link.label}
         </a>

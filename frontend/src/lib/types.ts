@@ -190,6 +190,14 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface LoginResponse {
+  id: string;
+  username: string;
+  role: UserRole;
+  is_active: boolean;
+  access_token: string;
+}
+
 export interface IllustrationOut {
   id: string;
   user_id: string;

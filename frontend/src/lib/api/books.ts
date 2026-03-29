@@ -1,4 +1,4 @@
-import { get, post, put, patch, del } from "./client";
+import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
 import type {
   BookOut,
   BookReport,
@@ -25,8 +25,9 @@ export const booksApi = {
     const formData = new FormData();
     formData.append("file", file);
     if (libraryId) formData.append("library_id", libraryId);
-    return fetch("/api/books", {
+    return fetch(`${apiBase()}/books`, {
       method: "POST",
+      headers: getAuthHeader(),
       body: formData,
     }).then(async (res) => {
       if (!res.ok) {
@@ -58,9 +59,9 @@ export const booksApi = {
 
   delete: (bookId: string) => del(`/books/${bookId}`),
 
-  getFileUrl: (bookId: string) => `/api/books/${bookId}/file`,
+  getFileUrl: (bookId: string) => `${apiBase()}/books/${bookId}/file`,
 
-  getCoverUrl: (bookId: string) => `/api/books/${bookId}/cover`,
+  getCoverUrl: (bookId: string) => `${apiBase()}/books/${bookId}/cover`,
 
   refreshMetadata: (bookId: string) => post(`/books/${bookId}/refresh`),
 
@@ -162,7 +163,7 @@ export const booksApi = {
     get(`/books/${bookId}/illustrations/styles`) as Promise<StylePromptOut[]>,
 
   getIllustrationImageUrl: (bookId: string, illustrationId: string) =>
-    `/api/books/${bookId}/illustrations/${illustrationId}/image`,
+    `${apiBase()}/books/${bookId}/illustrations/${illustrationId}/image`,
 
   getEpubImages: (bookId: string) =>
     get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
@@ -246,9 +247,9 @@ export const booksApi = {
       conversation_id?: string | null;
     },
   ) =>
-    fetch(`/api/books/${bookId}/companion`, {
+    fetch(`${apiBase()}/books/${bookId}/companion`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...getAuthHeader() },
       body: JSON.stringify(data),
     }),
 

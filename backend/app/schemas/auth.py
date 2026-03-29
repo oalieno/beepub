@@ -14,3 +14,11 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class LoginResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    is_active: bool
+    access_token: str
