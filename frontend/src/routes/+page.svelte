@@ -36,10 +36,9 @@
       const { getDownloadedBooks, getCoverSrc } =
         await import("$lib/services/offline");
       const books = await getDownloadedBooks();
+      // Always re-derive cover URIs (stored paths become stale after app restart)
       for (const book of books) {
-        if (!book.coverPath) {
-          book.coverPath = await getCoverSrc(book);
-        }
+        book.coverPath = await getCoverSrc(book);
       }
       downloadedBooks = books;
     } catch {
@@ -110,6 +109,7 @@
     <!-- Offline mode -->
     <section class="mb-8">
       <div
+        role="status"
         class="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-4 flex items-center gap-3"
       >
         <WifiOff class="text-amber-500 shrink-0" size={20} />

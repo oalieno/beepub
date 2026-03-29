@@ -89,11 +89,11 @@ async function downloadCover(bookId: string): Promise<string | null> {
   }
 }
 
-/** Get a WebView-safe cover URI for an existing entry. */
+/** Get a WebView-safe cover URI for an existing entry.
+ *  Always re-derives from disk — stored coverPath may be stale after app restart. */
 export async function getCoverSrc(
   entry: DownloadEntry,
 ): Promise<string | null> {
-  if (entry.coverPath) return entry.coverPath;
   try {
     const uriResult = await Filesystem.getUri({
       path: `covers/${entry.bookId}.jpg`,

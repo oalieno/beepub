@@ -3,6 +3,8 @@
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import { isNative } from "$lib/platform";
+  import { isOnline } from "$lib/services/network";
+  import { toastStore } from "$lib/stores/toast";
   import { UserRole } from "$lib/types";
   import { LogOut, Menu, X, Dices, Search, Download } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -31,31 +33,41 @@
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   const navLinks = $derived([
-    { href: "/", label: "Home", active: page.url.pathname === "/" },
+    {
+      href: "/",
+      label: "Home",
+      active: page.url.pathname === "/",
+      requiresOnline: false,
+    },
     {
       href: "/my-books",
       label: "My Books",
       active: page.url.pathname.startsWith("/my-books"),
+      requiresOnline: true,
     },
     {
       href: "/libraries",
       label: "Libraries",
       active: page.url.pathname.startsWith("/libraries"),
+      requiresOnline: true,
     },
     {
       href: "/bookshelves",
       label: "Shelves",
       active: page.url.pathname.startsWith("/bookshelves"),
+      requiresOnline: true,
     },
     {
       href: "/highlights",
       label: "Highlights",
       active: page.url.pathname.startsWith("/highlights"),
+      requiresOnline: true,
     },
     {
       href: "/discover",
       label: "Discover",
       active: page.url.pathname.startsWith("/discover"),
+      requiresOnline: true,
     },
     ...(isNative()
       ? [
@@ -63,6 +75,7 @@
             href: "/downloads",
             label: "Downloads",
             active: page.url.pathname.startsWith("/downloads"),
+            requiresOnline: false,
           },
         ]
       : []),
@@ -72,10 +85,18 @@
             href: "/admin",
             label: "Admin",
             active: page.url.pathname.startsWith("/admin"),
+            requiresOnline: true,
           },
         ]
       : []),
   ]);
+
+  let online = $derived($isOnline);
+
+  function handleDisabledClick(e: Event) {
+    e.preventDefault();
+    toastStore.info("Available when online");
+  }
 </script>
 
 <svelte:window
@@ -109,11 +130,17 @@
       class="hidden md:flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1"
     >
       {#each navLinks as link}
+        {@const disabled = !online && link.requiresOnline}
         <a
-          href={link.href}
-          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {link.active
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          href={disabled ? undefined : link.href}
+          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {disabled
+            ? 'opacity-40 cursor-default'
+            : link.active
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          aria-disabled={disabled || undefined}
+          title={disabled ? "Available when online" : undefined}
+          onclick={disabled ? handleDisabledClick : undefined}
         >
           {link.label}
         </a>
@@ -204,12 +231,17 @@
       class="md:hidden bg-card card-soft mx-4 mt-2 rounded-2xl px-3 py-3 flex flex-col gap-1"
     >
       {#each navLinks as link}
+        {@const disabled = !online && link.requiresOnline}
         <a
-          href={link.href}
-          class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {link.active
-            ? 'bg-primary text-primary-foreground'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-          onclick={() => (menuOpen = false)}
+          href={disabled ? undefined : link.href}
+          class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {disabled
+            ? 'opacity-40 cursor-default'
+            : link.active
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          aria-disabled={disabled || undefined}
+          title={disabled ? "Available when online" : undefined}
+          onclick={disabled ? handleDisabledClick : () => (menuOpen = false)}
         >
           {link.label}
         </a>

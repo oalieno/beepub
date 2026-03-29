@@ -24,11 +24,9 @@
       const { getDownloadedBooks, getStorageUsage, getCoverSrc } =
         await import("$lib/services/offline");
       const books = await getDownloadedBooks();
-      // Resolve cover URIs (coverPath may be stale after app restart)
+      // Always re-derive cover URIs (stored paths become stale after app restart)
       for (const book of books) {
-        if (!book.coverPath) {
-          book.coverPath = await getCoverSrc(book);
-        }
+        book.coverPath = await getCoverSrc(book);
       }
       entries = books;
       totalSize = await getStorageUsage();

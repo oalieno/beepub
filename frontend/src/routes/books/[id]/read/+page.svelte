@@ -12,6 +12,7 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { isOnline } from "$lib/services/network";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
@@ -349,6 +350,7 @@
     {isImageBook}
     highlightCount={highlights.length}
     illustrationCount={illustrations.length}
+    offline={!$isOnline}
     onprev={() => reader?.prev()}
     onnext={() => reader?.next()}
     onfontToggle={handleFontToggle}
