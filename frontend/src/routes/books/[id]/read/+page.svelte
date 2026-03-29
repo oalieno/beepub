@@ -406,6 +406,7 @@
         {fontSize}
         {darkMode}
         {isImageBook}
+        offline={!$isOnline}
         ontitle={(t) => (title = t)}
         onprogress={(p) => {
           percentage = p.percentage;

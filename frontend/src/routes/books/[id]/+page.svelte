@@ -261,8 +261,8 @@
       const { downloadBook } = await import("$lib/services/offline");
       await downloadBook(
         bookId,
-        book.title ?? "Untitled",
-        book.authors ?? [],
+        book.display_title ?? book.title ?? "Untitled",
+        book.display_authors ?? book.authors ?? [],
         (loaded, total) => {
           downloadProgress = total > 0 ? Math.round((loaded / total) * 100) : 0;
         },

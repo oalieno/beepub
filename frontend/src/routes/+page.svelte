@@ -10,6 +10,7 @@
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { isNative } from "$lib/platform";
+  import { isOnline } from "$lib/services/network";
   import type {
     BookOut,
     BookWithInteractionOut,
@@ -26,9 +27,10 @@
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
   let readingStats = $state<ReadingStats | null>(null);
   let downloadedBooks = $state<DownloadEntry[]>([]);
-  let offline = $state(false);
+  let offline = $derived(!$isOnline && isNative());
   let currentYear = new Date().getFullYear();
   let loading = $state(true);
+  let hasLoadedOnline = $state(false);
 
   async function loadDownloadedBooks() {
     if (!isNative()) return;
@@ -46,10 +48,7 @@
     }
   }
 
-  onMount(async () => {
-    // Always load downloaded books (works offline)
-    await loadDownloadedBooks();
-
+  async function loadOnlineData() {
     try {
       const [libs, activity, stats, currentlyReading] = await Promise.all([
         librariesApi.list(),
@@ -89,11 +88,24 @@
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
       recentBooks = allBooks.slice(0, 12);
+      hasLoadedOnline = true;
     } catch {
-      // If all API calls fail, we're likely offline
-      if (isNative()) offline = true;
-    } finally {
-      loading = false;
+      // API calls failed — offline state handled by isOnline store
+    }
+  }
+
+  onMount(async () => {
+    await loadDownloadedBooks();
+    if (!offline) {
+      await loadOnlineData();
+    }
+    loading = false;
+  });
+
+  // Re-fetch data when coming back online
+  $effect(() => {
+    if (!offline && !hasLoadedOnline && !loading) {
+      loadOnlineData();
     }
   });
 </script>

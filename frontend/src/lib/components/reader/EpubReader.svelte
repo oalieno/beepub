@@ -15,6 +15,7 @@
     fontSize = 16,
     darkMode = false,
     isImageBook = false,
+    offline = false,
     onprogress,
     ontitle,
     ontoc,
@@ -35,6 +36,7 @@
     fontSize?: number;
     darkMode?: boolean;
     isImageBook?: boolean;
+    offline?: boolean;
     onprogress?: (detail: { cfi: string; percentage: number }) => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
@@ -1736,6 +1738,7 @@
     >
       <HighlightMenu
         hasExisting={!!existingHighlight}
+        {offline}
         onhighlight={handleHighlight}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
