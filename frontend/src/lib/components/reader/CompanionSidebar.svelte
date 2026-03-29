@@ -429,6 +429,7 @@
     {darkMode
     ? 'bg-gray-900 sm:border-l sm:border-gray-800'
     : 'bg-card sm:border-l sm:border-border'}"
+  style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
   aria-modal="true"
   aria-label="Reading Companion"
