@@ -134,7 +134,7 @@
         <a
           href={disabled ? undefined : link.href}
           class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {disabled
-            ? 'opacity-40 cursor-default'
+            ? 'opacity-25 cursor-default'
             : link.active
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
@@ -150,18 +150,31 @@
     <!-- Right side -->
     <div class="hidden md:flex items-center gap-3">
       <button
-        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-        onclick={() => (searchOpen = true)}
-        title="Search (⌘K)"
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        onclick={() => {
+          if (!online) {
+            toastStore.info("Available when online");
+            return;
+          }
+          searchOpen = true;
+        }}
+        title={!online ? "Available when online" : "Search (⌘K)"}
+        aria-disabled={!online || undefined}
       >
         <Search size={20} />
       </button>
       <a
-        href="/gacha"
-        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-        title="抽書"
+        href={!online ? undefined : "/gacha"}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : page.url.pathname === '/gacha'
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        title={!online ? "Available when online" : "抽書"}
+        aria-disabled={!online || undefined}
+        onclick={!online ? handleDisabledClick : undefined}
       >
         <Dices size={20} />
       </a>
@@ -197,16 +210,29 @@
     <!-- Mobile right side -->
     <div class="md:hidden flex items-center gap-1">
       <button
-        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-        onclick={() => (searchOpen = true)}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        onclick={() => {
+          if (!online) {
+            toastStore.info("Available when online");
+            return;
+          }
+          searchOpen = true;
+        }}
+        aria-disabled={!online || undefined}
       >
         <Search size={20} />
       </button>
       <a
-        href="/gacha"
-        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        href={!online ? undefined : "/gacha"}
+        class="p-2 rounded-lg transition-colors {!online
+          ? 'opacity-25 cursor-default'
+          : page.url.pathname === '/gacha'
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        aria-disabled={!online || undefined}
+        onclick={!online ? handleDisabledClick : undefined}
       >
         <Dices size={20} />
       </a>
@@ -235,7 +261,7 @@
         <a
           href={disabled ? undefined : link.href}
           class="px-4 py-2.5 rounded-xl text-sm font-medium transition-colors {disabled
-            ? 'opacity-40 cursor-default'
+            ? 'opacity-25 cursor-default'
             : link.active
               ? 'bg-primary text-primary-foreground'
               : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
