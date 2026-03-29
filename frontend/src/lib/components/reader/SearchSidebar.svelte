@@ -167,7 +167,7 @@
         onkeydown={handleKeydown}
         type="text"
         placeholder="Search..."
-        class="w-full pl-8 pr-3 py-1.5 text-sm rounded-md outline-none {darkMode
+        class="w-full pl-8 pr-3 py-1.5 text-base rounded-md outline-none {darkMode
           ? 'bg-gray-800 text-gray-200 placeholder-gray-500 border border-gray-700 focus:border-gray-600'
           : 'bg-muted text-foreground placeholder-muted-foreground border border-border focus:border-ring'}"
       />
