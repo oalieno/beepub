@@ -408,6 +408,7 @@
           <div
             class="max-h-[60vh] overflow-y-auto"
             role="tabpanel"
+            tabindex="0"
             onmouseleave={() => (selectedIndex = -1)}
           >
             {#each contentResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
@@ -505,6 +506,7 @@
           <div
             class="max-h-[60vh] overflow-y-auto"
             role="tabpanel"
+            tabindex="0"
             onmouseleave={() => (selectedIndex = -1)}
           >
             {#each keywordResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
