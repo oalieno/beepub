@@ -19,6 +19,7 @@
     SeriesNeighborsOut,
   } from "$lib/types";
   import HighlightList from "$lib/components/HighlightList.svelte";
+  import BottomSheet from "$lib/components/BottomSheet.svelte";
   import { BookDetailSkeleton } from "$lib/components/skeletons";
   import { UserRole } from "$lib/types";
   import {
@@ -28,8 +29,6 @@
     Pencil,
     RefreshCw,
     BookMarked,
-    Star,
-    StarHalf,
     EllipsisVertical,
     NotebookPen,
     Bookmark,
@@ -48,6 +47,7 @@
   import { isNative } from "$lib/platform";
   import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import * as Popover from "$lib/components/ui/popover";
   import DatePicker from "$lib/components/DatePicker.svelte";
   import { marked } from "marked";
 
@@ -97,19 +97,6 @@
     },
   };
 
-  function renderStars(rating: number): {
-    full: number;
-    half: boolean;
-    empty: number;
-  } {
-    const full = Math.floor(rating);
-    const half = rating - full >= 0.25 && rating - full < 0.75;
-    const extra = rating - full >= 0.75 ? 1 : 0;
-    const totalFull = full + extra;
-    const empty = 5 - totalFull - (half ? 1 : 0);
-    return { full: totalFull, half, empty };
-  }
-
   function handleAuthorFilter(author: string) {
     const q = author.trim();
     if (!q || !book?.library_id) return;
@@ -157,6 +144,7 @@
   let showAddToShelf = $state(false);
   let showNotesModal = $state(false);
   let showReportModal = $state(false);
+  let showMobileActions = $state(false);
   let reportForm = $state({ issue_type: "", description: "" });
   let submittingReport = $state(false);
   let editForm = $state({
@@ -560,7 +548,7 @@
   <title>{book?.display_title ?? "Book"} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6">
+<div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-24 md:pb-6">
   {#if loading}
     <BookDetailSkeleton />
   {:else if book}
@@ -618,15 +606,15 @@
         </div>
 
         <!-- Rating -->
-        <div class="mt-5">
-          <p class="text-sm text-muted-foreground mb-1.5">Your rating</p>
+        <div class="mt-5 flex items-center gap-3">
           <StarRating
             value={interaction?.rating ?? null}
             onchange={handleRating}
           />
+          <span class="text-sm text-muted-foreground">Your rating</span>
         </div>
 
-        <!-- External Ratings (compact inline) -->
+        <!-- External Ratings -->
         {#if externalMeta.length > 0 || isAdmin}
           <div class="mt-4 flex flex-wrap items-center gap-4">
             {#each externalMeta as meta}
@@ -638,31 +626,7 @@
                 idPattern: /^.+$/,
                 idHint: "ID",
               }}
-              {@const stars =
-                meta.rating != null ? renderStars(meta.rating) : null}
-              {#if editingUrlSource === meta.source}
-                <div class="flex items-center gap-2">
-                  <span class="text-muted-foreground text-sm font-medium"
-                    >{src.label}</span
-                  >
-                  <span class="text-xs text-muted-foreground"
-                    >{src.urlPrefix}</span
-                  >
-                  <input
-                    bind:value={editingUrlValue}
-                    placeholder={src.idHint}
-                    class="border border-input bg-background rounded-lg px-2 py-1 text-sm text-foreground w-40 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                  <button
-                    class="text-xs text-primary hover:text-primary/80 font-medium"
-                    onclick={saveExternalUrl}>Save</button
-                  >
-                  <button
-                    class="text-xs text-muted-foreground hover:text-foreground"
-                    onclick={() => (editingUrlSource = null)}>Cancel</button
-                  >
-                </div>
-              {:else}
+              <div class="flex items-center gap-2">
                 <a
                   href={meta.source_url ?? "#"}
                   target={meta.source_url ? "_blank" : undefined}
@@ -675,41 +639,64 @@
                   <span class="text-muted-foreground text-sm font-medium"
                     >{src.label}</span
                   >
-                  {#if meta.rating != null && stars}
+                  {#if meta.rating != null}
                     <span class="text-lg font-bold text-foreground"
                       >{meta.rating.toFixed(1)}</span
                     >
-                    <div class="flex items-center gap-px">
-                      {#each Array(stars.full) as _}
-                        <Star
-                          size={12}
-                          class="fill-muted-foreground text-muted-foreground"
-                        />
-                      {/each}
-                      {#if stars.half}
-                        <StarHalf
-                          size={12}
-                          class="fill-muted-foreground text-muted-foreground"
-                        />
-                      {/if}
-                      {#each Array(stars.empty) as _}
-                        <Star size={12} class="text-muted-foreground/30" />
-                      {/each}
-                    </div>
                   {:else}
                     <span class="text-muted-foreground text-sm">-</span>
                   {/if}
                 </a>
                 {#if isAdmin}
-                  <button
-                    class="text-muted-foreground hover:text-foreground"
-                    onclick={() => startEditUrl(meta.source, meta.source_url)}
-                    title="Edit source URL"
+                  <Popover.Root
+                    bind:open={
+                      () => editingUrlSource === meta.source,
+                      (v) => {
+                        if (v) startEditUrl(meta.source, meta.source_url);
+                        else editingUrlSource = null;
+                      }
+                    }
                   >
-                    <Pencil size={12} />
-                  </button>
+                    <Popover.Trigger>
+                      <button
+                        class="text-muted-foreground hover:text-foreground transition-colors"
+                        title="Edit source URL"
+                      >
+                        <Pencil size={12} />
+                      </button>
+                    </Popover.Trigger>
+                    <Popover.Content align="start" class="w-64">
+                      <div class="space-y-3">
+                        <p class="text-sm font-medium text-foreground">
+                          Link {src.label} page
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                          <span
+                            class="text-xs text-muted-foreground whitespace-nowrap"
+                            >...{src.urlPrefix.slice(-12)}</span
+                          >
+                          <input
+                            bind:value={editingUrlValue}
+                            placeholder={src.idHint}
+                            class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </div>
+                        <div class="flex justify-end gap-2">
+                          <button
+                            class="text-sm text-muted-foreground hover:text-foreground"
+                            onclick={() => (editingUrlSource = null)}
+                            >Cancel</button
+                          >
+                          <button
+                            class="text-sm bg-foreground text-background font-medium px-4 py-1.5 rounded-lg hover:bg-foreground/90 transition-colors"
+                            onclick={saveExternalUrl}>Save</button
+                          >
+                        </div>
+                      </div>
+                    </Popover.Content>
+                  </Popover.Root>
                 {/if}
-              {/if}
+              </div>
             {/each}
             {#if isAdmin}
               {@const existingSources = new Set(
@@ -717,36 +704,52 @@
               )}
               {#each Object.entries(SOURCE_META) as [key, src]}
                 {#if !existingSources.has(key)}
-                  {#if editingUrlSource === key}
-                    <div class="flex items-center gap-2">
-                      <span class="text-muted-foreground text-sm font-medium"
-                        >{src.label}</span
-                      >
-                      <span class="text-xs text-muted-foreground"
-                        >{src.urlPrefix}</span
-                      >
-                      <input
-                        bind:value={editingUrlValue}
-                        placeholder={src.idHint}
-                        class="border border-input bg-background rounded-lg px-2 py-1 text-sm text-foreground w-40 focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
+                  <Popover.Root
+                    bind:open={
+                      () => editingUrlSource === key,
+                      (v) => {
+                        if (v) startEditUrl(key, null);
+                        else editingUrlSource = null;
+                      }
+                    }
+                  >
+                    <Popover.Trigger>
                       <button
-                        class="text-xs text-primary hover:text-primary/80 font-medium"
-                        onclick={saveExternalUrl}>Save</button
+                        class="flex items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground text-sm"
                       >
-                      <button
-                        class="text-xs text-muted-foreground hover:text-foreground"
-                        onclick={() => (editingUrlSource = null)}>Cancel</button
-                      >
-                    </div>
-                  {:else}
-                    <button
-                      class="flex items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground text-sm"
-                      onclick={() => startEditUrl(key, null)}
-                    >
-                      + {src.label}
-                    </button>
-                  {/if}
+                        + {src.label}
+                      </button>
+                    </Popover.Trigger>
+                    <Popover.Content align="start" class="w-64">
+                      <div class="space-y-3">
+                        <p class="text-sm font-medium text-foreground">
+                          Link {src.label} page
+                        </p>
+                        <div class="flex items-center gap-1.5">
+                          <span
+                            class="text-xs text-muted-foreground whitespace-nowrap"
+                            >...{src.urlPrefix.slice(-12)}</span
+                          >
+                          <input
+                            bind:value={editingUrlValue}
+                            placeholder={src.idHint}
+                            class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                          />
+                        </div>
+                        <div class="flex justify-end gap-2">
+                          <button
+                            class="text-sm text-muted-foreground hover:text-foreground"
+                            onclick={() => (editingUrlSource = null)}
+                            >Cancel</button
+                          >
+                          <button
+                            class="text-sm bg-foreground text-background font-medium px-4 py-1.5 rounded-lg hover:bg-foreground/90 transition-colors"
+                            onclick={saveExternalUrl}>Save</button
+                          >
+                        </div>
+                      </div>
+                    </Popover.Content>
+                  </Popover.Root>
                 {/if}
               {/each}
             {/if}
@@ -755,94 +758,108 @@
 
         <!-- Reading Status -->
         <div class="mt-5">
-          <div class="flex flex-wrap items-center gap-3">
-            <Select.Root
-              type="single"
-              value={interaction?.reading_status ?? undefined}
-              onValueChange={handleStatusSelectChange}
-              disabled={savingStatus}
+          <Select.Root
+            type="single"
+            value={interaction?.reading_status ?? undefined}
+            onValueChange={handleStatusSelectChange}
+            disabled={savingStatus}
+          >
+            <Select.Trigger
+              class="w-full md:w-auto !h-10 rounded-full bg-white md:text-sm text-base justify-center md:justify-start {interaction?.reading_status ===
+              'read'
+                ? 'text-green-600 border-green-600/30'
+                : ''}"
             >
-              <Select.Trigger
-                class="rounded-full bg-white {interaction?.reading_status ===
-                'read'
-                  ? 'text-green-600 border-green-600/30'
-                  : ''}"
-              >
-                {#if interaction?.reading_status}
-                  {@const current = READING_STATUS_OPTIONS.find(
-                    (o) => o.value === interaction?.reading_status,
-                  )}
-                  {#if current}
-                    <current.icon
-                      size={14}
-                      class={interaction?.reading_status === "read"
-                        ? "text-green-600"
-                        : ""}
-                    />
-                    {current.label}
-                  {/if}
-                {:else}
-                  Set status
+              {#if interaction?.reading_status}
+                {@const current = READING_STATUS_OPTIONS.find(
+                  (o) => o.value === interaction?.reading_status,
+                )}
+                {#if current}
+                  <current.icon
+                    size={16}
+                    class={interaction?.reading_status === "read"
+                      ? "text-green-600"
+                      : ""}
+                  />
+                  {current.label}
                 {/if}
-              </Select.Trigger>
-              <Select.Content align="start">
-                <Select.Item value={CLEAR_STATUS_VALUE}>
-                  {#snippet children()}
-                    <BookMarked size={14} class="text-muted-foreground" />
-                    <span>Clear status</span>
+              {:else}
+                Set status
+              {/if}
+            </Select.Trigger>
+            <Select.Content align="start">
+              <Select.Item value={CLEAR_STATUS_VALUE}>
+                {#snippet children()}
+                  <BookMarked size={14} class="text-muted-foreground" />
+                  <span>Clear status</span>
+                {/snippet}
+              </Select.Item>
+              <Select.Separator />
+              {#each READING_STATUS_OPTIONS as opt}
+                <Select.Item value={opt.value}>
+                  {#snippet children({ selected })}
+                    <opt.icon
+                      size={14}
+                      class={opt.value === "read" && selected
+                        ? "text-green-600"
+                        : "text-muted-foreground"}
+                    />
+                    <span>{opt.label}</span>
                   {/snippet}
                 </Select.Item>
-                <Select.Separator />
-                {#each READING_STATUS_OPTIONS as opt}
-                  <Select.Item value={opt.value}>
-                    {#snippet children({ selected })}
-                      <opt.icon
-                        size={14}
-                        class={opt.value === "read" && selected
-                          ? "text-green-600"
-                          : "text-muted-foreground"}
-                      />
-                      <span>{opt.label}</span>
-                    {/snippet}
-                  </Select.Item>
-                {/each}
-              </Select.Content>
-            </Select.Root>
-            {#if interaction?.reading_status === "read" || interaction?.reading_status === "currently_reading"}
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">Started</span>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+          {#if interaction?.reading_status === "read" || interaction?.reading_status === "currently_reading"}
+            <div
+              class="mt-2 flex items-center justify-center md:justify-start gap-3 text-sm text-muted-foreground"
+            >
+              <span class="flex items-center gap-1.5">
+                Started
                 <DatePicker
+                  variant="text"
                   value={interaction?.started_at ?? null}
                   onchange={(v) => handleDateChange("started_at", v ?? "")}
                 />
-              </div>
-            {/if}
-            {#if interaction?.reading_status === "read"}
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">Finished</span>
-                <DatePicker
-                  value={interaction?.finished_at ?? null}
-                  onchange={(v) => handleDateChange("finished_at", v ?? "")}
-                />
-              </div>
-            {/if}
-          </div>
+              </span>
+              {#if interaction?.reading_status === "read"}
+                <span class="flex items-center gap-1.5">
+                  Finished
+                  <DatePicker
+                    variant="text"
+                    value={interaction?.finished_at ?? null}
+                    onchange={(v) => handleDateChange("finished_at", v ?? "")}
+                  />
+                </span>
+              {/if}
+            </div>
+          {/if}
         </div>
 
-        <!-- Action Buttons -->
-        <div class="mt-auto pt-6 flex items-center gap-3">
+        <!-- Action Buttons (desktop) -->
+        <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
           <button
             onclick={() =>
               goto(`/books/${book!.id}/read`, { replaceState: true })}
-            class="flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-4 sm:px-6 py-3 rounded-full transition-colors whitespace-nowrap text-sm sm:text-base"
+            class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
           >
             <BookOpen size={16} />
             Start Reading
           </button>
+          <button
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status === 'want_to_read' ? 'text-primary' : 'text-foreground'}"
+            onclick={() => handleStatusChange(interaction?.reading_status === 'want_to_read' ? null : 'want_to_read')}
+            title={interaction?.reading_status === 'want_to_read' ? 'Remove from Want to Read' : 'Want to Read'}
+          >
+            <Bookmark
+              size={16}
+              class={interaction?.reading_status === 'want_to_read' ? 'fill-primary' : ''}
+            />
+          </button>
           {#if isNative()}
             {#if offlineAvailable}
               <button
-                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-green-600 hover:shadow-md transition-all"
+                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-green-600 hover:shadow-md transition-all"
                 onclick={handleDeleteDownload}
                 title="Downloaded — tap to remove"
               >
@@ -850,7 +867,7 @@
               </button>
             {:else}
               <button
-                class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
                 onclick={handleDownload}
                 disabled={downloading}
                 title={downloading
@@ -866,7 +883,7 @@
             {/if}
           {/if}
           <button
-            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={toggleFavorite}
             title={interaction?.is_favorite
               ? "Remove from favorites"
@@ -880,14 +897,14 @@
             />
           </button>
           <button
-            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={() => (showAddToShelf = true)}
             title="Add to bookshelf"
           >
             <BookMarked size={16} />
           </button>
           <button
-            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={() => {
               notesText = interaction?.notes ?? "";
               showNotesModal = true;
@@ -900,7 +917,7 @@
             />
           </button>
           <button
-            class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {book.has_unresolved_reports
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {book.has_unresolved_reports
               ? 'text-destructive'
               : 'text-foreground'}"
             onclick={() => (showReportModal = true)}
@@ -912,7 +929,7 @@
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <button
-                  class="w-10 h-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
+                  class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
                   title="Admin actions"
                 >
                   <EllipsisVertical size={16} />
@@ -1202,6 +1219,156 @@
     {/if}
   {/if}
 </div>
+
+<!-- Mobile Sticky Bottom Bar -->
+{#if book && !loading}
+  <div
+    class="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+  >
+    <div class="flex items-center gap-2.5 max-w-6xl mx-auto">
+      <button
+        onclick={() => goto(`/books/${book!.id}/read`, { replaceState: true })}
+        class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
+      >
+        <BookOpen size={16} />
+        Start Reading
+      </button>
+      <button
+        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status === 'want_to_read' ? 'text-primary' : 'text-foreground'}"
+        onclick={() => handleStatusChange(interaction?.reading_status === 'want_to_read' ? null : 'want_to_read')}
+        title={interaction?.reading_status === 'want_to_read' ? 'Remove from Want to Read' : 'Want to Read'}
+      >
+        <Bookmark
+          size={18}
+          class={interaction?.reading_status === 'want_to_read' ? 'fill-primary' : ''}
+        />
+      </button>
+      <button
+        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"
+        onclick={() => (showMobileActions = true)}
+      >
+        <EllipsisVertical size={18} />
+      </button>
+    </div>
+  </div>
+
+  <BottomSheet bind:open={showMobileActions}>
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+      onclick={() => { toggleFavorite(); showMobileActions = false; }}
+    >
+      <Heart
+        size={20}
+        class={interaction?.is_favorite ? "fill-red-500 text-red-500 shrink-0" : "text-muted-foreground shrink-0"}
+      />
+      {interaction?.is_favorite ? "Remove from favorites" : "Add to favorites"}
+    </button>
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+      onclick={() => {
+        showAddToShelf = true;
+        showMobileActions = false;
+      }}
+    >
+      <BookMarked size={20} class="text-muted-foreground shrink-0" />
+      Add to shelf
+    </button>
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+      onclick={() => {
+        notesText = interaction?.notes ?? "";
+        showNotesModal = true;
+        showMobileActions = false;
+      }}
+    >
+      <NotebookPen
+        size={20}
+        class={interaction?.notes
+          ? "text-primary shrink-0"
+          : "text-muted-foreground shrink-0"}
+      />
+      Notes
+    </button>
+    {#if isNative()}
+      {#if offlineAvailable}
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            handleDeleteDownload();
+            showMobileActions = false;
+          }}
+        >
+          <CheckCircle size={20} class="text-green-600 shrink-0" />
+          Downloaded (tap to remove)
+        </button>
+      {:else}
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            handleDownload();
+            showMobileActions = false;
+          }}
+          disabled={downloading}
+        >
+          <Download size={20} class="text-muted-foreground shrink-0" />
+          {downloading
+            ? `Downloading ${downloadProgress}%`
+            : "Download for offline"}
+        </button>
+      {/if}
+    {/if}
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors {book.has_unresolved_reports
+        ? 'text-destructive'
+        : 'text-foreground'}"
+      onclick={() => {
+        showReportModal = true;
+        showMobileActions = false;
+      }}
+    >
+      <Flag
+        size={20}
+        class={book.has_unresolved_reports
+          ? "text-destructive shrink-0"
+          : "text-muted-foreground shrink-0"}
+      />
+      Report issue
+    </button>
+    {#if isAdmin}
+      <div class="border-t border-border my-1"></div>
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          showEditModal = true;
+          showMobileActions = false;
+        }}
+      >
+        <Pencil size={20} class="text-muted-foreground shrink-0" />
+        Edit metadata
+      </button>
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          handleRefreshMeta();
+          showMobileActions = false;
+        }}
+      >
+        <RefreshCw size={20} class="text-muted-foreground shrink-0" />
+        Refresh metadata
+      </button>
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          handleDelete();
+          showMobileActions = false;
+        }}
+      >
+        <Trash2 size={20} class="text-destructive shrink-0" />
+        Delete book
+      </button>
+    {/if}
+  </BottomSheet>
+{/if}
 
 <!-- Edit Modal -->
 {#if book}
