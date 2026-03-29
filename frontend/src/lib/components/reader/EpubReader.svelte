@@ -320,13 +320,36 @@
 
     // Use content endpoint as directory — epubjs will fetch individual files from the EPUB
     const authHeaders = getAuthHeader();
+    const hasAuth = Object.keys(authHeaders).length > 0;
+
+    // In native mode, epub.js needs auth headers on every request
+    // (cookies don't work cross-origin in Capacitor WebView).
+    // We also enable replacements: "blobUrl" so epub.js fetches images/CSS via
+    // XHR (with auth) and substitutes blob URLs in chapter HTML — otherwise <img>
+    // tags in the rendered iframe would make unauthenticated requests.
+    let nativeOpts = {};
+    if (hasAuth) {
+      const defaultRequest = (await import("$lib/epubjs/utils/request")).default;
+      nativeOpts = {
+        requestHeaders: authHeaders,
+        replacements: "blobUrl",
+        requestMethod: (
+          url: string,
+          type: string,
+          withCredentials: boolean,
+          headers: Record<string, string>,
+        ) => {
+          return defaultRequest(url, type, withCredentials, {
+            ...authHeaders,
+            ...(headers || {}),
+          });
+        },
+      };
+    }
+
     epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
       openAs: "directory",
-      // In native mode, epub.js needs auth headers on every request
-      // (cookies don't work cross-origin in Capacitor WebView)
-      ...(Object.keys(authHeaders).length > 0
-        ? { requestHeaders: authHeaders }
-        : {}),
+      ...nativeOpts,
     });
 
     rendition = epubBook.renderTo(container, {

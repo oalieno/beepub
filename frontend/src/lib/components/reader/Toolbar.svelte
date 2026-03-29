@@ -182,7 +182,7 @@
       ></div>
 
       <button
-        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
           darkMode,
         )}"
         onclick={() => onfontDecrease?.()}
@@ -196,7 +196,7 @@
           : 'text-muted-foreground'}">{fontSize}px</span
       >
       <button
-        class="hidden sm:inline-flex p-1.5 rounded-md transition-colors {btnClass(
+        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
           darkMode,
         )}"
         onclick={() => onfontIncrease?.()}
