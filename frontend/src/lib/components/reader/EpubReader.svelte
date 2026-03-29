@@ -4,6 +4,7 @@
   import { apiBase, getAuthHeader } from "$lib/api/client";
   import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
+  import { isBookDownloaded, readLocalBook } from "$lib/services/offline";
   import HighlightMenu from "./HighlightMenu.svelte";
   import ImageViewer from "./ImageViewer.svelte";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
@@ -318,39 +319,57 @@
   onMount(async () => {
     const Epub = (await import("$lib/epubjs/epub.js")).default;
 
-    // Use content endpoint as directory — epubjs will fetch individual files from the EPUB
-    const authHeaders = getAuthHeader();
-    const hasAuth = Object.keys(authHeaders).length > 0;
-
-    // In native mode, epub.js needs auth headers on every request
-    // (cookies don't work cross-origin in Capacitor WebView).
-    // We also enable replacements: "blobUrl" so epub.js fetches images/CSS via
-    // XHR (with auth) and substitutes blob URLs in chapter HTML — otherwise <img>
-    // tags in the rendered iframe would make unauthenticated requests.
-    let nativeOpts = {};
-    if (hasAuth) {
-      const defaultRequest = (await import("$lib/epubjs/utils/request")).default;
-      nativeOpts = {
-        requestHeaders: authHeaders,
-        replacements: "blobUrl",
-        requestMethod: (
-          url: string,
-          type: string,
-          withCredentials: boolean,
-          headers: Record<string, string>,
-        ) => {
-          return defaultRequest(url, type, withCredentials, {
-            ...authHeaders,
-            ...(headers || {}),
-          });
-        },
-      };
+    // Check for offline copy first (native only)
+    let localArrayBuffer: ArrayBuffer | null = null;
+    if (isNative()) {
+      try {
+        if (await isBookDownloaded(bookId)) {
+          localArrayBuffer = await readLocalBook(bookId);
+        }
+      } catch {
+        // Fall through to online mode
+      }
     }
 
-    epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
-      openAs: "directory",
-      ...nativeOpts,
-    });
+    if (localArrayBuffer) {
+      // Offline: load from local ArrayBuffer
+      epubBook = Epub(localArrayBuffer, {});
+    } else {
+      // Online: stream page-by-page from server
+      const authHeaders = getAuthHeader();
+      const hasAuth = Object.keys(authHeaders).length > 0;
+
+      // In native mode, epub.js needs auth headers on every request
+      // (cookies don't work cross-origin in Capacitor WebView).
+      // We also enable replacements: "blobUrl" so epub.js fetches images/CSS via
+      // XHR (with auth) and substitutes blob URLs in chapter HTML — otherwise <img>
+      // tags in the rendered iframe would make unauthenticated requests.
+      let nativeOpts = {};
+      if (hasAuth) {
+        const defaultRequest = (await import("$lib/epubjs/utils/request"))
+          .default;
+        nativeOpts = {
+          requestHeaders: authHeaders,
+          replacements: "blobUrl",
+          requestMethod: (
+            url: string,
+            type: string,
+            withCredentials: boolean,
+            headers: Record<string, string>,
+          ) => {
+            return defaultRequest(url, type, withCredentials, {
+              ...authHeaders,
+              ...(headers || {}),
+            });
+          },
+        };
+      }
+
+      epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
+        openAs: "directory",
+        ...nativeOpts,
+      });
+    }
 
     rendition = epubBook.renderTo(container, {
       width: "100%",
