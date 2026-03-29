@@ -36,6 +36,7 @@
   "dependencies": {
     "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "^8.3.0",
+    "@capacitor/keyboard": "^8.0.2",
     "@xmldom/xmldom": "^0.7.5",
     "core-js": "^3.18.3",
     "epubjs": "^0.3.93",
