@@ -29,7 +29,8 @@
     ></button>
 
     <div
-      class="absolute bottom-0 left-0 right-0 bg-card rounded-t-2xl shadow-2xl pb-[env(safe-area-inset-bottom)] animate-slide-up"
+      class="absolute bottom-0 left-0 right-0 bg-card rounded-t-2xl shadow-2xl animate-slide-up"
+      style="padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));"
     >
       <div class="flex justify-center pt-3 pb-1">
         <div class="w-9 h-1 rounded-full bg-muted-foreground/20"></div>

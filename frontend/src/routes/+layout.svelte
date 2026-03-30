@@ -8,7 +8,6 @@
   import { isNative } from "$lib/platform";
   import { hasServerUrl } from "$lib/api/client";
   import { initNetworkWatcher } from "$lib/services/network";
-  import Navbar from "$lib/components/Navbar.svelte";
   import Toast from "$lib/components/Toast.svelte";
   import type { Snippet } from "svelte";
   import type { UserOut } from "$lib/types";
@@ -39,18 +38,14 @@
   });
 
   // Client-side route guards for SPA (Capacitor) mode
-  // Block rendering until navigation completes to prevent child components
-  // from running (and crashing) before redirect takes effect.
   let nativeReady = $state(!isNative());
   $effect(() => {
     if (browser && isNative() && page.url) {
       const path = page.url.pathname;
-      // Must configure server URL before anything else
       if (!hasServerUrl() && path !== "/setup") {
         goto("/setup");
         return;
       }
-      // Must be logged in (except setup and login pages)
       if (
         hasServerUrl() &&
         !$authStore.user &&
@@ -60,32 +55,14 @@
         goto("/login");
         return;
       }
-      // All guards passed — safe to render
       nativeReady = true;
     }
   });
-
-  let isReaderPage = $derived(page.url.pathname.endsWith("/read"));
-  let isAuthenticated = $derived(!!data.user || !!$authStore.user);
 </script>
 
 {#if nativeReady}
-  {#if !isReaderPage && isAuthenticated}
-    <Navbar />
-  {/if}
-
-  <main
-    class="{isReaderPage
-      ? ''
-      : isAuthenticated
-        ? 'pt-16'
-        : ''} min-h-screen bg-background text-foreground"
-    style={!isReaderPage && isAuthenticated
-      ? "padding-top: calc(4rem + env(safe-area-inset-top, 0px));"
-      : ""}
-  >
+  <div class="min-h-screen bg-background text-foreground">
     {@render children()}
-  </main>
-
+  </div>
   <Toast />
 {/if}

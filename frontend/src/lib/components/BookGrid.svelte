@@ -57,9 +57,10 @@
 </script>
 
 <div
-  class="grid gap-4 items-start {columns === 'default'
-    ? 'grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
-    : columns}"
+  class="grid gap-4 items-start {columns === 'default' ? 'book-grid' : columns}"
+  style={columns === "default"
+    ? "grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
+    : ""}
 >
   {#each books as book (book.id)}
     {#if enableInteractions || externalMap}

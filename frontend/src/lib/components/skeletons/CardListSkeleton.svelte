@@ -7,7 +7,7 @@
 <div
   role="status"
   aria-label="Loading"
-  class="grid grid-cols-1 sm:grid-cols-2 gap-5"
+  class="grid grid-cols-1 gap-5 collection-grid"
 >
   {#each Array(count) as _}
     <div class="bg-card card-soft rounded-2xl overflow-hidden">
@@ -27,3 +27,11 @@
     </div>
   {/each}
 </div>
+
+<style>
+  @media (min-width: 640px) {
+    .collection-grid {
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    }
+  }
+</style>

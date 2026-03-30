@@ -53,7 +53,9 @@
   onkeydown={(e) => e.key === "Enter" && goto(`/books/${book.id}`)}
 >
   <!-- Cover -->
-  <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
+  <div
+    class="aspect-[2/3] mb-3 flex items-end justify-center overflow-hidden rounded-sm"
+  >
     <div
       class="relative inline-flex book-shadow-hover transition-all duration-300"
     >
@@ -61,12 +63,12 @@
         <img
           use:authedSrc={coverUrl(book.id)}
           alt="{book.display_title} cover"
-          class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow"
+          class="w-full h-full object-cover rounded-sm book-shadow"
           loading="lazy"
         />
       {:else}
         <div
-          class="h-56 sm:h-64 aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
+          class="w-full aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
         >
           <BookOpen class="text-muted-foreground/30" size={36} />
           <span

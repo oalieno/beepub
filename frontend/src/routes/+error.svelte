@@ -7,7 +7,7 @@
 </svelte:head>
 
 <div
-  class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] px-4 text-center"
+  class="flex flex-col items-center justify-center min-h-[60dvh] px-4 py-12 text-center"
 >
   <img
     src="/404.png"

@@ -14,9 +14,7 @@
       </div>
       <div class="flex gap-4 overflow-hidden pb-4 -mx-2 px-2">
         {#each Array(6) as _}
-          <div
-            class="flex-shrink-0 w-[calc(50%-8px)] sm:w-[calc(33.33%-11px)] md:w-[calc(25%-12px)] lg:w-[calc(20%-13px)] xl:w-[calc(16.66%-14px)]"
-          >
+          <div class="flex-shrink-0 w-[140px] sm:w-[160px]">
             <BookCardSkeleton />
           </div>
         {/each}

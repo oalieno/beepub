@@ -117,8 +117,7 @@
 </script>
 
 <div
-  class="flex flex-col items-center justify-center gap-8 overflow-hidden"
-  style="height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px));"
+  class="flex flex-col items-center justify-center gap-8 overflow-hidden gacha-height"
 >
   <!-- Pack / Card area -->
   <div class="relative w-64 sm:w-80">
@@ -509,6 +508,21 @@
     to {
       opacity: 1;
       transform: translateY(0);
+    }
+  }
+
+  /* Mobile: account for top bar (48px) + safe area top + tab bar (56px) + safe area bottom */
+  .gacha-height {
+    height: calc(
+      100dvh - 48px - env(safe-area-inset-top, 0px) - 56px -
+        env(safe-area-inset-bottom, 0px)
+    );
+  }
+
+  /* Desktop: sidebar is on the left, no top/bottom bars to subtract */
+  @media (min-width: 768px) {
+    .gacha-height {
+      height: 100dvh;
     }
   }
 </style>

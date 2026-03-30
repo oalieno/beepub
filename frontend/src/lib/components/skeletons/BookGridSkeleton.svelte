@@ -7,7 +7,8 @@
 <div
   role="status"
   aria-label="Loading"
-  class="grid gap-4 items-start grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6"
+  class="grid gap-4 items-start"
+  style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
 >
   {#each Array(count) as _}
     <BookCardSkeleton />

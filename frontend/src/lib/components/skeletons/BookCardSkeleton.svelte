@@ -3,8 +3,8 @@
 </script>
 
 <div class="w-full">
-  <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
-    <Skeleton class="h-56 sm:h-64 aspect-[2/3] rounded-sm" />
+  <div class="aspect-[2/3] mb-3 overflow-hidden rounded-sm">
+    <Skeleton class="w-full h-full rounded-sm" />
   </div>
   <div class="min-h-[3rem]">
     <Skeleton class="h-4 w-3/4 mb-1.5" />
