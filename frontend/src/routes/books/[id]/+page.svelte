@@ -32,102 +32,44 @@
     EllipsisVertical,
     NotebookPen,
     Bookmark,
-    BookOpenCheck,
-    CircleCheck,
-    CircleX,
     ArrowLeft,
-    Undo2,
-    ChevronLeft,
-    ChevronRight,
     Flag,
-    AlertTriangle,
+    TriangleAlert,
     Download,
-    CheckCircle,
+    CircleCheck,
   } from "@lucide/svelte";
   import { isNative } from "$lib/platform";
-  import * as Select from "$lib/components/ui/select";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import * as Popover from "$lib/components/ui/popover";
-  import DatePicker from "$lib/components/DatePicker.svelte";
   import { marked } from "marked";
+  import ExternalRatings from "$lib/components/ExternalRatings.svelte";
+  import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
+  import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
+  import BookMetadataEditModal from "$lib/components/BookMetadataEditModal.svelte";
+  import BookNotesModal from "$lib/components/BookNotesModal.svelte";
+  import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
 
-  const READING_STATUS_OPTIONS: {
-    value: ReadingStatus;
-    label: string;
-    icon: typeof Bookmark;
-  }[] = [
-    { value: "want_to_read", label: "Want to Read", icon: Bookmark },
-    {
-      value: "currently_reading",
-      label: "Currently Reading",
-      icon: BookOpenCheck,
-    },
-    { value: "read", label: "Read", icon: CircleCheck },
-    { value: "did_not_finish", label: "Did Not Finish", icon: CircleX },
-  ];
-
-  const CLEAR_STATUS_VALUE = "__clear_status__";
-
-  const SOURCE_META: Record<
-    string,
-    {
-      label: string;
-      color: string;
-      logo: string;
-      urlPrefix: string;
-      idPattern: RegExp;
-      idHint: string;
-    }
-  > = {
-    goodreads: {
-      label: "Goodreads",
-      color: "#5C4B3A",
-      logo: "g",
-      urlPrefix: "https://www.goodreads.com/book/show/",
-      idPattern: /^\d+[\w-]*$/,
-      idHint: "e.g. 33017208",
-    },
-    readmoo: {
-      label: "Readmoo",
-      color: "#2E7D32",
-      logo: "R",
-      urlPrefix: "https://readmoo.com/book/",
-      idPattern: /^\d+$/,
-      idHint: "e.g. 210227953000101",
-    },
-  };
-
-  function handleAuthorFilter(author: string) {
-    const q = author.trim();
-    if (!q || !book?.library_id) return;
-
-    const params = new URLSearchParams({ author: q });
-    goto(`/libraries/${book.library_id}?${params.toString()}`);
+  function newInteraction(
+    overrides: Partial<InteractionOut> = {},
+  ): InteractionOut {
+    return {
+      rating: null,
+      is_favorite: false,
+      reading_progress: null,
+      reading_status: null,
+      started_at: null,
+      finished_at: null,
+      notes: null,
+      updated_at: "",
+      ...overrides,
+    };
   }
 
-  function handleSeriesFilter(seriesName: string) {
-    if (!seriesName || !book?.library_id) return;
-    const params = new URLSearchParams({ series: seriesName });
-    goto(`/libraries/${book.library_id}?${params.toString()}`);
-  }
-
-  function handleTagFilter(tag: string) {
-    if (!tag || !book?.library_id) return;
-    const params = new URLSearchParams({ tag });
-    goto(`/libraries/${book.library_id}?${params.toString()}`);
-  }
-
-  function formatSeriesIndex(idx: number | null | undefined): string {
-    if (idx == null) return "";
-    return Number.isInteger(idx) ? String(idx) : String(idx);
-  }
-
-  function handleStatusSelectChange(value: string) {
-    if (value === CLEAR_STATUS_VALUE) {
-      handleStatusChange(null);
-      return;
-    }
-    handleStatusChange(value as ReadingStatus);
+  function filterInLibrary(param: string, value: string) {
+    const v = value.trim();
+    if (!v || !book?.library_id) return;
+    goto(
+      `/libraries/${book.library_id}?${new URLSearchParams({ [param]: v })}`,
+    );
   }
 
   let bookId = $derived(page.params.id as string);
@@ -145,23 +87,7 @@
   let showNotesModal = $state(false);
   let showReportModal = $state(false);
   let showMobileActions = $state(false);
-  let reportForm = $state({ issue_type: "", description: "" });
-  let submittingReport = $state(false);
-  let editForm = $state({
-    title: "",
-    authors: "",
-    description: "",
-    publisher: "",
-    published_date: "",
-    series: "",
-    series_index: "",
-    tags: "",
-  });
-  let notesText = $state("");
-  let savingNotes = $state(false);
   let savingStatus = $state(false);
-  let editingUrlSource = $state<string | null>(null);
-  let editingUrlValue = $state("");
 
   // Offline download state (native only)
   let offlineAvailable = $state(false);
@@ -188,52 +114,49 @@
       book = b;
       externalMeta = ext;
       bookshelves = shelves;
-      if (book) {
-        editForm = {
-          title: book.title ?? "",
-          authors: (book.authors ?? []).join(", "),
-          description: book.description ?? "",
-          publisher: book.publisher ?? "",
-          published_date: book.published_date ?? "",
-          series: book.series ?? "",
-          series_index:
-            book.series_index != null ? String(book.series_index) : "",
-          tags: (book.tags ?? []).join(", "),
-        };
-      }
-      // Load user interaction (rating, favorite, progress)
-      try {
-        interaction = await booksApi.getInteraction(bookId);
-      } catch {
-        // ignore
-      }
-      // Load highlights
-      try {
-        bookHighlights = await booksApi.getHighlights(bookId);
-      } catch {
-        // ignore
-      }
-      // Load similar books
-      try {
-        similarBooks = await booksApi.getSimilar(bookId, 10);
-      } catch {
-        similarBooks = [];
-      }
-      // Load series neighbors
-      try {
-        seriesNeighbors = await booksApi.getSeriesNeighbors(bookId);
-      } catch {
-        seriesNeighbors = null;
-      }
-      // Check offline status (native only)
+      const secondaryFetches: Promise<void>[] = [
+        booksApi
+          .getInteraction(bookId)
+          .then((v) => {
+            interaction = v;
+          })
+          .catch(() => {}),
+        booksApi
+          .getHighlights(bookId)
+          .then((v) => {
+            bookHighlights = v;
+          })
+          .catch(() => {}),
+        booksApi
+          .getSimilar(bookId, 10)
+          .then((v) => {
+            similarBooks = v;
+          })
+          .catch(() => {
+            similarBooks = [];
+          }),
+        booksApi
+          .getSeriesNeighbors(bookId)
+          .then((v) => {
+            seriesNeighbors = v;
+          })
+          .catch(() => {
+            seriesNeighbors = null;
+          }),
+      ];
       if (isNative()) {
-        try {
-          const { isBookDownloaded } = await import("$lib/services/offline");
-          offlineAvailable = await isBookDownloaded(bookId);
-        } catch {
-          offlineAvailable = false;
-        }
+        secondaryFetches.push(
+          import("$lib/services/offline")
+            .then(({ isBookDownloaded }) => isBookDownloaded(bookId))
+            .then((v) => {
+              offlineAvailable = v;
+            })
+            .catch(() => {
+              offlineAvailable = false;
+            }),
+        );
       }
+      await Promise.all(secondaryFetches);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -280,18 +203,9 @@
     if (!book) return;
     try {
       await booksApi.updateRating(bookId, rating);
-      if (interaction) interaction = { ...interaction, rating };
-      else
-        interaction = {
-          rating,
-          is_favorite: false,
-          reading_progress: null,
-          reading_status: null,
-          started_at: null,
-          finished_at: null,
-          notes: null,
-          updated_at: "",
-        };
+      interaction = interaction
+        ? { ...interaction, rating }
+        : newInteraction({ rating });
       toastStore.success("Rating updated");
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -303,57 +217,12 @@
     const newVal = !interaction?.is_favorite;
     try {
       await booksApi.updateFavorite(bookId, newVal);
-      if (interaction) interaction = { ...interaction, is_favorite: newVal };
-      else
-        interaction = {
-          rating: null,
-          is_favorite: newVal,
-          reading_progress: null,
-          reading_status: null,
-          started_at: null,
-          finished_at: null,
-          notes: null,
-          updated_at: "",
-        };
+      interaction = interaction
+        ? { ...interaction, is_favorite: newVal }
+        : newInteraction({ is_favorite: newVal });
       toastStore.success(
         newVal ? "Added to favorites" : "Removed from favorites",
       );
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleSaveEdit() {
-    if (!book) return;
-    try {
-      const parsedTags = editForm.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-      const updated = await booksApi.updateMetadata(bookId, {
-        title: editForm.title || null,
-        authors:
-          editForm.authors
-            .split(",")
-            .map((a) => a.trim())
-            .filter(Boolean).length > 0
-            ? editForm.authors
-                .split(",")
-                .map((a) => a.trim())
-                .filter(Boolean)
-            : null,
-        description: editForm.description || null,
-        publisher: editForm.publisher || null,
-        published_date: editForm.published_date || null,
-        series: editForm.series || null,
-        series_index: editForm.series_index
-          ? parseFloat(editForm.series_index)
-          : null,
-        tags: parsedTags.length > 0 ? parsedTags : null,
-      });
-      book = updated;
-      showEditModal = false;
-      toastStore.success("Metadata updated");
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -374,49 +243,6 @@
     try {
       await booksApi.refreshMetadata(bookId);
       toastStore.success("Metadata refresh queued");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  function extractSourceId(source: string, url: string | null): string {
-    if (!url) return "";
-    const prefix = SOURCE_META[source]?.urlPrefix ?? "";
-    if (prefix && url.startsWith(prefix)) {
-      return url.slice(prefix.length);
-    }
-    return url;
-  }
-
-  function startEditUrl(source: string, currentUrl: string | null) {
-    editingUrlSource = source;
-    editingUrlValue = extractSourceId(source, currentUrl);
-  }
-
-  async function saveExternalUrl() {
-    if (!editingUrlSource) return;
-    try {
-      const id = editingUrlValue.trim();
-      if (id) {
-        const meta = SOURCE_META[editingUrlSource];
-        if (meta && !meta.idPattern.test(id)) {
-          toastStore.error(`Invalid ID format. ${meta.idHint}`);
-          return;
-        }
-        const prefix = meta?.urlPrefix ?? "";
-        const fullUrl = prefix + id;
-        await booksApi.updateExternalUrl(bookId, editingUrlSource, fullUrl);
-      } else {
-        await booksApi.updateExternalUrl(bookId, editingUrlSource, null);
-      }
-      // Reload external metadata after a short delay for the refresh
-      externalMeta = await booksApi
-        .getExternal(bookId)
-        .catch(() => [] as ExternalMetadataOut[]);
-      editingUrlSource = null;
-      toastStore.success(
-        id ? "Source URL updated, fetching metadata..." : "Source URL removed",
-      );
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -447,16 +273,7 @@
           finished_at: shouldClearDates ? null : interaction.finished_at,
         };
       } else
-        interaction = {
-          rating: null,
-          is_favorite: false,
-          reading_progress: null,
-          reading_status: newStatus || null,
-          started_at: null,
-          finished_at: null,
-          notes: null,
-          updated_at: "",
-        };
+        interaction = newInteraction({ reading_status: newStatus || null });
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -487,50 +304,14 @@
     }
   }
 
-  async function handleSaveNotes() {
-    if (!book) return;
-    savingNotes = true;
-    try {
-      await booksApi.updateNotes(bookId, notesText || null);
-      if (interaction)
-        interaction = { ...interaction, notes: notesText || null };
-      else
-        interaction = {
-          rating: null,
-          is_favorite: false,
-          reading_progress: null,
-          reading_status: null,
-          started_at: null,
-          finished_at: null,
-          notes: notesText || null,
-          updated_at: "",
-        };
-      showNotesModal = false;
-      toastStore.success("Notes saved");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      savingNotes = false;
-    }
+  function handleNotesSaved(notes: string | null) {
+    interaction = interaction
+      ? { ...interaction, notes }
+      : newInteraction({ notes });
   }
 
-  async function handleSubmitReport() {
-    if (!book || !reportForm.issue_type) return;
-    submittingReport = true;
-    try {
-      await booksApi.reportIssue(bookId, {
-        issue_type: reportForm.issue_type,
-        description: reportForm.description || undefined,
-      });
-      showReportModal = false;
-      reportForm = { issue_type: "", description: "" };
-      book = { ...book, has_unresolved_reports: true };
-      toastStore.success("Report submitted");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      submittingReport = false;
-    }
+  function handleReported() {
+    if (book) book = { ...book, has_unresolved_reports: true };
   }
 
   async function addToShelf(shelfId: string) {
@@ -594,7 +375,7 @@
                 <button
                   type="button"
                   class="hover:text-foreground hover:underline transition-colors"
-                  onclick={() => handleAuthorFilter(author)}
+                  onclick={() => filterInLibrary("author", author)}
                 >
                   {author}
                 </button>{idx < (book.display_authors ?? []).length - 1
@@ -614,227 +395,14 @@
           <span class="text-sm text-muted-foreground">Your rating</span>
         </div>
 
-        <!-- External Ratings -->
-        {#if externalMeta.length > 0 || isAdmin}
-          <div class="mt-4 flex flex-wrap items-center gap-4">
-            {#each externalMeta as meta}
-              {@const src = SOURCE_META[meta.source] ?? {
-                label: meta.source,
-                color: "#666",
-                logo: "?",
-                urlPrefix: "",
-                idPattern: /^.+$/,
-                idHint: "ID",
-              }}
-              <div class="flex items-center gap-2">
-                <a
-                  href={meta.source_url ?? "#"}
-                  target={meta.source_url ? "_blank" : undefined}
-                  rel={meta.source_url ? "noopener" : undefined}
-                  class="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                  onclick={meta.source_url
-                    ? undefined
-                    : (e: MouseEvent) => e.preventDefault()}
-                >
-                  <span class="text-muted-foreground text-sm font-medium"
-                    >{src.label}</span
-                  >
-                  {#if meta.rating != null}
-                    <span class="text-lg font-bold text-foreground"
-                      >{meta.rating.toFixed(1)}</span
-                    >
-                  {:else}
-                    <span class="text-muted-foreground text-sm">-</span>
-                  {/if}
-                </a>
-                {#if isAdmin}
-                  <Popover.Root
-                    bind:open={
-                      () => editingUrlSource === meta.source,
-                      (v) => {
-                        if (v) startEditUrl(meta.source, meta.source_url);
-                        else editingUrlSource = null;
-                      }
-                    }
-                  >
-                    <Popover.Trigger>
-                      <button
-                        class="text-muted-foreground hover:text-foreground transition-colors"
-                        title="Edit source URL"
-                      >
-                        <Pencil size={12} />
-                      </button>
-                    </Popover.Trigger>
-                    <Popover.Content align="start" class="w-64">
-                      <div class="space-y-3">
-                        <p class="text-sm font-medium text-foreground">
-                          Link {src.label} page
-                        </p>
-                        <div class="flex items-center gap-1.5">
-                          <span
-                            class="text-xs text-muted-foreground whitespace-nowrap"
-                            >...{src.urlPrefix.slice(-12)}</span
-                          >
-                          <input
-                            bind:value={editingUrlValue}
-                            placeholder={src.idHint}
-                            class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                          />
-                        </div>
-                        <div class="flex justify-end gap-2">
-                          <button
-                            class="text-sm text-muted-foreground hover:text-foreground"
-                            onclick={() => (editingUrlSource = null)}
-                            >Cancel</button
-                          >
-                          <button
-                            class="text-sm bg-foreground text-background font-medium px-4 py-1.5 rounded-lg hover:bg-foreground/90 transition-colors"
-                            onclick={saveExternalUrl}>Save</button
-                          >
-                        </div>
-                      </div>
-                    </Popover.Content>
-                  </Popover.Root>
-                {/if}
-              </div>
-            {/each}
-            {#if isAdmin}
-              {@const existingSources = new Set(
-                externalMeta.map((m) => m.source),
-              )}
-              {#each Object.entries(SOURCE_META) as [key, src]}
-                {#if !existingSources.has(key)}
-                  <Popover.Root
-                    bind:open={
-                      () => editingUrlSource === key,
-                      (v) => {
-                        if (v) startEditUrl(key, null);
-                        else editingUrlSource = null;
-                      }
-                    }
-                  >
-                    <Popover.Trigger>
-                      <button
-                        class="flex items-center gap-1 text-muted-foreground/50 hover:text-muted-foreground text-sm"
-                      >
-                        + {src.label}
-                      </button>
-                    </Popover.Trigger>
-                    <Popover.Content align="start" class="w-64">
-                      <div class="space-y-3">
-                        <p class="text-sm font-medium text-foreground">
-                          Link {src.label} page
-                        </p>
-                        <div class="flex items-center gap-1.5">
-                          <span
-                            class="text-xs text-muted-foreground whitespace-nowrap"
-                            >...{src.urlPrefix.slice(-12)}</span
-                          >
-                          <input
-                            bind:value={editingUrlValue}
-                            placeholder={src.idHint}
-                            class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
-                          />
-                        </div>
-                        <div class="flex justify-end gap-2">
-                          <button
-                            class="text-sm text-muted-foreground hover:text-foreground"
-                            onclick={() => (editingUrlSource = null)}
-                            >Cancel</button
-                          >
-                          <button
-                            class="text-sm bg-foreground text-background font-medium px-4 py-1.5 rounded-lg hover:bg-foreground/90 transition-colors"
-                            onclick={saveExternalUrl}>Save</button
-                          >
-                        </div>
-                      </div>
-                    </Popover.Content>
-                  </Popover.Root>
-                {/if}
-              {/each}
-            {/if}
-          </div>
-        {/if}
+        <ExternalRatings {bookId} bind:externalMeta {isAdmin} />
 
-        <!-- Reading Status -->
-        <div class="mt-5">
-          <Select.Root
-            type="single"
-            value={interaction?.reading_status ?? undefined}
-            onValueChange={handleStatusSelectChange}
-            disabled={savingStatus}
-          >
-            <Select.Trigger
-              class="w-full md:w-auto !h-10 rounded-full bg-white md:text-sm text-base justify-center md:justify-start {interaction?.reading_status ===
-              'read'
-                ? 'text-green-600 border-green-600/30'
-                : ''}"
-            >
-              {#if interaction?.reading_status}
-                {@const current = READING_STATUS_OPTIONS.find(
-                  (o) => o.value === interaction?.reading_status,
-                )}
-                {#if current}
-                  <current.icon
-                    size={16}
-                    class={interaction?.reading_status === "read"
-                      ? "text-green-600"
-                      : ""}
-                  />
-                  {current.label}
-                {/if}
-              {:else}
-                Set status
-              {/if}
-            </Select.Trigger>
-            <Select.Content align="start">
-              <Select.Item value={CLEAR_STATUS_VALUE}>
-                {#snippet children()}
-                  <BookMarked size={14} class="text-muted-foreground" />
-                  <span>Clear status</span>
-                {/snippet}
-              </Select.Item>
-              <Select.Separator />
-              {#each READING_STATUS_OPTIONS as opt}
-                <Select.Item value={opt.value}>
-                  {#snippet children({ selected })}
-                    <opt.icon
-                      size={14}
-                      class={opt.value === "read" && selected
-                        ? "text-green-600"
-                        : "text-muted-foreground"}
-                    />
-                    <span>{opt.label}</span>
-                  {/snippet}
-                </Select.Item>
-              {/each}
-            </Select.Content>
-          </Select.Root>
-          {#if interaction?.reading_status === "read" || interaction?.reading_status === "currently_reading"}
-            <div
-              class="mt-2 flex items-center justify-center md:justify-start gap-3 text-sm text-muted-foreground"
-            >
-              <span class="flex items-center gap-1.5">
-                Started
-                <DatePicker
-                  variant="text"
-                  value={interaction?.started_at ?? null}
-                  onchange={(v) => handleDateChange("started_at", v ?? "")}
-                />
-              </span>
-              {#if interaction?.reading_status === "read"}
-                <span class="flex items-center gap-1.5">
-                  Finished
-                  <DatePicker
-                    variant="text"
-                    value={interaction?.finished_at ?? null}
-                    onchange={(v) => handleDateChange("finished_at", v ?? "")}
-                  />
-                </span>
-              {/if}
-            </div>
-          {/if}
-        </div>
+        <ReadingStatusSelect
+          {interaction}
+          saving={savingStatus}
+          onstatuschange={handleStatusChange}
+          ondatechange={handleDateChange}
+        />
 
         <!-- Action Buttons (desktop) -->
         <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
@@ -847,13 +415,25 @@
             Start Reading
           </button>
           <button
-            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status === 'want_to_read' ? 'text-primary' : 'text-foreground'}"
-            onclick={() => handleStatusChange(interaction?.reading_status === 'want_to_read' ? null : 'want_to_read')}
-            title={interaction?.reading_status === 'want_to_read' ? 'Remove from Want to Read' : 'Want to Read'}
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status ===
+            'want_to_read'
+              ? 'text-primary'
+              : 'text-foreground'}"
+            onclick={() =>
+              handleStatusChange(
+                interaction?.reading_status === "want_to_read"
+                  ? null
+                  : "want_to_read",
+              )}
+            title={interaction?.reading_status === "want_to_read"
+              ? "Remove from Want to Read"
+              : "Want to Read"}
           >
             <Bookmark
               size={16}
-              class={interaction?.reading_status === 'want_to_read' ? 'fill-primary' : ''}
+              class={interaction?.reading_status === "want_to_read"
+                ? "fill-primary"
+                : ""}
             />
           </button>
           {#if isNative()}
@@ -863,7 +443,7 @@
                 onclick={handleDeleteDownload}
                 title="Downloaded — tap to remove"
               >
-                <CheckCircle size={16} />
+                <CircleCheck size={16} />
               </button>
             {:else}
               <button
@@ -906,7 +486,6 @@
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
             onclick={() => {
-              notesText = interaction?.notes ?? "";
               showNotesModal = true;
             }}
             title="Notes"
@@ -960,7 +539,7 @@
       <div
         class="flex items-center gap-3 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-xl mt-6"
       >
-        <AlertTriangle size={18} class="text-destructive shrink-0" />
+        <TriangleAlert size={18} class="text-destructive shrink-0" />
         <p class="text-sm text-destructive">
           This book's file may be corrupted or unreadable.
         </p>
@@ -981,152 +560,11 @@
         </div>
       {/if}
 
-      <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
-        <div class="flex flex-col gap-4 text-sm">
-          {#if book.display_series}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >Series</span
-              >
-              <button
-                class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
-                onclick={() => book && handleSeriesFilter(book.display_series!)}
-              >
-                {book.display_series}{#if book.display_series_index != null}
-                  [{formatSeriesIndex(book.display_series_index)}]{/if}
-              </button>
-              {#if seriesNeighbors?.previous || seriesNeighbors?.next}
-                <div class="flex flex-col gap-1 mt-2">
-                  {#if seriesNeighbors?.previous}
-                    <a
-                      href="/books/{seriesNeighbors.previous.id}"
-                      class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <ChevronLeft class="w-3.5 h-3.5 flex-shrink-0" />
-                      <span class="truncate"
-                        >{seriesNeighbors.previous.title ?? "Previous"}</span
-                      >
-                    </a>
-                  {/if}
-                  {#if seriesNeighbors?.next}
-                    <a
-                      href="/books/{seriesNeighbors.next.id}"
-                      class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
-                    >
-                      <ChevronRight class="w-3.5 h-3.5 flex-shrink-0" />
-                      <span class="truncate"
-                        >{seriesNeighbors.next.title ?? "Next"}</span
-                      >
-                    </a>
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-          {#if book.publisher ?? book.epub_publisher}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >Publisher</span
-              >
-              <span class="text-foreground font-medium"
-                >{book.publisher ?? book.epub_publisher}</span
-              >
-            </div>
-          {/if}
-          {#if book.published_date ?? book.epub_published_date}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >Published</span
-              >
-              <span class="text-foreground font-medium"
-                >{book.published_date ?? book.epub_published_date}</span
-              >
-            </div>
-          {/if}
-          {#if book.epub_language}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >Language</span
-              >
-              <span class="text-foreground font-medium"
-                >{book.epub_language}</span
-              >
-            </div>
-          {/if}
-          {#if book.epub_isbn}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >ISBN</span
-              >
-              <span class="text-foreground font-medium">{book.epub_isbn}</span>
-            </div>
-          {/if}
-          <div>
-            <span class="text-muted-foreground block text-xs mb-0.5"
-              >File Size</span
-            >
-            <span class="text-foreground font-medium"
-              >{book.file_size < 1_048_576
-                ? (book.file_size / 1024).toFixed(1) + " KB"
-                : (book.file_size / 1_048_576).toFixed(1) + " MB"}</span
-            >
-          </div>
-          {#if book.word_count}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-0.5"
-                >Word Count</span
-              >
-              <span class="text-foreground font-medium"
-                >{book.word_count.toLocaleString()}</span
-              >
-            </div>
-          {/if}
-          {#if (book.display_tags ?? []).length > 0}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-1">Tags</span>
-              <div class="flex flex-wrap gap-1.5">
-                {#each book.display_tags ?? [] as tag}
-                  <button
-                    class="text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
-                    onclick={() => handleTagFilter(tag)}
-                  >
-                    {tag}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-          {#if (book.ai_tags ?? []).length > 0}
-            <div>
-              <span class="text-muted-foreground block text-xs mb-1"
-                >AI Tags</span
-              >
-              <div class="flex flex-wrap gap-1.5">
-                {#each book.ai_tags ?? [] as aiTag}
-                  {@const categoryStyles = {
-                    genre:
-                      "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
-                    mood: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-                    topic:
-                      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
-                  }}
-                  <button
-                    class="text-xs px-2 py-0.5 rounded-full transition-colors hover:opacity-80 {categoryStyles[
-                      aiTag.category
-                    ] ?? 'bg-secondary text-foreground'}"
-                    onclick={() => handleTagFilter(aiTag.tag)}
-                    title="{aiTag.category} · {Math.round(
-                      aiTag.confidence * 100,
-                    )}% confidence"
-                  >
-                    {aiTag.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        </div>
-      </div>
+      <BookMetadataSidebar
+        {book}
+        {seriesNeighbors}
+        onfilter={filterInLibrary}
+      />
     </div>
 
     <!-- Notes -->
@@ -1138,7 +576,6 @@
           <button
             class="text-sm text-muted-foreground hover:text-foreground transition-colors"
             onclick={() => {
-              notesText = interaction?.notes ?? "";
               showNotesModal = true;
             }}
           >
@@ -1234,13 +671,25 @@
         Start Reading
       </button>
       <button
-        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status === 'want_to_read' ? 'text-primary' : 'text-foreground'}"
-        onclick={() => handleStatusChange(interaction?.reading_status === 'want_to_read' ? null : 'want_to_read')}
-        title={interaction?.reading_status === 'want_to_read' ? 'Remove from Want to Read' : 'Want to Read'}
+        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status ===
+        'want_to_read'
+          ? 'text-primary'
+          : 'text-foreground'}"
+        onclick={() =>
+          handleStatusChange(
+            interaction?.reading_status === "want_to_read"
+              ? null
+              : "want_to_read",
+          )}
+        title={interaction?.reading_status === "want_to_read"
+          ? "Remove from Want to Read"
+          : "Want to Read"}
       >
         <Bookmark
           size={18}
-          class={interaction?.reading_status === 'want_to_read' ? 'fill-primary' : ''}
+          class={interaction?.reading_status === "want_to_read"
+            ? "fill-primary"
+            : ""}
         />
       </button>
       <button
@@ -1255,11 +704,16 @@
   <BottomSheet bind:open={showMobileActions}>
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-      onclick={() => { toggleFavorite(); showMobileActions = false; }}
+      onclick={() => {
+        toggleFavorite();
+        showMobileActions = false;
+      }}
     >
       <Heart
         size={20}
-        class={interaction?.is_favorite ? "fill-red-500 text-red-500 shrink-0" : "text-muted-foreground shrink-0"}
+        class={interaction?.is_favorite
+          ? "fill-red-500 text-red-500 shrink-0"
+          : "text-muted-foreground shrink-0"}
       />
       {interaction?.is_favorite ? "Remove from favorites" : "Add to favorites"}
     </button>
@@ -1276,7 +730,6 @@
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
       onclick={() => {
-        notesText = interaction?.notes ?? "";
         showNotesModal = true;
         showMobileActions = false;
       }}
@@ -1298,7 +751,7 @@
             showMobileActions = false;
           }}
         >
-          <CheckCircle size={20} class="text-green-600 shrink-0" />
+          <CircleCheck size={20} class="text-green-600 shrink-0" />
           Downloaded (tap to remove)
         </button>
       {:else}
@@ -1370,273 +823,19 @@
   </BottomSheet>
 {/if}
 
-<!-- Edit Modal -->
 {#if book}
-  <Modal
-    title="Edit Metadata"
-    open={showEditModal}
-    onclose={() => (showEditModal = false)}
-  >
-    <div class="space-y-4">
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-title">Title</label
-          >
-          {#if editForm.title && book.epub_title}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.title = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <input
-          id="edit-title"
-          bind:value={editForm.title}
-          placeholder={book.epub_title ?? ""}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {#if editForm.title && book.epub_title && editForm.title !== book.epub_title}
-          <p class="text-xs text-muted-foreground">
-            Original: {book.epub_title}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-authors">Authors (comma-separated)</label
-          >
-          {#if editForm.authors && book.epub_authors?.length}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.authors = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <input
-          id="edit-authors"
-          bind:value={editForm.authors}
-          placeholder={(book.epub_authors ?? []).join(", ")}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {#if editForm.authors && book.epub_authors?.length && editForm.authors !== (book.epub_authors ?? []).join(", ")}
-          <p class="text-xs text-muted-foreground">
-            Original: {(book.epub_authors ?? []).join(", ")}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-publisher">Publisher</label
-          >
-          {#if editForm.publisher && book.epub_publisher}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.publisher = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <input
-          id="edit-publisher"
-          bind:value={editForm.publisher}
-          placeholder={book.epub_publisher ?? ""}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {#if editForm.publisher && book.epub_publisher && editForm.publisher !== book.epub_publisher}
-          <p class="text-xs text-muted-foreground">
-            Original: {book.epub_publisher}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-date">Published Date</label
-          >
-          {#if editForm.published_date && book.epub_published_date}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.published_date = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <input
-          id="edit-date"
-          bind:value={editForm.published_date}
-          placeholder={book.epub_published_date ?? ""}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {#if editForm.published_date && book.epub_published_date && editForm.published_date !== book.epub_published_date}
-          <p class="text-xs text-muted-foreground">
-            Original: {book.epub_published_date}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-series">Series</label
-          >
-          {#if editForm.series && book.epub_series}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => {
-                editForm.series = "";
-                editForm.series_index = "";
-              }}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <div class="flex gap-2">
-          <input
-            id="edit-series"
-            bind:value={editForm.series}
-            placeholder={book.epub_series ?? ""}
-            class="flex-1 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-          <input
-            id="edit-series-index"
-            bind:value={editForm.series_index}
-            placeholder={book.epub_series_index != null
-              ? String(book.epub_series_index)
-              : "#"}
-            type="number"
-            step="0.1"
-            class="w-20 border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
-        </div>
-        {#if editForm.series && book.epub_series && editForm.series !== book.epub_series}
-          <p class="text-xs text-muted-foreground">
-            Original: {book.epub_series}{#if book.epub_series_index != null}
-              [{book.epub_series_index}]{/if}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-tags">Tags (comma-separated)</label
-          >
-          {#if editForm.tags && book.epub_tags?.length}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.tags = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <input
-          id="edit-tags"
-          bind:value={editForm.tags}
-          placeholder={(book.epub_tags ?? []).join(", ")}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30"
-        />
-        {#if editForm.tags && book.epub_tags?.length && editForm.tags !== (book.epub_tags ?? []).join(", ")}
-          <p class="text-xs text-muted-foreground">
-            Original: {(book.epub_tags ?? []).join(", ")}
-          </p>
-        {/if}
-      </div>
-      <div class="space-y-1">
-        <div class="flex items-center justify-between">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="edit-desc">Description</label
-          >
-          {#if editForm.description && book.epub_description}
-            <button
-              class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-              onclick={() => (editForm.description = "")}
-            >
-              <Undo2 size={12} />
-              Reset
-            </button>
-          {/if}
-        </div>
-        <textarea
-          id="edit-desc"
-          bind:value={editForm.description}
-          placeholder={book.epub_description ?? ""}
-          rows={4}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-        ></textarea>
-        {#if editForm.description && book.epub_description && editForm.description !== book.epub_description}
-          <p class="text-xs text-muted-foreground">
-            Original: {book.epub_description.slice(0, 100)}...
-          </p>
-        {/if}
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button
-          class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-          onclick={() => (showEditModal = false)}>Cancel</button
-        >
-        <button
-          class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
-          onclick={handleSaveEdit}>Save</button
-        >
-      </div>
-    </div>
-  </Modal>
+  <BookMetadataEditModal
+    {book}
+    bind:open={showEditModal}
+    onupdate={(updated) => (book = updated)}
+  />
 
-  <Modal
-    title="Notes"
-    open={showNotesModal}
-    onclose={() => (showNotesModal = false)}
-  >
-    <div class="space-y-4">
-      <div class="space-y-1">
-        <label class="block text-sm text-muted-foreground" for="notes-text"
-          >Markdown supported</label
-        >
-        <textarea
-          id="notes-text"
-          bind:value={notesText}
-          rows={10}
-          class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none font-mono text-sm"
-          placeholder="Write your notes here..."
-        ></textarea>
-      </div>
-      <div class="flex justify-end gap-2 pt-2">
-        <button
-          class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-          onclick={() => (showNotesModal = false)}>Cancel</button
-        >
-        <button
-          class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl disabled:opacity-50"
-          onclick={handleSaveNotes}
-          disabled={savingNotes}
-        >
-          {savingNotes ? "Saving..." : "Save"}
-        </button>
-      </div>
-    </div>
-  </Modal>
+  <BookNotesModal
+    {bookId}
+    initialNotes={interaction?.notes ?? ""}
+    bind:open={showNotesModal}
+    onsaved={handleNotesSaved}
+  />
 
   <Modal
     title="Add to Bookshelf"
@@ -1669,64 +868,8 @@
   </Modal>
 {/if}
 
-<Modal
-  title="Report Issue"
-  open={showReportModal}
-  onclose={() => (showReportModal = false)}
->
-  <div class="space-y-4">
-    <div class="space-y-1">
-      <p class="text-sm text-muted-foreground">Issue type</p>
-      <Select.Root
-        type="single"
-        value={reportForm.issue_type || undefined}
-        onValueChange={(v) => (reportForm.issue_type = v)}
-      >
-        <Select.Trigger>
-          {#if reportForm.issue_type}
-            {{
-              corrupt_file: "Corrupt file",
-              wrong_metadata: "Wrong metadata",
-              cant_open: "Can't open",
-              other: "Other",
-            }[reportForm.issue_type]}
-          {:else}
-            Select an issue...
-          {/if}
-        </Select.Trigger>
-        <Select.Content>
-          <Select.Item value="corrupt_file">Corrupt file</Select.Item>
-          <Select.Item value="wrong_metadata">Wrong metadata</Select.Item>
-          <Select.Item value="cant_open">Can't open</Select.Item>
-          <Select.Item value="other">Other</Select.Item>
-        </Select.Content>
-      </Select.Root>
-    </div>
-    <div class="space-y-1">
-      <label class="block text-sm text-muted-foreground" for="report-desc"
-        >Description (optional)</label
-      >
-      <textarea
-        id="report-desc"
-        bind:value={reportForm.description}
-        rows={4}
-        maxlength={2000}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-sm"
-        placeholder="Describe the issue..."
-      ></textarea>
-    </div>
-    <div class="flex justify-end gap-2 pt-2">
-      <button
-        class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-        onclick={() => (showReportModal = false)}>Cancel</button
-      >
-      <button
-        class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl disabled:opacity-50"
-        onclick={handleSubmitReport}
-        disabled={submittingReport || !reportForm.issue_type}
-      >
-        {submittingReport ? "Submitting..." : "Submit Report"}
-      </button>
-    </div>
-  </div>
-</Modal>
+<ReportIssueModal
+  {bookId}
+  bind:open={showReportModal}
+  onreported={handleReported}
+/>

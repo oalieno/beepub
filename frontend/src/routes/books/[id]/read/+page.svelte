@@ -35,6 +35,7 @@
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);
   let readingTimer: ReturnType<typeof setTimeout> | null = null;
+  let destroyed = false;
   const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
   let autoReadTriggered = false;
 
@@ -51,11 +52,17 @@
   let highlights = $state<HighlightOut[]>([]);
   let illustrations = $state<IllustrationOut[]>([]);
   let stylePrompts = $state<StylePromptOut[]>([]);
-  let showHighlightSidebar = $state(false);
-  let showTocSidebar = $state(false);
-  let showIllustrationSidebar = $state(false);
-  let showSearchSidebar = $state(false);
-  let showCompanionSidebar = $state(false);
+  type Sidebar =
+    | "highlights"
+    | "toc"
+    | "illustrations"
+    | "search"
+    | "companion";
+  let activeSidebar = $state<Sidebar | null>(null);
+
+  function toggleSidebar(name: Sidebar) {
+    activeSidebar = activeSidebar === name ? null : name;
+  }
   let companionSelectedText = $state<string | null>(null);
   let companionSelectedCfi = $state<string | null>(null);
   let showIllustrationModal = $state(false);
@@ -116,6 +123,7 @@
 
   onDestroy(() => {
     if (!browser) return;
+    destroyed = true;
     document.documentElement.style.overflow = prevHtmlOverflow;
     document.body.style.overflow = prevBodyOverflow;
     if (readingTimer) clearTimeout(readingTimer);
@@ -267,6 +275,7 @@
   async function pollIllustration(illustrationId: string) {
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 3000));
+      if (destroyed) return;
 
       try {
         const ill = await booksApi.getIllustration(bookId, illustrationId);
@@ -316,15 +325,12 @@
   function handleCompanion(detail: { cfiRange: string; text: string }) {
     companionSelectedText = detail.text;
     companionSelectedCfi = detail.cfiRange;
-    showCompanionSidebar = true;
-    showHighlightSidebar = false;
-    showTocSidebar = false;
-    showIllustrationSidebar = false;
+    activeSidebar = "companion";
   }
 
   function handleSelectIllustration(ill: IllustrationOut) {
     reader?.displayCfi(ill.cfi_range);
-    showIllustrationSidebar = false;
+    activeSidebar = null;
     viewingIllustration = ill;
   }
 </script>
@@ -358,43 +364,15 @@
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}
     onchapter={(href) => reader?.displayChapter(href)}
-    onhighlights={() => {
-      showHighlightSidebar = !showHighlightSidebar;
-      showTocSidebar = false;
-      showIllustrationSidebar = false;
-      showCompanionSidebar = false;
-      showSearchSidebar = false;
-    }}
-    onillustrations={() => {
-      showIllustrationSidebar = !showIllustrationSidebar;
-      showHighlightSidebar = false;
-      showTocSidebar = false;
-      showCompanionSidebar = false;
-      showSearchSidebar = false;
-    }}
+    onhighlights={() => toggleSidebar("highlights")}
+    onillustrations={() => toggleSidebar("illustrations")}
     oncompanion={() => {
-      showCompanionSidebar = !showCompanionSidebar;
+      toggleSidebar("companion");
       companionSelectedText = null;
       companionSelectedCfi = null;
-      showHighlightSidebar = false;
-      showTocSidebar = false;
-      showIllustrationSidebar = false;
-      showSearchSidebar = false;
     }}
-    onsearch={() => {
-      showSearchSidebar = !showSearchSidebar;
-      showHighlightSidebar = false;
-      showTocSidebar = false;
-      showIllustrationSidebar = false;
-      showCompanionSidebar = false;
-    }}
-    ontoc_toggle={() => {
-      showTocSidebar = !showTocSidebar;
-      showHighlightSidebar = false;
-      showIllustrationSidebar = false;
-      showCompanionSidebar = false;
-      showSearchSidebar = false;
-    }}
+    onsearch={() => toggleSidebar("search")}
+    ontoc_toggle={() => toggleSidebar("toc")}
   />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
@@ -451,38 +429,38 @@
       </div>
     {/if}
 
-    {#if showTocSidebar}
+    {#if activeSidebar === "toc"}
       <TocSidebar
         {toc}
         {darkMode}
         {currentHref}
         onchapter={(href) => {
           reader?.displayChapter(href);
-          showTocSidebar = false;
+          activeSidebar = null;
         }}
-        onclose={() => (showTocSidebar = false)}
+        onclose={() => (activeSidebar = null)}
       />
     {/if}
 
-    {#if showSearchSidebar && !isImageBook}
+    {#if activeSidebar === "search" && !isImageBook}
       <SearchSidebar
         {darkMode}
         onselect={(cfi) => {
           reader?.displayCfi(cfi);
         }}
-        onclose={() => (showSearchSidebar = false)}
+        onclose={() => (activeSidebar = null)}
         onsearch={(query, onResults, signal) =>
           reader?.searchBook(query, onResults, signal)}
       />
     {/if}
 
-    {#if showHighlightSidebar && !isImageBook}
+    {#if activeSidebar === "highlights" && !isImageBook}
       <HighlightSidebar
         {highlights}
         {darkMode}
         onselect={(hl) => {
           reader?.displayCfi(hl.cfi_range);
-          showHighlightSidebar = false;
+          activeSidebar = null;
         }}
         ondelete={async (hl) => {
           try {
@@ -495,22 +473,22 @@
           }
         }}
         onshare={handleShareHighlight}
-        onclose={() => (showHighlightSidebar = false)}
+        onclose={() => (activeSidebar = null)}
       />
     {/if}
 
-    {#if showIllustrationSidebar && !isImageBook}
+    {#if activeSidebar === "illustrations" && !isImageBook}
       <IllustrationSidebar
         {illustrations}
         {bookId}
         {darkMode}
         onselect={handleSelectIllustration}
         ondelete={handleDeleteIllustration}
-        onclose={() => (showIllustrationSidebar = false)}
+        onclose={() => (activeSidebar = null)}
       />
     {/if}
 
-    {#if showCompanionSidebar && !isImageBook}
+    {#if activeSidebar === "companion" && !isImageBook}
       <CompanionSidebar
         {bookId}
         {darkMode}
@@ -519,7 +497,7 @@
         selectedText={companionSelectedText}
         selectedCfi={companionSelectedCfi}
         getCurrentCfi={() => reader?.getCurrentCfi() ?? ""}
-        onclose={() => (showCompanionSidebar = false)}
+        onclose={() => (activeSidebar = null)}
       />
     {/if}
   </div>

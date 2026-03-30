@@ -49,7 +49,8 @@
       type="button"
       class={variant === "text"
         ? "text-sm text-muted-foreground underline decoration-dotted underline-offset-4 decoration-muted-foreground/40 hover:text-foreground transition-colors cursor-pointer"
-        : "flex h-10 items-center gap-2 rounded-full border border-input bg-white px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] " + (value ? "text-foreground" : "text-muted-foreground")}
+        : "flex h-10 items-center gap-2 rounded-full border border-input bg-white px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none select-none focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] " +
+          (value ? "text-foreground" : "text-muted-foreground")}
     >
       {#if variant === "pill"}
         <CalendarIcon size={14} class="text-muted-foreground" />
