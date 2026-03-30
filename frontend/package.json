@@ -40,6 +40,7 @@
     "@capacitor/keyboard": "^8.0.2",
     "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.1",
+    "@capacitor/splash-screen": "^8.0.1",
     "@xmldom/xmldom": "^0.7.5",
     "core-js": "^3.18.3",
     "epubjs": "^0.3.93",

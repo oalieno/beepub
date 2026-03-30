@@ -9,6 +9,12 @@ const config: CapacitorConfig = {
       // Hide the accessory bar (prev/next/done) above the keyboard
       hideAccessoryBar: true,
     },
+    SplashScreen: {
+      launchAutoHide: true,
+      autoHideDelay: 1500,
+      backgroundColor: "#faf7f2",
+      showSpinner: false,
+    },
   },
 };
 
