@@ -12,7 +12,7 @@
     LibraryBig,
     LoaderCircle,
     Square,
-    AlertTriangle,
+    TriangleAlert,
   } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
 
@@ -167,7 +167,7 @@
                 />
               {/if}
               {#if stale && running}
-                <AlertTriangle class="text-amber-500 shrink-0" size={15} />
+                <TriangleAlert class="text-amber-500 shrink-0" size={15} />
               {/if}
             </div>
 

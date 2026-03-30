@@ -78,25 +78,22 @@
     isHovering = false;
   }
 
-  function handleMouseMove(e: MouseEvent) {
+  function updateTilt(clientX: number, clientY: number) {
     if (!cardEl) return;
     const rect = cardEl.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
 
-    // Tilt: max 25 degrees
     tiltY = ((x - centerX) / centerX) * 25;
     tiltX = ((centerY - y) / centerY) * 25;
-
-    // Shine position (percentage)
     shineX = (x / rect.width) * 100;
     shineY = (y / rect.height) * 100;
     isHovering = true;
   }
 
-  function handleMouseLeave() {
+  function resetTilt() {
     tiltX = 0;
     tiltY = 0;
     shineX = 50;
@@ -104,39 +101,18 @@
     isHovering = false;
   }
 
-  // Touch support for mobile
+  function handleMouseMove(e: MouseEvent) {
+    updateTilt(e.clientX, e.clientY);
+  }
+
   function handleTouchStart(e: TouchEvent) {
     e.preventDefault();
-    applyTouch(e.touches[0]);
+    updateTilt(e.touches[0].clientX, e.touches[0].clientY);
   }
 
   function handleTouchMove(e: TouchEvent) {
     e.preventDefault();
-    applyTouch(e.touches[0]);
-  }
-
-  function handleTouchEnd() {
-    tiltX = 0;
-    tiltY = 0;
-    shineX = 50;
-    shineY = 50;
-    isHovering = false;
-  }
-
-  function applyTouch(touch: Touch) {
-    if (!cardEl) return;
-    const rect = cardEl.getBoundingClientRect();
-    const x = touch.clientX - rect.left;
-    const y = touch.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-
-    tiltY = ((x - centerX) / centerX) * 25;
-    tiltX = ((centerY - y) / centerY) * 25;
-
-    shineX = (x / rect.width) * 100;
-    shineY = (y / rect.height) * 100;
-    isHovering = true;
+    updateTilt(e.touches[0].clientX, e.touches[0].clientY);
   }
 </script>
 
@@ -227,10 +203,10 @@
         class="w-full aspect-[2/3] reveal-pop card-perspective"
         bind:this={cardEl}
         onmousemove={handleMouseMove}
-        onmouseleave={handleMouseLeave}
+        onmouseleave={resetTilt}
         ontouchstart={handleTouchStart}
         ontouchmove={handleTouchMove}
-        ontouchend={handleTouchEnd}
+        ontouchend={resetTilt}
       >
         <div
           class="book-3d w-full h-full"

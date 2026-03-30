@@ -13,7 +13,7 @@
     ArrowLeft,
     EllipsisVertical,
   } from "@lucide/svelte";
-  import { onMount, tick } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import type {
@@ -86,6 +86,12 @@
   let pendingDeleteId = $state<string | null>(null);
   let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Cleanup tracking
+  let destroyed = false;
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
+  let focusTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeReader: ReadableStreamDefaultReader | null = null;
+
   // Detect mobile
   const isMobile = typeof window !== "undefined" && window.innerWidth < 640;
 
@@ -112,14 +118,22 @@
 
     // Focus input on desktop after animation
     if (!isMobile) {
-      setTimeout(() => inputEl?.focus(), 220);
+      focusTimer = setTimeout(() => inputEl?.focus(), 220);
     }
+  });
+
+  onDestroy(() => {
+    destroyed = true;
+    if (closeTimer) clearTimeout(closeTimer);
+    if (focusTimer) clearTimeout(focusTimer);
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+    activeReader?.cancel().catch(() => {});
   });
 
   function close() {
     visible = false;
     backdropVisible = false;
-    setTimeout(() => onclose?.(), 200);
+    closeTimer = setTimeout(() => onclose?.(), 200);
   }
 
   async function loadConversationList() {
@@ -219,13 +233,14 @@
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response body");
+      activeReader = reader;
 
       const decoder = new TextDecoder();
       let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done || destroyed) break;
 
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split("\n");
@@ -274,6 +289,7 @@
       toastStore.error((e as Error).message);
       messages = messages.filter((m) => m.id !== userMsg.id);
     } finally {
+      activeReader = null;
       isStreaming = false;
       streamingContent = "";
     }

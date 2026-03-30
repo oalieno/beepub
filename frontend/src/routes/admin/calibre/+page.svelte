@@ -9,8 +9,8 @@
     HardDrive,
     RefreshCw,
     Link,
-    CheckCircle,
-    AlertCircle,
+    CircleCheck,
+    CircleAlert,
     LoaderCircle,
   } from "@lucide/svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
@@ -251,7 +251,7 @@
                 </div>
               {:else if syncInfo.status === "completed"}
                 <div class="flex items-center gap-2 text-sm text-green-600">
-                  <CheckCircle size={14} />
+                  <CircleCheck size={14} />
                   Sync completed: {syncInfo.added} added, {syncInfo.updated} updated,
                   {syncInfo.unchanged} unchanged
                   {#if syncInfo.skipped > 0}
@@ -260,7 +260,7 @@
                 </div>
               {:else if syncInfo.status === "failed"}
                 <div class="flex items-center gap-2 text-sm text-destructive">
-                  <AlertCircle size={14} />
+                  <CircleAlert size={14} />
                   Sync failed
                 </div>
               {/if}

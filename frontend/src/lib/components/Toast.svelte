@@ -1,13 +1,13 @@
 <script lang="ts">
   import { toastStore } from "$lib/stores/toast";
-  import { CheckCircle, XCircle, Info, AlertTriangle, X } from "@lucide/svelte";
+  import { CircleCheck, CircleX, Info, TriangleAlert, X } from "@lucide/svelte";
   import type { ToastType } from "$lib/stores/toast";
 
   const icons = {
-    success: CheckCircle,
-    error: XCircle,
+    success: CircleCheck,
+    error: CircleX,
     info: Info,
-    warning: AlertTriangle,
+    warning: TriangleAlert,
   } as const;
 
   const colors: Record<ToastType, string> = {

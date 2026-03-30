@@ -44,45 +44,32 @@
   let hasOpenai = $derived(openaiBaseUrl.trim().length > 0);
 
   // Model lists fetched from providers
-  let geminiModels = $state<{ id: string; name: string }[]>([]);
-  let openaiModels = $state<{ id: string; name: string }[]>([]);
-  let loadingGeminiModels = $state(false);
-  let loadingOpenaiModels = $state(false);
+  let modelCache = $state<
+    Record<string, { models: { id: string; name: string }[]; loading: boolean }>
+  >({
+    gemini: { models: [], loading: false },
+    openai: { models: [], loading: false },
+  });
 
   async function fetchModels(provider: "gemini" | "openai") {
-    if (provider === "gemini") {
-      loadingGeminiModels = true;
-      try {
-        geminiModels = await adminApi.getAiModels("gemini");
-      } catch {
-        geminiModels = [];
-      } finally {
-        loadingGeminiModels = false;
-      }
-    } else {
-      loadingOpenaiModels = true;
-      try {
-        openaiModels = await adminApi.getAiModels("openai");
-      } catch {
-        openaiModels = [];
-      } finally {
-        loadingOpenaiModels = false;
-      }
+    modelCache[provider].loading = true;
+    try {
+      modelCache[provider].models = await adminApi.getAiModels(provider);
+    } catch {
+      modelCache[provider].models = [];
+    } finally {
+      modelCache[provider].loading = false;
     }
   }
 
   function getModelsForProvider(
     provider: string,
   ): { id: string; name: string }[] {
-    if (provider === "gemini") return geminiModels;
-    if (provider === "openai") return openaiModels;
-    return [];
+    return modelCache[provider]?.models ?? [];
   }
 
   function isLoadingModels(provider: string): boolean {
-    if (provider === "gemini") return loadingGeminiModels;
-    if (provider === "openai") return loadingOpenaiModels;
-    return false;
+    return modelCache[provider]?.loading ?? false;
   }
 
   const allTimezones = Intl.supportedValuesOf("timeZone");

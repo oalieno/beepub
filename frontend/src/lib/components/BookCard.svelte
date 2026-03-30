@@ -2,7 +2,7 @@
   import { goto } from "$app/navigation";
   import type { BookOut, ReadingStatus } from "$lib/types";
   import {
-    AlertTriangle,
+    TriangleAlert,
     BookOpen,
     Bookmark,
     Check,
@@ -91,7 +91,7 @@
           class="absolute left-2 p-1 bg-destructive/80 backdrop-blur-sm rounded-full"
           style:top={book.is_image_book ? "2.25rem" : "0.5rem"}
         >
-          <AlertTriangle size={13} class="text-destructive-foreground" />
+          <TriangleAlert size={13} class="text-destructive-foreground" />
         </div>
       {/if}
 

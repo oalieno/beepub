@@ -25,99 +25,94 @@
   let inputEl: HTMLInputElement | undefined = $state();
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  // Books tab state
-  let bookResults = $state<BookSearchResult[]>([]);
-  let bookTotal = $state(0);
-  let bookLoading = $state(false);
+  type SearchState<T> = {
+    results: T[];
+    total: number;
+    loading: boolean;
+    error: string;
+  };
 
-  // Content tab state
-  let contentResults = $state<SemanticSearchResult[]>([]);
-  let contentLoading = $state(false);
-  let contentError = $state("");
+  function createSearchState<T>(): SearchState<T> {
+    return { results: [], total: 0, loading: false, error: "" };
+  }
 
-  // Keyword tab state
-  let keywordResults = $state<KeywordSearchResult[]>([]);
-  let keywordTotal = $state(0);
-  let keywordLoading = $state(false);
-  let keywordError = $state("");
+  let books = $state<SearchState<BookSearchResult>>(createSearchState());
+  let content = $state<SearchState<SemanticSearchResult>>(createSearchState());
+  let keyword = $state<SearchState<KeywordSearchResult>>(createSearchState());
 
   let selectedIndex = $state(-1);
 
   function doBookSearch() {
     const q = query.trim();
     if (!q) {
-      bookResults = [];
-      bookTotal = 0;
+      books = createSearchState();
       return;
     }
-    bookLoading = true;
+    books.loading = true;
     booksApi
       .search(q)
       .then((resp) => {
-        bookResults = resp.items;
-        bookTotal = resp.total;
+        books.results = resp.items;
+        books.total = resp.total;
         selectedIndex = -1;
       })
       .catch(() => {
-        bookResults = [];
-        bookTotal = 0;
+        books.results = [];
+        books.total = 0;
       })
       .finally(() => {
-        bookLoading = false;
+        books.loading = false;
       });
   }
 
   function doContentSearch() {
     const q = query.trim();
     if (!q) {
-      contentResults = [];
-      contentError = "";
+      content = createSearchState();
       return;
     }
-    contentLoading = true;
-    contentError = "";
+    content.loading = true;
+    content.error = "";
     searchApi
       .semantic(q)
       .then((resp) => {
-        contentResults = resp.results;
+        content.results = resp.results;
         selectedIndex = -1;
       })
       .catch((err) => {
-        contentResults = [];
-        contentError =
+        content.results = [];
+        content.error =
           err.message === "Semantic search is not configured"
             ? "Semantic search is not configured. Set up embedding in Admin settings."
             : "Search unavailable — please try again";
       })
       .finally(() => {
-        contentLoading = false;
+        content.loading = false;
       });
   }
 
   function doKeywordSearch() {
     const q = query.trim();
     if (!q) {
-      keywordResults = [];
-      keywordTotal = 0;
-      keywordError = "";
+      keyword = createSearchState();
       return;
     }
-    keywordLoading = true;
-    keywordError = "";
+    keyword.loading = true;
+    keyword.error = "";
     searchApi
       .keyword(q)
       .then((resp) => {
-        keywordResults = resp.results;
-        keywordTotal = resp.total;
+        keyword.results = resp.results;
+        keyword.total = resp.total;
         selectedIndex = -1;
       })
       .catch(() => {
-        keywordResults = [];
-        keywordTotal = 0;
-        keywordError = "Search unavailable — please try again";
+        keyword.results = [];
+        keyword.total = 0;
+        keyword.error = "Search unavailable — please try again";
       })
       .finally(() => {
-        keywordLoading = false;
+        keyword.loading = false;
       });
   }
 
@@ -162,9 +157,9 @@
   }
 
   function currentResults(): number {
-    if (activeTab === "books") return bookResults.length;
-    if (activeTab === "content") return contentResults.length;
-    return keywordResults.length;
+    if (activeTab === "books") return books.results.length;
+    if (activeTab === "content") return content.results.length;
+    return keyword.results.length;
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -176,12 +171,12 @@
       selectedIndex = Math.max(selectedIndex - 1, -1);
     } else if (e.key === "Enter" && selectedIndex >= 0) {
       e.preventDefault();
-      if (activeTab === "books" && bookResults[selectedIndex]) {
-        selectBookResult(bookResults[selectedIndex]);
-      } else if (activeTab === "content" && contentResults[selectedIndex]) {
-        selectContentResult(contentResults[selectedIndex]);
-      } else if (activeTab === "keyword" && keywordResults[selectedIndex]) {
-        selectContentResult(keywordResults[selectedIndex]);
+      if (activeTab === "books" && books.results[selectedIndex]) {
+        selectBookResult(books.results[selectedIndex]);
+      } else if (activeTab === "content" && content.results[selectedIndex]) {
+        selectContentResult(content.results[selectedIndex]);
+      } else if (activeTab === "keyword" && keyword.results[selectedIndex]) {
+        selectContentResult(keyword.results[selectedIndex]);
       }
     } else if (e.key === "Enter" && selectedIndex < 0) {
       handleSearchSubmit();
@@ -193,13 +188,9 @@
   $effect(() => {
     if (open) {
       query = "";
-      bookResults = [];
-      bookTotal = 0;
-      contentResults = [];
-      contentError = "";
-      keywordResults = [];
-      keywordTotal = 0;
-      keywordError = "";
+      books = createSearchState();
+      content = createSearchState();
+      keyword = createSearchState();
       selectedIndex = -1;
       activeTab = "books";
       setTimeout(() => inputEl?.focus(), 50);
@@ -285,13 +276,9 @@
             class="text-muted-foreground hover:text-foreground"
             onclick={() => {
               query = "";
-              bookResults = [];
-              bookTotal = 0;
-              contentResults = [];
-              contentError = "";
-              keywordResults = [];
-              keywordTotal = 0;
-              keywordError = "";
+              books = createSearchState();
+              content = createSearchState();
+              keyword = createSearchState();
               inputEl?.focus();
             }}
           >
@@ -312,16 +299,16 @@
             class="max-h-[60vh] overflow-y-auto"
             onmouseleave={() => (selectedIndex = -1)}
           >
-            {#if bookLoading && bookResults.length === 0}
+            {#if books.loading && books.results.length === 0}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
                 Searching...
               </div>
-            {:else if bookResults.length === 0 && !bookLoading}
+            {:else if books.results.length === 0 && !books.loading}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
                 No books found
               </div>
             {:else}
-              {#each bookResults as result, i (result.id)}
+              {#each books.results as result, i (result.id)}
                 <button
                   class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-secondary/50 transition-colors
                     {i === selectedIndex ? 'bg-secondary/70' : ''}"
@@ -359,11 +346,11 @@
                   {/if}
                 </button>
               {/each}
-              {#if bookTotal > bookResults.length}
+              {#if books.total > books.results.length}
                 <div
                   class="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50"
                 >
-                  Showing {bookResults.length} of {bookTotal} results
+                  Showing {books.results.length} of {books.total} results
                 </div>
               {/if}
             {/if}
@@ -380,7 +367,7 @@
               Searches across all your books by meaning, not just keywords
             </p>
           </div>
-        {:else if contentLoading}
+        {:else if content.loading}
           <!-- Skeleton loading -->
           <div class="max-h-[60vh] overflow-y-auto">
             {#each [1, 2, 3] as _}
@@ -394,11 +381,11 @@
               </div>
             {/each}
           </div>
-        {:else if contentError}
+        {:else if content.error}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-            {contentError}
+            {content.error}
           </div>
-        {:else if contentResults.length === 0}
+        {:else if content.results.length === 0}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
             <BookOpen size={24} class="mx-auto mb-2 opacity-30" />
             No matching passages found. Try different keywords or check that your
@@ -411,7 +398,7 @@
             tabindex="0"
             onmouseleave={() => (selectedIndex = -1)}
           >
-            {#each contentResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
+            {#each content.results as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
                   {i === selectedIndex ? 'bg-secondary/70' : ''}"
@@ -478,7 +465,7 @@
               Searches across all your books by exact keyword match
             </p>
           </div>
-        {:else if keywordLoading}
+        {:else if keyword.loading}
           <!-- Skeleton loading -->
           <div class="max-h-[60vh] overflow-y-auto">
             {#each [1, 2, 3] as _}
@@ -492,11 +479,11 @@
               </div>
             {/each}
           </div>
-        {:else if keywordError}
+        {:else if keyword.error}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-            {keywordError}
+            {keyword.error}
           </div>
-        {:else if keywordResults.length === 0}
+        {:else if keyword.results.length === 0}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
             <TextSearch size={24} class="mx-auto mb-2 opacity-30" />
             No matching passages found. Try different keywords or check that your
@@ -509,7 +496,7 @@
             tabindex="0"
             onmouseleave={() => (selectedIndex = -1)}
           >
-            {#each keywordResults as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
+            {#each keyword.results as result, i (result.book_id + "-" + result.spine_index + "-" + result.char_offset_start)}
               <button
                 class="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-secondary/50 transition-colors
                   {i === selectedIndex ? 'bg-secondary/70' : ''}"
@@ -553,11 +540,11 @@
                 </div>
               </button>
             {/each}
-            {#if keywordTotal > keywordResults.length}
+            {#if keyword.total > keyword.results.length}
               <div
                 class="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50"
               >
-                Showing {keywordResults.length} of {keywordTotal} results
+                Showing {keyword.results.length} of {keyword.total} results
               </div>
             {/if}
           </div>

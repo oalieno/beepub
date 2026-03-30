@@ -27,38 +27,58 @@
 <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
   <div class="flex flex-col gap-4 text-sm">
     {#if book.display_series}
+      {@const total = seriesNeighbors?.progress?.total_in_library ?? 0}
+      {@const currentIdx = book.display_series_index}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5">Series</span>
-        <button
-          class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
-          onclick={() => onfilter("series", book.display_series!)}
-        >
-          {book.display_series}{#if book.display_series_index != null}
-            [{formatSeriesIndex(book.display_series_index)}]{/if}
-        </button>
+        <div class="flex items-baseline gap-2">
+          <button
+            class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
+            onclick={() => onfilter("series", book.display_series!)}
+          >
+            {book.display_series}
+          </button>
+          {#if currentIdx != null}
+            <span class="text-muted-foreground text-xs whitespace-nowrap">
+              vol. {formatSeriesIndex(currentIdx)}{#if total > 0}{" "}of {total}{/if}
+            </span>
+          {/if}
+        </div>
         {#if seriesNeighbors?.previous || seriesNeighbors?.next}
-          <div class="flex flex-col gap-1 mt-2">
+          <div class="flex items-center gap-1.5 mt-2">
             {#if seriesNeighbors?.previous}
               <a
                 href="/books/{seriesNeighbors.previous.id}"
-                class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+                title={seriesNeighbors.previous.title ?? "Previous"}
               >
-                <ChevronLeft class="w-3.5 h-3.5 flex-shrink-0" />
-                <span class="truncate"
-                  >{seriesNeighbors.previous.title ?? "Previous"}</span
-                >
+                <ChevronLeft class="w-3.5 h-3.5" />
               </a>
+            {:else}
+              <div class="w-6"></div>
+            {/if}
+            {#if currentIdx != null && total > 0}
+              <div
+                class="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden"
+              >
+                <div
+                  class="h-full rounded-full bg-primary transition-all"
+                  style="width: {Math.min((currentIdx / total) * 100, 100)}%"
+                ></div>
+              </div>
+            {:else}
+              <div class="flex-1"></div>
             {/if}
             {#if seriesNeighbors?.next}
               <a
                 href="/books/{seriesNeighbors.next.id}"
-                class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+                class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
+                title={seriesNeighbors.next.title ?? "Next"}
               >
-                <ChevronRight class="w-3.5 h-3.5 flex-shrink-0" />
-                <span class="truncate"
-                  >{seriesNeighbors.next.title ?? "Next"}</span
-                >
+                <ChevronRight class="w-3.5 h-3.5" />
               </a>
+            {:else}
+              <div class="w-6"></div>
             {/if}
           </div>
         {/if}

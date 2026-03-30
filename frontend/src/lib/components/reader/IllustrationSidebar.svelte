@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { X, Trash2, LoaderCircle, AlertCircle } from "@lucide/svelte";
+  import { X, Trash2, LoaderCircle, CircleAlert } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
 
@@ -154,7 +154,7 @@
                       : 'text-purple-500'}"
                   />
                 {:else if ill.status === "failed"}
-                  <AlertCircle size={16} class="text-red-400" />
+                  <CircleAlert size={16} class="text-red-400" />
                 {:else}
                   <LoaderCircle
                     size={16}
