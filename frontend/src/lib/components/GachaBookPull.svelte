@@ -141,7 +141,8 @@
 </script>
 
 <div
-  class="flex flex-col items-center justify-center h-[calc(100dvh-4rem)] gap-8 overflow-hidden"
+  class="flex flex-col items-center justify-center gap-8 overflow-hidden"
+  style="height: calc(100dvh - 4rem - env(safe-area-inset-top, 0px));"
 >
   <!-- Pack / Card area -->
   <div class="relative w-64 sm:w-80">
