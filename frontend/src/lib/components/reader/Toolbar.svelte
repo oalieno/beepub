@@ -10,7 +10,6 @@
     List,
     Search,
     Highlighter,
-    Sparkles,
     MessageCircle,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
@@ -37,7 +36,6 @@
     onthemeToggle,
     onchapter,
     onhighlights,
-    onillustrations,
     oncompanion,
     onsearch,
     ontoc_toggle,
@@ -62,7 +60,6 @@
     onthemeToggle?: () => void;
     onchapter?: (href: string) => void;
     onhighlights?: () => void;
-    onillustrations?: () => void;
     oncompanion?: () => void;
     onsearch?: () => void;
     ontoc_toggle?: () => void;
@@ -122,34 +119,6 @@
             : 'bg-primary text-primary-foreground'}"
         >
           {highlightCount > 99 ? "99" : highlightCount}
-        </span>
-      {/if}
-    </button>
-
-    <!-- Illustrations button -->
-    <button
-      class="p-1.5 rounded-md transition-colors relative {offline
-        ? 'opacity-40'
-        : btnClass(darkMode)}"
-      title={offline
-        ? "AI features require an internet connection"
-        : "AI Illustrations"}
-      aria-disabled={offline || undefined}
-      onclick={() => {
-        if (offline) {
-          toastStore.info("AI features require an internet connection");
-          return;
-        }
-        onillustrations?.();
-      }}
-    >
-      <Sparkles size={18} />
-      {#if illustrationCount > 0}
-        <span
-          class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center"
-          style="background: linear-gradient(135deg, #a855f7, #3b82f6); color: white;"
-        >
-          {illustrationCount > 99 ? "99" : illustrationCount}
         </span>
       {/if}
     </button>

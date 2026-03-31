@@ -14,7 +14,6 @@
   import { toastStore } from "$lib/stores/toast";
   import { isOnline } from "$lib/services/network";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
-  import IllustrationSidebar from "$lib/components/reader/IllustrationSidebar.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import SearchSidebar from "$lib/components/reader/SearchSidebar.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
@@ -52,12 +51,7 @@
   let highlights = $state<HighlightOut[]>([]);
   let illustrations = $state<IllustrationOut[]>([]);
   let stylePrompts = $state<StylePromptOut[]>([]);
-  type Sidebar =
-    | "highlights"
-    | "toc"
-    | "illustrations"
-    | "search"
-    | "companion";
+  type Sidebar = "highlights" | "toc" | "search" | "companion";
   let activeSidebar = $state<Sidebar | null>(null);
 
   function toggleSidebar(name: Sidebar) {
@@ -365,7 +359,6 @@
     onthemeToggle={handleThemeToggle}
     onchapter={(href) => reader?.displayChapter(href)}
     onhighlights={() => toggleSidebar("highlights")}
-    onillustrations={() => toggleSidebar("illustrations")}
     oncompanion={() => {
       toggleSidebar("companion");
       companionSelectedText = null;
@@ -457,6 +450,8 @@
     {#if activeSidebar === "highlights" && !isImageBook}
       <HighlightSidebar
         {highlights}
+        {illustrations}
+        {bookId}
         {darkMode}
         onselect={(hl) => {
           reader?.displayCfi(hl.cfi_range);
@@ -473,17 +468,8 @@
           }
         }}
         onshare={handleShareHighlight}
-        onclose={() => (activeSidebar = null)}
-      />
-    {/if}
-
-    {#if activeSidebar === "illustrations" && !isImageBook}
-      <IllustrationSidebar
-        {illustrations}
-        {bookId}
-        {darkMode}
-        onselect={handleSelectIllustration}
-        ondelete={handleDeleteIllustration}
+        onillustrationselect={handleSelectIllustration}
+        onillustrationdelete={handleDeleteIllustration}
         onclose={() => (activeSidebar = null)}
       />
     {/if}
