@@ -5,6 +5,9 @@
   import { authStore } from "$lib/stores/auth";
   import EpubReader from "$lib/components/reader/EpubReader.svelte";
   import Toolbar from "$lib/components/reader/Toolbar.svelte";
+  import ReaderTopBar from "$lib/components/reader/ReaderTopBar.svelte";
+  import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
+  import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
@@ -54,8 +57,17 @@
   type Sidebar = "highlights" | "toc" | "search" | "companion";
   let activeSidebar = $state<Sidebar | null>(null);
 
+  let showMobileBottomBar = $state(false);
+  let showSettings = $state(false);
+
   function toggleSidebar(name: Sidebar) {
     activeSidebar = activeSidebar === name ? null : name;
+    if (activeSidebar) showMobileBottomBar = false;
+  }
+
+  function handleReaderTap() {
+    if (activeSidebar) return;
+    showMobileBottomBar = !showMobileBottomBar;
   }
   let companionSelectedText = $state<string | null>(null);
   let companionSelectedCfi = $state<string | null>(null);
@@ -338,35 +350,41 @@
     ? 'bg-gray-900'
     : 'bg-background'}"
 >
-  <Toolbar
-    {bookId}
-    {title}
-    {fontFamily}
-    {fontSize}
-    {percentage}
-    {darkMode}
-    {toc}
-    {isRtl}
-    {isImageBook}
-    highlightCount={highlights.length}
-    illustrationCount={illustrations.length}
-    offline={!$isOnline}
-    onprev={() => reader?.prev()}
-    onnext={() => reader?.next()}
-    onfontToggle={handleFontToggle}
-    onfontIncrease={handleFontIncrease}
-    onfontDecrease={handleFontDecrease}
-    onthemeToggle={handleThemeToggle}
-    onchapter={(href) => reader?.displayChapter(href)}
-    onhighlights={() => toggleSidebar("highlights")}
-    oncompanion={() => {
-      toggleSidebar("companion");
-      companionSelectedText = null;
-      companionSelectedCfi = null;
-    }}
-    onsearch={() => toggleSidebar("search")}
-    ontoc_toggle={() => toggleSidebar("toc")}
-  />
+  <!-- Desktop toolbar -->
+  <div class="hidden md:block">
+    <Toolbar
+      {bookId}
+      {title}
+      {fontFamily}
+      {fontSize}
+      {percentage}
+      {darkMode}
+      {toc}
+      {isRtl}
+      {isImageBook}
+      highlightCount={highlights.length}
+      illustrationCount={illustrations.length}
+      offline={!$isOnline}
+      onprev={() => reader?.prev()}
+      onnext={() => reader?.next()}
+      onfontToggle={handleFontToggle}
+      onfontIncrease={handleFontIncrease}
+      onfontDecrease={handleFontDecrease}
+      onthemeToggle={handleThemeToggle}
+      onchapter={(href) => reader?.displayChapter(href)}
+      onhighlights={() => toggleSidebar("highlights")}
+      oncompanion={() => {
+        toggleSidebar("companion");
+        companionSelectedText = null;
+        companionSelectedCfi = null;
+      }}
+      onsearch={() => toggleSidebar("search")}
+      ontoc_toggle={() => toggleSidebar("toc")}
+    />
+  </div>
+
+  <!-- Mobile top bar (always visible) -->
+  <ReaderTopBar {bookId} {title} {percentage} {darkMode} />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
     {#if ready}
@@ -391,6 +409,7 @@
         onillustrationclick={(ill) => (viewingIllustration = ill)}
         onshare={handleShareHighlight}
         oncompanion={handleCompanion}
+        ontap={handleReaderTap}
         onready={() => (epubLoaded = true)}
         onatend={prefetchSeriesNeighbors}
         onbookend={handleBookEnd}
@@ -407,10 +426,10 @@
       </div>
     {/if}
 
-    <!-- Bottom percentage indicator -->
+    <!-- Bottom percentage indicator (desktop only, mobile has it in top bar) -->
     {#if epubLoaded}
       <div
-        class="absolute bottom-0 left-0 right-0 flex items-center justify-center py-2 pointer-events-none"
+        class="hidden md:flex absolute bottom-0 left-0 right-0 items-center justify-center py-2 pointer-events-none"
       >
         <span
           class="text-xs px-3 py-1 rounded-full {darkMode
@@ -487,6 +506,45 @@
       />
     {/if}
   </div>
+
+  <!-- Mobile bottom bar (tap to toggle) -->
+  {#if showMobileBottomBar}
+    <ReaderBottomBar
+      {percentage}
+      {darkMode}
+      {isRtl}
+      {isImageBook}
+      highlightCount={highlights.length}
+      offline={!$isOnline}
+      onprev={() => reader?.prev()}
+      onnext={() => reader?.next()}
+      ontoc={() => toggleSidebar("toc")}
+      onsearch={() => toggleSidebar("search")}
+      onhighlights={() => toggleSidebar("highlights")}
+      oncompanion={() => {
+        toggleSidebar("companion");
+        companionSelectedText = null;
+        companionSelectedCfi = null;
+      }}
+      onsettings={() => {
+        showSettings = true;
+        showMobileBottomBar = false;
+      }}
+    />
+  {/if}
+
+  <!-- Mobile settings sheet -->
+  <ReaderSettingsSheet
+    bind:open={showSettings}
+    {fontFamily}
+    {fontSize}
+    {darkMode}
+    {isImageBook}
+    onfontToggle={handleFontToggle}
+    onfontIncrease={handleFontIncrease}
+    onfontDecrease={handleFontDecrease}
+    onthemeToggle={handleThemeToggle}
+  />
 
   {#if showIllustrationModal}
     <IllustrationPromptModal

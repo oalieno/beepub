@@ -4,10 +4,7 @@
 
 type TocEntry = { label: string; href: string; subitems?: TocEntry[] };
 
-export function getSpineIndexForHref(
-  epubBook: any,
-  tocHref: string,
-): number {
+export function getSpineIndexForHref(epubBook: any, tocHref: string): number {
   const base = tocHref.split("#")[0];
   const item = epubBook?.spine?.get(base);
   return item?.index ?? -1;

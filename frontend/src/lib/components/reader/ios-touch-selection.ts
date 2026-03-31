@@ -24,8 +24,7 @@ const isCJK = (ch: string) =>
   /[\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/.test(
     ch,
   );
-const isLatinWord = (ch: string) =>
-  /[\w\u00C0-\u024F\u0400-\u04FF]/.test(ch);
+const isLatinWord = (ch: string) => /[\w\u00C0-\u024F\u0400-\u04FF]/.test(ch);
 
 const SWIPE_THRESHOLD = 50;
 const LONG_PRESS_MS = 300;

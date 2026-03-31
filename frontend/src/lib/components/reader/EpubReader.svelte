@@ -33,6 +33,7 @@
     onhrefchange,
     onready,
     oncompanion,
+    ontap,
     onatend,
     onbookend,
   }: {
@@ -54,6 +55,7 @@
     onhrefchange?: (href: string) => void;
     onready?: () => void;
     oncompanion?: (detail: { cfiRange: string; text: string }) => void;
+    ontap?: () => void;
     onatend?: () => void;
     onbookend?: () => void;
   } = $props();
@@ -80,6 +82,7 @@
   let existingHighlight: HighlightOut | null = $state(null);
   let highlightMenuShownAt = 0;
   let highlightMenuEl: HTMLDivElement | undefined = $state();
+  let longPressFired = false;
   const MENU_H = 44;
 
   function setClampedMenuPosition(x: number, y: number) {
@@ -292,63 +295,86 @@
       const doc = contents.document;
       doc.addEventListener("wheel", handleWheel, { passive: false });
 
-      // Image zoom: click/tap on images opens full-screen viewer
-      // Style all images (including SVG <image>) with zoom-in cursor
-      doc.querySelectorAll("img").forEach((img: HTMLElement) => {
-        img.style.cursor = "zoom-in";
-      });
-      doc.querySelectorAll("svg image").forEach((img: Element) => {
-        (img as HTMLElement).style.cursor = "zoom-in";
-        // SVG <image> elements don't receive clicks easily; style parent SVG too
-        const svg = img.closest("svg");
-        if (svg) (svg as unknown as HTMLElement).style.cursor = "zoom-in";
-      });
+      // Image zoom: long-press (500ms) on both touch and mouse
 
-      // Use document-level click delegation to catch all image clicks
-      // (works even with iOS touch state machine since click fires after touchend)
-      doc.addEventListener("click", (e: MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (!target) return;
-
-        let imageSrc: string | null = null;
-
-        // Case 1: <img> element
+      // Helper: extract image src from an event target
+      function getImageSrc(target: HTMLElement): string | null {
         if (target.tagName === "IMG") {
-          imageSrc = (target as HTMLImageElement).src;
+          return (target as HTMLImageElement).src;
         }
-        // Case 2: <image> inside <svg> (common in manga)
-        else if (target.tagName === "image" || target.closest?.("image")) {
+        if (target.tagName === "image" || target.closest?.("image")) {
           const imageEl =
             target.tagName === "image" ? target : target.closest("image");
-          imageSrc =
+          let src =
             imageEl?.getAttribute("href") ||
             imageEl?.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
             null;
-          // Resolve relative URL
-          if (imageSrc && !imageSrc.startsWith("http")) {
-            imageSrc = new URL(imageSrc, contents.document.baseURI).href;
+          if (src && !src.startsWith("http")) {
+            src = new URL(src, contents.document.baseURI).href;
           }
+          return src;
         }
-        // Case 3: <svg> that wraps an <image> (click lands on svg, not on image)
-        else if (target.tagName === "svg" || target.closest?.("svg")) {
+        if (target.tagName === "svg" || target.closest?.("svg")) {
           const svg = target.tagName === "svg" ? target : target.closest("svg");
           const imageEl = svg?.querySelector("image");
           if (imageEl) {
-            imageSrc =
+            let src =
               imageEl.getAttribute("href") ||
               imageEl.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
               null;
-            if (imageSrc && !imageSrc.startsWith("http")) {
-              imageSrc = new URL(imageSrc, contents.document.baseURI).href;
+            if (src && !src.startsWith("http")) {
+              src = new URL(src, contents.document.baseURI).href;
             }
+            return src;
           }
         }
+        return null;
+      }
 
-        if (imageSrc) {
-          e.preventDefault();
-          e.stopPropagation();
-          zoomImageSrc = imageSrc;
-        }
+      // Touch: long-press (500ms) to zoom image
+      let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+      // longPressFired is at component scope (see below)
+
+      doc.addEventListener("touchstart", (e: TouchEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+        const src = getImageSrc(target);
+        if (!src) return;
+        longPressFired = false;
+        longPressTimer = setTimeout(() => {
+          longPressFired = true;
+          zoomImageSrc = src;
+        }, 500);
+      }, { passive: true });
+
+      doc.addEventListener("touchmove", () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      }, { passive: true });
+
+      doc.addEventListener("touchend", () => {
+        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+      });
+
+      // Mouse: long-press (500ms) to zoom image (same as touch)
+      let mouseDownTimer: ReturnType<typeof setTimeout> | null = null;
+
+      doc.addEventListener("mousedown", (e: MouseEvent) => {
+        const target = e.target as HTMLElement;
+        if (!target) return;
+        const src = getImageSrc(target);
+        if (!src) return;
+        mouseDownTimer = setTimeout(() => {
+          longPressFired = true;
+          zoomImageSrc = src;
+        }, 500);
+      });
+
+      doc.addEventListener("mousemove", () => {
+        if (mouseDownTimer) { clearTimeout(mouseDownTimer); mouseDownTimer = null; }
+      });
+
+      doc.addEventListener("mouseup", () => {
+        if (mouseDownTimer) { clearTimeout(mouseDownTimer); mouseDownTimer = null; }
       });
 
       // Highlight cursor: show pointer when hovering over a highlight
@@ -527,6 +553,9 @@
         if (!footnoteOpenedThisClick) {
           showFootnote = false;
         }
+        // Notify parent for bottom bar toggle (skip if long-press just zoomed an image)
+        if (!longPressFired) ontap?.();
+        longPressFired = false;
       }
     });
 
