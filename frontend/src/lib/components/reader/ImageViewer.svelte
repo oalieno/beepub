@@ -32,9 +32,7 @@
 
   // Backdrop close state
   let didMove = false;
-  let lastInteractionWasTouch = false;
   let closeTapTimer: ReturnType<typeof setTimeout> | null = null;
-  const openedAt = Date.now();
 
   const MIN_SCALE = 1;
   const MAX_SCALE = 5;
@@ -67,7 +65,6 @@
   }
 
   function handleTouchStart(e: TouchEvent) {
-    lastInteractionWasTouch = true;
     didMove = false;
     if (e.touches.length === 2) {
       // Pinch start
@@ -91,6 +88,7 @@
           scale = 2.5;
         }
         lastTapTime = 0;
+        didMove = true; // prevent pointerup from triggering close
         return;
       }
       lastTapTime = now;
@@ -142,7 +140,6 @@
 
   // Mouse pan (desktop)
   function handleMouseDown(e: MouseEvent) {
-    lastInteractionWasTouch = false;
     didMove = false;
     if (scale > 1) {
       isPanning = true;
@@ -170,11 +167,12 @@
     if (e.key === "Escape") onclose?.();
   }
 
-  function handleContainerClick() {
-    // Ignore phantom clicks from touch→mouse synthesis when overlay opens mid-longpress
-    if (Date.now() - openedAt < 400) return;
+  // Use pointerup instead of click for backdrop close.
+  // Synthetic mouse events from cross-iframe touch (Capacitor iOS) don't generate
+  // pointer events, so phantom clicks never reach this handler.
+  function handlePointerUp(e: PointerEvent) {
     if (didMove || scale > 1) return;
-    if (lastInteractionWasTouch) {
+    if (e.pointerType === "touch") {
       // Delay close to allow double-tap zoom to cancel it
       closeTapTimer = setTimeout(() => onclose?.(), 300);
     } else {
@@ -214,7 +212,7 @@
     onmousemove={handleMouseMove}
     onmouseup={handleMouseUp}
     onmouseleave={handleMouseUp}
-    onclick={handleContainerClick}
+    onpointerup={handlePointerUp}
   >
     <img
       {src}
