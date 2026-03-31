@@ -39,14 +39,17 @@ class User(Base, TimestampMixin):
 
     # Relationships
     library_accesses: Mapped[list["LibraryAccess"]] = relationship(
-        "LibraryAccess", foreign_keys="LibraryAccess.user_id", back_populates="user"
+        "LibraryAccess",
+        foreign_keys="LibraryAccess.user_id",
+        back_populates="user",
+        passive_deletes=True,
     )
     bookshelves: Mapped[list["Bookshelf"]] = relationship(
-        "Bookshelf", back_populates="user"
+        "Bookshelf", back_populates="user", passive_deletes=True
     )
     interactions: Mapped[list["UserBookInteraction"]] = relationship(
-        "UserBookInteraction", back_populates="user"
+        "UserBookInteraction", back_populates="user", passive_deletes=True
     )
     highlights: Mapped[list["Highlight"]] = relationship(
-        "Highlight", back_populates="user"
+        "Highlight", back_populates="user", passive_deletes=True
     )
