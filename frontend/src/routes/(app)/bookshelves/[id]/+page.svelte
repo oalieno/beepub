@@ -7,6 +7,7 @@
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { BookOpen } from "@lucide/svelte";
+  import BackButton from "$lib/components/BackButton.svelte";
   import type { BookshelfOut, BookOut } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
@@ -81,11 +82,9 @@
     <BookGridSkeleton count={12} />
   {:else if shelf}
     <div class="mb-8">
-      <a
-        href="/bookshelves"
-        class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-        >← Shelves</a
-      >
+      <div class="mb-1">
+        <BackButton href="/bookshelves" label="Shelves" />
+      </div>
       <h1 class="text-3xl font-bold text-foreground">{shelf.name}</h1>
       {#if shelf.description}
         <p class="text-muted-foreground mt-1">{shelf.description}</p>

@@ -12,6 +12,7 @@
   import { LibraryVisibility } from "$lib/types";
   import { Trash2, UserPlus, Save } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
 
   let libraryId = $derived(page.params.id as string);
 
@@ -114,11 +115,9 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
-    <a
-      href="/admin/libraries"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >← Libraries</a
-    >
+    <div class="mb-1">
+      <BackButton href="/admin/libraries" label="Libraries" />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">
       {library?.name ?? "Library"}
     </h1>

@@ -13,6 +13,7 @@
     CircleAlert,
     LoaderCircle,
   } from "@lucide/svelte";
+  import BackButton from "$lib/components/BackButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
 
   let libraries = $state<CalibreLibraryInfo[]>([]);
@@ -118,12 +119,9 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
-    <a
-      href="/admin"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-    >
-      ← Admin
-    </a>
+    <div class="mb-1">
+      <BackButton href="/admin" label="Admin" />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">Calibre Import</h1>
     <p class="text-muted-foreground mt-1">
       Link and sync Calibre libraries (read-only)

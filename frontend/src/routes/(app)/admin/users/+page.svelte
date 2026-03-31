@@ -7,6 +7,7 @@
   import { UserRole } from "$lib/types";
   import { Trash2, Shield, User } from "@lucide/svelte";
   import { TableSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
 
   let users = $state<UserOut[]>([]);
   let loading = $state(true);
@@ -58,11 +59,9 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
-    <a
-      href="/admin"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >← Admin</a
-    >
+    <div class="mb-1">
+      <BackButton href="/admin" label="Admin" />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">Users</h1>
     <p class="text-muted-foreground mt-1">Manage user accounts and roles</p>
   </div>

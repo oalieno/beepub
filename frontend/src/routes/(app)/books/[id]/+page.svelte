@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { goto, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
@@ -32,12 +32,12 @@
     EllipsisVertical,
     NotebookPen,
     Bookmark,
-    ArrowLeft,
     Flag,
     TriangleAlert,
     Download,
     CircleCheck,
   } from "@lucide/svelte";
+  import BackButton from "$lib/components/BackButton.svelte";
   import { isNative } from "$lib/platform";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { marked } from "marked";
@@ -98,6 +98,23 @@
   let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
+
+  // Track if user arrived via internal navigation (vs direct link / external)
+  // Persisted in sessionStorage to survive reader round-trip (component gets destroyed)
+  let hasInternalHistory = $state(false);
+  afterNavigate((nav) => {
+    if (nav.from) {
+      // nav.from is null on initial page load (direct link), non-null for internal navigation
+      if (!nav.from.url.pathname.endsWith("/read")) {
+        hasInternalHistory = true;
+        sessionStorage.setItem(`book-back-${bookId}`, "1");
+      } else {
+        // Returning from reader — restore flag
+        hasInternalHistory =
+          sessionStorage.getItem(`book-back-${bookId}`) === "1";
+      }
+    }
+  });
 
   $effect(() => {
     // Re-load data when bookId changes (e.g. navigating from similar books)
@@ -337,13 +354,13 @@
     <BookDetailSkeleton />
   {:else if book}
     <!-- Back Button -->
-    <button
-      class="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors mb-6 -ml-1"
-      onclick={() => history.back()}
-    >
-      <ArrowLeft size={18} />
-      <span class="text-sm">Back</span>
-    </button>
+    <div class="mb-6 -ml-1">
+      <BackButton
+        href={book.library_id ? `/libraries/${book.library_id}` : "/"}
+        label="Back"
+        onclick={hasInternalHistory ? () => history.back() : undefined}
+      />
+    </div>
 
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">

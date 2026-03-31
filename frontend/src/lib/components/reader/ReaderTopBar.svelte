@@ -26,7 +26,7 @@
       class="p-1.5 -ml-1 rounded-md transition-colors {darkMode
         ? 'text-gray-400 hover:bg-gray-800'
         : 'text-muted-foreground hover:bg-secondary'}"
-      onclick={() => goto(`/books/${bookId}`)}
+      onclick={() => goto(`/books/${bookId}`, { replaceState: true })}
       aria-label="Back to book detail"
     >
       <ArrowLeft size={20} />

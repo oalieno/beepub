@@ -18,6 +18,7 @@
     HardDrive,
   } from "@lucide/svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import BackButton from "$lib/components/BackButton.svelte";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -88,11 +89,9 @@
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="flex items-end justify-between mb-8">
     <div>
-      <a
-        href="/admin"
-        class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-        >← Admin</a
-      >
+      <div class="mb-1">
+        <BackButton href="/admin" label="Admin" />
+      </div>
       <h1 class="text-3xl font-bold text-foreground">Libraries</h1>
       <p class="text-muted-foreground mt-1">
         Manage libraries, visibility, and access
