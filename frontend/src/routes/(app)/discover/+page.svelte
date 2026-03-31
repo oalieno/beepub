@@ -13,6 +13,7 @@
     BookGridSkeleton,
     BrowseSectionSkeleton,
   } from "$lib/components/skeletons";
+  import { toastStore } from "$lib/stores/toast";
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);
@@ -33,7 +34,7 @@
     try {
       recommendations = await booksApi.getRecommendations(20);
     } catch (e) {
-      console.error("Failed to load recommendations:", e);
+      toastStore.error("Failed to load recommendations");
     } finally {
       loadingRecs = false;
     }
@@ -60,7 +61,7 @@
         }
       }
     } catch (e) {
-      console.error("Failed to load browse sections:", e);
+      toastStore.error("Failed to load browse sections");
     } finally {
       loadingBrowse = false;
     }

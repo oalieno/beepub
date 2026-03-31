@@ -88,6 +88,9 @@
     ? 'bg-gray-900 border-l border-gray-800'
     : 'bg-card border-l border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Highlights & Illustrations"
 >
   <!-- Header with tabs -->
   <div

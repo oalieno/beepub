@@ -77,6 +77,9 @@
     ? 'bg-gray-900 border-l border-gray-800'
     : 'bg-card border-l border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Illustrations"
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode

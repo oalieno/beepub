@@ -50,6 +50,9 @@
     ? 'bg-gray-900 border-r border-gray-800'
     : 'bg-card border-r border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
+  role="dialog"
+  aria-modal="true"
+  aria-label="Table of Contents"
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
