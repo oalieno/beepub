@@ -7,6 +7,11 @@
   import { isBookDownloaded, readLocalBook } from "$lib/services/offline";
   import HighlightMenu from "./HighlightMenu.svelte";
   import ImageViewer from "./ImageViewer.svelte";
+  import FootnotePopup from "./FootnotePopup.svelte";
+  import { setupIOSTouchSelection } from "./ios-touch-selection";
+  import { updateIllustrationOverlays } from "./illustration-overlays";
+  import { prefetchSections } from "./image-prefetch";
+  import { findActiveTocHref } from "./toc-utils";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
 
   let {
@@ -91,6 +96,34 @@
     highlightMenuY = y < MENU_H + 8 ? y + MENU_H + 16 : y;
   }
 
+  /** Dismiss highlight menu and clear iOS selection overlay */
+  function dismissMenu() {
+    showHighlightMenu = false;
+    clearIOSSelection();
+  }
+
+  /** Show highlight menu at a given range with scroll-offset correction */
+  function showMenuAtRange(
+    range: Range,
+    text: string,
+    cfiRange: string,
+    existing: HighlightOut | null,
+  ) {
+    const rect = range.getBoundingClientRect();
+    const mgr = rendition?.manager;
+    const scrollLeft = mgr?.container?.scrollLeft ?? 0;
+    const scrollTop = mgr?.container?.scrollTop ?? 0;
+    selectedCfi = cfiRange;
+    selectedText = text;
+    existingHighlight = existing;
+    setClampedMenuPosition(
+      rect.left - scrollLeft + rect.width / 2,
+      rect.top - scrollTop - 8,
+    );
+    showHighlightMenu = true;
+    highlightMenuShownAt = Date.now();
+  }
+
   // Image zoom viewer
   let zoomImageSrc: string | null = $state(null);
 
@@ -98,7 +131,7 @@
   let showFootnote = $state(false);
   let footnoteContent = $state("");
   let footnoteOpenedThisClick = false;
-  let footnoteSourcePath = "";
+  let footnoteSourcePath = $state("");
 
   // Progress tracking
   let currentCfi = "";
@@ -111,8 +144,6 @@
 
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let prevFontSize = 0;
-  let initialized = false;
   let handleVisibility: (() => void) | null = null;
 
   const HIGHLIGHT_COLORS: Record<string, string> = {
@@ -123,199 +154,21 @@
     orange: "#fed7aa",
   };
 
-  const ILLUSTRATION_OVERLAY_ID = "beepub-illustration-overlay";
-  const ILLUSTRATION_GRADIENT =
-    "linear-gradient(135deg, rgba(168,85,247,0.30), rgba(59,130,246,0.30), rgba(236,72,153,0.30))";
-
   const SERIF_FONTS =
     '"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif';
   const SANS_FONTS =
     '"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif';
 
-  const PREFETCH_FORWARD = 3;
-  const PREFETCH_BACKWARD = 1;
-  const prefetchedUrls = new Set<string>();
-  let prefetchAbort: (() => void) | null = null;
-
-  function prefetchImage(url: string): Promise<void> {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => resolve();
-      img.onerror = () => resolve();
-      img.src = url;
-    });
-  }
-
-  function prefetchSections() {
-    if (!epubBook?.spine || !rendition) return;
-    const currentSection = epubBook.spine.get(currentSectionIndex);
-    if (!currentSection) return;
-
-    // Abort previous prefetch chain if user navigated again
-    prefetchAbort?.();
-
-    const toPrefetch: any[] = [];
-
-    let section: any = currentSection;
-    for (let i = 0; i < PREFETCH_FORWARD; i++) {
-      section = section.next?.();
-      if (!section) break;
-      toPrefetch.push(section);
-    }
-
-    section = currentSection;
-    for (let i = 0; i < PREFETCH_BACKWARD; i++) {
-      section = section.prev?.();
-      if (!section) break;
-      toPrefetch.push(section);
-    }
-
-    // Collect all image URLs from sections, then load sequentially
-    let cancelled = false;
-    prefetchAbort = () => {
-      cancelled = true;
-    };
-
-    (async () => {
-      const allUrls: string[] = [];
-      for (const s of toPrefetch) {
-        try {
-          const contents: any = await s.load(epubBook.load.bind(epubBook));
-          contents.querySelectorAll("img").forEach((img: Element) => {
-            const src = img.getAttribute("src");
-            if (src) allUrls.push(new URL(src, s.url).href);
-          });
-          contents.querySelectorAll("image").forEach((img: Element) => {
-            const href =
-              img.getAttributeNS("http://www.w3.org/1999/xlink", "href") ||
-              img.getAttribute("href") ||
-              img.getAttribute("xlink:href");
-            if (href) allUrls.push(new URL(href, s.url).href);
-          });
-        } catch {}
-      }
-
-      // Load images one at a time so we don't compete for bandwidth
-      for (const url of allUrls) {
-        if (cancelled) break;
-        if (prefetchedUrls.has(url)) continue;
-        prefetchedUrls.add(url);
-        await prefetchImage(url);
-      }
-    })();
+  function doPrefetch() {
+    prefetchSections(epubBook, currentSectionIndex);
   }
 
   function emitProgress() {
     onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
   }
 
-  function findActiveTocHref(sectionIndex: number): string {
-    if (!epubBook || tocData.length === 0) return "";
-
-    // Flatten TOC entries with their spine indices
-    const flat: { href: string; spineIndex: number }[] = [];
-    for (const item of tocData) {
-      const si = getSpineIndexForHref(item.href);
-      if (si !== -1) flat.push({ href: item.href, spineIndex: si });
-      if (item.subitems) {
-        for (const sub of item.subitems) {
-          const ssi = getSpineIndexForHref(sub.href);
-          if (ssi !== -1) flat.push({ href: sub.href, spineIndex: ssi });
-        }
-      }
-    }
-
-    // Sort by spine index, preserving TOC order for same-index entries
-    flat.sort((a, b) => a.spineIndex - b.spineIndex);
-
-    // Find the last entry whose spine index <= current section index
-    let active = "";
-    for (const entry of flat) {
-      if (entry.spineIndex <= sectionIndex) {
-        active = entry.href;
-      } else {
-        break;
-      }
-    }
-
-    // Refine: for entries sharing the same spine file as active,
-    // check fragment positions in the rendered DOM
-    if (active && rendition) {
-      const activeBase = active.split("#")[0];
-      const sameFile = flat.filter(
-        (e) =>
-          e.spineIndex === getSpineIndexForHref(active) &&
-          e.spineIndex === sectionIndex,
-      );
-
-      if (sameFile.length > 1) {
-        const contents = rendition.getContents();
-        if (contents && contents.length > 0) {
-          const doc = contents[0]?.document;
-          if (doc) {
-            // Walk entries in order; pick the last one whose anchor is
-            // above or at the current viewport position
-            let refined = sameFile[0].href; // default to first
-            for (const entry of sameFile) {
-              const fragment = entry.href.split("#")[1];
-              if (!fragment) {
-                refined = entry.href;
-                continue;
-              }
-              const el = doc.getElementById(fragment);
-              if (el) {
-                const rect = el.getBoundingClientRect();
-                // In paginated mode, elements we've scrolled past have
-                // negative top (vertical) or negative left (horizontal)
-                if (rect.top <= 10) {
-                  refined = entry.href;
-                }
-              }
-            }
-            active = refined;
-          }
-        }
-      }
-    }
-
-    return active;
-  }
-
-  function getSpineIndexForHref(tocHref: string): number {
-    const base = tocHref.split("#")[0];
-    const item = epubBook?.spine?.get(base);
-    return item?.index ?? -1;
-  }
-
-  function normalizeFootnoteHref(rawHref: string): string | null {
-    const href = (rawHref ?? "").trim();
-    if (!href || href.startsWith("javascript:")) return null;
-
-    // Resolve popup links against the original section path of this footnote,
-    // then map them back to epub.js-relative spine hrefs.
-    const basePath = footnoteSourcePath || "";
-    const baseUrl = `https://epub.local/${basePath}`;
-    const resolved = new URL(href, baseUrl);
-
-    if (resolved.origin !== "https://epub.local") return null;
-
-    const path = resolved.pathname.replace(/^\/+/, "");
-    const hash = resolved.hash || "";
-    return path || hash ? `${path}${hash}` : null;
-  }
-
-  async function handleFootnoteContentClick(e: MouseEvent) {
-    const target = e.target as HTMLElement | null;
-    const anchor = target?.closest?.("a") as HTMLAnchorElement | null;
-    if (!anchor) return;
-
-    const hrefAttr = anchor.getAttribute("href") ?? "";
-    const normalized = normalizeFootnoteHref(hrefAttr);
-    if (!normalized) return;
-
-    e.preventDefault();
-    showFootnote = false;
-    await rendition?.display(normalized);
+  function doFindActiveTocHref(sectionIndex: number): string {
+    return findActiveTocHref(epubBook, rendition, tocData, sectionIndex);
   }
 
   onMount(async () => {
@@ -385,19 +238,6 @@
 
     // relocated handler: calculate percentage from section position
     rendition.on("relocated", (location: any) => {
-      const mgr = rendition?.manager;
-      if (mgr?.isPaginated && mgr?.settings?.axis === "vertical") {
-        console.log("[split-diag][relocated]", {
-          cfi: location?.start?.cfi,
-          href: location?.start?.href,
-          sectionIndex: location?.start?.index,
-          page: location?.start?.displayed?.page,
-          total: location?.start?.displayed?.total,
-          scrollTop: mgr?.container?.scrollTop,
-          scrollHeight: mgr?.container?.scrollHeight,
-          offsetHeight: mgr?.container?.offsetHeight,
-        });
-      }
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
@@ -415,10 +255,10 @@
         ),
       );
       emitProgress();
-      onhrefchange?.(findActiveTocHref(currentSectionIndex));
+      onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
       debouncedSave();
-      updateIllustrationOverlays();
-      prefetchSections();
+      doUpdateOverlays();
+      doPrefetch();
 
       // Track end-of-book state for series navigation
       const wasAtEnd = isAtEnd;
@@ -543,11 +383,6 @@
         doc.body.style.cursor = overHighlight ? "pointer" : "";
       });
 
-      // Detect iOS (iPhone/iPad/iPod or desktop iPad with touch)
-      const isIOS =
-        /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-
       // Helper: show highlight menu from current selection
       function tryShowMenuFromSelection() {
         if (showHighlightMenu) return;
@@ -561,285 +396,26 @@
         const existing =
           highlights.find((h: HighlightOut) => h.cfi_range === cfiRange) ??
           null;
-        const range = sel.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        const mgr = rendition?.manager;
-        const scrollLeft = mgr?.container?.scrollLeft ?? 0;
-        const scrollTop = mgr?.container?.scrollTop ?? 0;
-        selectedCfi = cfiRange;
-        selectedText = text;
-        existingHighlight = existing;
-        setClampedMenuPosition(
-          rect.left - scrollLeft + rect.width / 2,
-          rect.top - scrollTop - 8,
-        );
-        showHighlightMenu = true;
-        highlightMenuShownAt = Date.now();
+        showMenuAtRange(sel.getRangeAt(0), text, cfiRange, existing);
       }
 
-      if (isIOS) {
-        // === iOS: disable native selection, implement custom long-press ===
-        const iosStyle = doc.createElement("style");
-        iosStyle.textContent = [
-          "* { -webkit-touch-callout: none !important; }",
-          "body { -webkit-user-select: none !important; user-select: none !important; touch-action: pan-x pan-y; }",
-          "body.beepub-selecting { -webkit-user-select: text !important; user-select: text !important; }",
-          "::selection { background: rgba(59, 130, 246, 0.35) !important; }",
-        ].join("\n");
-        doc.head.appendChild(iosStyle);
-
-        // Block epub inline scripts via CSP (allowScriptedContent is needed for event handlers only)
-        const cspMeta = doc.createElement("meta");
-        cspMeta.setAttribute("http-equiv", "Content-Security-Policy");
-        cspMeta.setAttribute("content", "script-src 'none'");
-        doc.head.insertBefore(cspMeta, doc.head.firstChild);
-
-        // Selection overlay: draw blue rectangles over selected text
-        let overlayContainer: HTMLDivElement | null = null;
-        function updateSelectionOverlay(range: Range | null) {
-          let overlay: HTMLDivElement;
-          if (!overlayContainer) {
-            overlay = doc.createElement("div");
-            overlay.id = "beepub-sel-overlay";
-            overlay.style.cssText =
-              "position:absolute;top:0;left:0;pointer-events:none;z-index:9999;";
-            doc.body.appendChild(overlay);
-            overlayContainer = overlay;
-          } else {
-            overlay = overlayContainer;
-          }
-          overlay.innerHTML = "";
-          if (!range) return;
-          const rects = range.getClientRects();
-          const scrollX = contents.window.scrollX || 0;
-          const scrollY = contents.window.scrollY || 0;
-          for (let i = 0; i < rects.length; i++) {
-            const r = rects[i];
-            const div = doc.createElement("div");
-            div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgba(59,130,246,0.3);border-radius:2px;`;
-            overlay.appendChild(div);
-          }
-        }
-        function clearSelectionOverlay() {
-          if (overlayContainer) overlayContainer.innerHTML = "";
-        }
-
-        // Touch state machine: IDLE → WAITING → SELECTING or SWIPING
-        type TouchState = "idle" | "waiting" | "selecting" | "swiping";
-        let touchState: TouchState = "idle";
-        let lpTimer: ReturnType<typeof setTimeout> | null = null;
-        let startX = 0;
-        let startY = 0;
-        // Anchor point of selection (start of the initially selected word)
-        let anchorNode: Node | null = null;
-        let anchorOffset = 0;
-        let didDragSelect = false; // true if user dragged after long-press
-        let currentRange: Range | null = null;
-        let currentRangeText = "";
-
-        const isCJK = (ch: string) =>
-          /[\u3040-\u309F\u30A0-\u30FF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF]/.test(
-            ch,
-          );
-        const isLatinWord = (ch: string) =>
-          /[\w\u00C0-\u024F\u0400-\u04FF]/.test(ch);
-
-        /** Select word at (x, y) and return the Range, or null */
-        function selectWordAt(x: number, y: number): Range | null {
-          doc.body.classList.add("beepub-selecting");
-          const caretRange = doc.caretRangeFromPoint(x, y);
-          if (!caretRange) {
-            doc.body.classList.remove("beepub-selecting");
-            return null;
-          }
-          const node = caretRange.startContainer;
-          if (node.nodeType !== Node.TEXT_NODE) {
-            doc.body.classList.remove("beepub-selecting");
-            return null;
-          }
-          const nodeText = node.textContent || "";
-          let s = caretRange.startOffset;
-          let e = caretRange.startOffset;
-          if (s < nodeText.length && isCJK(nodeText[s])) {
-            e = s + 1;
-          } else if (s < nodeText.length && isLatinWord(nodeText[s])) {
-            while (s > 0 && isLatinWord(nodeText[s - 1])) s--;
-            while (e < nodeText.length && isLatinWord(nodeText[e])) e++;
-          } else if (e < nodeText.length) {
-            e++;
-          }
-          if (s === e) {
-            doc.body.classList.remove("beepub-selecting");
-            return null;
-          }
-          caretRange.setStart(node, s);
-          caretRange.setEnd(node, e);
-          const sel = contents.window.getSelection();
-          sel.removeAllRanges();
-          sel.addRange(caretRange);
-          // Save range/text before re-disabling selection (user-select:none clears getSelection)
-          currentRange = caretRange.cloneRange();
-          currentRangeText = sel.toString().trim();
-          // Immediately re-disable native selection — our overlay handles the visual highlight
-          doc.body.classList.remove("beepub-selecting");
-          updateSelectionOverlay(caretRange);
-          return caretRange;
-        }
-
-        /** Extend selection from anchor to the caret position at (x, y) */
-        function extendSelectionTo(x: number, y: number) {
-          if (!anchorNode) return;
-          doc.body.classList.add("beepub-selecting");
-          const caretRange = doc.caretRangeFromPoint(x, y);
-          if (!caretRange) {
-            doc.body.classList.remove("beepub-selecting");
-            return;
-          }
-          const sel = contents.window.getSelection();
-          if (!sel) {
-            doc.body.classList.remove("beepub-selecting");
-            return;
-          }
-          const range = doc.createRange();
-          const focusNode = caretRange.startContainer;
-          const focusOffset = caretRange.startOffset;
-          const cmp = anchorNode.compareDocumentPosition(focusNode);
-          const isBefore =
-            cmp & Node.DOCUMENT_POSITION_PRECEDING ||
-            (anchorNode === focusNode && focusOffset < anchorOffset);
-          if (isBefore) {
-            range.setStart(focusNode, focusOffset);
-            range.setEnd(anchorNode, anchorOffset);
-          } else {
-            range.setStart(anchorNode, anchorOffset);
-            range.setEnd(focusNode, focusOffset);
-          }
-          sel.removeAllRanges();
-          sel.addRange(range);
-          currentRange = range.cloneRange();
-          currentRangeText = sel.toString().trim();
-          doc.body.classList.remove("beepub-selecting");
-          updateSelectionOverlay(range);
-        }
-
-        /** Show the highlight menu for a given range and its text */
-        function showMenuForRange(range: Range, text: string) {
-          if (isImageBook) return;
-          const cfi = rendition?.manager
-            ?.getContents?.()?.[0]
-            ?.cfiFromRange?.(range);
-          if (!cfi) return;
-          const rect = range.getBoundingClientRect();
-          const mgr = rendition?.manager;
-          const scrollLeft = mgr?.container?.scrollLeft ?? 0;
-          const scrollTop = mgr?.container?.scrollTop ?? 0;
-          const existing =
-            highlights.find((h: HighlightOut) => h.cfi_range === cfi) ?? null;
-          selectedCfi = cfi;
-          selectedText = text;
-          existingHighlight = existing;
-          setClampedMenuPosition(
-            rect.left - scrollLeft + rect.width / 2,
-            rect.top - scrollTop - 8,
-          );
-          showHighlightMenu = true;
-          highlightMenuShownAt = Date.now();
-        }
-
-        doc.addEventListener(
-          "touchstart",
-          (e: TouchEvent) => {
-            if (e.touches.length !== 1) return;
-            const t = e.touches[0];
-            startX = t.clientX;
-            startY = t.clientY;
-            touchState = "waiting";
-
-            lpTimer = setTimeout(() => {
-              lpTimer = null;
-              // Long-press fired → select word and enter selecting mode
-              const range = selectWordAt(startX, startY);
-              if (range) {
-                // Save anchor (start of selected word) for drag-to-extend
-                anchorNode = range.startContainer;
-                anchorOffset = range.startOffset;
-                touchState = "selecting";
-                didDragSelect = false;
-                if (currentRange && currentRangeText)
-                  showMenuForRange(currentRange, currentRangeText);
-              } else {
-                touchState = "idle";
-              }
-            }, 300);
+      if (isIOSDevice) {
+        setupIOSTouchSelection(doc, contents.window, {
+          onselect(range, text) {
+            if (isImageBook) return;
+            const cfi = rendition?.manager
+              ?.getContents?.()?.[0]
+              ?.cfiFromRange?.(range);
+            if (!cfi) return;
+            const existing =
+              highlights.find((h: HighlightOut) => h.cfi_range === cfi) ?? null;
+            showMenuAtRange(range, text, cfi, existing);
           },
-          { passive: true },
-        );
-
-        doc.addEventListener(
-          "touchmove",
-          (e: TouchEvent) => {
-            const t = e.touches[0];
-            if (touchState === "waiting") {
-              // Moved before long-press timer → switch to swiping
-              if (
-                Math.abs(t.clientX - startX) > 10 ||
-                Math.abs(t.clientY - startY) > 10
-              ) {
-                if (lpTimer) {
-                  clearTimeout(lpTimer);
-                  lpTimer = null;
-                }
-                touchState = "swiping";
-              }
-            } else if (touchState === "selecting") {
-              // Dragging after long-press → extend selection (require >15px to avoid finger tremor)
-              if (
-                Math.abs(t.clientX - startX) > 15 ||
-                Math.abs(t.clientY - startY) > 15
-              ) {
-                didDragSelect = true;
-                extendSelectionTo(t.clientX, t.clientY);
-              }
-            }
-          },
-          { passive: true },
-        );
-
-        doc.addEventListener(
-          "touchend",
-          (e: TouchEvent) => {
-            if (lpTimer) {
-              clearTimeout(lpTimer);
-              lpTimer = null;
-            }
-            const endX = e.changedTouches[0]?.clientX ?? startX;
-            const dx = endX - startX;
-
-            if (touchState === "selecting") {
-              // Only update menu position if user actually dragged to extend
-              if (didDragSelect && currentRange && currentRangeText)
-                showMenuForRange(currentRange, currentRangeText);
-            } else if (touchState === "swiping") {
-              // Swipe to turn page (min 50px horizontal distance)
-              const SWIPE_THRESHOLD = 50;
-              if (Math.abs(dx) > SWIPE_THRESHOLD) {
-                const swipeLeft = dx < 0;
-                if (swipeLeft) {
-                  isRtl ? _doPrev() : _doNext();
-                } else {
-                  isRtl ? _doNext() : _doPrev();
-                }
-              }
-            } else if (touchState === "waiting" && showHighlightMenu) {
-              // Quick tap to dismiss menu
-              showHighlightMenu = false;
-              clearIOSSelection();
-            }
-            touchState = "idle";
-            anchorNode = null;
-          },
-          { passive: true },
-        );
+          onswipeleft: () => (isRtl ? _doPrev() : _doNext()),
+          onswiperight: () => (isRtl ? _doNext() : _doPrev()),
+          ontapdismiss: dismissMenu,
+          isMenuVisible: () => showHighlightMenu,
+        });
       } else {
         // === Non-iOS: use selectionchange + touchend fallback ===
         let selChangeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -892,9 +468,9 @@
 
               const swipeLeft = dx < 0;
               if (swipeLeft) {
-                isRtl ? rendition?.prev() : rendition?.next();
+                isRtl ? _doPrev() : _doNext();
               } else {
-                isRtl ? rendition?.next() : rendition?.prev();
+                isRtl ? _doNext() : _doPrev();
               }
             } else if (!swiping) {
               // Tap (not swipe) — show highlight menu if text selected
@@ -912,7 +488,6 @@
       (cfiRange: string, contents: { window: Window }) => {
         // On iOS, our custom touch handler manages selection and menu
         if (isIOSDevice) return;
-        // Suppress text selection context menu for image books
         if (isImageBook) return;
 
         const selection = contents.window.getSelection();
@@ -920,22 +495,7 @@
         const text = selection.toString().trim();
         const existing =
           highlights.find((h) => h.cfi_range === cfiRange) ?? null;
-
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-
-        const mgr = rendition?.manager;
-        const scrollLeft = mgr?.container?.scrollLeft ?? 0;
-        const scrollTop = mgr?.container?.scrollTop ?? 0;
-        const x = rect.left - scrollLeft + rect.width / 2;
-        const y = rect.top - scrollTop - 8;
-
-        selectedCfi = cfiRange;
-        selectedText = text;
-        existingHighlight = existing;
-        setClampedMenuPosition(x, y);
-        showHighlightMenu = true;
-        highlightMenuShownAt = Date.now();
+        showMenuAtRange(selection.getRangeAt(0), text, cfiRange, existing);
       },
     );
 
@@ -947,23 +507,9 @@
         );
         if (!hl) return;
 
-        // Get the range position for menu placement
         const range = contents?.range?.(cfiRange);
         if (!range) return;
-        const rect = range.getBoundingClientRect();
-        const mgr = rendition?.manager;
-        const scrollLeft = mgr?.container?.scrollLeft ?? 0;
-        const scrollTop = mgr?.container?.scrollTop ?? 0;
-
-        selectedCfi = cfiRange;
-        selectedText = hl.text;
-        existingHighlight = hl;
-        setClampedMenuPosition(
-          rect.left - scrollLeft + rect.width / 2,
-          rect.top - scrollTop - 8,
-        );
-        showHighlightMenu = true;
-        highlightMenuShownAt = Date.now();
+        showMenuAtRange(range, hl.text, cfiRange, hl);
       },
     );
 
@@ -976,8 +522,7 @@
       const contents = rendition?.manager?.getContents?.();
       const sel = contents?.[0]?.window?.getSelection();
       if (!sel || sel.isCollapsed || sel.toString().trim() === "") {
-        showHighlightMenu = false;
-        clearIOSSelection();
+        dismissMenu();
         // Don't close footnote if it was just opened by a link click in the same event cycle
         if (!footnoteOpenedThisClick) {
           showFootnote = false;
@@ -988,9 +533,7 @@
     rendition.on("link", async (linkEvent: any) => {
       const href: string = linkEvent.href;
       const hashIdx = href.indexOf("#");
-      console.log("[link] href:", href, "hashIdx:", hashIdx, "isRtl:", isRtl);
       if (hashIdx === -1) {
-        console.log("[link] no hash, letting default handleLinks run");
         return;
       }
 
@@ -998,16 +541,6 @@
       const elementId = href.slice(hashIdx + 1);
 
       const section = epubBook.spine.get(filePath);
-      console.log(
-        "[link] filePath:",
-        filePath,
-        "elementId:",
-        elementId,
-        "section found:",
-        !!section,
-        "section.index:",
-        section?.index,
-      );
       if (!section) return;
 
       // If the link points to a different section, navigate there instead of showing a popup
@@ -1046,8 +579,7 @@
         footnoteSourcePath = filePath;
         footnoteContent = el.innerHTML;
         showFootnote = true;
-      } catch (err) {
-        console.error("[link] error:", err);
+      } catch {
         await rendition?.display(href);
       }
     });
@@ -1091,12 +623,6 @@
       }
     }
     try {
-      console.log("[split-diag][restore-progress]", {
-        cfi: savedProgress?.cfi,
-        section_page: savedProgress?.section_page,
-        section_index: savedProgress?.section_index,
-        font_size: savedProgress?.font_size,
-      });
       if (savedProgress?.cfi) {
         // Show saved percentage immediately while loading
         if (savedProgress.percentage != null)
@@ -1193,8 +719,6 @@
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    prevFontSize = fontSize;
-    initialized = true;
     onready?.();
   });
 
@@ -1287,150 +811,8 @@
     } catch {}
   }
 
-  function ensureIllustrationOverlayRoot(contents: any): HTMLDivElement | null {
-    const doc = contents?.document;
-    if (!doc?.body) return null;
-
-    let root = doc.getElementById(
-      ILLUSTRATION_OVERLAY_ID,
-    ) as HTMLDivElement | null;
-    if (!root) {
-      root = doc.createElement("div") as HTMLDivElement;
-      root!.id = ILLUSTRATION_OVERLAY_ID;
-      root!.style.cssText =
-        "position:absolute;top:0;left:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:9998;writing-mode:horizontal-tb;";
-      doc.body.appendChild(root);
-    }
-
-    return root;
-  }
-
-  /**
-   * Extract the spine step number from a CFI string.
-   * e.g. "epubcfi(/6/28!/4/2...)" → 28, which maps to spine index 28/2 - 1 = 13
-   */
-  function cfiSpineIndex(cfi: string): number {
-    const m = cfi.match(/^epubcfi\(\/6\/(\d+)/);
-    return m ? Math.floor(parseInt(m[1], 10) / 2) - 1 : -1;
-  }
-
-  function updateIllustrationOverlays() {
-    if (!rendition) return;
-
-    // views() returns a Views object with internal _views array
-    const viewsResult = rendition.views?.();
-    const views: any[] =
-      viewsResult?._views ?? (Array.isArray(viewsResult) ? viewsResult : []);
-    if (views.length === 0) return;
-
-    for (const view of views) {
-      const contents = view?.contents;
-      const doc = contents?.document;
-      const win = contents?.window;
-      if (!doc || !win) continue;
-
-      const viewSpineIndex: number = view.index ?? view.section?.index ?? -1;
-
-      const root = ensureIllustrationOverlayRoot(contents);
-      if (!root) continue;
-      root.innerHTML = "";
-
-      const scrollX = win.scrollX || 0;
-      const scrollY = win.scrollY || 0;
-
-      for (const ill of illustrations) {
-        if (ill.status !== "completed" && ill.status !== "generating") continue;
-
-        const illSpine = cfiSpineIndex(ill.cfi_range);
-
-        // Only render overlays for illustrations belonging to this section
-        if (viewSpineIndex >= 0 && illSpine !== viewSpineIndex) continue;
-
-        try {
-          const range = contents.range(ill.cfi_range);
-          if (!range) continue;
-
-          const allRects = Array.from(range.getClientRects()) as DOMRect[];
-          const nonEmpty = allRects.filter((r) => r.width > 0 && r.height > 0);
-          // Deduplicate overlapping rects produced by getClientRects().
-          // For multi-line ranges the browser may return aggregate bounding rects
-          // that overlap with per-line rects. When two rects overlap by >50% of
-          // the smaller rect's area, discard the larger one.
-          const discard = new Set<number>();
-          for (let i = 0; i < nonEmpty.length; i++) {
-            if (discard.has(i)) continue;
-            for (let j = i + 1; j < nonEmpty.length; j++) {
-              if (discard.has(j)) continue;
-              const a = nonEmpty[i],
-                b = nonEmpty[j];
-              const ox = Math.max(
-                0,
-                Math.min(a.right, b.right) - Math.max(a.left, b.left),
-              );
-              const oy = Math.max(
-                0,
-                Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top),
-              );
-              const overlap = ox * oy;
-              if (overlap <= 0) continue;
-              const areaA = a.width * a.height;
-              const areaB = b.width * b.height;
-              const smaller = Math.min(areaA, areaB);
-              if (overlap > smaller * 0.5) {
-                // Discard the larger rect
-                discard.add(areaA >= areaB ? i : j);
-              }
-            }
-          }
-          const rects = nonEmpty.filter((_r, idx) => !discard.has(idx));
-          const isGenerating = ill.status === "generating";
-          for (const rect of rects) {
-            const overlay = doc.createElement("button");
-            overlay.type = "button";
-            overlay.title = isGenerating
-              ? "Generating..."
-              : "View illustration";
-            overlay.setAttribute("aria-label", overlay.title);
-            overlay.style.cssText = [
-              "position:absolute",
-              `left:${rect.left + scrollX}px`,
-              `top:${rect.top + scrollY}px`,
-              `width:${rect.width}px`,
-              `height:${rect.height}px`,
-              `background:${ILLUSTRATION_GRADIENT}`,
-              "border:none",
-              "border-radius:4px",
-              "padding:0",
-              "margin:0",
-              isGenerating ? "cursor:wait" : "cursor:pointer",
-              "pointer-events:auto",
-              "box-shadow: inset 0 0 0 1px rgba(255,255,255,0.10)",
-              "mix-blend-mode:multiply",
-              "touch-action:manipulation",
-              isGenerating
-                ? "animation:beepub-pulse 2s ease-in-out infinite"
-                : "",
-            ].join(";");
-            if (!isGenerating) {
-              overlay.addEventListener("click", (e: Event) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onillustrationclick?.(ill);
-              });
-            }
-            root.appendChild(overlay);
-          }
-
-          // Inject pulse animation if generating and not already present
-          if (isGenerating && !doc.getElementById("beepub-pulse-style")) {
-            const style = doc.createElement("style");
-            style.id = "beepub-pulse-style";
-            style.textContent = `@keyframes beepub-pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }`;
-            doc.head.appendChild(style);
-          }
-        } catch {}
-      }
-    }
+  function doUpdateOverlays() {
+    updateIllustrationOverlays(rendition, illustrations, onillustrationclick);
   }
 
   function applyTheme() {
@@ -1483,19 +865,19 @@
     } else {
       illustrations = [...illustrations, ill];
     }
-    updateIllustrationOverlays();
+    doUpdateOverlays();
   }
 
   export function removeIllustrationAnnotation(cfiRange: string) {
     if (!rendition) return;
     illustrations = illustrations.filter((x) => x.cfi_range !== cfiRange);
-    updateIllustrationOverlays();
+    doUpdateOverlays();
   }
 
   export function updateIllustrations(newIllustrations: IllustrationOut[]) {
     illustrations = newIllustrations;
     onillustrationschange?.(illustrations);
-    updateIllustrationOverlays();
+    doUpdateOverlays();
   }
 
   function _doPrev() {
@@ -1521,27 +903,7 @@
   }
 
   export function displayChapter(href: string) {
-    const mgr = rendition?.manager;
-    console.log("[split-diag][displayChapter:before]", {
-      href,
-      axis: mgr?.settings?.axis,
-      isPaginated: mgr?.isPaginated,
-      scrollTop: mgr?.container?.scrollTop,
-      scrollHeight: mgr?.container?.scrollHeight,
-      offsetHeight: mgr?.container?.offsetHeight,
-    });
-
-    rendition?.display(href).then(() => {
-      const mgr2 = rendition?.manager;
-      console.log("[split-diag][displayChapter:after]", {
-        href,
-        axis: mgr2?.settings?.axis,
-        isPaginated: mgr2?.isPaginated,
-        scrollTop: mgr2?.container?.scrollTop,
-        scrollHeight: mgr2?.container?.scrollHeight,
-        offsetHeight: mgr2?.container?.offsetHeight,
-      });
-    });
+    rendition?.display(href);
   }
 
   export function displayCfi(cfi: string) {
@@ -1625,15 +987,11 @@
     darkMode;
     if (rendition) {
       applyTheme();
-      if (initialized && fontSize !== prevFontSize) {
-        prevFontSize = fontSize;
-      }
     }
   });
 
   async function handleHighlight() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!selectedCfi || !selectedText) return;
 
     try {
@@ -1656,15 +1014,13 @@
   }
 
   function handleShare() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!existingHighlight) return;
     onshare?.(existingHighlight);
   }
 
   async function handleCopy() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!selectedText) return;
     try {
       await navigator.clipboard.writeText(selectedText);
@@ -1675,22 +1031,19 @@
   }
 
   function handleIllustrate() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!selectedCfi || !selectedText) return;
     onillustrate?.({ cfiRange: selectedCfi, text: selectedText });
   }
 
   function handleCompanion() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!selectedCfi || !selectedText) return;
     oncompanion?.({ cfiRange: selectedCfi, text: selectedText });
   }
 
   async function handleRemoveHighlight() {
-    showHighlightMenu = false;
-    clearIOSSelection();
+    dismissMenu();
     if (!existingHighlight) return;
     try {
       await booksApi.deleteHighlight(bookId, existingHighlight.id);
@@ -1745,10 +1098,7 @@
         oncompanion={handleCompanion}
         oncopy={handleCopy}
         onshare={handleShare}
-        onclose={() => {
-          showHighlightMenu = false;
-          clearIOSSelection();
-        }}
+        onclose={dismissMenu}
       />
     </div>
   {/if}
@@ -1762,37 +1112,14 @@
   {/if}
 
   {#if showFootnote}
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="absolute inset-0 z-50 flex items-center justify-center"
-      onclick={() => (showFootnote = false)}
-      onkeydown={(e) => {
-        if (e.key === "Escape") showFootnote = false;
-      }}
-    >
-      <div
-        class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode
-          ? 'bg-gray-800 text-gray-200 border-2 border-gray-500'
-          : 'bg-white text-gray-900 border-2 border-black'}"
-        style="width: 50%; height: 50%; overflow-y: auto; font-size: {fontSize}px;{isRtl
-          ? ' writing-mode: vertical-rl; max-height: none; overflow-x: auto; overflow-y: hidden;'
-          : ''}"
-        onclick={async (e: MouseEvent) => {
-          e.stopPropagation();
-          await handleFootnoteContentClick(e);
-        }}
-        onkeydown={(e) => e.stopPropagation()}
-      >
-        {@html footnoteContent}
-      </div>
-    </div>
+    <FootnotePopup
+      content={footnoteContent}
+      {darkMode}
+      {fontSize}
+      {isRtl}
+      sourcePath={footnoteSourcePath}
+      onclose={() => (showFootnote = false)}
+      onnavigate={(href) => rendition?.display(href)}
+    />
   {/if}
 </div>
-
-<style>
-  :global(.footnote-content a),
-  :global(.footnote-content sup) {
-    text-orientation: upright;
-    text-combine-upright: all;
-  }
-</style>
