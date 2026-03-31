@@ -35,7 +35,7 @@
 
   <main
     class="md:pl-[280px] {isBookDetail
-      ? ''
+      ? 'book-detail-safe-area'
       : 'pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]'} md:pt-0 md:pb-0"
   >
     {@render children()}
@@ -47,3 +47,11 @@
     {@render children()}
   </main>
 {/if}
+
+<style>
+  @media (max-width: 767px) {
+    .book-detail-safe-area {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+  }
+</style>

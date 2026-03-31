@@ -133,20 +133,17 @@
   {#if loading}
     <div role="status" aria-label="Loading" class="space-y-3">
       {#each Array(6) as _}
-        <div
-          class="bg-card card-soft rounded-2xl p-5 flex items-center justify-between"
-        >
+        <div class="bg-card card-soft rounded-2xl p-5">
           <div class="flex items-center gap-4">
             <Skeleton class="w-10 h-10 rounded-xl shrink-0" />
-            <div>
+            <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 mb-1">
                 <Skeleton class="h-5 w-32" />
                 <Skeleton class="h-5 w-14 rounded-full" />
               </div>
-              <Skeleton class="h-4 w-64" />
+              <Skeleton class="h-4 w-3/4" />
             </div>
           </div>
-          <Skeleton class="h-9 w-24 rounded-lg shrink-0" />
         </div>
       {/each}
     </div>

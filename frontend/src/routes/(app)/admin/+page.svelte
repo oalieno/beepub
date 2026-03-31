@@ -84,7 +84,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <Library class="text-primary" size={18} />
           </div>
@@ -110,7 +110,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <Users class="text-primary" size={18} />
           </div>
@@ -136,7 +136,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <HardDrive class="text-primary" size={18} />
           </div>
@@ -162,7 +162,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <ListChecks class="text-primary" size={18} />
           </div>
@@ -188,7 +188,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <Flag class="text-primary" size={18} />
           </div>
@@ -214,7 +214,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <Activity class="text-primary" size={18} />
           </div>
@@ -240,7 +240,7 @@
       >
         <div class="flex items-center gap-4">
           <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center"
+            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
             <Settings class="text-primary" size={18} />
           </div>
