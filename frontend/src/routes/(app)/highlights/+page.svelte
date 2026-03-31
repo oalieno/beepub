@@ -19,6 +19,9 @@
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
 
+  // Undo delete state
+  let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
   // Derived: book titles for HighlightList
   let bookTitles = $derived(() => {
     const titles: Record<string, string> = {};
@@ -66,14 +69,33 @@
     }
   });
 
-  async function handleDelete(hl: HighlightOut) {
-    try {
-      await booksApi.deleteHighlight(hl.book_id, hl.id);
-      highlights = highlights.filter((h) => h.id !== hl.id);
-      toastStore.success("Highlight removed");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
+  function handleDelete(hl: HighlightOut) {
+    // Optimistically remove from UI
+    highlights = highlights.filter((h) => h.id !== hl.id);
+
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+
+    toastStore.info("Highlight removed", {
+      action: {
+        label: "Undo",
+        onclick: () => {
+          if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+          pendingDeleteTimer = null;
+          highlights = [...highlights, hl];
+        },
+      },
+      duration: 5000,
+    });
+
+    pendingDeleteTimer = setTimeout(async () => {
+      try {
+        await booksApi.deleteHighlight(hl.book_id, hl.id);
+      } catch (e) {
+        toastStore.error((e as Error).message);
+        highlights = [...highlights, hl];
+      }
+      pendingDeleteTimer = null;
+    }, 5000);
   }
 
   function handleShare(hl: HighlightOut) {

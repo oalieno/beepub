@@ -84,6 +84,7 @@
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
   let isImageBook = $state(false);
+  let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
   let aiStatus = $state<AiStatus>({
     companion: false,
     tag: false,
@@ -476,15 +477,37 @@
           reader?.displayCfi(hl.cfi_range);
           activeSidebar = null;
         }}
-        ondelete={async (hl) => {
-          try {
-            await booksApi.deleteHighlight(bookId, hl.id);
-            highlights = highlights.filter((h) => h.id !== hl.id);
-            reader?.removeHighlightAnnotation(hl.cfi_range);
-            toastStore.success("Highlight removed");
-          } catch (e) {
-            toastStore.error((e as Error).message);
-          }
+        ondelete={(hl) => {
+          highlights = highlights.filter((h) => h.id !== hl.id);
+          reader?.removeHighlightAnnotation(hl.cfi_range);
+
+          if (pendingHighlightDeleteTimer)
+            clearTimeout(pendingHighlightDeleteTimer);
+
+          toastStore.info("Highlight removed", {
+            action: {
+              label: "Undo",
+              onclick: () => {
+                if (pendingHighlightDeleteTimer)
+                  clearTimeout(pendingHighlightDeleteTimer);
+                pendingHighlightDeleteTimer = null;
+                highlights = [...highlights, hl];
+                reader?.addHighlightAnnotation(hl.cfi_range, hl.color);
+              },
+            },
+            duration: 5000,
+          });
+
+          pendingHighlightDeleteTimer = setTimeout(async () => {
+            try {
+              await booksApi.deleteHighlight(bookId, hl.id);
+            } catch (e) {
+              toastStore.error((e as Error).message);
+              highlights = [...highlights, hl];
+              reader?.addHighlightAnnotation(hl.cfi_range, hl.color);
+            }
+            pendingHighlightDeleteTimer = null;
+          }, 5000);
         }}
         onshare={handleShareHighlight}
         onillustrationselect={handleSelectIllustration}

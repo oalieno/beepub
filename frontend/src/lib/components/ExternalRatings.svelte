@@ -40,6 +40,7 @@
 
   let editingUrlSource = $state<string | null>(null);
   let editingUrlValue = $state("");
+  let validationError = $state("");
 
   function extractSourceId(source: string, url: string | null): string {
     if (!url) return "";
@@ -53,6 +54,7 @@
   function startEditUrl(source: string, currentUrl: string | null) {
     editingUrlSource = source;
     editingUrlValue = extractSourceId(source, currentUrl);
+    validationError = "";
   }
 
   async function saveExternalUrl() {
@@ -62,7 +64,7 @@
       if (id) {
         const meta = SOURCE_META[editingUrlSource];
         if (meta && !meta.idPattern.test(id)) {
-          toastStore.error(`Invalid ID format. ${meta.idHint}`);
+          validationError = `Invalid ID format. ${meta.idHint}`;
           return;
         }
         const prefix = meta?.urlPrefix ?? "";
@@ -153,6 +155,9 @@
                     class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
+                {#if validationError}
+                  <p class="text-xs text-red-600">{validationError}</p>
+                {/if}
                 <div class="flex justify-end gap-2">
                   <button
                     class="text-sm text-muted-foreground hover:text-foreground"
@@ -204,6 +209,9 @@
                     class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
                   />
                 </div>
+                {#if validationError}
+                  <p class="text-xs text-red-600">{validationError}</p>
+                {/if}
                 <div class="flex justify-end gap-2">
                   <button
                     class="text-sm text-muted-foreground hover:text-foreground"

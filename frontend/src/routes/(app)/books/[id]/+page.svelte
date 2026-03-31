@@ -94,6 +94,9 @@
   let downloading = $state(false);
   let downloadProgress = $state(0);
 
+  // Undo delete state
+  let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
+
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   $effect(() => {
@@ -599,14 +602,34 @@
           <HighlightList
             highlights={bookHighlights}
             onselect={(hl) => goto(`/books/${bookId}/read`)}
-            ondelete={async (hl) => {
-              try {
-                await booksApi.deleteHighlight(bookId, hl.id);
-                bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
-                toastStore.success("Highlight removed");
-              } catch (e) {
-                toastStore.error((e as Error).message);
-              }
+            ondelete={(hl) => {
+              bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
+
+              if (pendingHighlightDeleteTimer)
+                clearTimeout(pendingHighlightDeleteTimer);
+
+              toastStore.info("Highlight removed", {
+                action: {
+                  label: "Undo",
+                  onclick: () => {
+                    if (pendingHighlightDeleteTimer)
+                      clearTimeout(pendingHighlightDeleteTimer);
+                    pendingHighlightDeleteTimer = null;
+                    bookHighlights = [...bookHighlights, hl];
+                  },
+                },
+                duration: 5000,
+              });
+
+              pendingHighlightDeleteTimer = setTimeout(async () => {
+                try {
+                  await booksApi.deleteHighlight(bookId, hl.id);
+                } catch (e) {
+                  toastStore.error((e as Error).message);
+                  bookHighlights = [...bookHighlights, hl];
+                }
+                pendingHighlightDeleteTimer = null;
+              }, 5000);
             }}
           />
         </div>

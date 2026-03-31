@@ -963,6 +963,17 @@
     return currentCfi;
   }
 
+  export function addHighlightAnnotation(
+    cfiRange: string,
+    color: string = "yellow",
+  ) {
+    const fill = HIGHLIGHT_COLORS[color] ?? HIGHLIGHT_COLORS.yellow;
+    rendition?.annotations.highlight(cfiRange, {}, () => {}, "hl", {
+      fill,
+      "fill-opacity": "0.5",
+    });
+  }
+
   export function removeHighlightAnnotation(cfiRange: string) {
     rendition?.annotations.remove(cfiRange, "highlight");
   }

@@ -17,17 +17,19 @@
   let showRegister = $state(false);
   let loading = $state(false);
   let showPassword = $state(false);
+  let errorMessage = $state("");
 
   async function handleLogin() {
     if (!username || !password) return;
     loading = true;
+    errorMessage = "";
     try {
       const loginResponse = await authApi.login(username, password);
       authStore.login(loginResponse);
       toastStore.success("Welcome back, " + loginResponse.username + "!");
       goto("/");
     } catch (e) {
-      toastStore.error((e as Error).message);
+      errorMessage = (e as Error).message;
     } finally {
       loading = false;
     }
@@ -36,12 +38,13 @@
   async function handleRegister() {
     if (!username || !password) return;
     loading = true;
+    errorMessage = "";
     try {
       await authApi.register({ username, password });
       toastStore.success("Account created! Please log in.");
       showRegister = false;
     } catch (e) {
-      toastStore.error((e as Error).message);
+      errorMessage = (e as Error).message;
     } finally {
       loading = false;
     }
@@ -140,6 +143,9 @@
                 </button>
               </div>
             </div>
+            {#if errorMessage}
+              <p class="text-sm text-red-600">{errorMessage}</p>
+            {/if}
             <Button
               type="submit"
               disabled={loading}
@@ -198,6 +204,9 @@
                 </button>
               </div>
             </div>
+            {#if errorMessage}
+              <p class="text-sm text-red-600">{errorMessage}</p>
+            {/if}
             <Button
               type="submit"
               disabled={loading}

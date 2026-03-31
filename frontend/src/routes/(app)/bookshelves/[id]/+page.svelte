@@ -14,6 +14,7 @@
   let shelf = $state<BookshelfOut | null>(null);
   let books = $state<BookOut[]>([]);
   let loading = $state(true);
+  let pendingRemoveTimer: ReturnType<typeof setTimeout> | null = null;
 
   onMount(async () => {
     await loadData();
@@ -35,14 +36,35 @@
     }
   }
 
-  async function removeBook(bookId: string) {
-    try {
-      await bookshelvesApi.removeBook(shelfId, bookId);
-      books = books.filter((b) => b.id !== bookId);
-      toastStore.success("Book removed from shelf");
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
+  function removeBook(bookId: string) {
+    const removedBook = books.find((b) => b.id === bookId);
+    if (!removedBook) return;
+
+    books = books.filter((b) => b.id !== bookId);
+
+    if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
+
+    toastStore.info("Book removed from shelf", {
+      action: {
+        label: "Undo",
+        onclick: () => {
+          if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
+          pendingRemoveTimer = null;
+          books = [...books, removedBook];
+        },
+      },
+      duration: 5000,
+    });
+
+    pendingRemoveTimer = setTimeout(async () => {
+      try {
+        await bookshelvesApi.removeBook(shelfId, bookId);
+      } catch (e) {
+        toastStore.error((e as Error).message);
+        books = [...books, removedBook];
+      }
+      pendingRemoveTimer = null;
+    }, 5000);
   }
 </script>
 

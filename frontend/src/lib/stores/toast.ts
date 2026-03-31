@@ -27,7 +27,9 @@ function createToastStore() {
       ...toasts,
       { id, message, type, action: opts?.action },
     ]);
-    setTimeout(() => remove(id), opts?.duration ?? 3000);
+    const duration =
+      opts?.duration ?? (type === "error" || type === "warning" ? null : 3000);
+    if (duration) setTimeout(() => remove(id), duration);
     return id;
   }
 
@@ -41,12 +43,18 @@ function createToastStore() {
       message: string,
       opts?: { action?: ToastAction; duration?: number },
     ) => add(message, "success", opts),
-    error: (message: string) => add(message, "error"),
+    error: (
+      message: string,
+      opts?: { action?: ToastAction; duration?: number },
+    ) => add(message, "error", opts),
     info: (
       message: string,
       opts?: { action?: ToastAction; duration?: number },
     ) => add(message, "info", opts),
-    warning: (message: string) => add(message, "warning"),
+    warning: (
+      message: string,
+      opts?: { action?: ToastAction; duration?: number },
+    ) => add(message, "warning", opts),
     remove,
   };
 }
