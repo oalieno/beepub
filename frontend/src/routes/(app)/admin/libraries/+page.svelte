@@ -85,7 +85,7 @@
   <title>Libraries - Admin - BeePub</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6 mx-auto" style="max-width: 1000px;">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="flex items-end justify-between mb-8">
     <div>
       <a

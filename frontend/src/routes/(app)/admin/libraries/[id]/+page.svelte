@@ -112,7 +112,7 @@
   <title>{library?.name ?? "Library"} - Admin - BeePub</title>
 </svelte:head>
 
-<div class="max-w-2xl mx-auto px-6 sm:px-8 py-6">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
     <a
       href="/admin/libraries"

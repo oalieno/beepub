@@ -86,7 +86,7 @@
   <title>Highlights - BeePub</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6 mx-auto" style="max-width: 780px;">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   {#if loading}
     <HighlightListSkeleton groups={3} />
   {:else if highlights.length === 0}

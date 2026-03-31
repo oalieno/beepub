@@ -38,7 +38,7 @@
     show?: boolean;
   }
 
-  let links = $derived<ProfileLink[]>([
+  let mobileLinks = $derived<ProfileLink[]>([
     {
       href: "/my-books",
       label: "My Books",
@@ -81,7 +81,7 @@
   ]);
 </script>
 
-<div class="max-w-lg mx-auto px-4 py-8">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-8">
   <!-- User info -->
   <div class="flex flex-col items-center gap-3 mb-8">
     <Avatar.Root class="h-20 w-20">
@@ -98,9 +98,9 @@
     </div>
   </div>
 
-  <!-- Nav links -->
-  <div class="bg-card card-soft rounded-2xl overflow-hidden">
-    {#each links as link, i}
+  <!-- Mobile nav links -->
+  <div class="bg-card card-soft rounded-2xl overflow-hidden md:hidden">
+    {#each mobileLinks as link, i}
       {@const disabled = !online && link.requiresOnline}
       {#if i > 0}
         <div class="flex justify-center">
@@ -124,6 +124,20 @@
       </a>
     {/each}
   </div>
+
+  <!-- Desktop nav links -->
+  {#if isAdmin}
+    <div class="bg-card card-soft rounded-2xl overflow-hidden hidden md:block">
+      <a
+        href="/admin"
+        class="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50 active:bg-secondary"
+      >
+        <Settings size={20} class="text-muted-foreground shrink-0" />
+        <span class="text-sm font-medium flex-1">Admin</span>
+        <ChevronRight size={16} class="text-muted-foreground/50" />
+      </a>
+    </div>
+  {/if}
 
   <!-- Logout -->
   <div class="mt-4 bg-card card-soft rounded-2xl overflow-hidden">

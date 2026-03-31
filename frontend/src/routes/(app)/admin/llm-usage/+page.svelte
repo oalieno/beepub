@@ -3,7 +3,6 @@
   import { adminApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
-  import { ArrowLeft } from "@lucide/svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { TableSkeleton } from "$lib/components/skeletons";
 
@@ -57,18 +56,18 @@
   <title>LLM Usage - Admin - BeePub</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6 mx-auto" style="max-width: 1000px;">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <!-- Header -->
-  <div class="mb-8 flex items-center gap-3">
-    <a href="/admin" class="p-2 rounded-xl hover:bg-muted transition-colors">
-      <ArrowLeft size={20} class="text-muted-foreground" />
-    </a>
-    <div>
-      <h1 class="text-3xl font-bold text-foreground">LLM Usage</h1>
-      <p class="text-muted-foreground mt-1">
-        Token consumption across AI features
-      </p>
-    </div>
+  <div class="mb-8">
+    <a
+      href="/admin"
+      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
+      >&larr; Admin</a
+    >
+    <h1 class="text-3xl font-bold text-foreground">LLM Usage</h1>
+    <p class="text-muted-foreground mt-1">
+      Token consumption across AI features
+    </p>
   </div>
 
   <!-- Period selector -->
@@ -153,8 +152,8 @@
           <p class="text-muted-foreground">No per-user usage data yet.</p>
         </div>
       {:else}
-        <div class="bg-card card-soft rounded-2xl overflow-hidden">
-          <table class="w-full text-sm">
+        <div class="bg-card card-soft rounded-2xl overflow-x-auto">
+          <table class="w-full text-sm whitespace-nowrap">
             <thead>
               <tr class="border-b border-border text-left">
                 <th class="px-4 py-3 font-medium text-muted-foreground">User</th
@@ -215,8 +214,8 @@
           </p>
         </div>
       {:else}
-        <div class="bg-card card-soft rounded-2xl overflow-hidden">
-          <table class="w-full text-sm">
+        <div class="bg-card card-soft rounded-2xl overflow-x-auto">
+          <table class="w-full text-sm whitespace-nowrap">
             <thead>
               <tr class="border-b border-border text-left">
                 <th class="px-4 py-3 font-medium text-muted-foreground"
@@ -280,56 +279,5 @@
       {/if}
     </div>
 
-    <!-- By Day -->
-    {#if data.by_day.length > 0}
-      <div>
-        <h2 class="text-lg font-semibold text-foreground mb-4">
-          Daily Breakdown
-        </h2>
-        <div class="bg-card card-soft rounded-2xl overflow-hidden">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-border text-left">
-                <th class="px-4 py-3 font-medium text-muted-foreground">Date</th
-                >
-                <th class="px-4 py-3 font-medium text-muted-foreground"
-                  >Feature</th
-                >
-                <th
-                  class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Total Tokens</th
-                >
-                <th
-                  class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Calls</th
-                >
-              </tr>
-            </thead>
-            <tbody>
-              {#each data.by_day as row}
-                <tr class="border-b border-border/50 last:border-0">
-                  <td class="px-4 py-3 text-foreground"
-                    >{row.day
-                      ? new Date(row.day).toLocaleDateString()
-                      : "—"}</td
-                  >
-                  <td class="px-4 py-3 text-muted-foreground"
-                    >{FEATURE_LABELS[row.feature] ?? row.feature}</td
-                  >
-                  <td
-                    class="px-4 py-3 text-right tabular-nums font-medium text-foreground"
-                    >{formatTokens(row.total_tokens)}</td
-                  >
-                  <td
-                    class="px-4 py-3 text-right tabular-nums text-muted-foreground"
-                    >{row.call_count.toLocaleString()}</td
-                  >
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    {/if}
   {/if}
 </div>

@@ -19,6 +19,22 @@
   let stats = $state<AdminStats | null>(null);
   let loading = $state(true);
 
+  interface AdminLink {
+    href: string;
+    label: string;
+    icon: typeof Library;
+  }
+
+  const links: AdminLink[] = [
+    { href: "/admin/libraries", label: "Libraries", icon: Library },
+    { href: "/admin/users", label: "Users", icon: Users },
+    { href: "/admin/calibre", label: "Calibre Import", icon: HardDrive },
+    { href: "/admin/jobs", label: "Jobs", icon: ListChecks },
+    { href: "/admin/reports", label: "Book Reports", icon: Flag },
+    { href: "/admin/llm-usage", label: "LLM Usage", icon: Activity },
+    { href: "/admin/settings", label: "Settings", icon: Settings },
+  ];
+
   onMount(async () => {
     try {
       stats = await adminApi.getStats();
@@ -34,232 +50,60 @@
   <title>Admin - BeePub</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6 mx-auto" style="max-width: 1000px;">
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-    <p class="text-muted-foreground mt-1">Overview and management tools</p>
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
+  <div class="mb-6">
+    <a
+      href="/profile"
+      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
+      >&larr; Profile</a
+    >
   </div>
 
   {#if loading}
     <DashboardSkeleton />
   {:else}
     <!-- Stats -->
-    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
-      <div class="bg-card card-soft rounded-2xl p-6 text-center">
-        <div
-          class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
-        >
-          <Users class="text-primary" size={22} />
+    <div class="bg-card card-soft rounded-2xl overflow-hidden mb-6">
+      <div class="flex divide-x divide-border">
+        <div class="flex-1 flex flex-col items-center py-3 px-2 gap-0.5">
+          <span class="text-lg font-bold tabular-nums">{stats?.users ?? 0}</span
+          >
+          <span class="text-xs text-muted-foreground">Users</span>
         </div>
-        <p class="text-3xl font-bold text-foreground">{stats?.users ?? 0}</p>
-        <p class="text-muted-foreground text-sm mt-0.5">Users</p>
-      </div>
-      <div class="bg-card card-soft rounded-2xl p-6 text-center">
-        <div
-          class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
-        >
-          <BookOpen class="text-primary" size={22} />
+        <div class="flex-1 flex flex-col items-center py-3 px-2 gap-0.5">
+          <span class="text-lg font-bold tabular-nums">{stats?.books ?? 0}</span
+          >
+          <span class="text-xs text-muted-foreground">Books</span>
         </div>
-        <p class="text-3xl font-bold text-foreground">{stats?.books ?? 0}</p>
-        <p class="text-muted-foreground text-sm mt-0.5">Books</p>
-      </div>
-      <div class="bg-card card-soft rounded-2xl p-6 text-center">
-        <div
-          class="mx-auto w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-3"
-        >
-          <Library class="text-primary" size={22} />
+        <div class="flex-1 flex flex-col items-center py-3 px-2 gap-0.5">
+          <span class="text-lg font-bold tabular-nums"
+            >{stats?.libraries ?? 0}</span
+          >
+          <span class="text-xs text-muted-foreground">Libraries</span>
         </div>
-        <p class="text-3xl font-bold text-foreground">
-          {stats?.libraries ?? 0}
-        </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Libraries</p>
       </div>
     </div>
 
     <!-- Links -->
-    <div class="space-y-3">
-      <a
-        href="/admin/libraries"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <Library class="text-primary" size={18} />
+    <div class="bg-card card-soft rounded-2xl overflow-hidden">
+      {#each links as link, i}
+        {#if i > 0}
+          <div class="flex justify-center">
+            <div
+              class="w-4/5 h-px bg-border"
+              style="transform: scaleY(0.5);"
+            ></div>
           </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Libraries
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Manage libraries, visibility, and book access
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/users"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <Users class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Users
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Manage user roles and accounts
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/calibre"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <HardDrive class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Calibre Import
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Link and sync Calibre libraries
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/jobs"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <ListChecks class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Jobs
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Monitor and trigger background processing tasks
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/reports"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <Flag class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Book Reports
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Review user-reported and system-detected book issues
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/llm-usage"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <Activity class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              LLM Usage
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Monitor AI token usage across features
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
-      <a
-        href="/admin/settings"
-        class="flex items-center justify-between bg-card card-soft rounded-2xl hover:shadow-md p-5 transition-all duration-200 group"
-      >
-        <div class="flex items-center gap-4">
-          <div
-            class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-          >
-            <Settings class="text-primary" size={18} />
-          </div>
-          <div>
-            <p
-              class="font-semibold text-foreground group-hover:text-primary transition-colors"
-            >
-              Settings
-            </p>
-            <p class="text-muted-foreground text-sm">
-              Timezone, metadata refresh schedule
-            </p>
-          </div>
-        </div>
-        <ChevronRight
-          class="text-muted-foreground/40 group-hover:text-primary transition-colors"
-          size={20}
-        />
-      </a>
+        {/if}
+        <a
+          href={link.href}
+          class="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50 active:bg-secondary"
+        >
+          <link.icon size={20} class="text-muted-foreground shrink-0" />
+          <span class="text-sm font-medium flex-1">{link.label}</span>
+          <ChevronRight size={16} class="text-muted-foreground/50" />
+        </a>
+      {/each}
     </div>
   {/if}
 </div>
