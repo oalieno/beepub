@@ -335,24 +335,38 @@
       let longPressTimer: ReturnType<typeof setTimeout> | null = null;
       // longPressFired is at component scope (see below)
 
-      doc.addEventListener("touchstart", (e: TouchEvent) => {
-        const target = e.target as HTMLElement;
-        if (!target) return;
-        const src = getImageSrc(target);
-        if (!src) return;
-        longPressFired = false;
-        longPressTimer = setTimeout(() => {
-          longPressFired = true;
-          zoomImageSrc = src;
-        }, 500);
-      }, { passive: true });
+      doc.addEventListener(
+        "touchstart",
+        (e: TouchEvent) => {
+          const target = e.target as HTMLElement;
+          if (!target) return;
+          const src = getImageSrc(target);
+          if (!src) return;
+          longPressFired = false;
+          longPressTimer = setTimeout(() => {
+            longPressFired = true;
+            zoomImageSrc = src;
+          }, 500);
+        },
+        { passive: true },
+      );
 
-      doc.addEventListener("touchmove", () => {
-        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
-      }, { passive: true });
+      doc.addEventListener(
+        "touchmove",
+        () => {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+        },
+        { passive: true },
+      );
 
       doc.addEventListener("touchend", () => {
-        if (longPressTimer) { clearTimeout(longPressTimer); longPressTimer = null; }
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
       });
 
       // Mouse: long-press (500ms) to zoom image (same as touch)
@@ -370,11 +384,17 @@
       });
 
       doc.addEventListener("mousemove", () => {
-        if (mouseDownTimer) { clearTimeout(mouseDownTimer); mouseDownTimer = null; }
+        if (mouseDownTimer) {
+          clearTimeout(mouseDownTimer);
+          mouseDownTimer = null;
+        }
       });
 
       doc.addEventListener("mouseup", () => {
-        if (mouseDownTimer) { clearTimeout(mouseDownTimer); mouseDownTimer = null; }
+        if (mouseDownTimer) {
+          clearTimeout(mouseDownTimer);
+          mouseDownTimer = null;
+        }
       });
 
       // Highlight cursor: show pointer when hovering over a highlight
