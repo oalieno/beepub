@@ -34,6 +34,7 @@
   let didMove = false;
   let lastInteractionWasTouch = false;
   let closeTapTimer: ReturnType<typeof setTimeout> | null = null;
+  const openedAt = Date.now();
 
   const MIN_SCALE = 1;
   const MAX_SCALE = 5;
@@ -170,6 +171,8 @@
   }
 
   function handleContainerClick() {
+    // Ignore phantom clicks from touch→mouse synthesis when overlay opens mid-longpress
+    if (Date.now() - openedAt < 400) return;
     if (didMove || scale > 1) return;
     if (lastInteractionWasTouch) {
       // Delay close to allow double-tap zoom to cancel it
