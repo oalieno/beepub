@@ -15,7 +15,7 @@ from app.config import settings
 from app.models.book import Book
 from app.models.book_embedding import BookEmbeddingChunk
 from app.models.book_text import BookTextChunk
-from app.models.tag import AiBookTag
+from app.models.tag import BookTag
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +64,11 @@ JOB_TYPES: dict[str, JobType] = {
         label="Book Embedding",
         description="Generate book-level embeddings from chapter summaries",
         requires_ai=True,
+    ),
+    "metadata_backfill": JobType(
+        key="metadata_backfill",
+        label="Metadata & Tags",
+        description="Fetch external metadata and generate tags (no AI)",
     ),
 }
 
@@ -310,9 +315,21 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         blocked = blocked_result.scalar() or 0
     elif job_type == "auto_tag":
         # Books without any AI tags (uses metadata, not text chunks)
-        has_tags = select(AiBookTag.book_id).group_by(AiBookTag.book_id)
+        has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
         missing_result = await db.execute(
             select(func.count(Book.id)).where(Book.id.notin_(has_tags))
+        )
+    elif job_type == "metadata_backfill":
+        # Books without any external tags
+        from app.models.tag import TagSource
+
+        has_external_tags = (
+            select(BookTag.book_id)
+            .where(BookTag.source == TagSource.external)
+            .group_by(BookTag.book_id)
+        )
+        missing_result = await db.execute(
+            select(func.count(Book.id)).where(Book.id.notin_(has_external_tags))
         )
     elif job_type == "book_embedding":
         # Non-image books with ALL chunks summarized but no book-level embedding

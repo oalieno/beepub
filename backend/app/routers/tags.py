@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_user
-from app.models.tag import AiBookTag
+from app.models.tag import BookTag
 from app.models.user import User
 from app.schemas.tag import TagWithCount
 from app.services.tags import CURATED_TAGS_WITH_LABELS, TAG_LABELS
@@ -22,18 +22,18 @@ async def list_tags(
     db: Annotated[AsyncSession, Depends(get_db)],
     category: str | None = Query(None),
 ):
-    """List all AI tags with book counts."""
+    """List all tags with book counts."""
     query = (
         select(
-            AiBookTag.tag,
-            AiBookTag.category,
-            func.count(func.distinct(AiBookTag.book_id)).label("book_count"),
+            BookTag.tag,
+            BookTag.category,
+            func.count(func.distinct(BookTag.book_id)).label("book_count"),
         )
-        .group_by(AiBookTag.tag, AiBookTag.category)
-        .order_by(func.count(func.distinct(AiBookTag.book_id)).desc())
+        .group_by(BookTag.tag, BookTag.category)
+        .order_by(func.count(func.distinct(BookTag.book_id)).desc())
     )
     if category:
-        query = query.where(AiBookTag.category == category)
+        query = query.where(BookTag.category == category)
 
     result = await db.execute(query)
     return [

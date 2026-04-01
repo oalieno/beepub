@@ -29,6 +29,7 @@
     summarize: BookOpen,
     auto_tag: Tags,
     book_embedding: LibraryBig,
+    metadata_backfill: ScanSearch,
   };
 
   /** Maps job keys that require AI to their corresponding AiStatus field. */

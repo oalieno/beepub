@@ -9,7 +9,7 @@ from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisib
 from app.models.llm_usage import LLMUsageLog
 from app.models.reading import Highlight, UserBookInteraction
 from app.models.settings import AppSetting
-from app.models.tag import AiBookTag, TagCategory
+from app.models.tag import BookTag, TagCategory, TagSource
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -28,8 +28,9 @@ __all__ = [
     "Highlight",
     "Illustration",
     "AppSetting",
-    "AiBookTag",
+    "BookTag",
     "TagCategory",
+    "TagSource",
     "CompanionConversation",
     "CompanionMessage",
     "BookTextChunk",

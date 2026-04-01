@@ -86,11 +86,11 @@ async def get_similar_books(
               AND COALESCE(b.tags, b.epub_tags, '{}')
                   && t.t_tags
         ),
-        -- AI tag overlap (uses index on ai_book_tags)
+        -- Tag overlap (uses index on book_tags)
         ai_tag_candidates AS (
             SELECT b_tags.book_id, COUNT(*) * 3 AS score
-            FROM ai_book_tags t_tags
-            JOIN ai_book_tags b_tags ON t_tags.tag = b_tags.tag
+            FROM book_tags t_tags
+            JOIN book_tags b_tags ON t_tags.tag = b_tags.tag
             WHERE t_tags.book_id = :book_id
               AND b_tags.book_id != :book_id
             GROUP BY b_tags.book_id
@@ -280,7 +280,7 @@ async def get_books_by_tag_category(
     tags_result = await db.execute(
         text("""
             SELECT at.tag, COUNT(DISTINCT at.book_id) as book_count
-            FROM ai_book_tags at
+            FROM book_tags at
             JOIN library_books lb ON lb.book_id = at.book_id
             JOIN libraries l ON l.id = lb.library_id
             WHERE at.category = :category
@@ -315,7 +315,7 @@ async def get_books_by_tag_category(
             text("""
                 SELECT b.id
                 FROM books b
-                JOIN ai_book_tags at ON at.book_id = b.id
+                JOIN book_tags at ON at.book_id = b.id
                 JOIN library_books lb ON lb.book_id = b.id
                 JOIN libraries l ON l.id = lb.library_id
                 WHERE at.tag = :tag

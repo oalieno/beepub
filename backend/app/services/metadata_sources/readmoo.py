@@ -199,6 +199,21 @@ class ReadmooSource(AbstractMetadataSource):
                     except Exception:
                         pass
 
+                # Extract categories
+                categories = []
+                for cat_el in soup.select(
+                    ".breadcrumb a, "
+                    ".category-link, "
+                    "[itemprop='genre'], "
+                    ".book-category a, "
+                    ".book-meta a[href*='/category/']"
+                ):
+                    cat_text = cat_el.get_text(strip=True)
+                    if cat_text and cat_text not in categories and cat_text != "首頁":
+                        categories.append(cat_text)
+
+                raw_data = {"categories": categories} if categories else None
+
                 reviews = []
                 review_els = soup.select(".review-item, .comment-item")
                 for el in review_els[:5]:
@@ -211,6 +226,7 @@ class ReadmooSource(AbstractMetadataSource):
                     rating=rating,
                     rating_count=rating_count,
                     reviews=reviews if reviews else None,
+                    raw_data=raw_data,
                 )
         except Exception as e:
             logger.warning(f"Readmoo fetch failed for {url}: {e}")

@@ -573,7 +573,7 @@ async def get_discover_recommendations(
 async def get_discover_browse(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    category: str = Query(..., pattern="^(genre|mood|topic)$"),
+    category: str = Query(..., pattern="^(genre|subgenre|mood|theme|trope)$"),
     limit_per_tag: int = Query(8, ge=1, le=20),
     max_tags: int = Query(10, ge=1, le=30),
 ):

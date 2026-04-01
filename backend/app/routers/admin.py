@@ -566,9 +566,9 @@ async def get_similarity_debug(
         SELECT
             (SELECT CARDINALITY(ba.authors & bb.authors) FROM ba, bb) AS shared_authors,
             (SELECT CARDINALITY(ba.tags & bb.tags) FROM ba, bb) AS shared_tags,
-            (SELECT COUNT(*) FROM ai_book_tags a
-             JOIN ai_book_tags b ON a.tag = b.tag
-             WHERE a.book_id = :book_a AND b.book_id = :book_b) AS shared_ai_tags,
+            (SELECT COUNT(*) FROM book_tags a
+             JOIN book_tags b ON a.tag = b.tag
+             WHERE a.book_id = :book_a AND b.book_id = :book_b) AS shared_book_tags,
             (SELECT CASE WHEN ba.publisher = bb.publisher AND ba.publisher IS NOT NULL
                     THEN 1 ELSE 0 END FROM ba, bb) AS same_publisher,
             (SELECT CASE WHEN ba.language = bb.language AND ba.language IS NOT NULL

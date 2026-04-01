@@ -18,9 +18,12 @@
 
   const categoryStyles: Record<string, string> = {
     genre: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
+    subgenre:
+      "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300",
     mood: "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300",
-    topic:
+    theme:
       "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+    trope: "bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300",
   };
 </script>
 
@@ -132,36 +135,21 @@
         >
       </div>
     {/if}
-    {#if (book.display_tags ?? []).length > 0}
+    {#if (book.book_tags ?? []).length > 0}
       <div>
         <span class="text-muted-foreground block text-xs mb-1">Tags</span>
         <div class="flex flex-wrap gap-1.5">
-          {#each book.display_tags ?? [] as tag}
-            <button
-              class="text-xs px-2 py-0.5 rounded-full bg-secondary text-foreground hover:bg-secondary/80 transition-colors"
-              onclick={() => onfilter("tag", tag)}
-            >
-              {tag}
-            </button>
-          {/each}
-        </div>
-      </div>
-    {/if}
-    {#if (book.ai_tags ?? []).length > 0}
-      <div>
-        <span class="text-muted-foreground block text-xs mb-1">AI Tags</span>
-        <div class="flex flex-wrap gap-1.5">
-          {#each book.ai_tags ?? [] as aiTag}
+          {#each book.book_tags ?? [] as bookTag}
             <button
               class="text-xs px-2 py-0.5 rounded-full transition-colors hover:opacity-80 {categoryStyles[
-                aiTag.category
+                bookTag.category
               ] ?? 'bg-secondary text-foreground'}"
-              onclick={() => onfilter("tag", aiTag.tag)}
-              title="{aiTag.category} · {Math.round(
-                aiTag.confidence * 100,
-              )}% confidence"
+              onclick={() => onfilter("tag", bookTag.tag)}
+              title="{bookTag.category} · {Math.round(
+                bookTag.confidence * 100,
+              )}%"
             >
-              {aiTag.label}
+              {bookTag.label}
             </button>
           {/each}
         </div>

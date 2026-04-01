@@ -98,6 +98,11 @@ def _execute_book_task(job_type: str, book_id: str) -> None:
         run_async(_run_text_extract(book_id))
         run_async(_run_summarize_chunks(book_id, 999999))
 
+    elif job_type == "metadata_backfill":
+        from app.tasks.metadata_backfill import _run_metadata_backfill
+
+        run_async(_run_metadata_backfill(book_id))
+
     elif job_type == "auto_tag":
         from app.tasks.auto_tag import _run_auto_tag_book
 
@@ -116,7 +121,7 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
     from app.models.book import Book
     from app.models.book_embedding import BookEmbeddingChunk
     from app.models.book_text import BookTextChunk
-    from app.models.tag import AiBookTag
+    from app.models.tag import BookTag
 
     if job_type == "text_extraction":
         # Books not yet classified (is_image_book IS NULL)
@@ -168,8 +173,21 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
                 seen.add(bid)
                 book_ids.append(bid)
         return book_ids
+    elif job_type == "metadata_backfill":
+        from app.models.tag import TagSource
+
+        has_external_tags = (
+            select(BookTag.book_id)
+            .where(BookTag.source == TagSource.external)
+            .group_by(BookTag.book_id)
+        )
+        result = await db.execute(
+            select(Book.id)
+            .where(Book.id.notin_(has_external_tags))
+            .order_by(Book.created_at)
+        )
     elif job_type == "auto_tag":
-        has_tags = select(AiBookTag.book_id).group_by(AiBookTag.book_id)
+        has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
         result = await db.execute(
             select(Book.id).where(Book.id.notin_(has_tags)).order_by(Book.created_at)
         )

@@ -8,7 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import * as Card from "$lib/components/ui/card";
   import * as Select from "$lib/components/ui/select";
-  import { Save } from "@lucide/svelte";
+  import { Eye, EyeOff, Save } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
 
@@ -38,6 +38,13 @@
   let embeddingModel = $state("");
   let embeddingApiUrl = $state("");
   let embeddingApiKey = $state("");
+
+  // External metadata API keys
+  let googleBooksApiKey = $state("");
+  let hardcoverApiToken = $state("");
+
+  // Password visibility toggles
+  let visibleFields = $state<Record<string, boolean>>({});
 
   // Derived: which providers have credentials configured
   let hasGemini = $derived(geminiApiKey.trim().length > 0);
@@ -166,6 +173,8 @@
       embeddingModel = settings.embedding_model || "";
       embeddingApiUrl = settings.embedding_api_url || "";
       embeddingApiKey = settings.embedding_api_key || "";
+      googleBooksApiKey = settings.google_books_api_key || "";
+      hardcoverApiToken = settings.hardcover_api_token || "";
 
       // Fetch model lists for configured providers
       const fetches: Promise<void>[] = [];
@@ -201,6 +210,8 @@
         embedding_model: embeddingModel,
         embedding_api_url: embeddingApiUrl,
         embedding_api_key: embeddingApiKey,
+        google_books_api_key: googleBooksApiKey,
+        hardcover_api_token: hardcoverApiToken,
       });
       toastStore.success("Settings saved");
     } catch (e) {
@@ -210,6 +221,36 @@
     }
   }
 </script>
+
+{#snippet passwordInput(
+  id: string,
+  placeholder: string,
+  value: string,
+  onChange: (v: string) => void,
+)}
+  <div class="relative">
+    <Input
+      {id}
+      type={visibleFields[id] ? "text" : "password"}
+      {placeholder}
+      {value}
+      oninput={(e) => onChange(e.currentTarget.value)}
+      class="pr-10"
+    />
+    <button
+      type="button"
+      class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
+      onclick={() => (visibleFields[id] = !visibleFields[id])}
+      tabindex={-1}
+    >
+      {#if visibleFields[id]}
+        <EyeOff size={16} />
+      {:else}
+        <Eye size={16} />
+      {/if}
+    </button>
+  </div>
+{/snippet}
 
 {#snippet featureProviderFields(
   prefix: string,
@@ -426,6 +467,45 @@
         </Card.Content>
       </Card.Root>
 
+      <!-- External Metadata APIs -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>External Metadata APIs</Card.Title>
+          <Card.Description>
+            API keys for fetching book genres and tags from external platforms.
+            Goodreads and Readmoo work without keys.
+          </Card.Description>
+        </Card.Header>
+        <Card.Content class="space-y-5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div class="space-y-1.5">
+              <Label for="google-books-key">Google Books API Key</Label>
+              {@render passwordInput(
+                "google-books-key",
+                "AIza...",
+                googleBooksApiKey,
+                (v) => (googleBooksApiKey = v),
+              )}
+              <p class="text-xs text-muted-foreground">
+                Free, 1000 requests/day
+              </p>
+            </div>
+            <div class="space-y-1.5">
+              <Label for="hardcover-token">Hardcover API Token</Label>
+              {@render passwordInput(
+                "hardcover-token",
+                "Bearer token from hardcover.app",
+                hardcoverApiToken,
+                (v) => (hardcoverApiToken = v),
+              )}
+              <p class="text-xs text-muted-foreground">
+                Free, 60 requests/min. Provides genres, moods, and tags.
+              </p>
+            </div>
+          </div>
+        </Card.Content>
+      </Card.Root>
+
       <!-- AI Providers -->
       <Card.Root>
         <Card.Header>
@@ -438,25 +518,23 @@
         <Card.Content class="space-y-5">
           <div class="max-w-sm space-y-1.5">
             <Label for="gemini-key">Gemini API Key</Label>
-            <Input
-              id="gemini-key"
-              type="password"
-              placeholder="AIza..."
-              value={geminiApiKey}
-              oninput={(e) => (geminiApiKey = e.currentTarget.value)}
-            />
+            {@render passwordInput(
+              "gemini-key",
+              "AIza...",
+              geminiApiKey,
+              (v) => (geminiApiKey = v),
+            )}
           </div>
           <div class="border-t border-border/30 pt-5">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div class="space-y-1.5">
                 <Label for="openai-key">OpenAI Compatible API Key</Label>
-                <Input
-                  id="openai-key"
-                  type="password"
-                  placeholder="sk-... (optional for Ollama)"
-                  value={openaiApiKey}
-                  oninput={(e) => (openaiApiKey = e.currentTarget.value)}
-                />
+                {@render passwordInput(
+                  "openai-key",
+                  "sk-... (optional for Ollama)",
+                  openaiApiKey,
+                  (v) => (openaiApiKey = v),
+                )}
               </div>
               <div class="space-y-1.5">
                 <Label for="openai-url">Base URL</Label>
@@ -570,13 +648,12 @@
           </div>
           <div class="max-w-sm space-y-1.5">
             <Label for="embedding-api-key">API Key</Label>
-            <Input
-              id="embedding-api-key"
-              type="password"
-              placeholder="Optional — not needed for local servers"
-              value={embeddingApiKey}
-              oninput={(e) => (embeddingApiKey = e.currentTarget.value)}
-            />
+            {@render passwordInput(
+              "embedding-api-key",
+              "Optional — not needed for local servers",
+              embeddingApiKey,
+              (v) => (embeddingApiKey = v),
+            )}
           </div>
         </Card.Content>
       </Card.Root>

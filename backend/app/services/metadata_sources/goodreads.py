@@ -208,6 +208,31 @@ class GoodreadsSource(AbstractMetadataSource):
                         except Exception:
                             pass
 
+                # Extract genres/shelves
+                genres = []
+                for genre_el in soup.select(
+                    "[data-testid='genresList'] a, "
+                    ".BookPageMetadataSection__genreButton a, "
+                    ".actionLinkLite.bookPageGenreLink"
+                ):
+                    genre_text = genre_el.get_text(strip=True)
+                    if genre_text and genre_text not in genres:
+                        genres.append(genre_text)
+
+                # Extract top shelves (user-voted categories)
+                shelves = []
+                for shelf_el in soup.select(
+                    "[data-testid='shelfList'] a, "
+                    ".BookPageShelfList a, "
+                    "a.actionLinkLite.bookPageGenreLink"
+                ):
+                    shelf_text = shelf_el.get_text(strip=True)
+                    if shelf_text and shelf_text not in shelves and shelf_text not in genres:
+                        shelves.append(shelf_text)
+
+                raw["genres"] = genres
+                raw["shelves"] = shelves
+
                 # Extract top reviews
                 reviews = []
                 review_els = soup.select(".ReviewCard, .friendReviews")

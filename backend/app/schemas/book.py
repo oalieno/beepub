@@ -4,11 +4,12 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
-class AiBookTagNested(BaseModel):
+class BookTagNested(BaseModel):
     id: uuid.UUID
     tag: str
     label: str = ""
     category: str
+    source: str = ""
     confidence: float
 
     model_config = {"from_attributes": True}
@@ -51,7 +52,7 @@ class BookOut(BaseModel):
     display_series: str | None = None
     display_series_index: float | None = None
     display_tags: list[str] | None = None
-    ai_tags: list[AiBookTagNested] = []
+    book_tags: list[BookTagNested] = []
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID

@@ -6,10 +6,11 @@ from pydantic import BaseModel
 from app.schemas.book import BookOut
 
 
-class AiBookTagOut(BaseModel):
+class BookTagOut(BaseModel):
     id: uuid.UUID
     tag: str
     category: str
+    source: str
     confidence: float
     created_at: datetime
 

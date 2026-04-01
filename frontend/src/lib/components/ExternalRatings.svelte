@@ -36,6 +36,18 @@
       idPattern: /^\d+$/,
       idHint: "e.g. 210227953000101",
     },
+    google_books: {
+      label: "Google Books",
+      urlPrefix: "https://books.google.com/books?id=",
+      idPattern: /^[\w-]+$/,
+      idHint: "e.g. qixiEAAAQBAJ",
+    },
+    hardcover: {
+      label: "Hardcover",
+      urlPrefix: "https://hardcover.app/books/",
+      idPattern: /^[\w-]+$/,
+      idHint: "e.g. the-left-hand-of-darkness",
+    },
   };
 
   let editingUrlSource = $state<string | null>(null);
@@ -95,19 +107,32 @@
       }
     );
   }
+
+  function getExternalUrl(
+    source: string,
+    sourceUrl: string | null,
+  ): string | null {
+    if (!sourceUrl) return null;
+    // If already a full URL, use as-is
+    if (sourceUrl.startsWith("http")) return sourceUrl;
+    // Otherwise, prepend the source's URL prefix (e.g., Google Books volume ID)
+    const prefix = SOURCE_META[source]?.urlPrefix ?? "";
+    return prefix ? prefix + sourceUrl : null;
+  }
 </script>
 
 {#if externalMeta.length > 0 || isAdmin}
   <div class="mt-4 flex flex-wrap items-center gap-4">
     {#each externalMeta as meta}
       {@const src = getSourceMeta(meta.source)}
+      {@const externalUrl = getExternalUrl(meta.source, meta.source_url)}
       <div class="flex items-center gap-2">
         <a
-          href={meta.source_url ?? "#"}
-          target={meta.source_url ? "_blank" : undefined}
-          rel={meta.source_url ? "noopener" : undefined}
+          href={externalUrl ?? "#"}
+          target={externalUrl ? "_blank" : undefined}
+          rel={externalUrl ? "noopener" : undefined}
           class="flex items-center gap-2 hover:opacity-80 transition-opacity"
-          onclick={meta.source_url
+          onclick={externalUrl
             ? undefined
             : (e: MouseEvent) => e.preventDefault()}
         >

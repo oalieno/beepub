@@ -1,9 +1,10 @@
-"""Celery tasks for fetching external metadata (Goodreads, Readmoo)."""
+"""Celery tasks for fetching external metadata."""
 
 from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -17,11 +18,28 @@ async def _process_metadata_job(book_id: str) -> None:
     from sqlalchemy import text
 
     from app.database import create_task_engine
-    from app.services.metadata_sources import GoodreadsSource, ReadmooSource
-
-    sources = [GoodreadsSource(), ReadmooSource()]
+    from app.services.metadata_sources import (
+        GoodreadsSource,
+        GoogleBooksSource,
+        HardcoverSource,
+        ReadmooSource,
+    )
+    from app.services.settings import get_all_settings as _get_settings
 
     async with create_task_engine() as (_engine, session_factory):
+        # Load API keys from settings
+        async with session_factory() as settings_db:
+            app_settings = await _get_settings(settings_db)
+
+        google_api_key = app_settings.get("google_books_api_key", "")
+        hardcover_token = app_settings.get("hardcover_api_token", "")
+
+        sources = [
+            GoodreadsSource(),
+            ReadmooSource(),
+            GoogleBooksSource(api_key=google_api_key),
+            HardcoverSource(api_token=hardcover_token),
+        ]
         async with session_factory() as db:
             result = await db.execute(
                 text(
@@ -78,7 +96,18 @@ async def _process_metadata_job(book_id: str) -> None:
                             continue
 
                         best = results[0]
-                        fetch_result = await source.fetch(best.url)
+                        if best.score < 60:
+                            logger.debug(
+                                "Skipping %s for book %s: low score %.0f",
+                                source.source_name,
+                                book_id,
+                                best.score,
+                            )
+                            continue
+                        if best.prefetched:
+                            fetch_result = best.prefetched
+                        else:
+                            fetch_result = await source.fetch(best.url)
                         source_url = fetch_result.source_url
 
                     # Upsert external_metadata
@@ -147,6 +176,22 @@ async def _process_metadata_job(book_id: str) -> None:
                         e,
                     )
                     await db.rollback()
+
+            # After all sources fetched, run deterministic tag mapping
+            try:
+                from app.services.tag_mapping import generate_tags_from_metadata
+
+                async with session_factory() as db:
+                    count = await generate_tags_from_metadata(db, uuid.UUID(book_id))
+                    await db.commit()
+                    if count:
+                        logger.info(
+                            "Mapped %d external tags for book %s",
+                            count,
+                            book_id,
+                        )
+            except Exception as e:
+                logger.error("Error mapping external tags for book %s: %s", book_id, e)
 
 
 @celery.task(name="app.tasks.metadata.fetch_metadata", bind=True, max_retries=3)

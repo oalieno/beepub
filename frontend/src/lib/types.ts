@@ -29,11 +29,12 @@ export interface LibraryOut {
   preview_book_ids: string[];
 }
 
-export interface AiBookTag {
+export interface BookTag {
   id: string;
   tag: string;
   label: string;
-  category: "genre" | "mood" | "topic";
+  category: "genre" | "subgenre" | "mood" | "theme" | "trope";
+  source: string;
   confidence: number;
 }
 
@@ -68,7 +69,7 @@ export interface BookOut {
   display_series: string | null;
   display_series_index: number | null;
   display_tags: string[] | null;
-  ai_tags?: AiBookTag[];
+  book_tags?: BookTag[];
   calibre_id: number | null;
   calibre_added_at: string | null;
   added_by: string;
@@ -253,6 +254,8 @@ export interface AdminSettings {
   embedding_model: string;
   embedding_api_url: string;
   embedding_api_key: string;
+  google_books_api_key: string;
+  hardcover_api_token: string;
 }
 
 export interface AiStatus {

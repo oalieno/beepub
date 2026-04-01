@@ -30,13 +30,15 @@ if TYPE_CHECKING:
     from app.models.bookshelf import BookshelfBook
     from app.models.library import LibraryBook
     from app.models.reading import Highlight, UserBookInteraction
-    from app.models.tag import AiBookTag
+    from app.models.tag import BookTag
     from app.models.user import User
 
 
 class MetadataSource(enum.StrEnum):
     goodreads = "goodreads"
     readmoo = "readmoo"
+    google_books = "google_books"
+    hardcover = "hardcover"
 
 
 class Book(Base, TimestampMixin):
@@ -99,8 +101,8 @@ class Book(Base, TimestampMixin):
     bookshelf_books: Mapped[list[BookshelfBook]] = relationship(
         "BookshelfBook", back_populates="book", cascade="all, delete-orphan"
     )
-    ai_tags: Mapped[list[AiBookTag]] = relationship(
-        "AiBookTag",
+    book_tags: Mapped[list[BookTag]] = relationship(
+        "BookTag",
         back_populates="book",
         cascade="all, delete-orphan",
         lazy="selectin",

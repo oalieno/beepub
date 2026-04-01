@@ -17,7 +17,9 @@
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);
-  let activeCategory = $state<"genre" | "mood" | "topic">("genre");
+  let activeCategory = $state<
+    "genre" | "subgenre" | "mood" | "theme" | "trope"
+  >("genre");
   let loadingRecs = $state(true);
   let loadingBrowse = $state(true);
 
@@ -67,7 +69,9 @@
     }
   }
 
-  async function switchCategory(cat: "genre" | "mood" | "topic") {
+  async function switchCategory(
+    cat: "genre" | "subgenre" | "mood" | "theme" | "trope",
+  ) {
     activeCategory = cat;
     await loadBrowse();
   }
@@ -132,13 +136,16 @@
     <div
       class="flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1 w-fit mb-6"
     >
-      {#each ["genre", "mood", "topic"] as cat}
+      {#each ["genre", "subgenre", "mood", "theme", "trope"] as cat}
         <button
           class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 capitalize {activeCategory ===
           cat
             ? 'bg-primary text-primary-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-          onclick={() => switchCategory(cat as "genre" | "mood" | "topic")}
+          onclick={() =>
+            switchCategory(
+              cat as "genre" | "subgenre" | "mood" | "theme" | "trope",
+            )}
         >
           {cat}
         </button>

@@ -9,6 +9,7 @@ class SearchResult:
     title: str
     authors: list[str]
     score: float = 0.0
+    prefetched: "FetchResult | None" = None  # Skip fetch() if search already has data
 
 
 @dataclass

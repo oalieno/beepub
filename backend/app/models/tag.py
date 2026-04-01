@@ -18,12 +18,21 @@ if TYPE_CHECKING:
 
 class TagCategory(enum.StrEnum):
     genre = "genre"
+    subgenre = "subgenre"
     mood = "mood"
-    topic = "topic"
+    theme = "theme"
+    trope = "trope"
 
 
-class AiBookTag(Base):
-    __tablename__ = "ai_book_tags"
+class TagSource(enum.StrEnum):
+    external = "external"
+    epub = "epub"
+    manual = "manual"
+    ai = "ai"
+
+
+class BookTag(Base):
+    __tablename__ = "book_tags"
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -33,16 +42,17 @@ class AiBookTag(Base):
     )
     tag: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     category: Mapped[TagCategory] = mapped_column(
-        SAEnum(TagCategory), nullable=False, index=True
+        SAEnum(TagCategory, name="tagcategory_v2"), nullable=False, index=True
     )
-    confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    source: Mapped[TagSource] = mapped_column(
+        SAEnum(TagSource, name="tagsource"), nullable=False, index=True
+    )
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
     # Relationships
-    book: Mapped[Book] = relationship("Book", back_populates="ai_tags")
+    book: Mapped[Book] = relationship("Book", back_populates="book_tags")
 
-    __table_args__ = (
-        UniqueConstraint("book_id", "tag", name="uq_ai_book_tags_book_tag"),
-    )
+    __table_args__ = (UniqueConstraint("book_id", "tag", name="uq_book_tags_book_tag"),)

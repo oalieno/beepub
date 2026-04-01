@@ -28,6 +28,9 @@ DEFAULTS = {
     # Similar books — semantic similarity blend
     "similar_books_semantic_weight": "10.0",
     "similar_books_semantic_limit": "50",
+    # External metadata API keys
+    "google_books_api_key": "",
+    "hardcover_api_token": "",
 }
 
 
