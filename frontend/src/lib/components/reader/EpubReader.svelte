@@ -197,11 +197,12 @@
       const authHeaders = getAuthHeader();
       const hasAuth = Object.keys(authHeaders).length > 0;
 
-      // In native mode, epub.js needs auth headers on every request
-      // (cookies don't work cross-origin in Capacitor WebView).
-      // We also enable replacements: "blobUrl" so epub.js fetches images/CSS via
-      // XHR (with auth) and substitutes blob URLs in chapter HTML — otherwise <img>
-      // tags in the rendered iframe would make unauthenticated requests.
+      // In native mode, epub.js needs auth headers on XHR requests for
+      // chapter HTML, OPF, etc. Images/CSS in iframes are authenticated
+      // via WKWebView's cookie store (login sets an HttpOnly cookie).
+      // replacements: "blobUrl" ensures CSS/fonts are fetched via XHR
+      // (with auth) and blob-replaced; images are skipped by our patched
+      // resources.replacements() and load directly via cookie auth.
       let nativeOpts = {};
       if (hasAuth) {
         const defaultRequest = (await import("$lib/epubjs/utils/request"))

@@ -646,7 +646,9 @@ class Book {
       }
       // Substitute hook
       let substituteResources = (output, section) => {
-        section.output = this.resources.substitute(output, section.url);
+        return this.resources.substituteAsync(output, section.url).then((replaced) => {
+          section.output = replaced;
+        });
       };
 
       // Set to use replacements
@@ -699,7 +701,12 @@ class Book {
    */
   replacements() {
     this.spine.hooks.serialize.register((output, section) => {
-      section.output = this.resources.substitute(output, section.url);
+      // Async: awaits only image blob URLs referenced in this section's HTML.
+      // Hook.trigger() supports promises — section.render() waits for this
+      // to complete before injecting HTML into the DOM.
+      return this.resources.substituteAsync(output, section.url).then((replaced) => {
+        section.output = replaced;
+      });
     });
 
     return this.resources.replacements().then(() => {

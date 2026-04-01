@@ -37,6 +37,7 @@ class Resources {
     });
 
     this.replacementUrls = [];
+    this.imagePromises = new Map(); // href -> Promise<string|null>
 
     this.html = [];
     this.assets = [];
@@ -138,20 +139,107 @@ class Resources {
       );
     }
 
-    var replacements = this.urls.map((url) => {
-      var absolute = this.settings.resolver(url);
+    var imageMimes = new Set([
+      "image/jpeg",
+      "image/png",
+      "image/gif",
+      "image/webp",
+      "image/svg+xml",
+      "image/bmp",
+      "image/tiff",
+    ]);
 
+    var nonImageJobs = [];
+    var imageJobs = [];
+
+    this.assets.forEach((item, i) => {
+      if (imageMimes.has(item.type)) {
+        imageJobs.push({ index: i, url: this.urls[i] });
+      } else {
+        nonImageJobs.push({ index: i, url: this.urls[i] });
+      }
+    });
+
+    // Block on CSS/fonts only
+    var replacements = nonImageJobs.map(({ url }) => {
+      var absolute = this.settings.resolver(url);
       return this.createUrl(absolute).catch((err) => {
         console.error(err);
         return null;
       });
     });
 
-    return Promise.all(replacements).then((replacementUrls) => {
-      this.replacementUrls = replacementUrls.filter((url) => {
-        return typeof url === "string";
+    return Promise.all(replacements).then((results) => {
+      this.replacementUrls = new Array(this.urls.length).fill(null);
+      nonImageJobs.forEach(({ index }, i) => {
+        if (typeof results[i] === "string") {
+          this.replacementUrls[index] = results[i];
+        }
       });
-      return replacementUrls;
+
+      // Record which indices are images (for on-demand fetch in substituteAsync)
+      this._imageIndices = new Set(imageJobs.map(({ index }) => index));
+
+      return this.replacementUrls;
+    });
+  }
+
+  /**
+   * Fetch a single image asset as a blob URL on demand.
+   * Caches the promise so repeated calls for the same asset share one fetch.
+   * @param  {number} index  index into this.urls / this.assets
+   * @return {Promise<string|null>}
+   */
+  _fetchImage(index) {
+    var href = this.urls[index];
+    if (this.imagePromises.has(href)) {
+      return this.imagePromises.get(href);
+    }
+    var absolute = this.settings.resolver(href);
+    var promise = this.createUrl(absolute)
+      .then((blobUrl) => {
+        if (typeof blobUrl === "string") {
+          this.replacementUrls[index] = blobUrl;
+        }
+        return blobUrl;
+      })
+      .catch(() => null);
+    this.imagePromises.set(href, promise);
+    return promise;
+  }
+
+  /**
+   * Substitute urls in content, fetching blob URLs on demand for any
+   * images referenced in this section's HTML.
+   * @param  {string} content  serialized section HTML
+   * @param  {string} [url]    section url for relative resolution
+   * @return {Promise<string>} content with urls substituted
+   */
+  substituteAsync(content, url) {
+    // Find images in this section that need fetching.
+    // Check both the raw href (relative path like "image/0.jpg") and
+    // the resolved relative URL, since content may contain either form.
+    var relUrls = url ? this.relativeTo(url) : this.urls;
+    var pending = [];
+
+    this.urls.forEach((assetHref, i) => {
+      if (this.replacementUrls[i]) return; // already resolved
+      if (!this._imageIndices || !this._imageIndices.has(i)) return;
+      // Match against raw href (relative) or resolved URL
+      if (
+        (assetHref && content.indexOf(assetHref) !== -1) ||
+        (relUrls[i] && content.indexOf(relUrls[i]) !== -1)
+      ) {
+        pending.push(this._fetchImage(i));
+      }
+    });
+
+    if (pending.length === 0) {
+      return Promise.resolve(this.substitute(content, url));
+    }
+
+    return Promise.all(pending).then(() => {
+      return this.substitute(content, url);
     });
   }
 
@@ -310,6 +398,7 @@ class Resources {
     this.manifest = undefined;
     this.resources = undefined;
     this.replacementUrls = undefined;
+    this.imagePromises = undefined;
     this.html = undefined;
     this.assets = undefined;
     this.css = undefined;
