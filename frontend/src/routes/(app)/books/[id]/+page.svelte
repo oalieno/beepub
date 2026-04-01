@@ -28,7 +28,7 @@
     Trash2,
     Pencil,
     RefreshCw,
-    BookMarked,
+    ShelvingUnit,
     EllipsisVertical,
     NotebookPen,
     Bookmark,
@@ -501,7 +501,7 @@
             onclick={() => (showAddToShelf = true)}
             title="Add to bookshelf"
           >
-            <BookMarked size={16} />
+            <ShelvingUnit size={16} />
           </button>
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
@@ -765,7 +765,7 @@
         showMobileActions = false;
       }}
     >
-      <BookMarked size={20} class="text-muted-foreground shrink-0" />
+      <ShelvingUnit size={20} class="text-muted-foreground shrink-0" />
       Add to shelf
     </button>
     <button

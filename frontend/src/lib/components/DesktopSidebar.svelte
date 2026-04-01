@@ -8,8 +8,9 @@
     Home,
     BookOpen,
     Library,
-    Bookmark,
+    ShelvingUnit,
     Highlighter,
+    Compass,
     Search as SearchIcon,
     Dices,
     Download,
@@ -46,7 +47,7 @@
     {
       href: "/bookshelves",
       label: "Shelves",
-      icon: Bookmark,
+      icon: ShelvingUnit,
       active: page.url.pathname.startsWith("/bookshelves"),
       requiresOnline: true,
     },
@@ -60,7 +61,7 @@
     {
       href: "/discover",
       label: "Discover",
-      icon: SearchIcon,
+      icon: Compass,
       active: page.url.pathname.startsWith("/discover"),
       requiresOnline: true,
     },

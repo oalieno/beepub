@@ -2,7 +2,7 @@
   import { page } from "$app/state";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
-  import { Home, Library, Search, User } from "@lucide/svelte";
+  import { Home, Library, Compass, User } from "@lucide/svelte";
   import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
@@ -25,7 +25,7 @@
     {
       href: "/discover",
       label: "Discover",
-      icon: Search,
+      icon: Compass,
       match: (p: string) => p.startsWith("/discover"),
       requiresOnline: true,
     },

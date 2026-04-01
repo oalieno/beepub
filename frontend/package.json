@@ -14,7 +14,7 @@
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
     "@internationalized/date": "^3.11.0",
-    "@lucide/svelte": "^0.561.0",
+    "@lucide/svelte": "^1.7.0",
     "@sveltejs/adapter-node": "^5.2.9",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.7.0",
