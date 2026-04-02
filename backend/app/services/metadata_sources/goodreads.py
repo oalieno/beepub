@@ -227,7 +227,11 @@ class GoodreadsSource(AbstractMetadataSource):
                     "a.actionLinkLite.bookPageGenreLink"
                 ):
                     shelf_text = shelf_el.get_text(strip=True)
-                    if shelf_text and shelf_text not in shelves and shelf_text not in genres:
+                    if (
+                        shelf_text
+                        and shelf_text not in shelves
+                        and shelf_text not in genres
+                    ):
                         shelves.append(shelf_text)
 
                 raw["genres"] = genres

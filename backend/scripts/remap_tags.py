@@ -45,12 +45,13 @@ async def main() -> None:
             if (i + 1) % 1000 == 0:
                 logger.info(
                     "Progress: %d/%d (mapped: %d, errors: %d)",
-                    i + 1, total, success, errors,
+                    i + 1,
+                    total,
+                    success,
+                    errors,
                 )
 
-        logger.info(
-            "Done. %d/%d books mapped, %d errors.", success, total, errors
-        )
+        logger.info("Done. %d/%d books mapped, %d errors.", success, total, errors)
 
 
 if __name__ == "__main__":

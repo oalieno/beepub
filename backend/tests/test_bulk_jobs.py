@@ -29,7 +29,9 @@ class TestExecuteBookTask:
 
     @patch("app.celeryapp.run_async")
     def test_text_extraction(self, mock_run_async):
-        with patch("app.tasks.text_extract._run_text_extract", new_callable=MagicMock) as mock_fn:
+        with patch(
+            "app.tasks.text_extract._run_text_extract", new_callable=MagicMock
+        ) as mock_fn:
             mock_fn.return_value = "coro"
             _execute_book_task("text_extraction", "book-123")
             mock_run_async.assert_called_once()
@@ -37,8 +39,12 @@ class TestExecuteBookTask:
     @patch("app.celeryapp.run_async")
     def test_embedding_runs_extract_then_embed(self, mock_run_async):
         with (
-            patch("app.tasks.text_extract._run_text_extract", new_callable=MagicMock) as mock_extract,
-            patch("app.tasks.embed._run_embed_book", new_callable=MagicMock) as mock_embed,
+            patch(
+                "app.tasks.text_extract._run_text_extract", new_callable=MagicMock
+            ) as mock_extract,
+            patch(
+                "app.tasks.embed._run_embed_book", new_callable=MagicMock
+            ) as mock_embed,
         ):
             mock_extract.return_value = "coro1"
             mock_embed.return_value = "coro2"
@@ -48,8 +54,12 @@ class TestExecuteBookTask:
     @patch("app.celeryapp.run_async")
     def test_summarize_runs_extract_then_summarize(self, mock_run_async):
         with (
-            patch("app.tasks.text_extract._run_text_extract", new_callable=MagicMock) as mock_extract,
-            patch("app.tasks.summarize._run_summarize_chunks", new_callable=MagicMock) as mock_summarize,
+            patch(
+                "app.tasks.text_extract._run_text_extract", new_callable=MagicMock
+            ) as mock_extract,
+            patch(
+                "app.tasks.summarize._run_summarize_chunks", new_callable=MagicMock
+            ) as mock_summarize,
         ):
             mock_extract.return_value = "coro1"
             mock_summarize.return_value = "coro2"
@@ -58,14 +68,18 @@ class TestExecuteBookTask:
 
     @patch("app.celeryapp.run_async")
     def test_auto_tag(self, mock_run_async):
-        with patch("app.tasks.auto_tag._run_auto_tag_book", new_callable=MagicMock) as mock_fn:
+        with patch(
+            "app.tasks.auto_tag._run_auto_tag_book", new_callable=MagicMock
+        ) as mock_fn:
             mock_fn.return_value = "coro"
             _execute_book_task("auto_tag", "book-aaa")
             mock_run_async.assert_called_once()
 
     @patch("app.celeryapp.run_async")
     def test_book_embedding(self, mock_run_async):
-        with patch("app.tasks.embed._run_embed_book_summary", new_callable=MagicMock) as mock_fn:
+        with patch(
+            "app.tasks.embed._run_embed_book_summary", new_callable=MagicMock
+        ) as mock_fn:
             mock_fn.return_value = "coro"
             _execute_book_task("book_embedding", "book-ccc")
             mock_run_async.assert_called_once()

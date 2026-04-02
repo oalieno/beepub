@@ -27,9 +27,7 @@ def upgrade() -> None:
     op.execute(
         "CREATE TYPE tagcategory_v2 AS ENUM ('genre', 'subgenre', 'mood', 'theme', 'trope')"
     )
-    op.execute(
-        "CREATE TYPE tagsource AS ENUM ('external', 'epub', 'manual', 'ai')"
-    )
+    op.execute("CREATE TYPE tagsource AS ENUM ('external', 'epub', 'manual', 'ai')")
 
     op.execute("""
         CREATE TABLE book_tags (
@@ -92,12 +90,31 @@ def downgrade() -> None:
     op.execute("CREATE TYPE tagcategory AS ENUM ('genre', 'mood', 'topic')")
     op.create_table(
         "ai_book_tags",
-        sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
-        sa.Column("book_id", UUID(as_uuid=True), sa.ForeignKey("books.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "id",
+            UUID(as_uuid=True),
+            primary_key=True,
+            server_default=sa.text("gen_random_uuid()"),
+        ),
+        sa.Column(
+            "book_id",
+            UUID(as_uuid=True),
+            sa.ForeignKey("books.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
         sa.Column("tag", sa.String(100), nullable=False),
-        sa.Column("category", sa.Enum("genre", "mood", "topic", name="tagcategory", create_type=False), nullable=False),
+        sa.Column(
+            "category",
+            sa.Enum("genre", "mood", "topic", name="tagcategory", create_type=False),
+            nullable=False,
+        ),
         sa.Column("confidence", sa.Float, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.func.now(),
+            nullable=False,
+        ),
         sa.UniqueConstraint("book_id", "tag", name="uq_ai_book_tags_book_tag"),
     )
     op.create_index("ix_ai_book_tags_book_id", "ai_book_tags", ["book_id"])
