@@ -131,23 +131,29 @@
     </div>
 
     <!-- Category Tabs -->
-    <div
-      class="flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1 w-fit mb-6"
-    >
-      {#each ["genre", "subgenre", "mood", "theme", "trope"] as cat}
-        <button
-          class="px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 capitalize {activeCategory ===
-          cat
-            ? 'bg-primary text-primary-foreground shadow-sm'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-          onclick={() =>
-            switchCategory(
-              cat as "genre" | "subgenre" | "mood" | "theme" | "trope",
-            )}
-        >
-          {cat}
-        </button>
-      {/each}
+    <div class="relative mb-6 max-w-full">
+      <div
+        class="inline-flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1 overflow-x-auto scrollbar-none max-w-full"
+      >
+        {#each ["genre", "subgenre", "mood", "theme", "trope"] as cat}
+          <button
+            class="shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 capitalize {activeCategory ===
+            cat
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+            onclick={() =>
+              switchCategory(
+                cat as "genre" | "subgenre" | "mood" | "theme" | "trope",
+              )}
+          >
+            {cat}
+          </button>
+        {/each}
+      </div>
+      <!-- Right fade hint for scrollable overflow -->
+      <div
+        class="absolute right-0 top-0 bottom-0 w-8 pointer-events-none rounded-r-full bg-gradient-to-l from-background to-transparent sm:hidden"
+      ></div>
     </div>
 
     {#if loadingBrowse}
