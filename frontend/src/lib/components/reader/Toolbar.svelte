@@ -13,6 +13,7 @@
     MessageCircle,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
+  import { getIsOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
 
   let {
@@ -81,7 +82,10 @@
   <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
     aria-label="Go back"
-    onclick={() => goto(`/books/${bookId}`, { replaceState: true })}
+    onclick={() =>
+      goto(getIsOnline() ? `/books/${bookId}` : "/downloads", {
+        replaceState: true,
+      })}
   >
     <ArrowLeft size={20} />
   </button>
