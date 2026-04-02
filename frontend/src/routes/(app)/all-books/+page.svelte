@@ -9,9 +9,9 @@
   import type { Snapshot } from "./$types";
 
   let bookBrowser = $state<BookBrowser>();
-  let browserState = $state<BookBrowserState | null>(null);
-  let restoredFromSnapshot = $state(false);
+  let restoreData = $state<BookBrowserState | null>(null);
   let pendingScrollY = $state(0);
+  let restoredFromSnapshot = $state(false);
   let mounted = $state(false);
 
   interface PageSnapshot {
@@ -33,7 +33,7 @@
       scrollY: window.scrollY,
     }),
     restore: (data) => {
-      browserState = data.browserState;
+      restoreData = data.browserState;
       pendingScrollY = data.scrollY;
       restoredFromSnapshot = true;
     },
@@ -44,13 +44,12 @@
       restoredFromSnapshot = false;
       mounted = true;
       await tick();
-      if (browserState && bookBrowser) {
-        bookBrowser.restoreState(browserState);
-      }
       await tick();
       window.scrollTo(0, pendingScrollY);
+      restoreData = null;
       return;
     }
+    restoreData = null;
     mounted = true;
   });
 
@@ -103,6 +102,7 @@
     <BookBrowser
       bind:this={bookBrowser}
       {fetchBooks}
+      {restoreData}
       initialSearch={(page.url.searchParams.get("search") ?? "").trim()}
       initialTag={(page.url.searchParams.get("tag") ?? "").trim()}
       initialAuthor={(page.url.searchParams.get("author") ?? "").trim()}

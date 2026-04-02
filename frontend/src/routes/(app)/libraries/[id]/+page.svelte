@@ -31,7 +31,7 @@
   let pendingScrollY = $state(0);
 
   let bookBrowser = $state<BookBrowser>();
-  let browserState = $state<BookBrowserState | null>(null);
+  let restoreData = $state<BookBrowserState | null>(null);
 
   interface PageSnapshot {
     browserState: BookBrowserState;
@@ -55,7 +55,7 @@
     }),
     restore: (data) => {
       library = data.library;
-      browserState = data.browserState;
+      restoreData = data.browserState;
       pendingScrollY = data.scrollY;
       restoredFromSnapshot = true;
       libraryLoading = false;
@@ -65,15 +65,15 @@
   afterNavigate(async () => {
     if (restoredFromSnapshot) {
       restoredFromSnapshot = false;
+      // restoreData is already set — BookBrowser will use it on mount
       await tick();
-      if (browserState && bookBrowser) {
-        bookBrowser.restoreState(browserState);
-      }
       await tick();
       window.scrollTo(0, pendingScrollY);
+      restoreData = null;
       return;
     }
 
+    restoreData = null;
     libraryLoading = true;
     try {
       library = await librariesApi.get(libraryId);
@@ -208,6 +208,7 @@
       <BookBrowser
         bind:this={bookBrowser}
         {fetchBooks}
+        {restoreData}
         initialSearch={(page.url.searchParams.get("search") ?? "").trim()}
         initialTag={(page.url.searchParams.get("tag") ?? "").trim()}
         initialAuthor={(page.url.searchParams.get("author") ?? "").trim()}

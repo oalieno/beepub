@@ -36,6 +36,7 @@
     initialSeries = "",
     initialSort = "added_at:desc",
     emptyMessage = "No books found",
+    restoreData,
     onStateChange,
   }: {
     fetchBooks: FetchBooksFn;
@@ -45,6 +46,7 @@
     initialSeries?: string;
     initialSort?: string;
     emptyMessage?: string;
+    restoreData?: BookBrowserState | null;
     onStateChange?: (state: BookBrowserState) => void;
   } = $props();
 
@@ -58,27 +60,34 @@
     sortValue: string;
   }
 
-  let books = $state<BookOut[]>([]);
-  let totalBooks = $state(0);
-  let hasMore = $derived(books.length < totalBooks);
-  let loading = $state(true);
-  let loadingMore = $state(false);
+  // Compute all initial values once from restoreData or initial* props.
+  // These props are intentionally captured once at creation time.
   // svelte-ignore state_referenced_locally
-  let searchQuery = $state(initialSearch);
+  const isRestoring = !!restoreData;
   // svelte-ignore state_referenced_locally
-  let filterAuthor = $state(initialAuthor);
-  // svelte-ignore state_referenced_locally
-  let filterTag = $state(initialTag);
-  // svelte-ignore state_referenced_locally
-  let filterSeries = $state(initialSeries);
+  const init: BookBrowserState = restoreData ?? {
+    books: [],
+    totalBooks: 0,
+    searchQuery: initialSearch,
+    filterAuthor: initialAuthor,
+    filterTag: initialTag,
+    filterSeries: initialSeries,
+    sortValue:
+      initialSeries && initialSort === "added_at:desc"
+        ? "series_index:asc"
+        : initialSort,
+  };
 
-  // Auto-select series order when series filter is active
-  // svelte-ignore state_referenced_locally
-  let sortValue = $state(
-    initialSeries && initialSort === "added_at:desc"
-      ? "series_index:asc"
-      : initialSort,
-  );
+  let books = $state<BookOut[]>(init.books);
+  let totalBooks = $state(init.totalBooks);
+  let hasMore = $derived(books.length < totalBooks);
+  let loading = $state(!isRestoring);
+  let loadingMore = $state(false);
+  let searchQuery = $state(init.searchQuery);
+  let filterAuthor = $state(init.filterAuthor);
+  let filterTag = $state(init.filterTag);
+  let filterSeries = $state(init.filterSeries);
+  let sortValue = $state(init.sortValue);
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
   let sortLabel = $derived(
@@ -87,12 +96,9 @@
 
   // Filter panel
   let showFilters = $state(false);
-  // svelte-ignore state_referenced_locally
-  let filterAuthorInput = $state(initialAuthor);
-  // svelte-ignore state_referenced_locally
-  let filterTagInput = $state(initialTag);
-  // svelte-ignore state_referenced_locally
-  let filterSeriesInput = $state(initialSeries);
+  let filterAuthorInput = $state(init.filterAuthor);
+  let filterTagInput = $state(init.filterTag);
+  let filterSeriesInput = $state(init.filterSeries);
 
   // Debounce timer for search input
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -203,19 +209,10 @@
     };
   }
 
-  export function restoreState(state: BookBrowserState) {
-    books = state.books;
-    totalBooks = state.totalBooks;
-    searchQuery = state.searchQuery;
-    filterAuthor = state.filterAuthor;
-    filterTag = state.filterTag;
-    filterSeries = state.filterSeries;
-    sortValue = state.sortValue;
-    loading = false;
+  // Initial load (skip if restoring from snapshot)
+  if (!isRestoring) {
+    loadData();
   }
-
-  // Initial load
-  loadData();
 </script>
 
 <!-- Search & toolbar -->
