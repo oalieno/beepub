@@ -73,8 +73,8 @@ def _fake_openai_response(
     return resp
 
 
-def _make_mock_client(mock_post: AsyncMock) -> AsyncMock:
-    mock_client = AsyncMock()
+def _make_mock_client(mock_post: AsyncMock) -> MagicMock:
+    mock_client = MagicMock()
     mock_client.post = mock_post
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)

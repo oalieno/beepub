@@ -5,7 +5,6 @@ Usage: docker compose exec backend python scripts/remap_tags.py
 
 import asyncio
 import logging
-import sys
 import uuid
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")

@@ -291,11 +291,6 @@ SYNONYM_MAP: dict[str, tuple[str, str]] = {
     "nonfiction": ("genre", "literary fiction"),
     "young adult nonfiction": ("genre", "young adult"),
     "shoujo": ("subgenre", "light novel"),
-    # ── Calibre / epub tag synonyms ──
-    "漫畫": ("genre", "graphic novel"),
-    "輕小說": ("subgenre", "light novel"),
-    "財經": ("subgenre", "economics"),
-    "寫作": ("genre", "essay"),
     # ── Theme mappings ──
     "identity": ("theme", "identity"),
     "death": ("theme", "mortality"),

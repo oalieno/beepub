@@ -21,7 +21,7 @@ from app.services.job_queue import (
 
 def _mock_redis(**overrides) -> AsyncMock:
     """Create a mock Redis client with default stubs."""
-    client = AsyncMock()
+    client = MagicMock()
     client.get = AsyncMock(return_value=None)
     client.set = AsyncMock()
     client.delete = AsyncMock()
