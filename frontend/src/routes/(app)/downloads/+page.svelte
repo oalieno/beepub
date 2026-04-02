@@ -71,10 +71,12 @@
       </p>
     </div>
   {:else if entries.length === 0}
-    <div class="bg-card card-soft rounded-2xl p-12 text-center">
-      <Download class="mx-auto mb-4 text-muted-foreground/30" size={48} />
-      <p class="text-muted-foreground text-lg">No downloaded books</p>
-      <p class="text-muted-foreground/70 text-sm mt-1">
+    <div class="flex flex-col items-center justify-center py-24 text-center">
+      <div class="mb-4 p-3 bg-primary/10 rounded-xl">
+        <Download class="text-primary/50" size={28} />
+      </div>
+      <p class="text-foreground text-lg font-medium mb-2">No downloads yet</p>
+      <p class="text-muted-foreground text-sm max-w-xs mb-6">
         Download books from their detail page to read them offline.
       </p>
     </div>
