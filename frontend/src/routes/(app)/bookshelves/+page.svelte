@@ -5,7 +5,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import type { BookshelfOut } from "$lib/types";
-  import { Plus, BookMarked, Trash2 } from "@lucide/svelte";
+  import { Plus, ShelvingUnit, Trash2 } from "@lucide/svelte";
   import { CardListSkeleton } from "$lib/components/skeletons";
 
   let bookshelves = $state<BookshelfOut[]>([]);
@@ -90,7 +90,7 @@
   {:else if bookshelves.length === 0}
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
-        <BookMarked class="text-primary/50" size={28} />
+        <ShelvingUnit class="text-primary/50" size={28} />
       </div>
       <p class="text-foreground text-lg font-medium mb-2">No shelves yet</p>
       <p class="text-muted-foreground text-sm max-w-xs mb-6">
@@ -119,7 +119,7 @@
             : "bg-secondary text-muted-foreground"}
         >
           {#snippet icon()}
-            <BookMarked class="text-muted-foreground/50 shrink-0" size={16} />
+            <ShelvingUnit class="text-muted-foreground/50 shrink-0" size={16} />
           {/snippet}
           {#snippet overlay()}
             <button
