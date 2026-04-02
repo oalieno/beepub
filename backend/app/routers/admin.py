@@ -12,8 +12,14 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
-from app.models.user import User
-from app.schemas.user import UserOut, UserUpdateRole
+from app.models.user import User, UserRole
+from app.schemas.user import (
+    AdminCreateUser,
+    AdminResetPassword,
+    UserOut,
+    UserUpdateRole,
+)
+from app.services.auth import hash_password
 from app.services.calibre import (
     _count_calibre_epubs,
     get_sync_status,
@@ -34,6 +40,26 @@ async def list_users(
     return result.scalars().all()
 
 
+@router.post("/users", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+async def create_user(
+    body: AdminCreateUser,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    existing = await db.execute(select(User).where(User.username == body.username))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Username already exists")
+    user = User(
+        username=body.username,
+        password_hash=hash_password(body.password),
+        role=UserRole.user,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
 @router.put("/users/{user_id}/role", response_model=UserOut)
 async def update_user_role(
     user_id: uuid.UUID,
@@ -49,6 +75,22 @@ async def update_user_role(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.put("/users/{user_id}/password")
+async def reset_user_password(
+    user_id: uuid.UUID,
+    body: AdminResetPassword,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.password_hash = hash_password(body.new_password)
+    await db.commit()
+    return {"ok": True}
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

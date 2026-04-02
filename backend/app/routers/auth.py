@@ -9,9 +9,10 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User, UserRole
-from app.schemas.auth import LoginResponse, RegisterRequest
+from app.schemas.auth import ChangePasswordRequest, LoginResponse, RegisterRequest
 from app.schemas.user import UserOut
 from app.services.auth import create_access_token, hash_password, verify_password
+from app.services.settings import get_setting
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -30,6 +31,16 @@ def _set_token_cookie(response: Response, token: str) -> None:
     )
 
 
+@router.get("/registration-status")
+async def registration_status(db: Annotated[AsyncSession, Depends(get_db)]):
+    count_result = await db.execute(select(func.count(User.id)))
+    user_count = count_result.scalar()
+    if user_count == 0:
+        return {"registration_enabled": True, "first_user": True}
+    reg_enabled = await get_setting(db, "registration_enabled")
+    return {"registration_enabled": reg_enabled == "true", "first_user": False}
+
+
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]):
     # Check username uniqueness
@@ -41,6 +52,14 @@ async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
     count_result = await db.execute(select(func.count(User.id)))
     user_count = count_result.scalar()
     role = UserRole.admin if user_count == 0 else UserRole.user
+
+    # If not the first user, check if registration is enabled
+    if user_count > 0:
+        reg_enabled = await get_setting(db, "registration_enabled")
+        if reg_enabled != "true":
+            raise HTTPException(
+                status_code=403, detail="Registration is currently closed"
+            )
 
     user = User(
         username=body.username,
@@ -85,6 +104,19 @@ async def logout(response: Response):
     response.delete_cookie(
         key="token", httponly=True, secure=True, samesite="lax", path="/"
     )
+    return {"ok": True}
+
+
+@router.put("/change-password")
+async def change_password(
+    body: ChangePasswordRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if not verify_password(body.current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    current_user.password_hash = hash_password(body.new_password)
+    await db.commit()
     return {"ok": True}
 
 

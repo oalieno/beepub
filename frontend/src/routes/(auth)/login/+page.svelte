@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { authApi } from "$lib/api/auth";
   import { authStore } from "$lib/stores/auth";
@@ -18,6 +19,16 @@
   let loading = $state(false);
   let showPassword = $state(false);
   let errorMessage = $state("");
+  let registrationAllowed = $state(false);
+
+  onMount(async () => {
+    try {
+      const status = await authApi.registrationStatus();
+      registrationAllowed = status.registration_enabled;
+    } catch {
+      registrationAllowed = false;
+    }
+  });
 
   async function handleLogin() {
     if (!username || !password) return;
@@ -51,6 +62,63 @@
   }
 </script>
 
+{#snippet loginForm()}
+  <form
+    onsubmit={(e) => {
+      e.preventDefault();
+      handleLogin();
+    }}
+    class="space-y-4"
+  >
+    <div class="space-y-1.5">
+      <Label for="username" class="text-sm font-medium">Username</Label>
+      <Input
+        id="username"
+        type="text"
+        bind:value={username}
+        placeholder="Enter username"
+        required
+        class="rounded-xl h-11"
+      />
+    </div>
+    <div class="space-y-1.5">
+      <Label for="password" class="text-sm font-medium">Password</Label>
+      <div class="relative">
+        <Input
+          id="password"
+          type={showPassword ? "text" : "password"}
+          bind:value={password}
+          placeholder="Enter password"
+          required
+          class="rounded-xl h-11 pr-10"
+        />
+        <button
+          type="button"
+          onclick={() => (showPassword = !showPassword)}
+          class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          tabindex={-1}
+        >
+          {#if showPassword}
+            <EyeOff size={18} />
+          {:else}
+            <Eye size={18} />
+          {/if}
+        </button>
+      </div>
+    </div>
+    {#if errorMessage && !showRegister}
+      <p class="text-sm text-red-600">{errorMessage}</p>
+    {/if}
+    <Button
+      type="submit"
+      disabled={loading}
+      class="w-full rounded-xl h-11 text-sm font-semibold"
+    >
+      {loading ? "Logging in..." : "Login"}
+    </Button>
+  </form>
+{/snippet}
+
 <svelte:head>
   <title>BeePub - Login</title>
 </svelte:head>
@@ -81,142 +149,99 @@
 
     <!-- Card -->
     <div class="bg-card card-soft rounded-2xl p-6">
-      <Tabs.Root value={showRegister ? "register" : "login"} class="w-full">
-        <Tabs.List
-          class="grid w-full grid-cols-2 mb-6 bg-secondary rounded-full p-1"
-        >
-          <Tabs.Trigger
-            value="login"
-            onclick={() => (showRegister = false)}
-            class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
-            >Login</Tabs.Trigger
+      {#if registrationAllowed}
+        <Tabs.Root value={showRegister ? "register" : "login"} class="w-full">
+          <Tabs.List
+            class="grid w-full grid-cols-2 mb-6 bg-secondary rounded-full p-1"
           >
-          <Tabs.Trigger
-            value="register"
-            onclick={() => (showRegister = true)}
-            class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
-            >Register</Tabs.Trigger
-          >
-        </Tabs.List>
-
-        <Tabs.Content value="login">
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              handleLogin();
-            }}
-            class="space-y-4"
-          >
-            <div class="space-y-1.5">
-              <Label for="username" class="text-sm font-medium">Username</Label>
-              <Input
-                id="username"
-                type="text"
-                bind:value={username}
-                placeholder="Enter username"
-                required
-                class="rounded-xl h-11"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="password" class="text-sm font-medium">Password</Label>
-              <div class="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  bind:value={password}
-                  placeholder="Enter password"
-                  required
-                  class="rounded-xl h-11 pr-10"
-                />
-                <button
-                  type="button"
-                  onclick={() => (showPassword = !showPassword)}
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  tabindex={-1}
-                >
-                  {#if showPassword}
-                    <EyeOff size={18} />
-                  {:else}
-                    <Eye size={18} />
-                  {/if}
-                </button>
-              </div>
-            </div>
-            {#if errorMessage}
-              <p class="text-sm text-red-600">{errorMessage}</p>
-            {/if}
-            <Button
-              type="submit"
-              disabled={loading}
-              class="w-full rounded-xl h-11 text-sm font-semibold"
+            <Tabs.Trigger
+              value="login"
+              onclick={() => {
+                showRegister = false;
+                errorMessage = "";
+              }}
+              class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              >Login</Tabs.Trigger
             >
-              {loading ? "Logging in..." : "Login"}
-            </Button>
-          </form>
-        </Tabs.Content>
-
-        <Tabs.Content value="register">
-          <form
-            onsubmit={(e) => {
-              e.preventDefault();
-              handleRegister();
-            }}
-            class="space-y-4"
-          >
-            <div class="space-y-1.5">
-              <Label for="reg-username" class="text-sm font-medium"
-                >Username</Label
-              >
-              <Input
-                id="reg-username"
-                type="text"
-                bind:value={username}
-                placeholder="Choose username"
-                required
-                class="rounded-xl h-11"
-              />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="reg-password" class="text-sm font-medium"
-                >Password</Label
-              >
-              <div class="relative">
-                <Input
-                  id="reg-password"
-                  type={showPassword ? "text" : "password"}
-                  bind:value={password}
-                  placeholder="Choose password"
-                  required
-                  class="rounded-xl h-11 pr-10"
-                />
-                <button
-                  type="button"
-                  onclick={() => (showPassword = !showPassword)}
-                  class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  tabindex={-1}
-                >
-                  {#if showPassword}
-                    <EyeOff size={18} />
-                  {:else}
-                    <Eye size={18} />
-                  {/if}
-                </button>
-              </div>
-            </div>
-            {#if errorMessage}
-              <p class="text-sm text-red-600">{errorMessage}</p>
-            {/if}
-            <Button
-              type="submit"
-              disabled={loading}
-              class="w-full rounded-xl h-11 text-sm font-semibold"
+            <Tabs.Trigger
+              value="register"
+              onclick={() => {
+                showRegister = true;
+                errorMessage = "";
+              }}
+              class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
+              >Register</Tabs.Trigger
             >
-              {loading ? "Creating account..." : "Register"}
-            </Button>
-          </form>
-        </Tabs.Content>
-      </Tabs.Root>
+          </Tabs.List>
+
+          <Tabs.Content value="login">
+            {@render loginForm()}
+          </Tabs.Content>
+
+          <Tabs.Content value="register">
+            <form
+              onsubmit={(e) => {
+                e.preventDefault();
+                handleRegister();
+              }}
+              class="space-y-4"
+            >
+              <div class="space-y-1.5">
+                <Label for="reg-username" class="text-sm font-medium"
+                  >Username</Label
+                >
+                <Input
+                  id="reg-username"
+                  type="text"
+                  bind:value={username}
+                  placeholder="Choose username"
+                  required
+                  class="rounded-xl h-11"
+                />
+              </div>
+              <div class="space-y-1.5">
+                <Label for="reg-password" class="text-sm font-medium"
+                  >Password</Label
+                >
+                <div class="relative">
+                  <Input
+                    id="reg-password"
+                    type={showPassword ? "text" : "password"}
+                    bind:value={password}
+                    placeholder="Choose password"
+                    required
+                    class="rounded-xl h-11 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onclick={() => (showPassword = !showPassword)}
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabindex={-1}
+                  >
+                    {#if showPassword}
+                      <EyeOff size={18} />
+                    {:else}
+                      <Eye size={18} />
+                    {/if}
+                  </button>
+                </div>
+              </div>
+              {#if errorMessage && showRegister}
+                <p class="text-sm text-red-600">{errorMessage}</p>
+              {/if}
+              <Button
+                type="submit"
+                disabled={loading}
+                class="w-full rounded-xl h-11 text-sm font-semibold"
+              >
+                {loading ? "Creating account..." : "Register"}
+              </Button>
+            </form>
+          </Tabs.Content>
+        </Tabs.Root>
+      {:else}
+        {@render loginForm()}
+      {/if}
     </div>
   </div>
 </div>

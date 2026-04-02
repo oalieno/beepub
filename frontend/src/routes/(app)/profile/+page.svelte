@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
+  import { authApi } from "$lib/api/auth";
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
@@ -14,11 +15,27 @@
     Dices,
     LogOut,
     ChevronRight,
+    KeyRound,
+    Eye,
+    EyeOff,
   } from "@lucide/svelte";
   import * as Avatar from "$lib/components/ui/avatar";
+  import { Input } from "$lib/components/ui/input";
+  import { Label } from "$lib/components/ui/label";
+  import { Button } from "$lib/components/ui/button";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let online = $derived($isOnline);
+
+  // Change password
+  let showChangePassword = $state(false);
+  let currentPassword = $state("");
+  let newPassword = $state("");
+  let confirmPassword = $state("");
+  let changingPassword = $state(false);
+  let showCurrentPw = $state(false);
+  let showNewPw = $state(false);
+  let passwordError = $state("");
 
   function handleDisabledClick(e: Event) {
     e.preventDefault();
@@ -28,6 +45,27 @@
   async function logout() {
     await authStore.logout();
     goto("/login");
+  }
+
+  async function handleChangePassword() {
+    passwordError = "";
+    if (newPassword !== confirmPassword) {
+      passwordError = "New passwords do not match";
+      return;
+    }
+    changingPassword = true;
+    try {
+      await authApi.changePassword(currentPassword, newPassword);
+      toastStore.success("Password changed successfully");
+      showChangePassword = false;
+      currentPassword = "";
+      newPassword = "";
+      confirmPassword = "";
+    } catch (e) {
+      passwordError = (e as Error).message;
+    } finally {
+      changingPassword = false;
+    }
   }
 
   interface ProfileLink {
@@ -96,6 +134,106 @@
         {$authStore.user?.username}
       </h1>
     </div>
+  </div>
+
+  <!-- Change Password -->
+  <div class="bg-card card-soft rounded-2xl overflow-hidden mb-4">
+    <button
+      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
+      onclick={() => {
+        showChangePassword = !showChangePassword;
+        passwordError = "";
+      }}
+    >
+      <KeyRound size={20} class="text-muted-foreground shrink-0" />
+      <span class="text-sm font-medium flex-1">Change Password</span>
+      <ChevronRight
+        size={16}
+        class="text-muted-foreground/50 transition-transform {showChangePassword
+          ? 'rotate-90'
+          : ''}"
+      />
+    </button>
+    {#if showChangePassword}
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          handleChangePassword();
+        }}
+        class="px-4 py-4 space-y-3"
+      >
+        <div class="space-y-1.5">
+          <Label for="current-pw" class="text-sm">Current Password</Label>
+          <div class="relative">
+            <Input
+              id="current-pw"
+              type={showCurrentPw ? "text" : "password"}
+              bind:value={currentPassword}
+              placeholder="Current password"
+              required
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
+              onclick={() => (showCurrentPw = !showCurrentPw)}
+              tabindex={-1}
+            >
+              {#if showCurrentPw}
+                <EyeOff size={16} />
+              {:else}
+                <Eye size={16} />
+              {/if}
+            </button>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="new-pw" class="text-sm">New Password</Label>
+          <div class="relative">
+            <Input
+              id="new-pw"
+              type={showNewPw ? "text" : "password"}
+              bind:value={newPassword}
+              placeholder="New password"
+              required
+              class="pr-10"
+            />
+            <button
+              type="button"
+              class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
+              onclick={() => (showNewPw = !showNewPw)}
+              tabindex={-1}
+            >
+              {#if showNewPw}
+                <EyeOff size={16} />
+              {:else}
+                <Eye size={16} />
+              {/if}
+            </button>
+          </div>
+        </div>
+        <div class="space-y-1.5">
+          <Label for="confirm-pw" class="text-sm">Confirm New Password</Label>
+          <Input
+            id="confirm-pw"
+            type="password"
+            bind:value={confirmPassword}
+            placeholder="Confirm new password"
+            required
+          />
+        </div>
+        {#if passwordError}
+          <p class="text-sm text-red-600">{passwordError}</p>
+        {/if}
+        <Button
+          type="submit"
+          disabled={changingPassword}
+          class="rounded-xl text-sm"
+        >
+          {changingPassword ? "Changing..." : "Change Password"}
+        </Button>
+      </form>
+    {/if}
   </div>
 
   <!-- Mobile nav links -->

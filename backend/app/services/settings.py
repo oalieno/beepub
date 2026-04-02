@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.settings import AppSetting
 
 DEFAULTS = {
+    "registration_enabled": "false",
     "timezone": "Asia/Taipei",
     "metadata_refresh_enabled": "true",
     "metadata_refresh_hour": "3",

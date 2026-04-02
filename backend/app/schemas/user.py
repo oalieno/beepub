@@ -18,3 +18,12 @@ class UserOut(BaseModel):
 
 class UserUpdateRole(BaseModel):
     role: UserRole
+
+
+class AdminCreateUser(BaseModel):
+    username: str
+    password: str
+
+
+class AdminResetPassword(BaseModel):
+    new_password: str

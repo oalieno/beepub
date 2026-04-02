@@ -1,4 +1,4 @@
-import { get, post } from "./client";
+import { get, post, put } from "./client";
 import type { LoginResponse, UserOut } from "$lib/types";
 
 export const authApi = {
@@ -13,4 +13,16 @@ export const authApi = {
     ) as Promise<LoginResponse>,
 
   me: () => get("/auth/me") as Promise<UserOut>,
+
+  registrationStatus: () =>
+    get("/auth/registration-status") as Promise<{
+      registration_enabled: boolean;
+      first_user: boolean;
+    }>,
+
+  changePassword: (currentPassword: string, newPassword: string) =>
+    put("/auth/change-password", {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
 };

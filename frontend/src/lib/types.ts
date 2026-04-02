@@ -238,6 +238,7 @@ export interface AdminStats {
 }
 
 export interface AdminSettings {
+  registration_enabled: string;
   timezone: string;
   metadata_refresh_enabled: string;
   metadata_refresh_hour: string;

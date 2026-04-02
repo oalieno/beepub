@@ -33,8 +33,14 @@ export const adminApi = {
   getUsers: () =>
     get("/admin/users") as Promise<import("$lib/types").UserOut[]>,
 
+  createUser: (data: { username: string; password: string }) =>
+    post("/admin/users", data) as Promise<import("$lib/types").UserOut>,
+
   updateRole: (userId: string, role: string) =>
     put(`/admin/users/${userId}/role`, { role }),
+
+  resetPassword: (userId: string, newPassword: string) =>
+    put(`/admin/users/${userId}/password`, { new_password: newPassword }),
 
   deleteUser: (userId: string) => del(`/admin/users/${userId}`),
 

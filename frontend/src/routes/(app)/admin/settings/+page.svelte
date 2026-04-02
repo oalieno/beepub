@@ -16,6 +16,7 @@
   let loading = $state(true);
   let saving = $state(false);
   // Form state
+  let registrationEnabled = $state(false);
   let timezone = $state("Asia/Taipei");
   let metadataEnabled = $state(true);
   let metadataHour = $state(3);
@@ -153,6 +154,7 @@
     loading = true;
     try {
       settings = await adminApi.getSettings();
+      registrationEnabled = settings.registration_enabled === "true";
       timezone = settings.timezone;
       metadataEnabled = settings.metadata_refresh_enabled === "true";
       metadataHour = parseInt(settings.metadata_refresh_hour) || 3;
@@ -192,6 +194,7 @@
     saving = true;
     try {
       settings = await adminApi.updateSettings({
+        registration_enabled: registrationEnabled ? "true" : "false",
         timezone,
         metadata_refresh_enabled: metadataEnabled ? "true" : "false",
         metadata_refresh_hour: String(metadataHour),
@@ -350,6 +353,32 @@
     <FormSkeleton cards={6} />
   {:else}
     <div class="space-y-6">
+      <!-- User Registration -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>User Registration</Card.Title>
+          <Card.Description
+            >Control whether new users can register accounts</Card.Description
+          >
+        </Card.Header>
+        <Card.Content>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              bind:checked={registrationEnabled}
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/50"
+            />
+            <span class="text-sm text-foreground"
+              >Allow public registration</span
+            >
+          </label>
+          <p class="text-xs text-muted-foreground mt-2">
+            When disabled, only admins can create new user accounts. The first
+            user can always register.
+          </p>
+        </Card.Content>
+      </Card.Root>
+
       <!-- Timezone -->
       <Card.Root>
         <Card.Header>
