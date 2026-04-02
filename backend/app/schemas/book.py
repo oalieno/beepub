@@ -75,6 +75,7 @@ class BookWithInteractionOut(BookOut):
     reading_percentage: float | None = None
     last_read_at: str | None = None
     seed_book_id: uuid.UUID | None = None
+    seed_book_title: str | None = None
 
 
 class PaginatedBooksWithInteraction(BaseModel):

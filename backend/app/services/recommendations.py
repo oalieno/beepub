@@ -41,6 +41,10 @@ async def get_similar_books(
     if semantic_limit is None:
         semantic_limit = 50
 
+    # Get total book count for IDF weighting
+    total_books_result = await db.execute(text("SELECT COUNT(*) FROM books"))
+    total_books = total_books_result.scalar() or 1
+
     # Two-phase approach for large libraries:
     # 1. Gather candidates via indexed lookups (only books sharing a signal)
     # 2. Score only those candidates
@@ -86,11 +90,28 @@ async def get_similar_books(
               AND COALESCE(b.tags, b.epub_tags, '{}')
                   && t.t_tags
         ),
-        -- Tag overlap (uses index on book_tags)
-        ai_tag_candidates AS (
-            SELECT b_tags.book_id, COUNT(*) * 3 AS score
+        -- Tag overlap with IDF weighting + category multipliers
+        -- Rare tags (hard sci-fi) score much higher than common tags (literary fiction)
+        -- Tropes 3x, subgenre/theme 2x, mood 1.5x, genre 1x
+        tag_idf AS (
+            SELECT tag, COUNT(DISTINCT book_id) AS doc_count
+            FROM book_tags GROUP BY tag
+        ),
+        book_tag_candidates AS (
+            SELECT b_tags.book_id,
+                   SUM(
+                       LN(GREATEST(CAST(:total_books AS float), 1) / GREATEST(ti.doc_count, 1))
+                       * CASE b_tags.category::text
+                           WHEN 'trope' THEN 3.0
+                           WHEN 'subgenre' THEN 2.0
+                           WHEN 'theme' THEN 2.0
+                           WHEN 'mood' THEN 1.5
+                           ELSE 1.0
+                         END
+                   ) AS score
             FROM book_tags t_tags
             JOIN book_tags b_tags ON t_tags.tag = b_tags.tag
+            JOIN tag_idf ti ON ti.tag = t_tags.tag
             WHERE t_tags.book_id = :book_id
               AND b_tags.book_id != :book_id
             GROUP BY b_tags.book_id
@@ -141,7 +162,7 @@ async def get_similar_books(
             UNION ALL
             SELECT book_id, score FROM tag_candidates
             UNION ALL
-            SELECT book_id, score FROM ai_tag_candidates
+            SELECT book_id, score FROM book_tag_candidates
             UNION ALL
             SELECT book_id, score FROM publisher_candidates
             UNION ALL
@@ -177,6 +198,7 @@ async def get_similar_books(
             "user_id": str(user_id),
             "is_admin": is_admin,
             "limit": limit,
+            "total_books": total_books,
             "semantic_weight": semantic_weight,
             "semantic_limit": semantic_limit,
         },

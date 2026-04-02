@@ -127,9 +127,7 @@
         <Compass size={24} class="text-primary" />
         <h1 class="text-3xl font-bold text-foreground">Browse</h1>
       </div>
-      <p class="text-muted-foreground mt-1">
-        Explore books by AI-generated tags.
-      </p>
+      <p class="text-muted-foreground mt-1">Explore books by tags.</p>
     </div>
 
     <!-- Category Tabs -->

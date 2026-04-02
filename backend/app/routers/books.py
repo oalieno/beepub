@@ -550,6 +550,16 @@ async def get_discover_recommendations(
     # Build seed_book_id map for "Because you read X" attribution
     seed_map = {r["book_id"]: r.get("seed_book_id") for r in recs}
 
+    # Fetch seed book titles
+    seed_ids = {sid for sid in seed_map.values() if sid}
+    seed_titles = {}
+    if seed_ids:
+        seed_result = await db.execute(
+            select(Book.id, Book.title, Book.epub_title).where(Book.id.in_(seed_ids))
+        )
+        for row in seed_result.all():
+            seed_titles[row[0]] = row[1] or row[2] or ""
+
     items = []
     for bid in book_ids:
         book = books.get(bid)
@@ -563,7 +573,10 @@ async def get_discover_recommendations(
             progress = interaction.reading_progress or {}
             item.reading_percentage = progress.get("percentage")
             item.last_read_at = progress.get("last_read_at")
-        item.seed_book_id = seed_map.get(bid)
+        seed_id = seed_map.get(bid)
+        item.seed_book_id = seed_id
+        if seed_id:
+            item.seed_book_title = seed_titles.get(seed_id)
         items.append(item)
 
     return items

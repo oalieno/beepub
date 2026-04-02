@@ -116,6 +116,8 @@ export interface BookWithInteractionOut extends BookOut {
   is_favorite: boolean;
   reading_percentage: number | null;
   last_read_at: string | null;
+  seed_book_id?: string | null;
+  seed_book_title?: string | null;
 }
 
 export interface PaginatedBooksWithInteraction {
