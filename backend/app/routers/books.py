@@ -27,6 +27,7 @@ from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata, MetadataSource
 from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
 from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
+from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.schemas.book import (
     BookMetadataUpdate,
@@ -37,6 +38,7 @@ from app.schemas.book import (
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
+    PaginatedBooks,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
     SeriesBookBrief,
@@ -623,6 +625,113 @@ async def get_discover_browse(
     return sections
 
 
+@router.get("/all", response_model=PaginatedBooks)
+async def list_all_books(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    search: str | None = Query(None),
+    author: str | None = Query(None),
+    tag: str | None = Query(None),
+    series: str | None = Query(None),
+    sort: str = Query("created_at"),
+    order: str = Query("desc"),
+    limit: int = Query(60, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """List all books across accessible libraries."""
+    from sqlalchemy import String as SAString
+    from sqlalchemy import cast
+    from sqlalchemy.sql.functions import coalesce
+
+    # Subquery: accessible book IDs (avoids DISTINCT on the main query)
+    accessible_ids = select(LibraryBook.book_id)
+    if current_user.role != UserRole.admin:
+        accessible_ids = accessible_ids.join(
+            Library, Library.id == LibraryBook.library_id
+        ).where(
+            or_(
+                Library.visibility == LibraryVisibility.public,
+                Library.id.in_(
+                    select(LibraryAccess.library_id).where(
+                        LibraryAccess.user_id == current_user.id
+                    )
+                ),
+            )
+        )
+
+    base_query = select(Book).where(Book.id.in_(accessible_ids))
+
+    # Apply filters
+    if search:
+        pattern = f"%{search}%"
+        base_query = base_query.where(
+            or_(
+                Book.title.ilike(pattern),
+                Book.epub_title.ilike(pattern),
+                cast(Book.authors, SAString).ilike(pattern),
+                cast(Book.epub_authors, SAString).ilike(pattern),
+                Book.series.ilike(pattern),
+                Book.epub_series.ilike(pattern),
+            )
+        )
+    if author:
+        base_query = base_query.where(
+            or_(
+                Book.authors.any(author),
+                Book.epub_authors.any(author),
+            )
+        )
+    if tag:
+        base_query = base_query.where(
+            or_(
+                Book.tags.any(tag),
+                Book.epub_tags.any(tag),
+                Book.id.in_(select(BookTag.book_id).where(BookTag.tag == tag)),
+            )
+        )
+    if series:
+        base_query = base_query.where(
+            or_(
+                Book.series == series,
+                Book.epub_series == series,
+            )
+        )
+
+    # Count total
+    count_query = select(func.count()).select_from(base_query.subquery())
+    total = (await db.execute(count_query)).scalar() or 0
+
+    # Apply sorting and pagination
+    sort_map = {
+        "display_title": coalesce(Book.title, Book.epub_title),
+        "added_at": coalesce(Book.calibre_added_at, Book.created_at),
+        "series_index": coalesce(Book.series_index, Book.epub_series_index),
+    }
+    if series and sort == "created_at":
+        sort = "series_index"
+        order = "asc"
+    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
+    if sort == "series_index":
+        series_col = coalesce(Book.series, Book.epub_series)
+        if order == "desc":
+            base_query = base_query.order_by(
+                series_col.desc().nullslast(), sort_col.desc().nullslast(), Book.id
+            )
+        else:
+            base_query = base_query.order_by(
+                series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
+            )
+    elif order == "desc":
+        base_query = base_query.order_by(sort_col.desc(), Book.id)
+    else:
+        base_query = base_query.order_by(sort_col.asc(), Book.id)
+
+    base_query = base_query.offset(offset).limit(limit)
+
+    result = await db.execute(base_query)
+    return PaginatedBooks(items=result.scalars().all(), total=total)
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,
@@ -630,13 +739,16 @@ async def get_book(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     book = await _get_book_with_access(book_id, current_user, db)
-    # Find the first library this book belongs to
+    # Find libraries this book belongs to
     lb_result = await db.execute(
-        select(LibraryBook.library_id).where(LibraryBook.book_id == book_id).limit(1)
+        select(Library.id, Library.name)
+        .join(LibraryBook, LibraryBook.library_id == Library.id)
+        .where(LibraryBook.book_id == book_id)
     )
-    library_id = lb_result.scalar_one_or_none()
+    libraries = lb_result.all()
     out = BookOut.model_validate(book)
-    out.library_id = library_id
+    out.library_id = libraries[0].id if libraries else None
+    out.library_names = [lib.name for lib in libraries]
 
     # Check for unresolved reports
     from app.models.book_report import BookReport

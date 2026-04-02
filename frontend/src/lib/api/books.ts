@@ -10,6 +10,7 @@ import type {
   HighlightOut,
   IllustrationOut,
   InteractionOut,
+  PaginatedBooks,
   PaginatedBooksWithInteraction,
   ProgressOut,
   ReadingStats,
@@ -225,6 +226,29 @@ export const booksApi = {
     get(`/books/discover/browse?category=${category}`) as Promise<
       TagBrowseSection[]
     >,
+
+  getAll: (options?: {
+    search?: string;
+    author?: string;
+    tag?: string;
+    series?: string;
+    sort?: string;
+    order?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.search) params.set("search", options.search);
+    if (options?.author) params.set("author", options.author);
+    if (options?.tag) params.set("tag", options.tag);
+    if (options?.series) params.set("series", options.series);
+    if (options?.sort) params.set("sort", options.sort);
+    if (options?.order) params.set("order", options.order);
+    if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.offset != null) params.set("offset", String(options.offset));
+    const qs = params.toString();
+    return get(`/books/all${qs ? `?${qs}` : ""}`) as Promise<PaginatedBooks>;
+  },
 
   // Companion
   listCompanionConversations: (bookId: string) =>

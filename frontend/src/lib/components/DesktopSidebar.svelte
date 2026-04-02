@@ -8,6 +8,7 @@
     Home,
     BookOpen,
     Library,
+    BookCopy,
     ShelvingUnit,
     Highlighter,
     Compass,
@@ -35,6 +36,13 @@
       label: "My Books",
       icon: BookOpen,
       active: page.url.pathname.startsWith("/my-books"),
+      requiresOnline: true,
+    },
+    {
+      href: "/all-books",
+      label: "All Books",
+      icon: BookCopy,
+      active: page.url.pathname.startsWith("/all-books"),
       requiresOnline: true,
     },
     {

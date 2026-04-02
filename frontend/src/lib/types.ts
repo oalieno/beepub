@@ -75,6 +75,7 @@ export interface BookOut {
   added_by: string;
   created_at: string;
   library_id: string | null;
+  library_names: string[];
 }
 
 export interface SeriesBookBrief {

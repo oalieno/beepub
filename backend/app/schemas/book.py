@@ -58,6 +58,7 @@ class BookOut(BaseModel):
     added_by: uuid.UUID
     created_at: datetime
     library_id: uuid.UUID | None = None
+    library_names: list[str] = []
 
     model_config = {"from_attributes": True}
 

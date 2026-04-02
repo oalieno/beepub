@@ -87,6 +87,18 @@
         {/if}
       </div>
     {/if}
+    {#if book.library_names?.length > 0}
+      <div>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{book.library_names.length === 1 ? "Library" : "Libraries"}</span
+        >
+        <div class="flex flex-wrap gap-1.5">
+          {#each book.library_names as name}
+            <span class="text-foreground font-medium">{name}</span>
+          {/each}
+        </div>
+      </div>
+    {/if}
     {#if book.publisher ?? book.epub_publisher}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5">Publisher</span

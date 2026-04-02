@@ -176,10 +176,12 @@
               <h3 class="text-lg font-semibold text-foreground">
                 {section.label}
               </h3>
-              <span class="text-xs text-muted-foreground">
-                {section.book_count}
-                {section.book_count === 1 ? "book" : "books"}
-              </span>
+              <a
+                href="/all-books?tag={encodeURIComponent(section.tag)}"
+                class="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+              >
+                See all →
+              </a>
             </div>
             <div
               class="flex gap-4 overflow-x-auto pb-4 -mx-2 px-2 scrollbar-thin"
