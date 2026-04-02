@@ -7,7 +7,7 @@
   import { UserRole } from "$lib/types";
   import {
     BookOpen,
-    Bookmark,
+    ShelvingUnit,
     Highlighter,
     Settings,
     Download,
@@ -54,7 +54,7 @@
     {
       href: "/bookshelves",
       label: "Shelves",
-      icon: Bookmark,
+      icon: ShelvingUnit,
       requiresOnline: true,
     },
     ...(isNative()
