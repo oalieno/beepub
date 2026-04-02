@@ -190,7 +190,31 @@
     }
   }
 
+  function isValidUrl(url: string): boolean {
+    const trimmed = url.trim();
+    return trimmed === "" || /^https?:\/\//.test(trimmed);
+  }
+
+  let openaiBaseUrlError = $derived(
+    openaiBaseUrl.trim() && !isValidUrl(openaiBaseUrl)
+      ? "Must start with http:// or https://"
+      : "",
+  );
+  let embeddingApiUrlError = $derived(
+    embeddingApiUrl.trim() && !isValidUrl(embeddingApiUrl)
+      ? "Must start with http:// or https://"
+      : "",
+  );
+
   async function handleSave() {
+    if (openaiBaseUrlError) {
+      document.getElementById("openai-url")?.focus();
+      return;
+    }
+    if (embeddingApiUrlError) {
+      document.getElementById("embedding-api-url")?.focus();
+      return;
+    }
     saving = true;
     try {
       settings = await adminApi.updateSettings({
@@ -573,9 +597,13 @@
                   value={openaiBaseUrl}
                   oninput={(e) => (openaiBaseUrl = e.currentTarget.value)}
                 />
-                <p class="text-xs text-muted-foreground">
-                  For Ollama: http://host:11434/v1
-                </p>
+                {#if openaiBaseUrlError}
+                  <p class="text-xs text-red-600">{openaiBaseUrlError}</p>
+                {:else}
+                  <p class="text-xs text-muted-foreground">
+                    For Ollama: http://host:11434/v1
+                  </p>
+                {/if}
               </div>
             </div>
           </div>
@@ -661,9 +689,13 @@
                 value={embeddingApiUrl}
                 oninput={(e) => (embeddingApiUrl = e.currentTarget.value)}
               />
-              <p class="text-xs text-muted-foreground">
-                OpenAI-compatible /v1/embeddings endpoint
-              </p>
+              {#if embeddingApiUrlError}
+                <p class="text-xs text-red-600">{embeddingApiUrlError}</p>
+              {:else}
+                <p class="text-xs text-muted-foreground">
+                  OpenAI-compatible /v1/embeddings endpoint
+                </p>
+              {/if}
             </div>
             <div class="space-y-1.5">
               <Label for="embedding-model">Model</Label>

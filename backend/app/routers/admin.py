@@ -349,7 +349,7 @@ async def list_ai_models(
                         {"id": model_id, "name": m.get("displayName", model_id)}
                     )
     elif provider == "openai":
-        if not base_url:
+        if not base_url or not base_url.startswith(("http://", "https://")):
             raise HTTPException(
                 status_code=400, detail="OpenAI base URL not configured"
             )
