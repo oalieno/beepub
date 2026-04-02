@@ -992,32 +992,37 @@ async def get_series_neighbors(
     prev_book = None
 
     if current_index is not None:
-        # Next: smallest index > current
+        # Next: smallest index > current (prefer newest edition if same index)
         result = await db.execute(
-            base.where(index_col > current_index).order_by(index_col.asc()).limit(1)
+            base.where(index_col > current_index)
+            .order_by(index_col.asc(), Book.created_at.desc())
+            .limit(1)
         )
         next_book = result.scalar_one_or_none()
 
-        # Previous: largest index < current
+        # Previous: largest index < current (prefer newest edition if same index)
         result = await db.execute(
-            base.where(index_col < current_index).order_by(index_col.desc()).limit(1)
+            base.where(index_col < current_index)
+            .order_by(index_col.desc(), Book.created_at.desc())
+            .limit(1)
         )
         prev_book = result.scalar_one_or_none()
 
-    # Series progress: total books in series (accessible) and how many are read
+    # Series progress: count distinct volumes (not books, since editions share index)
     total_result = await db.execute(
-        select(func.count(func.distinct(Book.id)))
+        select(func.count(func.distinct(index_col)))
         .select_from(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .where(
             series_col == series_name,
+            index_col.isnot(None),
             LibraryBook.library_id.in_(accessible_libs),
         )
     )
     total_in_library = total_result.scalar() or 0
 
     read_result = await db.execute(
-        select(func.count(func.distinct(Book.id)))
+        select(func.count(func.distinct(index_col)))
         .select_from(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .join(
@@ -1027,6 +1032,7 @@ async def get_series_neighbors(
         )
         .where(
             series_col == series_name,
+            index_col.isnot(None),
             LibraryBook.library_id.in_(accessible_libs),
             UserBookInteraction.reading_status == "read",
         )
