@@ -219,10 +219,27 @@ async def trigger_calibre_sync(
     if not library.calibre_path:
         raise HTTPException(status_code=400, detail="Not a Calibre library")
 
-    # Check if sync is already running
+    # Check if sync is already running (with stale detection)
     sync_status = await get_sync_status(library_id)
     if sync_status and sync_status.get("status") == "running":
-        raise HTTPException(status_code=409, detail="Sync already in progress")
+        # Treat as stale if running for more than 30 minutes
+        started_at = sync_status.get("started_at")
+        if started_at:
+            from datetime import UTC, datetime
+
+            try:
+                started = datetime.fromisoformat(started_at)
+                elapsed = (datetime.now(UTC) - started).total_seconds()
+                if elapsed < 1800:  # 30 minutes
+                    raise HTTPException(
+                        status_code=409, detail="Sync already in progress"
+                    )
+                # Stale — fall through to re-trigger
+            except (ValueError, TypeError):
+                pass  # Bad timestamp — allow re-trigger
+        else:
+            # No started_at (old format) — block to be safe
+            raise HTTPException(status_code=409, detail="Sync already in progress")
 
     asyncio.create_task(
         sync_calibre_library(library.calibre_path, library.id, current_user.id)

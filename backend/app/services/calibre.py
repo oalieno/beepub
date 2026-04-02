@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import redis.asyncio as aioredis
@@ -238,8 +238,11 @@ async def sync_calibre_library(
             "skipped": result.skipped,
             "removed": result.removed,
             "errors": result.errors[-10:],  # keep last 10 errors
+            "started_at": progress_started_at,
         }
         await client.set(key, json.dumps(progress), ex=3600)  # expire in 1 hour
+
+    progress_started_at = datetime.now(UTC).isoformat()
 
     result = SyncResult()
     try:
@@ -405,6 +408,12 @@ async def sync_calibre_library(
     except Exception as e:
         result.errors.append(f"Sync failed: {e}")
         logger.exception("Calibre sync failed")
-        await _update_progress(result, 0, 0, "failed")
+        try:
+            await _update_progress(result, 0, 0, "failed")
+        except Exception:
+            pass
     finally:
-        await client.aclose()
+        try:
+            await client.aclose()
+        except Exception:
+            pass
