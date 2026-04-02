@@ -214,11 +214,7 @@
         initialAuthor={(page.url.searchParams.get("author") ?? "").trim()}
         initialSeries={(page.url.searchParams.get("series") ?? "").trim()}
         initialSort={page.url.searchParams.get("sort") || "added_at:desc"}
-        emptyMessage={isCalibre
-          ? "Sync from Calibre to add books."
-          : isAdmin
-            ? "Upload EPUBs or drag and drop here."
-            : "No books in this library."}
+        emptyMessage="No books found"
         onStateChange={handleStateChange}
       />
     </div>
