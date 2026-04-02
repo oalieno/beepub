@@ -2,6 +2,7 @@
   import { X, Trash2, LoaderCircle, CircleAlert } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
+  import { authedSrc } from "$lib/actions/authedSrc";
 
   const STYLE_LABELS: Record<string, string> = {
     ink_wash: "Ink Wash",
@@ -145,7 +146,10 @@
               >
                 {#if ill.status === "completed"}
                   <img
-                    src={booksApi.getIllustrationImageUrl(bookId, ill.id)}
+                    use:authedSrc={booksApi.getIllustrationImageUrl(
+                      bookId,
+                      ill.id,
+                    )}
                     alt="Illustration"
                     class="w-full h-full object-cover"
                   />

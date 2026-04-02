@@ -16,6 +16,7 @@
   } from "$lib/types";
   import { booksApi } from "$lib/api/books";
   import { apiBase } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
 
   const MAX_REFS = 4;
 
@@ -329,7 +330,7 @@
                     No images found in this book
                   </p>
                 {:else}
-                  <div class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto">
+                  <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                     {#each epubImages as img}
                       {@const selected = isSelected("epub", img.path)}
                       <button
@@ -348,7 +349,7 @@
                         title={img.name}
                       >
                         <img
-                          src="{apiBase()}/books/{bookId}/content/{img.path}"
+                          use:authedSrc={`${apiBase()}/books/${bookId}/content/${img.path}`}
                           alt={img.name}
                           class="w-full h-full object-cover"
                           loading="lazy"
@@ -378,11 +379,11 @@
                   >
                     Generated illustrations
                   </p>
-                  <div class="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto">
+                  <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                     {#each completedIllustrations as ill}
                       {@const selected = isSelected("illustration", ill.id)}
                       <button
-                        class="relative aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
+                        class="relative w-full aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
                           ? 'border-purple-500 ring-2 ring-purple-500/30'
                           : selectedRefs.length >= MAX_REFS
                             ? darkMode
@@ -400,7 +401,10 @@
                         title={ill.text.slice(0, 60)}
                       >
                         <img
-                          src={booksApi.getIllustrationImageUrl(bookId, ill.id)}
+                          use:authedSrc={booksApi.getIllustrationImageUrl(
+                            bookId,
+                            ill.id,
+                          )}
                           alt="illustration"
                           class="w-full h-full object-cover"
                           loading="lazy"

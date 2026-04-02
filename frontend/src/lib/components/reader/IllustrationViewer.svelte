@@ -2,6 +2,7 @@
   import { X, ChevronDown, ChevronUp } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
+  import { authedSrc } from "$lib/actions/authedSrc";
 
   const STYLE_LABELS: Record<string, string> = {
     ink_wash: "Ink Wash",
@@ -65,7 +66,10 @@
     <!-- Image -->
     <div class="w-full aspect-square bg-black/10 rounded-t-xl overflow-hidden">
       <img
-        src={booksApi.getIllustrationImageUrl(bookId, illustration.id)}
+        use:authedSrc={booksApi.getIllustrationImageUrl(
+          bookId,
+          illustration.id,
+        )}
         alt="AI Generated Illustration"
         class="w-full h-full object-contain"
       />

@@ -33,6 +33,13 @@ export function authedSrc(
       return;
     }
 
+    // Set a transparent 1x1 placeholder so the img has intrinsic size
+    // and CSS layout (aspect-ratio, grid) works before the real image loads.
+    if (!img.src) {
+      img.src =
+        "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    }
+
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
       if (!res.ok) return;
