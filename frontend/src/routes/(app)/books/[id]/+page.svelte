@@ -35,9 +35,11 @@
     Flag,
     TriangleAlert,
     Download,
-    CircleCheck,
+    Check,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
+  import * as Dialog from "$lib/components/ui/dialog";
+  import { Button } from "$lib/components/ui/button";
   import { isNative } from "$lib/platform";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { marked } from "marked";
@@ -87,12 +89,27 @@
   let showNotesModal = $state(false);
   let showReportModal = $state(false);
   let showMobileActions = $state(false);
+  let showRemoveDownloadDialog = $state(false);
   let savingStatus = $state(false);
 
   // Offline download state (native only)
   let offlineAvailable = $state(false);
   let downloading = $state(false);
   let downloadProgress = $state(0);
+
+  // Long-press handler for removing offline copy
+  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  function startLongPress() {
+    longPressTimer = setTimeout(() => {
+      showRemoveDownloadDialog = true;
+    }, 500);
+  }
+  function cancelLongPress() {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+  }
 
   // Undo delete state
   let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -459,26 +476,58 @@
           {#if isNative()}
             {#if offlineAvailable}
               <button
-                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-green-600 hover:shadow-md transition-all"
-                onclick={handleDeleteDownload}
-                title="Downloaded — tap to remove"
+                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-primary hover:shadow-md transition-all"
+                onpointerdown={startLongPress}
+                onpointerup={cancelLongPress}
+                onpointerleave={cancelLongPress}
+                title="Downloaded — long press to remove"
               >
-                <CircleCheck size={16} />
+                <Check size={16} />
+              </button>
+            {:else if downloading}
+              <button
+                class="h-10 w-10 flex items-center justify-center rounded-full relative"
+                disabled
+                title="Downloading {downloadProgress}%"
+              >
+                <svg class="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
+                  <circle
+                    cx="20"
+                    cy="20"
+                    r="17"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    class="text-secondary"
+                  />
+                  <circle
+                    cx="20"
+                    cy="20"
+                    r="17"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    class="text-primary"
+                    stroke-dasharray={2 * Math.PI * 17}
+                    stroke-dashoffset={2 *
+                      Math.PI *
+                      17 *
+                      (1 - downloadProgress / 100)}
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <span
+                  class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-primary"
+                  >{downloadProgress}%</span
+                >
               </button>
             {:else}
               <button
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
                 onclick={handleDownload}
-                disabled={downloading}
-                title={downloading
-                  ? `Downloading ${downloadProgress}%`
-                  : "Download for offline"}
+                title="Download for offline"
               >
-                {#if downloading}
-                  <span class="text-xs font-semibold">{downloadProgress}%</span>
-                {:else}
-                  <Download size={16} />
-                {/if}
+                <Download size={16} />
               </button>
             {/if}
           {:else if $authStore.user?.can_download}
@@ -745,25 +794,56 @@
       {#if isNative()}
         {#if offlineAvailable}
           <button
-            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-green-600 transition-all"
-            onclick={handleDeleteDownload}
-            title="Downloaded — tap to remove"
+            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-primary transition-all"
+            onpointerdown={startLongPress}
+            onpointerup={cancelLongPress}
+            onpointerleave={cancelLongPress}
+            title="Downloaded — long press to remove"
           >
-            <CircleCheck size={18} />
+            <Check size={18} />
+          </button>
+        {:else if downloading}
+          <button
+            class="h-12 w-12 flex items-center justify-center rounded-full relative"
+            disabled
+          >
+            <svg class="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
+              <circle
+                cx="24"
+                cy="24"
+                r="21"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                class="text-secondary"
+              />
+              <circle
+                cx="24"
+                cy="24"
+                r="21"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2.5"
+                class="text-primary"
+                stroke-dasharray={2 * Math.PI * 21}
+                stroke-dashoffset={2 *
+                  Math.PI *
+                  21 *
+                  (1 - downloadProgress / 100)}
+                stroke-linecap="round"
+              />
+            </svg>
+            <span
+              class="absolute inset-0 flex items-center justify-center text-xs font-semibold text-primary"
+              >{downloadProgress}%</span
+            >
           </button>
         {:else}
           <button
             class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
             onclick={handleDownload}
-            disabled={downloading}
           >
-            {#if downloading}
-              <span class="text-xs font-semibold text-primary"
-                >{downloadProgress}%</span
-              >
-            {:else}
-              <Download size={18} />
-            {/if}
+            <Download size={18} />
           </button>
         {/if}
       {:else if $authStore.user?.can_download}
@@ -929,3 +1009,33 @@
   bind:open={showReportModal}
   onreported={handleReported}
 />
+
+<!-- Remove Offline Copy Confirmation -->
+<Dialog.Root bind:open={showRemoveDownloadDialog}>
+  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+    <Dialog.Header>
+      <Dialog.Title>Remove offline copy?</Dialog.Title>
+      <Dialog.Description>
+        The book will still be in your library.
+      </Dialog.Description>
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button
+        variant="outline"
+        class="rounded-xl"
+        onclick={() => (showRemoveDownloadDialog = false)}
+      >
+        Cancel
+      </Button>
+      <Button
+        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+        onclick={() => {
+          handleDeleteDownload();
+          showRemoveDownloadDialog = false;
+        }}
+      >
+        Remove
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>

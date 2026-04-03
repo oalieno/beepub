@@ -39,7 +39,7 @@
 
     <div
       class="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col"
-      style="margin-bottom: env(safe-area-inset-bottom);"
+      style="margin-top: env(safe-area-inset-top); margin-bottom: env(safe-area-inset-bottom);"
       role="document"
     >
       <div class="flex items-center justify-between px-6 py-5 shrink-0">
