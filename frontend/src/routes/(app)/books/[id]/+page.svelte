@@ -758,7 +758,9 @@
             disabled={downloading}
           >
             {#if downloading}
-              <span class="text-xs font-semibold text-primary">{downloadProgress}%</span>
+              <span class="text-xs font-semibold text-primary"
+                >{downloadProgress}%</span
+              >
             {:else}
               <Download size={18} />
             {/if}

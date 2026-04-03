@@ -227,9 +227,7 @@
                   meta != null &&
                   meta.source_url == null &&
                   meta.rating == null}
-                <div
-                  class="flex items-center justify-between py-1.5 text-sm"
-                >
+                <div class="flex items-center justify-between py-1.5 text-sm">
                   <span class="text-foreground">{src.label}</span>
                   <div class="flex items-center gap-2">
                     {#if !meta}
