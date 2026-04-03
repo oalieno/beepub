@@ -24,6 +24,7 @@ async def _process_metadata_job(book_id: str) -> None:
         HardcoverSource,
         ReadmooSource,
     )
+    from app.services.metadata_sources.base import RateLimitError
     from app.services.settings import get_all_settings as _get_settings
 
     async with create_task_engine() as (_engine, session_factory):
@@ -165,6 +166,12 @@ async def _process_metadata_job(book_id: str) -> None:
                     await db.commit()
                     logger.info(
                         "Updated %s metadata for book %s",
+                        source.source_name,
+                        book_id,
+                    )
+                except RateLimitError:
+                    logger.warning(
+                        "Rate limited by %s for book %s, skipping",
                         source.source_name,
                         book_id,
                     )

@@ -3,6 +3,14 @@ from dataclasses import dataclass
 from typing import ClassVar
 
 
+class RateLimitError(Exception):
+    """Raised when an external API returns 429 Too Many Requests."""
+
+    def __init__(self, source: str):
+        self.source = source
+        super().__init__(f"{source} rate limited (429)")
+
+
 @dataclass
 class SearchResult:
     url: str

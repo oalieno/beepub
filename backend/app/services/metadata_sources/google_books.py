@@ -8,6 +8,7 @@ from rapidfuzz import fuzz
 from app.services.metadata_sources.base import (
     AbstractMetadataSource,
     FetchResult,
+    RateLimitError,
     SearchResult,
 )
 
@@ -36,6 +37,8 @@ class GoogleBooksSource(AbstractMetadataSource):
                 if isbn:
                     params["q"] = f"isbn:{isbn}"
                     resp = await client.get(API_BASE, params=params)
+                    if resp.status_code == 429:
+                        raise RateLimitError("google_books")
                     if resp.status_code == 200:
                         data = resp.json()
                         for item in data.get("items", []):
@@ -63,6 +66,8 @@ class GoogleBooksSource(AbstractMetadataSource):
 
                 params["q"] = " ".join(q_parts)
                 resp = await client.get(API_BASE, params=params)
+                if resp.status_code == 429:
+                    raise RateLimitError("google_books")
                 if resp.status_code != 200:
                     return []
 
@@ -95,6 +100,8 @@ class GoogleBooksSource(AbstractMetadataSource):
         try:
             async with httpx.AsyncClient(timeout=15) as client:
                 resp = await client.get(f"{API_BASE}/{volume_id}", params=params)
+                if resp.status_code == 429:
+                    raise RateLimitError("google_books")
                 if resp.status_code != 200:
                     return FetchResult(source_url=volume_id)
 

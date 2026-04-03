@@ -9,6 +9,7 @@ from rapidfuzz import fuzz
 from app.services.metadata_sources.base import (
     AbstractMetadataSource,
     FetchResult,
+    RateLimitError,
     SearchResult,
 )
 
@@ -175,6 +176,8 @@ class GoodreadsSource(AbstractMetadataSource):
                 headers=HEADERS, follow_redirects=True, timeout=15
             ) as client:
                 resp = await client.get(url)
+                if resp.status_code == 429:
+                    raise RateLimitError("goodreads")
                 if resp.status_code != 200:
                     return FetchResult(source_url=url)
 

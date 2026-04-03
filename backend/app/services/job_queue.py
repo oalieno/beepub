@@ -320,16 +320,16 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             select(func.count(Book.id)).where(Book.id.notin_(has_tags))
         )
     elif job_type == "metadata_backfill":
-        # Books without any external tags
-        from app.models.tag import TagSource
+        # Books missing at least one metadata source (4 sources total)
+        from app.models.book import ExternalMetadata
 
-        has_external_tags = (
-            select(BookTag.book_id)
-            .where(BookTag.source == TagSource.external)
-            .group_by(BookTag.book_id)
+        fully_fetched = (
+            select(ExternalMetadata.book_id)
+            .group_by(ExternalMetadata.book_id)
+            .having(func.count(ExternalMetadata.source) >= 4)
         )
         missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(has_external_tags))
+            select(func.count(Book.id)).where(Book.id.notin_(fully_fetched))
         )
     elif job_type == "book_embedding":
         # Non-image books with ALL chunks summarized but no book-level embedding

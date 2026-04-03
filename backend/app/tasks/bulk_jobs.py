@@ -116,7 +116,7 @@ def _execute_book_task(job_type: str, book_id: str) -> None:
 
 async def _get_missing_book_ids(db, job_type: str) -> list:
     """Get book IDs that haven't been processed for the given job type."""
-    from sqlalchemy import select
+    from sqlalchemy import func, select
 
     from app.models.book import Book
     from app.models.book_embedding import BookEmbeddingChunk
@@ -174,16 +174,16 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
                 book_ids.append(bid)
         return book_ids
     elif job_type == "metadata_backfill":
-        from app.models.tag import TagSource
+        from app.models.book import ExternalMetadata
 
-        has_external_tags = (
-            select(BookTag.book_id)
-            .where(BookTag.source == TagSource.external)
-            .group_by(BookTag.book_id)
+        fully_fetched = (
+            select(ExternalMetadata.book_id)
+            .group_by(ExternalMetadata.book_id)
+            .having(func.count(ExternalMetadata.source) >= 4)
         )
         result = await db.execute(
             select(Book.id)
-            .where(Book.id.notin_(has_external_tags))
+            .where(Book.id.notin_(fully_fetched))
             .order_by(Book.created_at)
         )
     elif job_type == "auto_tag":

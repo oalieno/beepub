@@ -8,6 +8,7 @@ from rapidfuzz import fuzz
 from app.services.metadata_sources.base import (
     AbstractMetadataSource,
     FetchResult,
+    RateLimitError,
     SearchResult,
 )
 
@@ -61,6 +62,8 @@ class HardcoverSource(AbstractMetadataSource):
                     headers=self._headers(),
                     json={"query": SEARCH_QUERY, "variables": {"query": query}},
                 )
+                if resp.status_code == 429:
+                    raise RateLimitError("hardcover")
                 if resp.status_code != 200:
                     logger.warning(
                         "Hardcover search returned %d: %s",
@@ -145,6 +148,8 @@ class HardcoverSource(AbstractMetadataSource):
                         "variables": {"query": url.replace("-", " ")},
                     },
                 )
+                if resp.status_code == 429:
+                    raise RateLimitError("hardcover")
                 if resp.status_code != 200:
                     return FetchResult(source_url=url)
 
