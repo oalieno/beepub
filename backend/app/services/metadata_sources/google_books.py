@@ -85,6 +85,8 @@ class GoogleBooksSource(AbstractMetadataSource):
                         )
                     )
                 results.sort(key=lambda r: r.score, reverse=True)
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning("Google Books search failed: %s", e)
 
@@ -131,6 +133,8 @@ class GoogleBooksSource(AbstractMetadataSource):
                     rating_count=int(rating_count) if rating_count else None,
                     raw_data=raw_data,
                 )
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning("Google Books fetch failed for %s: %s", volume_id, e)
             return FetchResult(source_url=volume_id)

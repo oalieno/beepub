@@ -125,6 +125,8 @@ class HardcoverSource(AbstractMetadataSource):
                     )
 
                 results.sort(key=lambda r: r.score, reverse=True)
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning("Hardcover search failed: %s", e)
 
@@ -193,6 +195,8 @@ class HardcoverSource(AbstractMetadataSource):
                         "slug": slug,
                     },
                 )
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning("Hardcover fetch failed for %s: %s", url, e)
             return FetchResult(source_url=url)

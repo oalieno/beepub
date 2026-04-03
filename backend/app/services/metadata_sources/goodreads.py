@@ -123,6 +123,8 @@ class GoodreadsSource(AbstractMetadataSource):
                                 results.append(
                                     SearchResult(url=full_url, title=text, authors=[])
                                 )
+            except RateLimitError:
+                raise
             except Exception as e:
                 logger.warning(f"Goodreads ISBN search failed: {e}")
 
@@ -158,6 +160,8 @@ class GoodreadsSource(AbstractMetadataSource):
                             )
                         results.sort(key=lambda r: r.score, reverse=True)
                         break
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning(f"Goodreads title search failed: {e}")
 
@@ -255,6 +259,8 @@ class GoodreadsSource(AbstractMetadataSource):
                     reviews=reviews if reviews else None,
                     raw_data=raw,
                 )
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning(f"Goodreads fetch failed for {url}: {e}")
             return FetchResult(source_url=url)

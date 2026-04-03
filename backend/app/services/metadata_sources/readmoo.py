@@ -121,6 +121,8 @@ class ReadmooSource(AbstractMetadataSource):
                     if results:
                         results.sort(key=lambda r: r.score, reverse=True)
                         break
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning(f"Readmoo search failed: {e}")
         return results[:3]
@@ -231,6 +233,8 @@ class ReadmooSource(AbstractMetadataSource):
                     reviews=reviews if reviews else None,
                     raw_data=raw_data,
                 )
+        except RateLimitError:
+            raise
         except Exception as e:
             logger.warning(f"Readmoo fetch failed for {url}: {e}")
             return FetchResult(source_url=url)
