@@ -152,7 +152,7 @@ class GoodreadsSource(AbstractMetadataSource):
 
                     if links:
                         for full_url, text in links:
-                            score = fuzz.token_set_ratio(title.lower(), text.lower())
+                            score = fuzz.token_sort_ratio(title.lower(), text.lower())
                             results.append(
                                 SearchResult(
                                     url=full_url, title=text, authors=[], score=score

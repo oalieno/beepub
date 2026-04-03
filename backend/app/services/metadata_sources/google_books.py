@@ -75,7 +75,7 @@ class GoogleBooksSource(AbstractMetadataSource):
                 for item in data.get("items", []):
                     vi = item.get("volumeInfo", {})
                     item_title = vi.get("title", "")
-                    score = fuzz.token_set_ratio(title.lower(), item_title.lower())
+                    score = fuzz.token_sort_ratio(title.lower(), item_title.lower())
                     results.append(
                         SearchResult(
                             url=item["id"],
