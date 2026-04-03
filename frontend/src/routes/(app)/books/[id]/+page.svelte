@@ -742,6 +742,38 @@
             : ""}
         />
       </button>
+      {#if isNative()}
+        {#if offlineAvailable}
+          <button
+            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-green-600 transition-all"
+            onclick={handleDeleteDownload}
+            title="Downloaded — tap to remove"
+          >
+            <CircleCheck size={18} />
+          </button>
+        {:else}
+          <button
+            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
+            onclick={handleDownload}
+            disabled={downloading}
+          >
+            {#if downloading}
+              <span class="text-xs font-semibold text-primary">{downloadProgress}%</span>
+            {:else}
+              <Download size={18} />
+            {/if}
+          </button>
+        {/if}
+      {:else if $authStore.user?.can_download}
+        <a
+          href="/api/books/{bookId}/file"
+          download
+          class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
+          title="Download EPUB"
+        >
+          <Download size={18} />
+        </a>
+      {/if}
       <button
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"
         onclick={() => (showMobileActions = true)}
@@ -792,44 +824,6 @@
       />
       Notes
     </button>
-    {#if isNative()}
-      {#if offlineAvailable}
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            handleDeleteDownload();
-            showMobileActions = false;
-          }}
-        >
-          <CircleCheck size={20} class="text-green-600 shrink-0" />
-          Downloaded (tap to remove)
-        </button>
-      {:else}
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            handleDownload();
-            showMobileActions = false;
-          }}
-          disabled={downloading}
-        >
-          <Download size={20} class="text-muted-foreground shrink-0" />
-          {downloading
-            ? `Downloading ${downloadProgress}%`
-            : "Download for offline"}
-        </button>
-      {/if}
-    {:else if $authStore.user?.can_download}
-      <a
-        href="/api/books/{bookId}/file"
-        download
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => (showMobileActions = false)}
-      >
-        <Download size={20} class="text-muted-foreground shrink-0" />
-        Download EPUB
-      </a>
-    {/if}
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors {book.has_unresolved_reports
         ? 'text-destructive'

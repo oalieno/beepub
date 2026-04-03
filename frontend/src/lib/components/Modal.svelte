@@ -38,10 +38,11 @@
     ></button>
 
     <div
-      class="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg"
+      class="relative bg-card rounded-2xl shadow-2xl w-full max-w-lg max-h-[calc(100dvh-2rem)] flex flex-col"
+      style="margin-bottom: env(safe-area-inset-bottom);"
       role="document"
     >
-      <div class="flex items-center justify-between px-6 py-5">
+      <div class="flex items-center justify-between px-6 py-5 shrink-0">
         <h2 class="text-lg font-bold text-foreground">{title}</h2>
         <button
           class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
@@ -52,7 +53,7 @@
         </button>
       </div>
 
-      <div class="px-6 pb-6">
+      <div class="px-6 pb-6 overflow-y-auto">
         {#if children}{@render children()}{/if}
       </div>
     </div>
