@@ -82,9 +82,11 @@ class HardcoverSource(AbstractMetadataSource):
 
                     item_authors = doc.get("author_names", [])
                     # Check title + alternative_titles for best match
+                    # Use token_sort_ratio (penalizes length mismatch) instead of
+                    # token_set_ratio (which matches "56" to "56 天還你濃密頭髮")
                     all_titles = [item_title] + (doc.get("alternative_titles") or [])
                     score = max(
-                        fuzz.token_set_ratio(title.lower(), t.lower())
+                        fuzz.token_sort_ratio(title.lower(), t.lower())
                         for t in all_titles
                         if t
                     )
