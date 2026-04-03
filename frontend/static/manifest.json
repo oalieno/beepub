@@ -3,6 +3,7 @@
   "short_name": "BeePub",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#faf7f2",
   "theme_color": "#b8860b",
   "icons": [
