@@ -540,59 +540,47 @@
               <Download size={16} />
             </a>
           {/if}
-          <button
-            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-            onclick={toggleFavorite}
-            title={interaction?.is_favorite
-              ? "Remove from favorites"
-              : "Add to favorites"}
-          >
-            <Heart
-              size={16}
-              class={interaction?.is_favorite
-                ? "fill-red-500 text-red-500"
-                : ""}
-            />
-          </button>
-          <button
-            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-            onclick={() => (showAddToShelf = true)}
-            title="Add to bookshelf"
-          >
-            <ShelvingUnit size={16} />
-          </button>
-          <button
-            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-            onclick={() => {
-              showNotesModal = true;
-            }}
-            title="Notes"
-          >
-            <NotebookPen
-              size={16}
-              class={interaction?.notes ? "text-primary" : ""}
-            />
-          </button>
-          <button
-            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {book.has_unresolved_reports
-              ? 'text-destructive'
-              : 'text-foreground'}"
-            onclick={() => (showReportModal = true)}
-            title="Report issue"
-          >
-            <Flag size={16} />
-          </button>
-          {#if isAdmin}
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <button
-                  class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
-                  title="Admin actions"
-                >
-                  <EllipsisVertical size={16} />
-                </button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="start" side="top">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <button
+                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
+                title="More actions"
+              >
+                <EllipsisVertical size={16} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="start" side="top">
+              <DropdownMenu.Item onclick={toggleFavorite}>
+                <Heart
+                  size={14}
+                  class={interaction?.is_favorite
+                    ? "fill-red-500 text-red-500"
+                    : ""}
+                />
+                {interaction?.is_favorite
+                  ? "Remove from favorites"
+                  : "Add to favorites"}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item onclick={() => (showAddToShelf = true)}>
+                <ShelvingUnit size={14} />
+                Add to shelf
+              </DropdownMenu.Item>
+              <DropdownMenu.Item onclick={() => (showNotesModal = true)}>
+                <NotebookPen
+                  size={14}
+                  class={interaction?.notes ? "text-primary" : ""}
+                />
+                Notes
+              </DropdownMenu.Item>
+              <DropdownMenu.Item onclick={() => (showReportModal = true)}>
+                <Flag
+                  size={14}
+                  class={book.has_unresolved_reports ? "text-destructive" : ""}
+                />
+                Report issue
+              </DropdownMenu.Item>
+              {#if isAdmin}
+                <DropdownMenu.Separator />
                 <DropdownMenu.Item onclick={() => (showEditModal = true)}>
                   <Pencil size={14} />
                   Edit metadata
@@ -606,9 +594,9 @@
                   <Trash2 size={14} />
                   Delete book
                 </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          {/if}
+              {/if}
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
         </div>
       </div>
     </div>
