@@ -113,7 +113,12 @@ class GoodreadsSource(AbstractMetadataSource):
                         if "/book/show/" in final_url:
                             clean_url = final_url.split("?")[0]
                             results.append(
-                                SearchResult(url=clean_url, title="", authors=[])
+                                SearchResult(
+                                    url=clean_url,
+                                    title="",
+                                    authors=[],
+                                    score=100.0,
+                                )
                             )
                         else:
                             soup = BeautifulSoup(resp.text, "html.parser")
@@ -121,7 +126,12 @@ class GoodreadsSource(AbstractMetadataSource):
                                 soup, limit=3
                             ):
                                 results.append(
-                                    SearchResult(url=full_url, title=text, authors=[])
+                                    SearchResult(
+                                        url=full_url,
+                                        title=text,
+                                        authors=[],
+                                        score=100.0,
+                                    )
                                 )
             except RateLimitError:
                 raise
