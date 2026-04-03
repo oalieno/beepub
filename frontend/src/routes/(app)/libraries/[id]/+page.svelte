@@ -160,14 +160,6 @@
     >
       <div>
         <div class="flex items-center gap-2 mb-1">
-          <span
-            class="text-xs px-2.5 py-1 rounded-full font-medium {library.visibility ===
-            'public'
-              ? 'bg-primary/15 text-primary'
-              : 'bg-secondary text-muted-foreground'}"
-          >
-            {library.visibility}
-          </span>
           {#if isCalibre}
             <span
               class="text-xs px-2.5 py-1 rounded-full font-medium bg-amber-500/15 text-amber-600 flex items-center gap-1"

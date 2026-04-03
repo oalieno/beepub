@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/bookshelves";
+  import { adminApi } from "$lib/api/admin";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { toastStore } from "$lib/stores/toast";

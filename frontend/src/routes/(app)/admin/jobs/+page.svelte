@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { adminApi, aiApi } from "$lib/api/bookshelves";
+  import { adminApi } from "$lib/api/admin";
+  import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import type { AiStatus, JobStatus } from "$lib/types";
   import {

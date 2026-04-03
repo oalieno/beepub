@@ -68,9 +68,8 @@ async def get_similar_books(
             SELECT l.id AS library_id
             FROM libraries l
             WHERE :is_admin = true
-               OR l.visibility = 'public'
-               OR l.id IN (
-                   SELECT library_id FROM library_access WHERE user_id = :user_id
+               OR l.id NOT IN (
+                   SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
                )
         ),
         -- Phase 1: gather candidate book IDs via indexed lookups
@@ -308,9 +307,8 @@ async def get_books_by_tag_category(
             WHERE at.category = :category
               AND (
                   :is_admin = true
-                  OR l.visibility = 'public'
-                  OR l.id IN (
-                      SELECT library_id FROM library_access WHERE user_id = :user_id
+                  OR l.id NOT IN (
+                      SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
                   )
               )
             GROUP BY at.tag
@@ -344,9 +342,8 @@ async def get_books_by_tag_category(
                   AND at.category = :category
                   AND (
                       :is_admin = true
-                      OR l.visibility = 'public'
-                      OR l.id IN (
-                          SELECT library_id FROM library_access WHERE user_id = :user_id
+                      OR l.id NOT IN (
+                          SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
                       )
                   )
                 GROUP BY b.id

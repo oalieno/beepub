@@ -36,6 +36,7 @@ def _make_user(
         password_hash=hash_password(password),
         role=role,
         is_active=is_active,
+        can_download=False,
     )
     user.created_at = datetime.now(UTC)
     return user

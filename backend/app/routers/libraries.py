@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, cast, func, or_, select
+from sqlalchemy import cast, exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 from sqlalchemy.types import String as SAString
@@ -10,7 +10,7 @@ from sqlalchemy.types import String as SAString
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
-from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
+from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.schemas.book import PaginatedBooks
@@ -18,8 +18,6 @@ from app.schemas.library import (
     LibraryBookAdd,
     LibraryCreate,
     LibraryListOut,
-    LibraryMemberAdd,
-    LibraryMemberOut,
     LibraryOut,
     LibraryUpdate,
 )
@@ -30,14 +28,11 @@ router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 def accessible_libraries_condition(user: User):
     if user.role == UserRole.admin:
         return True  # no filter
-    return or_(
-        Library.visibility == LibraryVisibility.public,
-        and_(
-            Library.visibility == LibraryVisibility.private,
-            Library.id.in_(
-                select(LibraryAccess.library_id).where(LibraryAccess.user_id == user.id)
-            ),
-        ),
+    return ~exists(
+        select(UserLibraryExclusion.library_id).where(
+            UserLibraryExclusion.user_id == user.id,
+            UserLibraryExclusion.library_id == Library.id,
+        )
     )
 
 
@@ -312,64 +307,6 @@ async def remove_book_from_library(
     await db.commit()
 
 
-@router.get("/{library_id}/members", response_model=list[LibraryMemberOut])
-async def list_library_members(
-    library_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    result = await db.execute(
-        select(LibraryAccess).where(LibraryAccess.library_id == library_id)
-    )
-    return result.scalars().all()
-
-
-@router.post("/{library_id}/members", status_code=status.HTTP_201_CREATED)
-async def add_library_member(
-    library_id: uuid.UUID,
-    body: LibraryMemberAdd,
-    current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    existing = await db.execute(
-        select(LibraryAccess).where(
-            LibraryAccess.library_id == library_id,
-            LibraryAccess.user_id == body.user_id,
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="User already has access")
-    access = LibraryAccess(
-        library_id=library_id,
-        user_id=body.user_id,
-        granted_by=current_user.id,
-    )
-    db.add(access)
-    await db.commit()
-    return {"status": "granted"}
-
-
-@router.delete(
-    "/{library_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-async def remove_library_member(
-    library_id: uuid.UUID,
-    user_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    result = await db.execute(
-        select(LibraryAccess).where(
-            LibraryAccess.library_id == library_id, LibraryAccess.user_id == user_id
-        )
-    )
-    access = result.scalar_one_or_none()
-    if not access:
-        raise HTTPException(status_code=404, detail="Member not found")
-    await db.delete(access)
-    await db.commit()
-
-
 async def _get_accessible_library(
     library_id: uuid.UUID, user: User, db: AsyncSession
 ) -> Library:
@@ -379,14 +316,13 @@ async def _get_accessible_library(
         raise HTTPException(status_code=404, detail="Library not found")
     if user.role == UserRole.admin:
         return library
-    if library.visibility == LibraryVisibility.public:
-        return library
-    access = await db.execute(
-        select(LibraryAccess).where(
-            LibraryAccess.library_id == library_id,
-            LibraryAccess.user_id == user.id,
+    # Check if user is excluded from this library
+    exclusion = await db.execute(
+        select(UserLibraryExclusion).where(
+            UserLibraryExclusion.library_id == library_id,
+            UserLibraryExclusion.user_id == user.id,
         )
     )
-    if not access.scalar_one_or_none():
+    if exclusion.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="Access denied")
     return library

@@ -3,17 +3,19 @@ export enum UserRole {
   Admin = "admin",
 }
 
-export enum LibraryVisibility {
-  Public = "public",
-  Private = "private",
-}
-
 export interface UserOut {
   id: string; // UUID
   username: string;
   role: UserRole;
   is_active: boolean;
+  can_download: boolean;
   created_at: string;
+}
+
+export interface UserLibraryAccess {
+  library_id: string;
+  library_name: string;
+  excluded: boolean;
 }
 
 export interface LibraryOut {
@@ -21,7 +23,6 @@ export interface LibraryOut {
   name: string;
   description: string | null;
   cover_image: string | null;
-  visibility: LibraryVisibility;
   calibre_path: string | null;
   created_by: string;
   created_at: string;

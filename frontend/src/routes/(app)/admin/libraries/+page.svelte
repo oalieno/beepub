@@ -6,17 +6,8 @@
   import { Input } from "$lib/components/ui/input";
   import { Textarea } from "$lib/components/ui/textarea";
   import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
   import type { LibraryOut } from "$lib/types";
-  import { LibraryVisibility } from "$lib/types";
-  import {
-    Plus,
-    Trash2,
-    Lock,
-    Globe,
-    Settings,
-    HardDrive,
-  } from "@lucide/svelte";
+  import { Plus, Trash2, Library, Settings, HardDrive } from "@lucide/svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import BackButton from "$lib/components/BackButton.svelte";
 
@@ -26,14 +17,8 @@
   let createForm = $state({
     name: "",
     description: "",
-    visibility: LibraryVisibility.Public as string,
   });
   let creating = $state(false);
-
-  const VISIBILITY_OPTIONS = [
-    { value: LibraryVisibility.Public, label: "Public" },
-    { value: LibraryVisibility.Private, label: "Private (whitelist)" },
-  ];
 
   onMount(async () => {
     await loadData();
@@ -60,7 +45,6 @@
       createForm = {
         name: "",
         description: "",
-        visibility: LibraryVisibility.Public,
       };
       toastStore.success("Library created");
     } catch (e) {
@@ -93,9 +77,7 @@
         <BackButton href="/admin" label="Admin" />
       </div>
       <h1 class="text-3xl font-bold text-foreground">Libraries</h1>
-      <p class="text-muted-foreground mt-1">
-        Manage libraries, visibility, and access
-      </p>
+      <p class="text-muted-foreground mt-1">Manage libraries and books</p>
     </div>
     <Button class="rounded-xl" onclick={() => (showCreateModal = true)}>
       <Plus size={16} />
@@ -138,16 +120,9 @@
         >
           <div class="flex items-center gap-3.5">
             <div
-              class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.visibility ===
-              LibraryVisibility.Private
-                ? 'bg-secondary text-muted-foreground'
-                : 'bg-primary/15 text-primary'}"
+              class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-primary/15 text-primary"
             >
-              {#if lib.visibility === LibraryVisibility.Private}
-                <Lock size={18} />
-              {:else}
-                <Globe size={18} />
-              {/if}
+              <Library size={18} />
             </div>
             <div>
               <p class="font-semibold text-foreground">
@@ -210,26 +185,6 @@
         class="rounded-xl bg-background"
         rows={3}
       />
-    </div>
-    <div class="space-y-1">
-      <span class="block text-sm font-medium text-foreground">Visibility</span>
-      <Select.Root
-        type="single"
-        value={createForm.visibility}
-        onValueChange={(v) => (createForm.visibility = v)}
-      >
-        <Select.Trigger class="w-full rounded-xl bg-background">
-          {@const current = VISIBILITY_OPTIONS.find(
-            (o) => o.value === createForm.visibility,
-          )}
-          {current?.label ?? "Select visibility"}
-        </Select.Trigger>
-        <Select.Content align="start">
-          {#each VISIBILITY_OPTIONS as opt}
-            <Select.Item value={opt.value}>{opt.label}</Select.Item>
-          {/each}
-        </Select.Content>
-      </Select.Root>
     </div>
     <div class="flex justify-end gap-2 pt-2">
       <Button

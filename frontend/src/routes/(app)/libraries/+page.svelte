@@ -3,7 +3,6 @@
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import type { LibraryOut } from "$lib/types";
-  import { LibraryVisibility } from "$lib/types";
   import { Library, HardDrive } from "@lucide/svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { CardListSkeleton } from "$lib/components/skeletons";
@@ -49,12 +48,8 @@
           name={lib.name}
           previewBookIds={lib.preview_book_ids}
           bookCount={lib.book_count}
-          badgeLabel={lib.visibility === LibraryVisibility.Private
-            ? "Private"
-            : "Public"}
-          badgeClass={lib.visibility === LibraryVisibility.Private
-            ? "bg-secondary text-muted-foreground"
-            : "bg-primary/15 text-primary"}
+          badgeLabel={lib.calibre_path ? "Calibre" : ""}
+          badgeClass="bg-primary/15 text-primary"
         >
           {#snippet icon()}
             {#if lib.calibre_path}

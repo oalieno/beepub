@@ -18,14 +18,14 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata, MetadataSource
-from app.models.library import Library, LibraryAccess, LibraryBook, LibraryVisibility
+from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
@@ -83,19 +83,17 @@ async def _user_can_access_book(
 ) -> bool:
     if user.role == UserRole.admin:
         return True
-    # Check if book is in any accessible library
+    # Check if book is in any non-excluded library
     result = await db.execute(
         select(LibraryBook)
         .join(Library, Library.id == LibraryBook.library_id)
         .where(
             LibraryBook.book_id == book_id,
-            or_(
-                Library.visibility == LibraryVisibility.public,
-                Library.id.in_(
-                    select(LibraryAccess.library_id).where(
-                        LibraryAccess.user_id == user.id
-                    )
-                ),
+            ~exists(
+                select(UserLibraryExclusion.library_id).where(
+                    UserLibraryExclusion.user_id == user.id,
+                    UserLibraryExclusion.library_id == Library.id,
+                )
             ),
         )
     )
@@ -649,13 +647,11 @@ async def list_all_books(
         accessible_ids = accessible_ids.join(
             Library, Library.id == LibraryBook.library_id
         ).where(
-            or_(
-                Library.visibility == LibraryVisibility.public,
-                Library.id.in_(
-                    select(LibraryAccess.library_id).where(
-                        LibraryAccess.user_id == current_user.id
-                    )
-                ),
+            ~exists(
+                select(UserLibraryExclusion.library_id).where(
+                    UserLibraryExclusion.user_id == current_user.id,
+                    UserLibraryExclusion.library_id == Library.id,
+                )
             )
         )
 
@@ -806,10 +802,22 @@ async def get_book_file(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    if current_user.role != UserRole.admin and not current_user.can_download:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Download permission required",
+        )
     book = await _get_book_with_access(book_id, current_user, db)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(book.file_path, media_type="application/epub+zip")
+    # Set filename for browser download
+    title = book.title or book.epub_title or "book"
+    filename = f"{title}.epub"
+    return FileResponse(
+        book.file_path,
+        media_type="application/epub+zip",
+        filename=filename,
+    )
 
 
 @router.get("/{book_id}/content/{path:path}")
@@ -956,22 +964,22 @@ async def get_series_neighbors(
     series_col = coalesce(Book.series, Book.epub_series)
     index_col = coalesce(Book.series_index, Book.epub_series_index)
 
-    # Accessible libraries subquery
-    accessible_libs = (
-        select(Library.id)
-        .where(
-            or_(
-                is_admin,
-                Library.visibility == LibraryVisibility.public,
-                Library.id.in_(
-                    select(LibraryAccess.library_id).where(
-                        LibraryAccess.user_id == current_user.id
+    # Accessible libraries subquery (deny-list: exclude libraries user is excluded from)
+    if is_admin:
+        accessible_libs = select(Library.id).scalar_subquery()
+    else:
+        accessible_libs = (
+            select(Library.id)
+            .where(
+                ~exists(
+                    select(UserLibraryExclusion.library_id).where(
+                        UserLibraryExclusion.user_id == current_user.id,
+                        UserLibraryExclusion.library_id == Library.id,
                     )
-                ),
+                )
             )
+            .scalar_subquery()
         )
-        .scalar_subquery()
-    )
 
     # Subquery: book IDs accessible to this user
     accessible_book_ids = (

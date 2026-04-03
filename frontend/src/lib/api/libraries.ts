@@ -1,24 +1,16 @@
 import { get, post, put, del } from "./client";
 import type { LibraryOut, PaginatedBooks } from "$lib/types";
 
-export interface LibraryMemberOut {
-  user_id: string;
-  granted_by: string;
-  granted_at: string;
-}
-
 export const librariesApi = {
   list: () => get("/libraries") as Promise<LibraryOut[]>,
 
   get: (id: string) => get(`/libraries/${id}`) as Promise<LibraryOut>,
 
-  create: (data: { name: string; description?: string; visibility?: string }) =>
+  create: (data: { name: string; description?: string }) =>
     post("/libraries", data) as Promise<LibraryOut>,
 
-  update: (
-    id: string,
-    data: { name?: string; description?: string; visibility?: string },
-  ) => put(`/libraries/${id}`, data) as Promise<LibraryOut>,
+  update: (id: string, data: { name?: string; description?: string }) =>
+    put(`/libraries/${id}`, data) as Promise<LibraryOut>,
 
   delete: (id: string) => del(`/libraries/${id}`),
 
@@ -49,15 +41,6 @@ export const librariesApi = {
       `/libraries/${id}/books${qs ? `?${qs}` : ""}`,
     ) as Promise<PaginatedBooks>;
   },
-
-  getMembers: (id: string) =>
-    get(`/libraries/${id}/members`) as Promise<LibraryMemberOut[]>,
-
-  addMember: (id: string, userId: string) =>
-    post(`/libraries/${id}/members`, { user_id: userId }),
-
-  removeMember: (id: string, userId: string) =>
-    del(`/libraries/${id}/members/${userId}`),
 
   addBook: (id: string, bookId: string) =>
     post(`/libraries/${id}/books`, { book_id: bookId }),

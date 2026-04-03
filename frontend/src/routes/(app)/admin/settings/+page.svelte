@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/bookshelves";
+  import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
   import type { AdminSettings } from "$lib/types";
   import { Input } from "$lib/components/ui/input";

@@ -12,7 +12,7 @@ from app.models.base import TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.bookshelf import Bookshelf
-    from app.models.library import LibraryAccess
+    from app.models.library import UserLibraryExclusion
     from app.models.reading import Highlight, UserBookInteraction
 
 
@@ -33,14 +33,15 @@ class User(Base, TimestampMixin):
         SAEnum(UserRole), nullable=False, default=UserRole.user
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    can_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )
 
     # Relationships
-    library_accesses: Mapped[list["LibraryAccess"]] = relationship(
-        "LibraryAccess",
-        foreign_keys="LibraryAccess.user_id",
+    library_exclusions: Mapped[list["UserLibraryExclusion"]] = relationship(
+        "UserLibraryExclusion",
+        foreign_keys="UserLibraryExclusion.user_id",
         back_populates="user",
         passive_deletes=True,
     )

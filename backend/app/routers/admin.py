@@ -16,7 +16,10 @@ from app.models.user import User, UserRole
 from app.schemas.user import (
     AdminCreateUser,
     AdminResetPassword,
+    UserLibraryAccessOut,
+    UserLibraryAccessUpdate,
     UserOut,
+    UserUpdatePermissions,
     UserUpdateRole,
 )
 from app.services.auth import hash_password
@@ -71,6 +74,19 @@ async def update_user_role(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Prevent demoting the last admin
+    if user.role == UserRole.admin and body.role != UserRole.admin:
+        admin_count = (
+            await db.execute(
+                select(func.count())
+                .select_from(User)
+                .where(User.role == UserRole.admin)
+            )
+        ).scalar()
+        if admin_count <= 1:
+            raise HTTPException(status_code=400, detail="Cannot demote the last admin")
+
     user.role = body.role
     await db.commit()
     await db.refresh(user)
@@ -107,6 +123,94 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
     await db.delete(user)
     await db.commit()
+
+
+@router.put("/users/{user_id}/permissions", response_model=UserOut)
+async def update_user_permissions(
+    user_id: uuid.UUID,
+    body: UserUpdatePermissions,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.can_download = body.can_download
+    await db.commit()
+    await db.refresh(user)
+    return user
+
+
+@router.get(
+    "/users/{user_id}/library-access", response_model=list[UserLibraryAccessOut]
+)
+async def get_user_library_access(
+    user_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.library import UserLibraryExclusion
+
+    # Verify user exists
+    result = await db.execute(select(User).where(User.id == user_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get all libraries
+    libs = await db.execute(select(Library).order_by(Library.name))
+    libraries = libs.scalars().all()
+
+    # Get excluded library IDs for this user
+    exclusions = await db.execute(
+        select(UserLibraryExclusion.library_id).where(
+            UserLibraryExclusion.user_id == user_id
+        )
+    )
+    excluded_ids = {row[0] for row in exclusions.all()}
+
+    return [
+        UserLibraryAccessOut(
+            library_id=lib.id,
+            library_name=lib.name,
+            excluded=lib.id in excluded_ids,
+        )
+        for lib in libraries
+    ]
+
+
+@router.put("/users/{user_id}/library-access")
+async def update_user_library_access(
+    user_id: uuid.UUID,
+    body: UserLibraryAccessUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    from app.models.library import UserLibraryExclusion
+
+    # Verify user exists
+    result = await db.execute(select(User).where(User.id == user_id))
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Delete all existing exclusions for this user
+    from sqlalchemy import delete
+
+    await db.execute(
+        delete(UserLibraryExclusion).where(UserLibraryExclusion.user_id == user_id)
+    )
+
+    # Create new exclusions
+    for lib_id in body.excluded_library_ids:
+        exclusion = UserLibraryExclusion(
+            user_id=user_id,
+            library_id=lib_id,
+            excluded_by=current_user.id,
+        )
+        db.add(exclusion)
+
+    await db.commit()
+    return {"status": "updated"}
 
 
 @router.get("/stats")

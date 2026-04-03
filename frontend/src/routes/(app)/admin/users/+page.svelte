@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { authStore } from "$lib/stores/auth";
-  import { adminApi } from "$lib/api/bookshelves";
+  import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
   import type { UserOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Trash2, Shield, User, UserPlus, KeyRound } from "@lucide/svelte";
+  import { Shield, User, UserPlus, ChevronRight } from "@lucide/svelte";
   import { TableSkeleton } from "$lib/components/skeletons";
   import BackButton from "$lib/components/BackButton.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import * as Dialog from "$lib/components/ui/dialog";
+  import { goto } from "$app/navigation";
 
   let users = $state<UserOut[]>([]);
   let loading = $state(true);
@@ -22,12 +22,6 @@
   let newPassword = $state("");
   let creating = $state(false);
   let createError = $state("");
-
-  // Reset password dialog
-  let showResetDialog = $state(false);
-  let resetUser = $state<UserOut | null>(null);
-  let resetPassword = $state("");
-  let resetting = $state(false);
 
   onMount(async () => {
     await loadData();
@@ -64,47 +58,6 @@
       creating = false;
     }
   }
-
-  async function toggleRole(user: UserOut) {
-    const newRole =
-      user.role === UserRole.Admin ? UserRole.User : UserRole.Admin;
-    try {
-      await adminApi.updateRole(user.id, newRole);
-      users = users.map((u) =>
-        u.id === user.id ? { ...u, role: newRole } : u,
-      );
-      toastStore.success(`Updated role for ${user.username}`);
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleResetPassword() {
-    if (!resetUser || !resetPassword) return;
-    resetting = true;
-    try {
-      await adminApi.resetPassword(resetUser.id, resetPassword);
-      toastStore.success(`Password reset for ${resetUser.username}`);
-      showResetDialog = false;
-      resetUser = null;
-      resetPassword = "";
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      resetting = false;
-    }
-  }
-
-  async function handleDelete(user: UserOut) {
-    if (!confirm(`Delete user "${user.username}"?`)) return;
-    try {
-      await adminApi.deleteUser(user.id);
-      users = users.filter((u) => u.id !== user.id);
-      toastStore.success(`Deleted user ${user.username}`);
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
 </script>
 
 <svelte:head>
@@ -133,10 +86,10 @@
   </div>
 
   {#if loading}
-    <TableSkeleton rows={5} columns={5} />
+    <TableSkeleton rows={5} columns={3} />
   {:else}
     <div class="bg-card card-soft rounded-2xl overflow-hidden overflow-x-auto">
-      <table class="w-full min-w-[600px]">
+      <table class="w-full min-w-[500px]">
         <thead class="border-b border-border/50">
           <tr>
             <th
@@ -151,12 +104,15 @@
               class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
               >Joined</th
             >
-            <th class="px-5 py-3.5"></th>
+            <th class="w-10 px-5 py-3.5"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-border/30">
           {#each users as user}
-            <tr class="hover:bg-secondary/30 transition-colors">
+            <tr
+              class="hover:bg-secondary/30 transition-colors cursor-pointer"
+              onclick={() => goto(`/admin/users/${user.id}`)}
+            >
               <td class="px-5 py-3.5 font-medium text-foreground"
                 >{user.username}</td
               >
@@ -178,39 +134,8 @@
               <td class="px-5 py-3.5 text-muted-foreground text-sm"
                 >{new Date(user.created_at).toLocaleDateString()}</td
               >
-              <td class="px-5 py-3.5">
-                <div class="flex items-center justify-end gap-2">
-                  {#if user.id !== $authStore.user?.id}
-                    <button
-                      class="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
-                      onclick={() => toggleRole(user)}
-                      title="Toggle admin role"
-                    >
-                      {user.role === UserRole.Admin ? "Demote" : "Promote"}
-                    </button>
-                    <button
-                      class="text-xs px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors"
-                      onclick={() => {
-                        resetUser = user;
-                        resetPassword = "";
-                        showResetDialog = true;
-                      }}
-                      title="Reset password"
-                    >
-                      <KeyRound size={13} />
-                    </button>
-                    <button
-                      class="w-7 h-7 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                      onclick={() => handleDelete(user)}
-                      title="Delete user"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  {:else}
-                    <span class="text-xs text-muted-foreground italic">You</span
-                    >
-                  {/if}
-                </div>
+              <td class="px-5 py-3.5 text-muted-foreground">
+                <ChevronRight size={16} />
               </td>
             </tr>
           {/each}
@@ -222,7 +147,7 @@
 
 <!-- Create User Dialog -->
 <Dialog.Root bind:open={showCreateDialog}>
-  <Dialog.Content class="sm:max-w-md">
+  <Dialog.Content class="sm:max-w-md bg-white dark:bg-neutral-900">
     <Dialog.Header>
       <Dialog.Title>Create User</Dialog.Title>
       <Dialog.Description>Create a new user account</Dialog.Description>
@@ -264,46 +189,6 @@
         >
         <Button type="submit" disabled={creating} class="rounded-xl">
           {creating ? "Creating..." : "Create"}
-        </Button>
-      </Dialog.Footer>
-    </form>
-  </Dialog.Content>
-</Dialog.Root>
-
-<!-- Reset Password Dialog -->
-<Dialog.Root bind:open={showResetDialog}>
-  <Dialog.Content class="sm:max-w-md">
-    <Dialog.Header>
-      <Dialog.Title>Reset Password</Dialog.Title>
-      <Dialog.Description
-        >Set a new password for {resetUser?.username}</Dialog.Description
-      >
-    </Dialog.Header>
-    <form
-      onsubmit={(e) => {
-        e.preventDefault();
-        handleResetPassword();
-      }}
-      class="space-y-4"
-    >
-      <div class="space-y-1.5">
-        <Label for="reset-password">New Password</Label>
-        <Input
-          id="reset-password"
-          type="password"
-          bind:value={resetPassword}
-          placeholder="New password"
-          required
-        />
-      </div>
-      <Dialog.Footer>
-        <Button
-          variant="outline"
-          class="rounded-xl"
-          onclick={() => (showResetDialog = false)}>Cancel</Button
-        >
-        <Button type="submit" disabled={resetting} class="rounded-xl">
-          {resetting ? "Resetting..." : "Reset Password"}
         </Button>
       </Dialog.Footer>
     </form>

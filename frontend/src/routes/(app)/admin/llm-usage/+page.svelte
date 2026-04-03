@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/bookshelves";
+  import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
   import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
   import { Skeleton } from "$lib/components/ui/skeleton";

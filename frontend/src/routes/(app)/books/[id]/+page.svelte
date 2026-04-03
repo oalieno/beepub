@@ -481,6 +481,15 @@
                 {/if}
               </button>
             {/if}
+          {:else if $authStore.user?.can_download}
+            <a
+              href="/api/books/{bookId}/file"
+              download
+              class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
+              title="Download EPUB"
+            >
+              <Download size={16} />
+            </a>
           {/if}
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
@@ -810,6 +819,16 @@
             : "Download for offline"}
         </button>
       {/if}
+    {:else if $authStore.user?.can_download}
+      <a
+        href="/api/books/{bookId}/file"
+        download
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => (showMobileActions = false)}
+      >
+        <Download size={20} class="text-muted-foreground shrink-0" />
+        Download EPUB
+      </a>
     {/if}
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors {book.has_unresolved_reports
