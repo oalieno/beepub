@@ -259,7 +259,7 @@ async def sync_calibre_library(
                 select(Library).where(Library.id == library_id)
             )
             if not lib_check.scalar_one_or_none():
-                logger.info("Library %s was deleted, aborting sync", library_id)
+                logger.info(f"Library {library_id} was deleted, aborting sync")
                 await _update_progress(result, total, 0, "failed")
                 return
 
@@ -396,9 +396,7 @@ async def sync_calibre_library(
                     await db.delete(book)
                     result.removed += 1
                 logger.info(
-                    "Removed %d orphan books from library %s",
-                    result.removed,
-                    library_id,
+                    f"Removed {result.removed} orphan books from library {library_id}"
                 )
 
             await db.commit()

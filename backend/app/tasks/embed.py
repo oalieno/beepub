@@ -44,7 +44,7 @@ async def _run_embed_book(book_id: str) -> None:
                 select(Book.is_image_book).where(Book.id == bid)
             )
             if img_result.scalar_one_or_none() is True:
-                logger.info("Book %s is an image book, skipping embedding", book_id)
+                logger.info(f"Book {book_id} is an image book, skipping embedding")
                 return
 
             # Load settings for embedding config
@@ -55,10 +55,7 @@ async def _run_embed_book(book_id: str) -> None:
 
             if not api_url or not model:
                 logger.warning(
-                    "Embedding not configured (api_url=%s, model=%s), skipping book %s",
-                    api_url,
-                    model,
-                    book_id,
+                    f"Embedding not configured (api_url={api_url}, model={model}), skipping book {book_id}"
                 )
                 return
 
@@ -71,7 +68,7 @@ async def _run_embed_book(book_id: str) -> None:
             text_chunks = list(result.scalars().all())
 
             if not text_chunks:
-                logger.info("Book %s has no text chunks, skipping embedding", book_id)
+                logger.info(f"Book {book_id} has no text chunks, skipping embedding")
                 return
 
             total_embedded = 0
@@ -130,7 +127,7 @@ async def _run_embed_book(book_id: str) -> None:
                         session_factory=session_factory,
                     )
 
-            logger.info("Embedded %d sub-chunks for book %s", total_embedded, book_id)
+            logger.info(f"Embedded {total_embedded} sub-chunks for book {book_id}")
 
             # Compute book-level average embedding from chunks
             if total_embedded > 0:
@@ -150,7 +147,7 @@ def embed_book(self, book_id: str) -> None:
 
         run_async(_run_embed_book(book_id))
     except Exception as exc:
-        logger.exception("embed_book failed for book %s", book_id)
+        logger.exception(f"embed_book failed for book {book_id}")
         if "429" in str(exc):
             countdown = 60 * (2**self.request.retries)
         else:
@@ -203,7 +200,7 @@ async def _upsert_chunk_avg_embedding(db, bid: uuid.UUID, model: str) -> None:
     )
     await db.execute(stmt)
     await db.commit()
-    logger.info("Upserted chunk-avg embedding for book %s (%d chunks)", bid, row.cnt)
+    logger.info(f"Upserted chunk-avg embedding for book {bid} ({row.cnt} chunks)")
 
 
 # Max token input for Qwen3-Embedding (context_length=4096)
@@ -261,8 +258,7 @@ async def _run_embed_book_summary(book_id: str) -> None:
             )
             if img_result.scalar_one_or_none() is True:
                 logger.info(
-                    "Book %s is an image book, skipping summary embedding",
-                    book_id,
+                    f"Book {book_id} is an image book, skipping summary embedding"
                 )
                 return
 
@@ -273,8 +269,7 @@ async def _run_embed_book_summary(book_id: str) -> None:
 
             if not api_url or not model:
                 logger.warning(
-                    "Embedding not configured, skipping summary embed for book %s",
-                    book_id,
+                    f"Embedding not configured, skipping summary embed for book {book_id}"
                 )
                 return
 
@@ -287,17 +282,14 @@ async def _run_embed_book_summary(book_id: str) -> None:
             all_chunks = list(all_chunks_result.scalars().all())
 
             if not all_chunks:
-                logger.info("Book %s has no text chunks, skipping", book_id)
+                logger.info(f"Book {book_id} has no text chunks, skipping")
                 return
 
             # Only embed when ALL chunks have summaries
             chunks_with_summary = [c for c in all_chunks if c.summary is not None]
             if len(chunks_with_summary) < len(all_chunks):
                 logger.info(
-                    "Book %s has %d/%d chunks summarized, waiting for all",
-                    book_id,
-                    len(chunks_with_summary),
-                    len(all_chunks),
+                    f"Book {book_id} has {len(chunks_with_summary)}/{len(all_chunks)} chunks summarized, waiting for all"
                 )
                 return
 
@@ -306,8 +298,7 @@ async def _run_embed_book_summary(book_id: str) -> None:
             summary_text, valid_count = _build_summary_text(chunks)
             if not summary_text:
                 logger.info(
-                    "Book %s has no valid summaries after filtering, skipping",
-                    book_id,
+                    f"Book {book_id} has no valid summaries after filtering, skipping"
                 )
                 return
 
@@ -341,9 +332,7 @@ async def _run_embed_book_summary(book_id: str) -> None:
             await db.commit()
 
             logger.info(
-                "Embedded summary for book %s (%d summaries)",
-                book_id,
-                valid_count,
+                f"Embedded summary for book {book_id} ({valid_count} summaries)"
             )
 
             # Log usage
@@ -372,7 +361,7 @@ def embed_book_summary(self, book_id: str) -> None:
 
         run_async(_run_embed_book_summary(book_id))
     except Exception as exc:
-        logger.exception("embed_book_summary failed for book %s", book_id)
+        logger.exception(f"embed_book_summary failed for book {book_id}")
         if "429" in str(exc):
             countdown = 60 * (2**self.request.retries)
         else:

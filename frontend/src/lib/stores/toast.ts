@@ -14,6 +14,8 @@ export interface Toast {
   action?: ToastAction;
 }
 
+const DEFAULT_TOAST_DURATION = 3000;
+
 function createToastStore() {
   const { subscribe, update } = writable<Toast[]>([]);
 
@@ -28,7 +30,8 @@ function createToastStore() {
       { id, message, type, action: opts?.action },
     ]);
     const duration =
-      opts?.duration ?? (type === "error" || type === "warning" ? null : 3000);
+      opts?.duration ??
+      (type === "error" || type === "warning" ? null : DEFAULT_TOAST_DURATION);
     if (duration) setTimeout(() => remove(id), duration);
     return id;
   }

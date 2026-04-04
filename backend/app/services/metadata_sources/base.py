@@ -29,6 +29,9 @@ class FetchResult:
     raw_data: dict | None = None
 
 
+REQUEST_TIMEOUT = 15
+
+
 class AbstractMetadataSource(ABC):
     source_name: ClassVar[str]
 

@@ -758,7 +758,11 @@
     );
 
     // Save progress every 30s as backup (without tracking reading activity)
-    progressTimer = setInterval(() => saveProgress(false), 30000);
+    const PROGRESS_SAVE_INTERVAL_MS = 30000;
+    progressTimer = setInterval(
+      () => saveProgress(false),
+      PROGRESS_SAVE_INTERVAL_MS,
+    );
     window.addEventListener("beforeunload", handleBeforeUnload);
 
     // Fix layout offset when returning to the app (e.g. iOS task switcher)

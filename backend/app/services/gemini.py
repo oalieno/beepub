@@ -188,7 +188,7 @@ async def generate_illustration(
 
     candidates = data.get("candidates", [])
     if not candidates:
-        logger.error("Gemini response has no candidates: %s", data)
+        logger.error(f"Gemini response has no candidates: {data}")
         raise ValueError("No candidates in Gemini response")
 
     content = candidates[0].get("content", {})
@@ -197,9 +197,7 @@ async def generate_illustration(
         # Gemini may return empty parts due to safety filters
         finish_reason = candidates[0].get("finishReason", "unknown")
         logger.error(
-            "Gemini response has no parts (finishReason=%s): %s",
-            finish_reason,
-            data,
+            f"Gemini response has no parts (finishReason={finish_reason}): {data}"
         )
         raise ValueError(f"Gemini returned no content (finishReason={finish_reason})")
 

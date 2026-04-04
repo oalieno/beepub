@@ -32,12 +32,10 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
       BOOKS_DIR: ${BOOKS_DIR:-/data/books}
       COVERS_DIR: ${COVERS_DIR:-/data/covers}
       ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-exp}
     volumes:
       - books_data:/data/books
       - covers_data:/data/covers
@@ -72,8 +70,6 @@ services:
       BOOKS_DIR: ${BOOKS_DIR:-/data/books}
       COVERS_DIR: ${COVERS_DIR:-/data/covers}
       ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash-exp}
     volumes:
       - books_data:/data/books
       - covers_data:/data/covers

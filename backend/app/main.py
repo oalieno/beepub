@@ -63,6 +63,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestContextMiddleware)
 
+# Self-hosted + Capacitor native app: must allow all origins.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

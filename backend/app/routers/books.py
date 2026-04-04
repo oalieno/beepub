@@ -604,12 +604,18 @@ async def get_discover_browse(
         max_tags=max_tags,
     )
 
+    all_ids = {bid for s in sections_data for bid in s["book_ids"]}
+    if all_ids:
+        result = await db.execute(select(Book).where(Book.id.in_(all_ids)))
+        book_map = {b.id: b for b in result.scalars().all()}
+    else:
+        book_map = {}
+
     sections = []
     for section in sections_data:
         if not section["book_ids"]:
             continue
-        result = await db.execute(select(Book).where(Book.id.in_(section["book_ids"])))
-        books = list(result.scalars().all())
+        books = [book_map[bid] for bid in section["book_ids"] if bid in book_map]
         sections.append(
             TagBrowseSection(
                 tag=section["tag"],
@@ -1017,23 +1023,22 @@ async def get_series_neighbors(
         prev_book = result.scalar_one_or_none()
 
     # Series progress: count distinct volumes (not books, since editions share index)
-    total_result = await db.execute(
-        select(func.count(func.distinct(index_col)))
-        .select_from(Book)
-        .join(LibraryBook, LibraryBook.book_id == Book.id)
-        .where(
-            series_col == series_name,
-            index_col.isnot(None),
-            LibraryBook.library_id.in_(accessible_libs),
-        )
-    )
-    total_in_library = total_result.scalar() or 0
+    from sqlalchemy import case
 
-    read_result = await db.execute(
-        select(func.count(func.distinct(index_col)))
+    progress_result = await db.execute(
+        select(
+            func.count(func.distinct(index_col)),
+            func.count(
+                func.distinct(
+                    case(
+                        (UserBookInteraction.reading_status == "read", index_col),
+                    )
+                )
+            ),
+        )
         .select_from(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
-        .join(
+        .outerjoin(
             UserBookInteraction,
             (UserBookInteraction.book_id == Book.id)
             & (UserBookInteraction.user_id == current_user.id),
@@ -1042,10 +1047,11 @@ async def get_series_neighbors(
             series_col == series_name,
             index_col.isnot(None),
             LibraryBook.library_id.in_(accessible_libs),
-            UserBookInteraction.reading_status == "read",
         )
     )
-    read_count = read_result.scalar() or 0
+    total_in_library, read_count = progress_result.one()
+    total_in_library = total_in_library or 0
+    read_count = read_count or 0
 
     def _brief(b: Book) -> SeriesBookBrief:
         return SeriesBookBrief(
@@ -1314,7 +1320,8 @@ async def update_progress(
                 pass
         if old_last_read:
             delta = (now - old_last_read).total_seconds()
-            if 0 < delta < 300:  # < 5 minutes = same session
+            MAX_READING_SESSION_GAP = 300  # 5 minutes
+            if 0 < delta < MAX_READING_SESSION_GAP:
                 delta_seconds = int(delta)
                 tz_name = await get_setting(db, "timezone")
                 today = datetime.now(ZoneInfo(tz_name)).date()

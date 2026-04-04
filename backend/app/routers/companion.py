@@ -69,8 +69,7 @@ async def _streaming_generator(
                 await db.commit()
         except Exception:
             logger.error(
-                "Failed to save assistant message for conversation %s",
-                conversation_id,
+                f"Failed to save assistant message for conversation {conversation_id}",
                 exc_info=True,
             )
 
@@ -97,7 +96,7 @@ async def _streaming_generator(
             },
         )
     except Exception as exc:
-        logger.error("Companion streaming error: %s", exc, exc_info=True)
+        logger.error(f"Companion streaming error: {exc}", exc_info=True)
         yield sse_event("error", {"message": str(exc)})
 
 

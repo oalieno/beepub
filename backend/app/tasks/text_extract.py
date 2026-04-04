@@ -63,10 +63,7 @@ async def _run_text_extract(book_id: str) -> None:
                     )
                     await db.commit()
                     logger.info(
-                        "Backfilled is_image_book for book %s: word_count=%d, is_image_book=%s",
-                        book_id,
-                        current_wc,
-                        is_image,
+                        f"Backfilled is_image_book for book {book_id}: word_count={current_wc}, is_image_book={is_image}"
                     )
                     return
 
@@ -85,10 +82,7 @@ async def _run_text_extract(book_id: str) -> None:
                 )
                 await db.commit()
                 logger.info(
-                    "Classified book %s: word_count=%d, is_image_book=%s",
-                    book_id,
-                    wc,
-                    is_image,
+                    f"Classified book {book_id}: word_count={wc}, is_image_book={is_image}"
                 )
                 return
 
@@ -96,7 +90,7 @@ async def _run_text_extract(book_id: str) -> None:
             result = await db.execute(select(Book.file_path).where(Book.id == bid))
             row = result.one_or_none()
             if not row:
-                logger.warning("Book %s not found, skipping text extraction", book_id)
+                logger.warning(f"Book {book_id} not found, skipping text extraction")
                 return
 
             file_path = row[0]
@@ -107,8 +101,7 @@ async def _run_text_extract(book_id: str) -> None:
             except Exception as exc:
                 # Corrupt/unreadable EPUB — classify and auto-report
                 logger.warning(
-                    "Failed to parse EPUB for book %s, classifying as image book",
-                    book_id,
+                    f"Failed to parse EPUB for book {book_id}, classifying as image book",
                     exc_info=True,
                 )
                 await db.execute(
@@ -128,7 +121,7 @@ async def _run_text_extract(book_id: str) -> None:
                     )
                 except Exception:
                     logger.warning(
-                        "Failed to create report for corrupt book %s", book_id
+                        f"Failed to create report for corrupt book {book_id}"
                     )
                 await db.commit()
                 return
@@ -141,7 +134,7 @@ async def _run_text_extract(book_id: str) -> None:
                     .values(word_count=0, is_image_book=True)
                 )
                 await db.commit()
-                logger.info("Book %s has no text, classified as image book", book_id)
+                logger.info(f"Book {book_id} has no text, classified as image book")
                 return
 
             for chunk in chunks:
@@ -167,11 +160,7 @@ async def _run_text_extract(book_id: str) -> None:
 
             await db.commit()
             logger.info(
-                "Extracted %d text chunks from book %s (word_count=%d, is_image_book=%s)",
-                len(chunks),
-                book_id,
-                wc,
-                is_image,
+                f"Extracted {len(chunks)} text chunks from book {book_id} (word_count={wc}, is_image_book={is_image})"
             )
 
 
@@ -187,5 +176,5 @@ def extract_book_text(self, book_id: str) -> None:
 
         run_async(_run_text_extract(book_id))
     except Exception as exc:
-        logger.exception("extract_book_text failed for book %s", book_id)
+        logger.exception(f"extract_book_text failed for book {book_id}")
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

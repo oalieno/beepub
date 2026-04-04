@@ -68,7 +68,7 @@ async def _run(
         os.makedirs(os.path.dirname(image_path), exist_ok=True)
         with open(image_path, "wb") as f:
             f.write(image_bytes)
-        logger.info("Illustration %s image saved", illustration_id)
+        logger.info(f"Illustration {illustration_id} image saved")
 
         # Log usage (fire-and-forget)
         from app.services.llm_usage import log_llm_usage
@@ -115,9 +115,7 @@ def _safe_mark(
 
         run_async(_mark_status(illustration_id, status, error_message))
     except Exception:
-        logger.exception(
-            "Failed to mark illustration %s as %s", illustration_id, status
-        )
+        logger.exception(f"Failed to mark illustration {illustration_id} as {status}")
 
 
 @celery.task(
@@ -150,16 +148,14 @@ def generate_illustration_task(
         )
         # Success — mark completed
         _safe_mark(illustration_id, "completed")
-        logger.info("Illustration %s completed", illustration_id)
+        logger.info(f"Illustration {illustration_id} completed")
     except Exception as exc:
         exc_msg = str(exc)
 
         # Non-retryable errors — mark failed immediately
         if any(marker in exc_msg for marker in NO_RETRY_MARKERS):
             logger.warning(
-                "generate_illustration_task permanently failed for %s: %s",
-                illustration_id,
-                exc_msg,
+                f"generate_illustration_task permanently failed for {illustration_id}: {exc_msg}"
             )
             _safe_mark(illustration_id, "failed", exc_msg)
             return
@@ -168,18 +164,12 @@ def generate_illustration_task(
         retries_left = self.max_retries - self.request.retries
         if retries_left <= 0:
             logger.error(
-                "generate_illustration_task exhausted retries for %s: %s",
-                illustration_id,
-                exc_msg,
+                f"generate_illustration_task exhausted retries for {illustration_id}: {exc_msg}"
             )
             _safe_mark(illustration_id, "failed", exc_msg)
             return
 
         logger.warning(
-            "generate_illustration_task retrying for %s (attempt %d/%d): %s",
-            illustration_id,
-            self.request.retries + 1,
-            self.max_retries + 1,
-            exc_msg,
+            f"generate_illustration_task retrying for {illustration_id} (attempt {self.request.retries + 1}/{self.max_retries + 1}): {exc_msg}"
         )
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

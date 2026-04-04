@@ -23,7 +23,7 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
 
     # Check if this run is still active (may have been stopped before worker picked it up)
     if not await is_run_active(job_type, run_id):
-        logger.info("bulk_job %s: run %s no longer active, skipping", job_type, run_id)
+        logger.info(f"bulk_job {job_type}: run {run_id} no longer active, skipping")
         return
 
     async with create_task_engine() as (_engine, session_factory):
@@ -32,13 +32,13 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
 
     total = len(book_ids)
     if total == 0:
-        logger.info("bulk_job %s: nothing to do", job_type)
+        logger.info(f"bulk_job {job_type}: nothing to do")
         return
 
     # Initialize progress counters in Redis
     await init_job_progress(job_type, run_id, total)
 
-    logger.info("bulk_job %s: dispatching %d tasks (run %s)", job_type, total, run_id)
+    logger.info(f"bulk_job {job_type}: dispatching {total} tasks (run {run_id})")
 
     for bid in book_ids:
         bid_str = str(bid)
@@ -46,10 +46,10 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
             _dispatch_single(job_type, bid_str, run_id)
         except Exception:
             logger.exception(
-                "bulk_job %s: failed to dispatch for book %s", job_type, bid_str
+                f"bulk_job {job_type}: failed to dispatch for book {bid_str}"
             )
 
-    logger.info("bulk_job %s: dispatched %d tasks", job_type, total)
+    logger.info(f"bulk_job {job_type}: dispatched {total} tasks")
 
 
 @celery.task(name="app.tasks.bulk_jobs.run_book_job", bind=True, max_retries=2)
@@ -68,7 +68,7 @@ def run_book_job(self, job_type: str, book_id: str, run_id: str) -> None:
             raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
         run_async(record_task_completion(run_id, job_type, success=False))
         logger.exception(
-            "run_book_job %s failed for book %s after retries", job_type, book_id
+            f"run_book_job {job_type} failed for book {book_id} after retries"
         )
         return
 

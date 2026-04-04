@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import uuid
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -18,49 +16,25 @@ async def _process_metadata_job(book_id: str) -> None:
     from sqlalchemy import text
 
     from app.database import create_task_engine
-    from app.services.metadata_sources import (
-        GoodreadsSource,
-        GoogleBooksSource,
-        HardcoverSource,
-        ReadmooSource,
+    from app.services.metadata_fetch import (
+        fetch_book_info,
+        init_metadata_sources,
+        run_tag_mapping,
+        search_and_fetch,
+        upsert_external_metadata,
     )
     from app.services.metadata_sources.base import RateLimitError
-    from app.services.settings import get_all_settings as _get_settings
 
     async with create_task_engine() as (_engine, session_factory):
-        # Load API keys from settings
-        async with session_factory() as settings_db:
-            app_settings = await _get_settings(settings_db)
+        sources = await init_metadata_sources(session_factory)
 
-        google_api_key = app_settings.get("google_books_api_key", "")
-        hardcover_token = app_settings.get("hardcover_api_token", "")
-
-        sources = [
-            GoodreadsSource(),
-            ReadmooSource(),
-            GoogleBooksSource(api_key=google_api_key),
-            HardcoverSource(api_token=hardcover_token),
-        ]
         async with session_factory() as db:
-            result = await db.execute(
-                text(
-                    "SELECT id, epub_title, epub_authors, epub_isbn, title, authors "
-                    "FROM books WHERE id = :id"
-                ),
-                {"id": book_id},
-            )
-            row = result.mappings().one_or_none()
-            if not row:
-                logger.warning("Book %s not found, skipping", book_id)
+            book_info = await fetch_book_info(db, book_id)
+            if not book_info:
+                logger.warning(f"Book {book_id} not found or has no title, skipping")
                 return
 
-            display_title = row["title"] or row["epub_title"] or ""
-            display_authors = row["authors"] or row["epub_authors"] or []
-            isbn = row["epub_isbn"]
-
-            if not display_title:
-                logger.info("Book %s has no title, skipping metadata fetch", book_id)
-                return
+            display_title, display_authors, isbn = book_info
 
             for source in sources:
                 try:
@@ -77,128 +51,36 @@ async def _process_metadata_job(book_id: str) -> None:
 
                     if pinned_url:
                         logger.info(
-                            "Using pinned URL for %s book %s: %s",
-                            source.source_name,
-                            book_id,
-                            pinned_url,
+                            f"Using pinned URL for {source.source_name} book {book_id}: {pinned_url}"
                         )
                         fetch_result = await source.fetch(pinned_url)
                         source_url = pinned_url
                     else:
-                        results = await source.search(
-                            display_title, display_authors, isbn
+                        result = await search_and_fetch(
+                            source, display_title, display_authors, isbn, book_id
                         )
-                        if not results:
-                            logger.info(
-                                "No results from %s for book %s",
-                                source.source_name,
-                                book_id,
-                            )
+                        if not result:
                             continue
+                        fetch_result, source_url = result
 
-                        best = results[0]
-                        if best.score < 60:
-                            logger.debug(
-                                "Skipping %s for book %s: low score %.0f",
-                                source.source_name,
-                                book_id,
-                                best.score,
-                            )
-                            continue
-                        if best.prefetched:
-                            fetch_result = best.prefetched
-                        else:
-                            fetch_result = await source.fetch(best.url)
-                        source_url = fetch_result.source_url
-
-                    # Upsert external_metadata
-                    await db.execute(
-                        text(
-                            """
-                            INSERT INTO external_metadata
-                                (
-                                    id,
-                                    book_id,
-                                    source,
-                                    source_url,
-                                    rating,
-                                    rating_count,
-                                    reviews,
-                                    raw_data,
-                                    fetched_at
-                                )
-                            VALUES
-                                (
-                                    gen_random_uuid(),
-                                    :book_id,
-                                    :source,
-                                    :source_url,
-                                    :rating,
-                                    :rating_count,
-                                    CAST(:reviews AS jsonb),
-                                    CAST(:raw_data AS jsonb),
-                                    :fetched_at
-                                )
-                            ON CONFLICT (book_id, source) DO UPDATE SET
-                                source_url = EXCLUDED.source_url,
-                                rating = EXCLUDED.rating,
-                                rating_count = EXCLUDED.rating_count,
-                                reviews = EXCLUDED.reviews,
-                                raw_data = EXCLUDED.raw_data,
-                                fetched_at = EXCLUDED.fetched_at
-                        """
-                        ),
-                        {
-                            "book_id": book_id,
-                            "source": source.source_name,
-                            "source_url": source_url,
-                            "rating": fetch_result.rating,
-                            "rating_count": fetch_result.rating_count,
-                            "reviews": json.dumps(fetch_result.reviews)
-                            if fetch_result.reviews
-                            else None,
-                            "raw_data": json.dumps(fetch_result.raw_data)
-                            if fetch_result.raw_data
-                            else None,
-                            "fetched_at": datetime.now(UTC),
-                        },
+                    await upsert_external_metadata(
+                        db, book_id, source.source_name, source_url, fetch_result
                     )
-                    await db.commit()
                     logger.info(
-                        "Updated %s metadata for book %s",
-                        source.source_name,
-                        book_id,
+                        f"Updated {source.source_name} metadata for book {book_id}"
                     )
                 except RateLimitError:
                     logger.warning(
-                        "Rate limited by %s for book %s, skipping",
-                        source.source_name,
-                        book_id,
+                        f"Rate limited by {source.source_name} for book {book_id}, skipping"
                     )
                 except Exception as e:
                     logger.error(
-                        "Error processing %s for book %s: %s",
-                        source.source_name,
-                        book_id,
-                        e,
+                        f"Error processing {source.source_name} for book {book_id}: {e}"
                     )
                     await db.rollback()
 
             # After all sources fetched, run deterministic tag mapping
-            try:
-                from app.services.tag_mapping import generate_tags_from_metadata
-
-                async with session_factory() as db:
-                    count = await generate_tags_from_metadata(db, uuid.UUID(book_id))
-                    await db.commit()
-                    if count:
-                        logger.info(
-                            "Mapped %d external tags for book %s",
-                            count,
-                            book_id,
-                        )
-            except Exception as e:
-                logger.error("Error mapping external tags for book %s: %s", book_id, e)
+            await run_tag_mapping(session_factory, book_id)
 
 
 @celery.task(name="app.tasks.metadata.fetch_metadata", bind=True, max_retries=3)
@@ -209,7 +91,7 @@ def fetch_metadata(self, book_id: str) -> None:
 
         run_async(_process_metadata_job(book_id))
     except Exception as exc:
-        logger.exception("fetch_metadata failed for book %s", book_id)
+        logger.exception(f"fetch_metadata failed for book {book_id}")
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
 
 
@@ -265,9 +147,7 @@ async def _check_and_schedule_refresh() -> None:
                 days_since = (datetime.now(UTC) - last_run_dt).total_seconds() / 86400
                 if days_since < interval_days:
                     logger.debug(
-                        "Last scheduled %.1f days ago, interval is %d days, skipping",
-                        days_since,
-                        interval_days,
+                        f"Last scheduled {days_since:.1f} days ago, interval is {interval_days} days, skipping"
                     )
                     return
 
@@ -296,7 +176,7 @@ async def _check_and_schedule_refresh() -> None:
                     fetch_metadata.apply_async(
                         args=[book_id], link=auto_tag_book.si(book_id)
                     )
-                logger.info("Queued %d books for metadata refresh", len(book_ids))
+                logger.info(f"Queued {len(book_ids)} books for metadata refresh")
 
             # Record last scheduled time
             await client.set(LAST_SCHEDULED_KEY, datetime.now(UTC).isoformat())

@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
 from app.services.metadata_sources.base import (
+    REQUEST_TIMEOUT,
     AbstractMetadataSource,
     FetchResult,
     RateLimitError,
@@ -95,7 +96,7 @@ class ReadmooSource(AbstractMetadataSource):
         try:
             queries = self._build_queries(title, authors)
             async with httpx.AsyncClient(
-                headers=HEADERS, follow_redirects=True, timeout=15
+                headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
             ) as client:
                 for query in queries:
                     if not query:
@@ -130,7 +131,7 @@ class ReadmooSource(AbstractMetadataSource):
     async def fetch(self, url: str) -> FetchResult:
         try:
             async with httpx.AsyncClient(
-                headers=HEADERS, follow_redirects=True, timeout=15
+                headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
             ) as client:
                 resp = await client.get(url)
                 if resp.status_code == 429:

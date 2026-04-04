@@ -118,7 +118,8 @@
 
     // Focus input on desktop after animation
     if (!isMobile) {
-      focusTimer = setTimeout(() => inputEl?.focus(), 220);
+      const FOCUS_DELAY_MS = 220;
+      focusTimer = setTimeout(() => inputEl?.focus(), FOCUS_DELAY_MS);
     }
   });
 

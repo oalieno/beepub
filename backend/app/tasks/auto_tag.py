@@ -31,12 +31,12 @@ async def _process_auto_tag(book_id: str) -> None:
             )
             row = result.mappings().one_or_none()
             if not row:
-                logger.warning("Book %s not found, skipping auto-tag", book_id)
+                logger.warning(f"Book {book_id} not found, skipping auto-tag")
                 return
 
             display_title = row["title"] or row["epub_title"]
             if not display_title:
-                logger.info("Book %s has no title, skipping auto-tag", book_id)
+                logger.info(f"Book {book_id} has no title, skipping auto-tag")
                 return
 
             display_authors = row["authors"] or row["epub_authors"]
@@ -70,17 +70,14 @@ async def _process_auto_tag(book_id: str) -> None:
             )
 
             if not tags:
-                logger.warning("No valid AI tags generated for book %s", book_id)
+                logger.warning(f"No valid AI tags generated for book {book_id}")
                 return
 
             # Save tags
             await save_ai_tags(db, uuid.UUID(book_id), tags)
             await db.commit()
             logger.info(
-                "Auto-tagged book %s with %d tags: %s",
-                book_id,
-                len(tags),
-                [t["tag"] for t in tags],
+                f"Auto-tagged book {book_id} with {len(tags)} tags: {[t['tag'] for t in tags]}"
             )
 
 
@@ -95,5 +92,5 @@ def auto_tag_book(self, book_id: str) -> None:
 
         run_async(_process_auto_tag(book_id))
     except Exception as exc:
-        logger.exception("auto_tag_book failed for book %s", book_id)
+        logger.exception(f"auto_tag_book failed for book {book_id}")
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

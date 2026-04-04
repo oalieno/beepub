@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from rapidfuzz import fuzz
 
 from app.services.metadata_sources.base import (
+    REQUEST_TIMEOUT,
     AbstractMetadataSource,
     FetchResult,
     RateLimitError,
@@ -102,7 +103,7 @@ class GoodreadsSource(AbstractMetadataSource):
         if isbn:
             try:
                 async with httpx.AsyncClient(
-                    headers=HEADERS, follow_redirects=True, timeout=15
+                    headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
                 ) as client:
                     resp = await client.get(
                         "https://www.goodreads.com/search", params={"q": isbn}
@@ -145,7 +146,7 @@ class GoodreadsSource(AbstractMetadataSource):
         try:
             queries = self._build_queries(title, authors)
             async with httpx.AsyncClient(
-                headers=HEADERS, follow_redirects=True, timeout=15
+                headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
             ) as client:
                 for query in queries:
                     if not query:
@@ -187,7 +188,7 @@ class GoodreadsSource(AbstractMetadataSource):
         url = self._normalize_book_url(url)
         try:
             async with httpx.AsyncClient(
-                headers=HEADERS, follow_redirects=True, timeout=15
+                headers=HEADERS, follow_redirects=True, timeout=REQUEST_TIMEOUT
             ) as client:
                 resp = await client.get(url)
                 if resp.status_code == 429:
@@ -212,7 +213,7 @@ class GoodreadsSource(AbstractMetadataSource):
                         rating = float(agg.get("ratingValue", 0)) or None
                         rating_count = int(agg.get("ratingCount", 0)) or None
                     except Exception:
-                        logger.warning("Failed to parse JSON-LD from %s", url)
+                        logger.warning(f"Failed to parse JSON-LD from {url}")
 
                 # Fallback: scrape rating display
                 if rating is None:

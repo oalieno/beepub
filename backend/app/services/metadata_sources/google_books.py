@@ -6,6 +6,7 @@ import httpx
 from rapidfuzz import fuzz
 
 from app.services.metadata_sources.base import (
+    REQUEST_TIMEOUT,
     AbstractMetadataSource,
     FetchResult,
     RateLimitError,
@@ -32,7 +33,7 @@ class GoogleBooksSource(AbstractMetadataSource):
             params["key"] = self.api_key
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
                 # Try ISBN first
                 if isbn:
                     params["q"] = f"isbn:{isbn}"
@@ -88,7 +89,7 @@ class GoogleBooksSource(AbstractMetadataSource):
         except RateLimitError:
             raise
         except Exception as e:
-            logger.warning("Google Books search failed: %s", e)
+            logger.warning(f"Google Books search failed: {e}")
 
         return results[:3]
 
@@ -100,7 +101,7 @@ class GoogleBooksSource(AbstractMetadataSource):
             params["key"] = self.api_key
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
                 resp = await client.get(f"{API_BASE}/{volume_id}", params=params)
                 if resp.status_code == 429:
                     raise RateLimitError("google_books")
@@ -136,5 +137,5 @@ class GoogleBooksSource(AbstractMetadataSource):
         except RateLimitError:
             raise
         except Exception as e:
-            logger.warning("Google Books fetch failed for %s: %s", volume_id, e)
+            logger.warning(f"Google Books fetch failed for {volume_id}: {e}")
             return FetchResult(source_url=volume_id)

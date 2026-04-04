@@ -68,7 +68,7 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
     client = aioredis.from_url(settings.redis_url)
     lock = client.lock(f"summarize:{book_id}", timeout=600)
     if not await lock.acquire(blocking=False):
-        logger.info("Summarize already running for book %s, skipping", book_id)
+        logger.info(f"Summarize already running for book {book_id}, skipping")
         await client.aclose()
         return
 
@@ -83,8 +83,7 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
                 )
                 if img_result.scalar_one_or_none() is True:
                     logger.info(
-                        "Book %s is an image book, skipping summarization",
-                        book_id,
+                        f"Book {book_id} is an image book, skipping summarization"
                     )
                     return
 
@@ -159,10 +158,7 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
                         )
                     except Exception:
                         logger.warning(
-                            "Failed to summarize chunk %s (spine %d) of book %s",
-                            chunk.id,
-                            chunk.spine_index,
-                            book_id,
+                            f"Failed to summarize chunk {chunk.id} (spine {chunk.spine_index}) of book {book_id}",
                             exc_info=True,
                         )
                         # Don't fail the whole task — skip this chunk
@@ -171,11 +167,7 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
                 await db.commit()
                 summarized = sum(1 for c in chunks if c.summary is not None)
                 logger.info(
-                    "Summarized %d/%d chunks for book %s (up to spine %d)",
-                    summarized,
-                    len(chunks),
-                    book_id,
-                    up_to_spine_index,
+                    f"Summarized {summarized}/{len(chunks)} chunks for book {book_id} (up to spine {up_to_spine_index})"
                 )
     finally:
         try:
@@ -205,5 +197,5 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
 
         embed_book_summary.delay(book_id)
     except Exception as exc:
-        logger.exception("summarize_chunks failed for book %s", book_id)
+        logger.exception(f"summarize_chunks failed for book {book_id}")
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

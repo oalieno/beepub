@@ -315,7 +315,7 @@ def _parse_tags_response(text: str) -> list[dict]:
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("Failed to parse AI tags response as JSON: %s", text[:200])
+        logger.warning(f"Failed to parse AI tags response as JSON: {text[:200]}")
         return []
 
     if not isinstance(data, list):
@@ -329,7 +329,7 @@ def _parse_tags_response(text: str) -> list[dict]:
             continue
         tag = item.get("tag", "").strip().lower()
         if tag not in _TAG_TO_CATEGORY:
-            logger.debug("Skipping unknown tag: %s", tag)
+            logger.debug(f"Skipping unknown tag: {tag}")
             continue
         if tag in seen_tags:
             continue
@@ -341,7 +341,7 @@ def _parse_tags_response(text: str) -> list[dict]:
             confidence = 0.5
         confidence = max(0.0, min(1.0, confidence))
         if confidence < 0.7:
-            logger.debug("Skipping low-confidence tag: %s (%.2f)", tag, confidence)
+            logger.debug(f"Skipping low-confidence tag: {tag} ({confidence:.2f})")
             continue
         valid_tags.append(
             {

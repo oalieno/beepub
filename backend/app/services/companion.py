@@ -222,9 +222,6 @@ async def build_system_prompt(
     language = book.epub_language or "Unknown"
 
     current_spine, node_idx = _parse_cfi(current_cfi)
-    print(
-        f"=== DEBUG current_cfi={current_cfi!r} spine={current_spine} node={node_idx} ==="
-    )
 
     # Try chunk-based context first (summaries + current raw text)
     book_context = await _build_context_from_chunks(
@@ -238,9 +235,7 @@ async def build_system_prompt(
                 book.file_path, current_cfi, max_chars=FALLBACK_RAW_CHARS
             )
         except Exception:
-            logger.warning(
-                "Failed to extract text from book %s", book.id, exc_info=True
-            )
+            logger.warning(f"Failed to extract text from book {book.id}", exc_info=True)
             book_context = "(Book text unavailable — the EPUB file could not be read.)"
 
         if len(book_context) > FALLBACK_RAW_CHARS:

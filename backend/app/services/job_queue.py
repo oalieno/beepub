@@ -209,12 +209,7 @@ async def record_task_completion(run_id: str, job_type: str, *, success: bool) -
             auto_pipe.set(_run_id_key(job_type), COMPLETED_SENTINEL)
             await auto_pipe.execute()
             logger.info(
-                "Job %s run %s auto-completed: %d/%d (%d failed)",
-                job_type,
-                run_id,
-                completed,
-                total,
-                failed,
+                f"Job {job_type} run {run_id} auto-completed: {completed}/{total} ({failed} failed)"
             )
     finally:
         await client.aclose()

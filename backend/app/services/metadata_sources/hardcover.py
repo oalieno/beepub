@@ -6,6 +6,7 @@ import httpx
 from rapidfuzz import fuzz
 
 from app.services.metadata_sources.base import (
+    REQUEST_TIMEOUT,
     AbstractMetadataSource,
     FetchResult,
     RateLimitError,
@@ -56,7 +57,7 @@ class HardcoverSource(AbstractMetadataSource):
             return []
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
                 resp = await client.post(
                     API_URL,
                     headers=self._headers(),
@@ -66,9 +67,7 @@ class HardcoverSource(AbstractMetadataSource):
                     raise RateLimitError("hardcover")
                 if resp.status_code != 200:
                     logger.warning(
-                        "Hardcover search returned %d: %s",
-                        resp.status_code,
-                        resp.text[:200],
+                        f"Hardcover search returned {resp.status_code}: {resp.text[:200]}"
                     )
                     return []
 
@@ -128,7 +127,7 @@ class HardcoverSource(AbstractMetadataSource):
         except RateLimitError:
             raise
         except Exception as e:
-            logger.warning("Hardcover search failed: %s", e)
+            logger.warning(f"Hardcover search failed: {e}")
 
         return results[:3]
 
@@ -141,7 +140,7 @@ class HardcoverSource(AbstractMetadataSource):
             return FetchResult(source_url=url)
 
         try:
-            async with httpx.AsyncClient(timeout=15) as client:
+            async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
                 resp = await client.post(
                     API_URL,
                     headers=self._headers(),
@@ -198,5 +197,5 @@ class HardcoverSource(AbstractMetadataSource):
         except RateLimitError:
             raise
         except Exception as e:
-            logger.warning("Hardcover fetch failed for %s: %s", url, e)
+            logger.warning(f"Hardcover fetch failed for {url}: {e}")
             return FetchResult(source_url=url)
