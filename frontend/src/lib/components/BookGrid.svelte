@@ -59,7 +59,7 @@
 <div
   class="grid gap-4 items-start {columns === 'default' ? 'book-grid' : columns}"
   style={columns === "default"
-    ? "grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
+    ? "grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"
     : ""}
 >
   {#each books as book (book.id)}

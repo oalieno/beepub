@@ -94,7 +94,9 @@
     <div class="mb-8">
       <div class="flex items-center gap-2">
         <Sparkles size={24} class="text-primary" />
-        <h1 class="text-3xl font-bold text-foreground">Recommended for You</h1>
+        <h1 class="text-2xl sm:text-3xl font-bold text-foreground">
+          Recommended for You
+        </h1>
       </div>
       <p class="text-muted-foreground mt-1">
         Based on your reading activity and favorites.

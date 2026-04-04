@@ -125,17 +125,15 @@
               <Library size={18} />
             </div>
             <div>
-              <p class="font-semibold text-foreground">
-                {lib.name}
-                {#if lib.calibre_path}
-                  <span
-                    class="ml-2 text-xs bg-amber-500/15 text-amber-600 px-2 py-0.5 rounded-full inline-flex items-center gap-1"
-                  >
-                    <HardDrive size={10} />
-                    Calibre
-                  </span>
-                {/if}
-              </p>
+              <p class="font-semibold text-foreground">{lib.name}</p>
+              {#if lib.calibre_path}
+                <span
+                  class="mt-1 text-xs bg-amber-500/15 text-amber-600 px-2 py-0.5 rounded-full inline-flex items-center gap-1 w-fit"
+                >
+                  <HardDrive size={10} />
+                  Calibre
+                </span>
+              {/if}
               {#if lib.description}
                 <p class="text-muted-foreground text-sm">{lib.description}</p>
               {/if}

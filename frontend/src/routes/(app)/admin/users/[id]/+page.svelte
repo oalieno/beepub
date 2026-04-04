@@ -168,7 +168,7 @@
   <title>{user?.username ?? "User"} - Admin - BeePub</title>
 </svelte:head>
 
-<div class="max-w-3xl mx-auto px-6 sm:px-8 py-6">
+<div class="max-w-3xl mx-auto px-4 sm:px-8 py-6">
   <div class="mb-1">
     <BackButton href="/admin/users" label="Users" />
   </div>
@@ -253,10 +253,10 @@
       <!-- Download Permission -->
       <div class="bg-card card-soft rounded-2xl p-5 mb-6">
         <h2 class="text-lg font-semibold text-foreground mb-4">Permissions</h2>
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <Download size={18} class="text-muted-foreground" />
-            <div>
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex items-center gap-3 min-w-0">
+            <Download size={18} class="text-muted-foreground shrink-0" />
+            <div class="min-w-0">
               <p class="text-sm font-medium text-foreground">Download EPUBs</p>
               <p class="text-xs text-muted-foreground">
                 Allow this user to download EPUB files to their device
@@ -264,7 +264,7 @@
             </div>
           </div>
           <button
-            class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {user.can_download
+            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {user.can_download
               ? 'bg-primary'
               : 'bg-secondary'}"
             onclick={toggleDownload}
@@ -281,19 +281,21 @@
 
       <!-- Library Access -->
       <div class="bg-card card-soft rounded-2xl p-5 mb-6">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-lg font-semibold text-foreground">Library Access</h2>
+        <div class="flex items-center justify-between gap-3 mb-4">
+          <h2 class="text-lg font-semibold text-foreground shrink-0">
+            Library Access
+          </h2>
           {#if libraryAccess.length > 1}
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-1.5">
               <button
-                class="text-xs px-2.5 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors disabled:opacity-40"
+                class="text-xs px-2 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors disabled:opacity-40 whitespace-nowrap"
                 onclick={() => setAllLibraryAccess(true)}
                 disabled={allGranted}
               >
                 Select all
               </button>
               <button
-                class="text-xs px-2.5 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors disabled:opacity-40"
+                class="text-xs px-2 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors disabled:opacity-40 whitespace-nowrap"
                 onclick={() => setAllLibraryAccess(false)}
                 disabled={allExcluded}
               >
@@ -307,15 +309,15 @@
         {:else}
           <div class="space-y-3">
             {#each libraryAccess as lib}
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <Library size={18} class="text-muted-foreground" />
-                  <span class="text-sm font-medium text-foreground"
+              <div class="flex items-center justify-between gap-4">
+                <div class="flex items-center gap-3 min-w-0">
+                  <Library size={18} class="text-muted-foreground shrink-0" />
+                  <span class="text-sm font-medium text-foreground truncate"
                     >{lib.library_name}</span
                   >
                 </div>
                 <button
-                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors {!lib.excluded
+                  class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {!lib.excluded
                     ? 'bg-primary'
                     : 'bg-secondary'}"
                   onclick={() => toggleLibraryExclusion(lib.library_id)}
@@ -339,8 +341,8 @@
       Danger Zone
     </h2>
     <div class="border border-destructive/30 rounded-2xl p-5">
-      <div class="flex items-center justify-between">
-        <div>
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0">
           <p class="text-sm font-medium text-foreground">Delete this user</p>
           <p class="text-xs text-muted-foreground">
             Permanently remove this user and all their data.
@@ -348,7 +350,7 @@
         </div>
         <Button
           variant="outline"
-          class="rounded-xl border-destructive/30 text-destructive hover:bg-destructive hover:text-white"
+          class="rounded-xl border-destructive/30 text-destructive hover:bg-destructive hover:text-white shrink-0"
           onclick={handleDelete}
           disabled={cannotDelete}
         >
