@@ -493,6 +493,7 @@ async def search_books(
                 cast(Book.epub_authors, SAString).ilike(pattern),
                 Book.series.ilike(pattern),
                 Book.epub_series.ilike(pattern),
+                Book.epub_isbn.ilike(pattern),
             ),
         )
         .distinct(Book.id)
@@ -674,6 +675,7 @@ async def list_all_books(
                 cast(Book.epub_authors, SAString).ilike(pattern),
                 Book.series.ilike(pattern),
                 Book.epub_series.ilike(pattern),
+                Book.epub_isbn.ilike(pattern),
             )
         )
     if author:

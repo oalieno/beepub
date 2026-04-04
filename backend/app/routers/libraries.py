@@ -197,6 +197,7 @@ async def list_library_books(
                 cast(Book.epub_authors, SAString).ilike(pattern),
                 Book.series.ilike(pattern),
                 Book.epub_series.ilike(pattern),
+                Book.epub_isbn.ilike(pattern),
             )
         )
     if author:
