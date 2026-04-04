@@ -42,6 +42,7 @@
   let autoReadTriggered = false;
 
   let title = $state("");
+  let hasDbTitle = false;
   let fontFamily = $state("serif");
   let fontSize = $state(16);
   let darkMode = $state(false);
@@ -118,12 +119,16 @@
     // Fetch current interaction and start reading timer
     fetchInteractionAndStartTimer();
 
-    // Fetch book authors for share card
+    // Fetch book metadata for share card + display title
     booksApi
       .get(bookId)
       .then((book) => {
         bookAuthors = book.display_authors ?? book.epub_authors ?? [];
         isImageBook = book.is_image_book === true;
+        if (book.display_title) {
+          title = book.display_title;
+          hasDbTitle = true;
+        }
       })
       .catch(() => {});
   });
@@ -397,7 +402,7 @@
         {darkMode}
         {isImageBook}
         offline={!$isOnline}
-        ontitle={(t) => (title = t)}
+        ontitle={(t) => { if (!hasDbTitle) title = t; }}
         onprogress={(p) => {
           percentage = p.percentage;
         }}
