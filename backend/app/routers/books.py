@@ -72,7 +72,7 @@ from app.services.storage import (
     save_upload_file,
 )
 from app.tasks.auto_tag import auto_tag_book
-from app.tasks.metadata import fetch_metadata
+from app.tasks.metadata import fetch_metadata, fetch_single_source
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -1188,8 +1188,8 @@ async def update_external_metadata_url(
             db.add(meta)
         await db.commit()
         await db.refresh(meta)
-        # Auto-trigger metadata refresh to fetch from the new URL
-        fetch_metadata.delay(str(book_id))
+        # Fetch data from the pinned URL and re-map tags
+        fetch_single_source.delay(str(book_id), source)
         return meta
 
 

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,6 +25,12 @@ class Library(Base, TimestampMixin):
     cover_image: Mapped[str | None] = mapped_column(String(500), nullable=True)
     calibre_path: Mapped[str | None] = mapped_column(
         String(500), nullable=True, unique=True
+    )
+    auto_sync: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="true"
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     created_by: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id"), nullable=False

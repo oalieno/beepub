@@ -242,10 +242,7 @@ export interface AdminStats {
 export interface AdminSettings {
   registration_enabled: string;
   timezone: string;
-  metadata_refresh_enabled: string;
-  metadata_refresh_hour: string;
-  metadata_refresh_interval_days: string;
-  metadata_refresh_cooldown_days: string;
+  calibre_auto_sync_interval_minutes: string;
   gemini_api_key: string;
   openai_api_key: string;
   openai_base_url: string;
@@ -277,6 +274,8 @@ export interface CalibreLibraryInfo {
   linked: boolean;
   library_id: string | null;
   library_name: string | null;
+  auto_sync: boolean | null;
+  last_synced_at: string | null;
 }
 
 export interface CalibreSyncStatus {
@@ -296,6 +295,8 @@ export interface CalibreLibraryStatus {
   calibre_path: string;
   calibre_book_count: number | null;
   imported_book_count: number;
+  auto_sync: boolean;
+  last_synced_at: string | null;
   sync: CalibreSyncStatus | null;
 }
 

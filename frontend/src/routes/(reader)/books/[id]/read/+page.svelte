@@ -402,7 +402,9 @@
         {darkMode}
         {isImageBook}
         offline={!$isOnline}
-        ontitle={(t) => { if (!hasDbTitle) title = t; }}
+        ontitle={(t) => {
+          if (!hasDbTitle) title = t;
+        }}
         onprogress={(p) => {
           percentage = p.percentage;
         }}

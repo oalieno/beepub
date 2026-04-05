@@ -1,4 +1,4 @@
-import { get, post, put, del } from "./client";
+import { get, post, put, patch, del } from "./client";
 import type { UserOut, UserLibraryAccess } from "$lib/types";
 
 export const adminApi = {
@@ -49,6 +49,12 @@ export const adminApi = {
 
   syncCalibreLibrary: (libraryId: string) =>
     post(`/admin/calibre/libraries/${libraryId}/sync`, {}),
+
+  updateCalibreLibrary: (libraryId: string, data: { auto_sync: boolean }) =>
+    patch(`/admin/calibre/libraries/${libraryId}`, data) as Promise<{
+      id: string;
+      auto_sync: boolean;
+    }>,
 
   getCalibreLibraryStatus: (libraryId: string) =>
     get(`/admin/calibre/libraries/${libraryId}/status`) as Promise<

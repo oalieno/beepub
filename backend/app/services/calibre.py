@@ -24,6 +24,15 @@ CALIBRE_BASE_DIR = "/calibre"
 SYNC_KEY_PREFIX = "beepub:calibre:sync"
 
 
+def get_metadata_db_mtime(calibre_path: str) -> datetime | None:
+    """Get metadata.db mtime as UTC datetime."""
+    db_path = os.path.join(calibre_path, "metadata.db")
+    try:
+        return datetime.fromtimestamp(os.path.getmtime(db_path), tz=UTC)
+    except OSError:
+        return None
+
+
 @dataclass
 class CalibreBookInfo:
     calibre_id: int
@@ -273,6 +282,8 @@ async def sync_calibre_library(
             existing_result = await db.execute(existing_query)
             existing_books = {b.calibre_id: b for b in existing_result.scalars().all()}
 
+            new_book_ids: list[str] = []
+
             for i, cal_book in enumerate(calibre_books):
                 try:
                     if cal_book.calibre_id in existing_books:
@@ -361,7 +372,7 @@ async def sync_calibre_library(
                             added_by=admin_user_id,
                         )
                         db.add(lb)
-                        extract_book_text.delay(str(book_id))
+                        new_book_ids.append(str(book_id))
                         result.added += 1
 
                 except Exception as e:
@@ -399,7 +410,24 @@ async def sync_calibre_library(
                     f"Removed {result.removed} orphan books from library {library_id}"
                 )
 
+            # Update last_synced_at
+            from sqlalchemy import update
+
+            await db.execute(
+                update(Library)
+                .where(Library.id == library_id)
+                .values(last_synced_at=datetime.now(UTC))
+            )
+
             await db.commit()
+
+        # Dispatch tasks AFTER commit to avoid race conditions
+        from app.tasks.auto_tag import auto_tag_book
+        from app.tasks.metadata import fetch_metadata
+
+        for book_id in new_book_ids:
+            extract_book_text.delay(book_id)
+            fetch_metadata.apply_async(args=[book_id], link=auto_tag_book.si(book_id))
 
         await _update_progress(result, total, total, "completed")
 

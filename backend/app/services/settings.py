@@ -6,10 +6,7 @@ from app.models.settings import AppSetting
 DEFAULTS = {
     "registration_enabled": "false",
     "timezone": "Asia/Taipei",
-    "metadata_refresh_enabled": "true",
-    "metadata_refresh_hour": "3",
-    "metadata_refresh_interval_days": "7",
-    "metadata_refresh_cooldown_days": "30",
+    "calibre_auto_sync_interval_minutes": "30",
     # Provider credentials (stored once)
     "gemini_api_key": "",
     "openai_api_key": "",

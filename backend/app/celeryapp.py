@@ -55,11 +55,32 @@ celery.conf.update(
         "app.tasks.summarize",
         "app.tasks.embed",
         "app.tasks.bulk_jobs",
+        "app.tasks.calibre_sync",
     ],
     beat_schedule={
-        "metadata-refresh-check": {
-            "task": "app.tasks.metadata.check_and_schedule_refresh",
-            "schedule": 3600.0,  # every hour
+        "calibre-auto-sync": {
+            "task": "app.tasks.calibre_sync.check_and_sync_calibre",
+            "schedule": 60.0,  # every 60 seconds, interval check is internal
         },
     },
+    task_routes={
+        "app.tasks.bulk_jobs.run_bulk_job": {"queue": "bulk"},
+        "app.tasks.bulk_jobs.run_book_job": {"queue": "bulk"},
+    },
 )
+
+
+@celery.on_after_configure.connect
+def _register_worker_ready(sender, **kwargs):
+    """Register worker_ready signal after celery is configured."""
+    from celery.signals import worker_ready
+
+    @worker_ready.connect
+    def on_worker_ready(sender, **kwargs):
+        """On default worker startup, trigger immediate calibre sync."""
+        queues = {q.name for q in sender.app.amqp.queues.consume_from}
+        if "default" not in queues and "celery" not in queues:
+            return
+        from app.tasks.calibre_sync import check_and_sync_calibre
+
+        check_and_sync_calibre.delay(True)

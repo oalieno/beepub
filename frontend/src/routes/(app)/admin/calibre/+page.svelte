@@ -4,14 +4,14 @@
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
+  import * as Select from "$lib/components/ui/select";
   import type { CalibreLibraryInfo, CalibreLibraryStatus } from "$lib/types";
   import {
     HardDrive,
     RefreshCw,
     Link,
-    CircleCheck,
-    CircleAlert,
     LoaderCircle,
+    Timer,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
@@ -24,21 +24,36 @@
   let pollingIntervals = $state<Record<string, ReturnType<typeof setInterval>>>(
     {},
   );
+  let syncIntervalMinutes = $state(30);
+
+  let linkedLibraries = $derived(libraries.filter((l) => l.linked));
+  let unlinkedLibraries = $derived(libraries.filter((l) => !l.linked));
+  let anySyncing = $derived(
+    linkedLibraries.some((l) => {
+      const s = l.library_id ? syncStatuses[l.library_id] : null;
+      return s?.sync?.status === "running";
+    }),
+  );
 
   onMount(() => {
-    void loadLibraries();
-
+    void loadData();
     return () => {
-      // Cleanup polling intervals
       Object.values(pollingIntervals).forEach(clearInterval);
     };
   });
 
-  async function loadLibraries() {
+  async function loadData() {
     loading = true;
     try {
-      libraries = await adminApi.getCalibreLibraries();
-      // Load status for linked libraries
+      const [libs, settings] = await Promise.all([
+        adminApi.getCalibreLibraries(),
+        adminApi.getSettings().catch(() => null),
+      ]);
+      libraries = libs;
+      if (settings) {
+        syncIntervalMinutes =
+          parseInt(settings.calibre_auto_sync_interval_minutes) || 30;
+      }
       for (const lib of libraries) {
         if (lib.linked && lib.library_id) {
           await loadStatus(lib.library_id);
@@ -55,11 +70,10 @@
     try {
       const status = await adminApi.getCalibreLibraryStatus(libraryId);
       syncStatuses[libraryId] = status;
-      // If sync is running, start polling
       if (status.sync?.status === "running") {
         startPolling(libraryId);
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
@@ -73,8 +87,7 @@
         if (status.sync?.status !== "running") {
           clearInterval(pollingIntervals[libraryId]);
           delete pollingIntervals[libraryId];
-          // Refresh library list to update counts
-          await loadLibraries();
+          await loadData();
         }
       } catch {
         clearInterval(pollingIntervals[libraryId]);
@@ -93,7 +106,7 @@
       toastStore.success(`Library "${name}" linked and sync started`);
       linkingPath = null;
       linkName = "";
-      await loadLibraries();
+      await loadData();
       if (result.library_id) {
         startPolling(result.library_id);
       }
@@ -105,11 +118,99 @@
   async function handleSync(libraryId: string) {
     try {
       await adminApi.syncCalibreLibrary(libraryId);
-      toastStore.success("Sync started");
       startPolling(libraryId);
     } catch (e) {
       toastStore.error((e as Error).message);
     }
+  }
+
+  async function handleSyncAll() {
+    const targets = linkedLibraries.filter((l) => {
+      const s = l.library_id ? syncStatuses[l.library_id] : null;
+      return s?.sync?.status !== "running";
+    });
+    if (targets.length === 0) return;
+    try {
+      await Promise.all(
+        targets.map((lib) => {
+          const id = lib.library_id!;
+          startPolling(id);
+          return adminApi.syncCalibreLibrary(id);
+        }),
+      );
+      toastStore.success(`Syncing ${targets.length} libraries`);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleToggleAutoSync(lib: CalibreLibraryInfo) {
+    if (!lib.library_id) return;
+    const newValue = !lib.auto_sync;
+    lib.auto_sync = newValue;
+    libraries = [...libraries];
+    try {
+      await adminApi.updateCalibreLibrary(lib.library_id, {
+        auto_sync: newValue,
+      });
+    } catch (e) {
+      lib.auto_sync = !newValue;
+      libraries = [...libraries];
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleIntervalChange(value: string) {
+    syncIntervalMinutes = parseInt(value);
+    try {
+      await adminApi.updateSettings({
+        calibre_auto_sync_interval_minutes: String(syncIntervalMinutes),
+      });
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function formatIntervalLabel(minutes: number): string {
+    if (minutes < 60) return `Every ${minutes} min`;
+    if (minutes === 60) return "Every 1 hour";
+    return `Every ${minutes / 60} hours`;
+  }
+
+  function formatRelativeTime(isoString: string | null): string {
+    if (!isoString) return "—";
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return "Just now";
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  }
+
+  function formatNumber(n: number | null): string {
+    if (n === null) return "—";
+    return n.toLocaleString();
+  }
+
+  function syncTooltip(
+    syncInfo: import("$lib/types").CalibreSyncStatus | null | undefined,
+  ): string | null {
+    if (!syncInfo) return null;
+    if (syncInfo.status === "completed") {
+      let text = `${syncInfo.added} added, ${syncInfo.updated} updated, ${syncInfo.unchanged} unchanged`;
+      if (syncInfo.skipped > 0) text += `, ${syncInfo.skipped} skipped`;
+      return text;
+    }
+    if (syncInfo.status === "failed") {
+      const msg =
+        syncInfo.errors.length > 0 ? syncInfo.errors[0] : "Unknown error";
+      return `Sync failed: ${msg}`;
+    }
+    return null;
   }
 </script>
 
@@ -129,21 +230,20 @@
   </div>
 
   {#if loading}
-    <div role="status" aria-label="Loading" class="space-y-3">
-      {#each Array(6) as _}
-        <div class="bg-card card-soft rounded-2xl p-5">
-          <div class="flex items-center gap-4">
-            <Skeleton class="w-10 h-10 rounded-xl shrink-0" />
-            <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2 mb-1">
-                <Skeleton class="h-5 w-32" />
-                <Skeleton class="h-5 w-14 rounded-full" />
-              </div>
-              <Skeleton class="h-4 w-3/4" />
+    <div role="status" aria-label="Loading">
+      <div class="bg-card card-soft rounded-2xl p-5">
+        <div class="space-y-4">
+          {#each Array(5) as _}
+            <div class="flex items-center gap-4">
+              <Skeleton class="h-5 w-28" />
+              <Skeleton class="h-5 w-40 hidden sm:block" />
+              <Skeleton class="h-5 w-16 ml-auto" />
+              <Skeleton class="h-6 w-11 rounded-full" />
+              <Skeleton class="h-5 w-5" />
             </div>
-          </div>
+          {/each}
         </div>
-      {/each}
+      </div>
     </div>
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
@@ -154,127 +254,246 @@
       </p>
     </div>
   {:else}
-    <div class="space-y-4">
-      {#each libraries as lib}
+    <!-- Header bar -->
+    {#if linkedLibraries.length > 0}
+      <div class="flex items-center justify-between gap-3 mb-5">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-semibold text-foreground whitespace-nowrap"
+            >Auto-sync</span
+          >
+          <Timer size={14} class="text-muted-foreground shrink-0" />
+          <Select.Root
+            type="single"
+            value={String(syncIntervalMinutes)}
+            onValueChange={handleIntervalChange}
+          >
+            <Select.Trigger
+              class="h-8 w-[130px] text-xs bg-white dark:bg-background border-border"
+            >
+              {formatIntervalLabel(syncIntervalMinutes)}
+            </Select.Trigger>
+            <Select.Content align="start">
+              <Select.Item value="5">5 minutes</Select.Item>
+              <Select.Item value="15">15 minutes</Select.Item>
+              <Select.Item value="30">30 minutes</Select.Item>
+              <Select.Item value="60">1 hour</Select.Item>
+              <Select.Item value="360">6 hours</Select.Item>
+              <Select.Item value="1440">24 hours</Select.Item>
+            </Select.Content>
+          </Select.Root>
+        </div>
+        <button
+          class="text-sm font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-40 whitespace-nowrap"
+          onclick={handleSyncAll}
+          disabled={anySyncing}
+        >
+          Sync all now
+        </button>
+      </div>
+    {/if}
+
+    <!-- Table -->
+    <div class="bg-card card-soft rounded-2xl overflow-hidden">
+      <!-- Desktop table header -->
+      <div
+        class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3 border-b border-border/50 text-xs font-medium text-muted-foreground uppercase tracking-wider"
+      >
+        <span>Library</span>
+        <span>Path</span>
+        <span class="text-right">Books</span>
+        <span class="text-center">Auto</span>
+        <span class="text-center">Synced</span>
+        <span></span>
+      </div>
+
+      <!-- Linked libraries -->
+      {#each linkedLibraries as lib}
         {@const status = lib.library_id ? syncStatuses[lib.library_id] : null}
         {@const syncInfo = status?.sync}
-        <div class="bg-card card-soft rounded-2xl p-5">
+        {@const tip = syncTooltip(syncInfo)}
+        <div class="border-b border-border/30 last:border-b-0">
+          <!-- Desktop row -->
           <div
-            class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3.5"
           >
-            <div class="flex items-center gap-3.5 min-w-0 w-full sm:w-auto">
-              <div
-                class="w-10 h-10 rounded-xl flex-shrink-0 flex items-center justify-center {lib.linked
-                  ? 'bg-primary/15 text-primary'
-                  : 'bg-secondary text-muted-foreground'}"
+            <span class="text-sm font-medium text-foreground truncate">
+              {lib.library_name || lib.name}
+            </span>
+            <span class="text-sm text-muted-foreground truncate">
+              {lib.path}
+            </span>
+            <span class="text-sm text-foreground tabular-nums text-right">
+              {formatNumber(lib.calibre_book_count)}
+            </span>
+            <div class="flex justify-center">
+              <button
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {lib.auto_sync
+                  ? 'bg-primary'
+                  : 'bg-secondary'}"
+                onclick={() => handleToggleAutoSync(lib)}
+                aria-label="Toggle auto-sync for {lib.library_name || lib.name}"
               >
-                <HardDrive size={18} />
-              </div>
-              <div class="min-w-0">
-                <p class="font-semibold text-foreground">
-                  {lib.library_name || lib.name}
-                  {#if lib.linked}
-                    <span
-                      class="ml-2 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full"
-                    >
-                      Linked
-                    </span>
-                  {/if}
-                </p>
-                <p class="text-muted-foreground text-sm break-words">
-                  {lib.path}
-                  {#if lib.calibre_book_count !== null}
-                    &middot; {lib.calibre_book_count} EPUBs in Calibre
-                  {/if}
-                  {#if status}
-                    &middot; {status.imported_book_count} imported
-                  {/if}
-                </p>
-              </div>
+                <span
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {lib.auto_sync
+                    ? 'translate-x-6'
+                    : 'translate-x-1'}"
+                ></span>
+              </button>
             </div>
-
-            <div
-              class="flex items-center gap-2 w-full sm:w-auto sm:justify-end"
+            <span
+              class="text-xs text-muted-foreground text-center whitespace-nowrap {syncInfo?.status ===
+              'failed'
+                ? 'text-destructive'
+                : ''}"
+              title={tip || undefined}
             >
-              {#if lib.linked && lib.library_id}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="rounded-xl whitespace-nowrap"
-                  disabled={syncInfo?.status === "running"}
-                  onclick={() => handleSync(lib.library_id!)}
-                >
-                  <RefreshCw
-                    size={14}
-                    class={syncInfo?.status === "running" ? "animate-spin" : ""}
-                  />
-                  Re-sync
-                </Button>
-              {:else}
-                <Button
-                  size="sm"
-                  class="rounded-xl whitespace-nowrap"
-                  onclick={() => {
-                    linkingPath = lib.path;
-                    linkName = lib.name;
-                  }}
-                >
-                  <Link size={14} />
-                  Link
-                </Button>
-              {/if}
+              {formatRelativeTime(lib.last_synced_at)}
+            </span>
+            <div class="flex justify-center">
+              <button
+                class="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+                disabled={syncInfo?.status === "running"}
+                onclick={() => handleSync(lib.library_id!)}
+                aria-label="Sync {lib.library_name || lib.name}"
+              >
+                <RefreshCw
+                  size={16}
+                  class={syncInfo?.status === "running" ? "animate-spin" : ""}
+                />
+              </button>
             </div>
           </div>
 
-          <!-- Sync progress -->
-          {#if syncInfo}
-            <div class="mt-4 pt-4 border-t border-border">
-              {#if syncInfo.status === "running"}
+          <!-- Mobile row -->
+          <div
+            class="sm:hidden flex items-center justify-between gap-3 px-5 py-3.5"
+          >
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-foreground truncate">
+                {lib.library_name || lib.name}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {formatNumber(lib.calibre_book_count)} books{#if lib.last_synced_at}
+                  &middot; {formatRelativeTime(lib.last_synced_at)}{/if}
+              </p>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <button
+                class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {lib.auto_sync
+                  ? 'bg-primary'
+                  : 'bg-secondary'}"
+                onclick={() => handleToggleAutoSync(lib)}
+                aria-label="Toggle auto-sync for {lib.library_name || lib.name}"
+              >
+                <span
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {lib.auto_sync
+                    ? 'translate-x-6'
+                    : 'translate-x-1'}"
+                ></span>
+              </button>
+              <button
+                class="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+                disabled={syncInfo?.status === "running"}
+                onclick={() => handleSync(lib.library_id!)}
+                aria-label="Sync {lib.library_name || lib.name}"
+              >
+                <RefreshCw
+                  size={16}
+                  class={syncInfo?.status === "running" ? "animate-spin" : ""}
+                />
+              </button>
+            </div>
+          </div>
+
+          <!-- Sync progress bar (only when running) -->
+          {#if syncInfo?.status === "running"}
+            <div class="px-5 pb-3.5 -mt-1">
+              <div
+                class="flex items-center gap-2 text-xs text-muted-foreground mb-1.5"
+              >
+                <LoaderCircle size={12} class="animate-spin" />
+                Syncing {syncInfo.processed} / {syncInfo.total}
+              </div>
+              <div class="w-full bg-secondary rounded-full h-1.5">
                 <div
-                  class="flex items-center gap-2 text-sm text-muted-foreground mb-2"
-                >
-                  <LoaderCircle size={14} class="animate-spin" />
-                  Syncing... {syncInfo.processed} / {syncInfo.total}
-                </div>
-                <div class="w-full bg-secondary rounded-full h-2">
-                  <div
-                    class="bg-primary h-2 rounded-full transition-all duration-300"
-                    style="width: {syncInfo.total > 0
-                      ? (syncInfo.processed / syncInfo.total) * 100
-                      : 0}%"
-                  ></div>
-                </div>
-              {:else if syncInfo.status === "completed"}
-                <div class="flex items-center gap-2 text-sm text-green-600">
-                  <CircleCheck size={14} />
-                  Sync completed: {syncInfo.added} added, {syncInfo.updated} updated,
-                  {syncInfo.unchanged} unchanged
-                  {#if syncInfo.skipped > 0}
-                    , {syncInfo.skipped} skipped
-                  {/if}
-                </div>
-              {:else if syncInfo.status === "failed"}
-                <div class="flex items-center gap-2 text-sm text-destructive">
-                  <CircleAlert size={14} />
-                  Sync failed
-                </div>
-              {/if}
-              {#if syncInfo.errors.length > 0}
-                <div class="mt-2 space-y-1">
-                  {#each syncInfo.errors as error}
-                    <p class="text-xs text-destructive/80">{error}</p>
-                  {/each}
-                </div>
-              {/if}
+                  class="bg-primary h-1.5 rounded-full transition-all duration-300"
+                  style="width: {syncInfo.total > 0
+                    ? (syncInfo.processed / syncInfo.total) * 100
+                    : 0}%"
+                ></div>
+              </div>
             </div>
           {/if}
         </div>
       {/each}
+
+      <!-- Unlinked libraries -->
+      {#each unlinkedLibraries as lib}
+        <div class="border-b border-border/30 last:border-b-0">
+          <!-- Desktop -->
+          <div
+            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3.5"
+          >
+            <span class="text-sm text-muted-foreground truncate"
+              >{lib.name}</span
+            >
+            <span class="text-sm text-muted-foreground/60 truncate"
+              >{lib.path}</span
+            >
+            <span class="text-sm text-muted-foreground tabular-nums text-right">
+              {formatNumber(lib.calibre_book_count)}
+            </span>
+            <div></div>
+            <div></div>
+            <div class="flex justify-center">
+              <button
+                class="text-muted-foreground hover:text-primary transition-colors"
+                onclick={() => {
+                  linkingPath = lib.path;
+                  linkName = lib.name;
+                }}
+                aria-label="Link {lib.name}"
+              >
+                <Link size={16} />
+              </button>
+            </div>
+          </div>
+          <!-- Mobile -->
+          <div
+            class="sm:hidden flex items-center justify-between gap-3 px-5 py-3.5"
+          >
+            <div class="min-w-0">
+              <p class="text-sm text-muted-foreground truncate">{lib.name}</p>
+              <p class="text-xs text-muted-foreground/60">
+                {formatNumber(lib.calibre_book_count)} books
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              class="rounded-xl shrink-0"
+              onclick={() => {
+                linkingPath = lib.path;
+                linkName = lib.name;
+              }}
+            >
+              <Link size={14} />
+              Link
+            </Button>
+          </div>
+        </div>
+      {/each}
     </div>
+
+    {#if linkedLibraries.length > 0}
+      <p class="text-xs text-muted-foreground mt-3">
+        Unchanged libraries are skipped automatically.
+      </p>
+    {/if}
   {/if}
 </div>
 
-<!-- Link dialog (inline) -->
+<!-- Link dialog -->
 {#if linkingPath}
   <div
     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"

@@ -18,10 +18,6 @@
   // Form state
   let registrationEnabled = $state(false);
   let timezone = $state("Asia/Taipei");
-  let metadataEnabled = $state(true);
-  let metadataHour = $state(3);
-  let metadataIntervalDays = $state(7);
-  let metadataCooldownDays = $state(30);
 
   // Provider credentials (stored once)
   let geminiApiKey = $state("");
@@ -135,11 +131,6 @@
     );
   }
 
-  const hourOptions = Array.from({ length: 24 }, (_, i) => ({
-    value: String(i),
-    label: `${String(i).padStart(2, "0")}:00`,
-  }));
-
   function providerLabel(value: string): string {
     if (value === "gemini") return "Gemini";
     if (value === "openai") return "OpenAI Compatible";
@@ -156,12 +147,6 @@
       settings = await adminApi.getSettings();
       registrationEnabled = settings.registration_enabled === "true";
       timezone = settings.timezone;
-      metadataEnabled = settings.metadata_refresh_enabled === "true";
-      metadataHour = parseInt(settings.metadata_refresh_hour) || 3;
-      metadataIntervalDays =
-        parseInt(settings.metadata_refresh_interval_days) || 7;
-      metadataCooldownDays =
-        parseInt(settings.metadata_refresh_cooldown_days) || 30;
       geminiApiKey = settings.gemini_api_key || "";
       openaiApiKey = settings.openai_api_key || "";
       openaiBaseUrl = settings.openai_base_url || "";
@@ -220,10 +205,6 @@
       settings = await adminApi.updateSettings({
         registration_enabled: registrationEnabled ? "true" : "false",
         timezone,
-        metadata_refresh_enabled: metadataEnabled ? "true" : "false",
-        metadata_refresh_hour: String(metadataHour),
-        metadata_refresh_interval_days: String(metadataIntervalDays),
-        metadata_refresh_cooldown_days: String(metadataCooldownDays),
         gemini_api_key: geminiApiKey,
         openai_api_key: openaiApiKey,
         openai_base_url: openaiBaseUrl,
@@ -429,94 +410,6 @@
               </Select.Content>
             </Select.Root>
           </div>
-        </Card.Content>
-      </Card.Root>
-
-      <!-- Metadata Refresh -->
-      <Card.Root>
-        <Card.Header>
-          <Card.Title>Metadata Auto-Refresh</Card.Title>
-          <Card.Description
-            >Automatically fetch book metadata from Goodreads and Readmoo</Card.Description
-          >
-        </Card.Header>
-        <Card.Content class="space-y-5">
-          <label class="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
-              bind:checked={metadataEnabled}
-              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/50"
-            />
-            <span class="text-sm text-foreground"
-              >Enable automatic metadata refresh</span
-            >
-          </label>
-
-          {#if metadataEnabled}
-            <div
-              class="grid grid-cols-1 sm:grid-cols-3 gap-5 pt-4 border-t border-border/30"
-            >
-              <div class="space-y-1.5">
-                <Label for="metadata-hour">Run at hour</Label>
-                <Select.Root
-                  type="single"
-                  value={String(metadataHour)}
-                  onValueChange={(v) => (metadataHour = parseInt(v))}
-                >
-                  <Select.Trigger
-                    id="metadata-hour"
-                    class="w-full bg-background"
-                  >
-                    {String(metadataHour).padStart(2, "0")}:00
-                  </Select.Trigger>
-                  <Select.Content align="start" class="max-h-64">
-                    {#each hourOptions as opt}
-                      <Select.Item value={opt.value}>{opt.label}</Select.Item>
-                    {/each}
-                  </Select.Content>
-                </Select.Root>
-                <p class="text-xs text-muted-foreground">
-                  Hour of day ({timezone})
-                </p>
-              </div>
-              <div class="space-y-1.5">
-                <Label for="metadata-interval">Schedule interval</Label>
-                <div class="flex items-center gap-2">
-                  <Input
-                    id="metadata-interval"
-                    type="number"
-                    min={1}
-                    max={365}
-                    bind:value={metadataIntervalDays}
-                  />
-                  <span class="text-sm text-muted-foreground shrink-0"
-                    >days</span
-                  >
-                </div>
-                <p class="text-xs text-muted-foreground">
-                  How often to run the refresh
-                </p>
-              </div>
-              <div class="space-y-1.5">
-                <Label for="metadata-cooldown">Cooldown</Label>
-                <div class="flex items-center gap-2">
-                  <Input
-                    id="metadata-cooldown"
-                    type="number"
-                    min={1}
-                    max={365}
-                    bind:value={metadataCooldownDays}
-                  />
-                  <span class="text-sm text-muted-foreground shrink-0"
-                    >days</span
-                  >
-                </div>
-                <p class="text-xs text-muted-foreground">
-                  Skip books fetched within this period
-                </p>
-              </div>
-            </div>
-          {/if}
         </Card.Content>
       </Card.Root>
 

@@ -259,6 +259,10 @@ async def list_calibre_libraries(
                 "linked": linked_lib is not None,
                 "library_id": str(linked_lib.id) if linked_lib else None,
                 "library_name": linked_lib.name if linked_lib else None,
+                "auto_sync": linked_lib.auto_sync if linked_lib else None,
+                "last_synced_at": linked_lib.last_synced_at.isoformat()
+                if linked_lib and linked_lib.last_synced_at
+                else None,
             }
         )
     return output
@@ -351,6 +355,29 @@ async def trigger_calibre_sync(
     return {"status": "sync_started"}
 
 
+class CalibreLibraryUpdate(BaseModel):
+    auto_sync: bool
+
+
+@router.patch("/calibre/libraries/{library_id}")
+async def update_calibre_library(
+    library_id: uuid.UUID,
+    body: CalibreLibraryUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Toggle auto_sync for a Calibre library."""
+    result = await db.execute(select(Library).where(Library.id == library_id))
+    library = result.scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if not library.calibre_path:
+        raise HTTPException(status_code=400, detail="Not a Calibre library")
+    library.auto_sync = body.auto_sync
+    await db.commit()
+    return {"id": str(library.id), "auto_sync": library.auto_sync}
+
+
 @router.get("/calibre/libraries/{library_id}/status")
 async def get_calibre_library_status(
     library_id: uuid.UUID,
@@ -389,6 +416,10 @@ async def get_calibre_library_status(
         "calibre_path": library.calibre_path,
         "calibre_book_count": calibre_count,
         "imported_book_count": imported_count,
+        "auto_sync": library.auto_sync,
+        "last_synced_at": library.last_synced_at.isoformat()
+        if library.last_synced_at
+        else None,
         "sync": sync,
     }
 
