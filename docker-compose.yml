@@ -50,7 +50,7 @@ services:
     build: ./backend
     restart: unless-stopped
     mem_limit: 4g
-    command: ["sh", "start-worker.sh"]
+    command: ["bash", "start-worker.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}

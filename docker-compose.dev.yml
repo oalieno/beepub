@@ -14,7 +14,7 @@ services:
       - backend_venv:/app/.venv
       - books_data:/data/books
       - covers_data:/data/covers
-    command: ["sh", "start-worker-dev.sh"]
+    command: ["bash", "start-worker-dev.sh"]
 
   beat:
     volumes:

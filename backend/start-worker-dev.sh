@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Dev mode: two celery workers with watchfiles auto-reload.
 
 set -e

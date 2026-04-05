@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Start two celery workers: one for default queue, one for bulk queue.
 # Both run in the same container. SIGTERM/SIGINT will kill both.
 
