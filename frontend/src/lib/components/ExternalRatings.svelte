@@ -1,7 +1,7 @@
 <script lang="ts">
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
-  import { Pencil, Plus } from "@lucide/svelte";
+  import { Pencil, Plus, Unlink, Ban } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
   import type { ExternalMetadataOut } from "$lib/types";
 
@@ -54,6 +54,30 @@
   let editingUrlValue = $state("");
   let validationError = $state("");
   let sourcesOpen = $state(false);
+
+  async function markNotFound(source: string) {
+    try {
+      await booksApi.updateExternalUrl(bookId, source, null);
+      externalMeta = await booksApi
+        .getExternal(bookId)
+        .catch(() => [] as ExternalMetadataOut[]);
+      toastStore.success("Marked as not found");
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function unlinkSource(source: string) {
+    try {
+      await booksApi.unlinkExternal(bookId, source);
+      externalMeta = await booksApi
+        .getExternal(bookId)
+        .catch(() => [] as ExternalMetadataOut[]);
+      toastStore.success("Source unlinked");
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
 
   // Sources with actual data (rating or URL) — shown inline
   let foundMeta = $derived(
@@ -247,9 +271,16 @@
                       <button
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
                         onclick={() => startEditUrl(key, null)}
-                        title="Edit source URL"
+                        title="Link manually"
                       >
                         <Pencil size={12} />
+                      </button>
+                      <button
+                        class="text-muted-foreground/50 hover:text-foreground transition-colors"
+                        onclick={() => unlinkSource(key)}
+                        title="Unlink — allow re-search"
+                      >
+                        <Unlink size={12} />
                       </button>
                     {:else}
                       <!-- Has data -->
@@ -271,6 +302,13 @@
                         title="Edit source URL"
                       >
                         <Pencil size={12} />
+                      </button>
+                      <button
+                        class="text-muted-foreground/50 hover:text-foreground transition-colors"
+                        onclick={() => markNotFound(key)}
+                        title="Mark as not found"
+                      >
+                        <Ban size={12} />
                       </button>
                     {/if}
                   </div>

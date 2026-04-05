@@ -1140,7 +1140,7 @@ async def update_external_metadata_url(
         raise HTTPException(status_code=404, detail="Book not found")
 
     if body.source_url is None:
-        # Delete the external metadata row for this source
+        # Mark as "not found" — clear data but keep the row as empty marker
         result = await db.execute(
             select(ExternalMetadata).where(
                 ExternalMetadata.book_id == book_id,
@@ -1148,9 +1148,24 @@ async def update_external_metadata_url(
             )
         )
         meta = result.scalar_one_or_none()
-        if not meta:
-            raise HTTPException(status_code=404, detail="External metadata not found")
-        await db.delete(meta)
+        if meta:
+            meta.source_url = None
+            meta.rating = None
+            meta.rating_count = None
+            meta.reviews = None
+            meta.raw_data = None
+        else:
+            meta = ExternalMetadata(
+                book_id=book_id,
+                source=validated_source,
+            )
+            db.add(meta)
+        await db.commit()
+        await db.refresh(meta)
+        # Re-run tag mapping since we removed a source's data
+        from app.services.tag_mapping import generate_tags_from_metadata
+
+        await generate_tags_from_metadata(db, book_id)
         await db.commit()
         return meta
     else:
@@ -1176,6 +1191,38 @@ async def update_external_metadata_url(
         # Auto-trigger metadata refresh to fetch from the new URL
         fetch_metadata.delay(str(book_id))
         return meta
+
+
+@router.delete("/{book_id}/external/{source}", status_code=204)
+async def delete_external_metadata(
+    book_id: uuid.UUID,
+    source: str,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Unlink a source completely — removes the row so it can be re-searched."""
+    try:
+        validated_source = MetadataSource(source)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid source")
+
+    result = await db.execute(
+        select(ExternalMetadata).where(
+            ExternalMetadata.book_id == book_id,
+            ExternalMetadata.source == validated_source,
+        )
+    )
+    meta = result.scalar_one_or_none()
+    if not meta:
+        raise HTTPException(status_code=404, detail="External metadata not found")
+    await db.delete(meta)
+    await db.commit()
+
+    # Re-run tag mapping
+    from app.services.tag_mapping import generate_tags_from_metadata
+
+    await generate_tags_from_metadata(db, book_id)
+    await db.commit()
 
 
 # --- User Interactions ---

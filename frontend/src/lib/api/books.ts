@@ -69,6 +69,9 @@ export const booksApi = {
   getExternal: (bookId: string) =>
     get(`/books/${bookId}/external`) as Promise<ExternalMetadataOut[]>,
 
+  unlinkExternal: (bookId: string, source: string) =>
+    del(`/books/${bookId}/external/${source}`),
+
   updateExternalUrl: (
     bookId: string,
     source: string,
