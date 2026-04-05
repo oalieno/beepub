@@ -62,18 +62,19 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
 
     # Skip if generation is stale (job was stopped)
     if not run_async(is_current_generation(job_type, generation)):
+        # Don't decr — stop_job already reset pending to 0
         return
 
     try:
         _execute_book_task(job_type, book_id)
     except Exception as exc:
         if self.request.retries < self.max_retries:
+            # Don't decr pending — the retry will handle it
             raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )
-    finally:
-        run_async(decr_pending(job_type))
+    run_async(decr_pending(job_type))
 
 
 def _execute_book_task(job_type: str, book_id: str) -> None:
