@@ -14,10 +14,9 @@ from app.models.user import User
 from app.services.job_queue import (
     JOB_TYPES,
     count_missing_books,
-    get_active_run_id,
-    get_job_progress,
-    start_job_run,
-    stop_job_run,
+    get_active_count,
+    start_job,
+    stop_job,
 )
 
 BLOCKED_LABELS: dict[str, str] = {
@@ -29,13 +28,6 @@ BLOCKED_LABELS: dict[str, str] = {
 router = APIRouter(prefix="/api/admin/jobs", tags=["jobs"])
 
 
-class JobProgressOut(BaseModel):
-    total: int
-    completed: int
-    failed: int
-    last_activity: float | None
-
-
 class JobStatusOut(BaseModel):
     key: str
     label: str
@@ -44,9 +36,8 @@ class JobStatusOut(BaseModel):
     missing: int
     blocked: int
     blocked_label: str
-    active: bool
+    active: int
     requires_ai: bool
-    progress: JobProgressOut | None = None
 
 
 class AllJobsResponse(BaseModel):
@@ -59,12 +50,11 @@ async def get_jobs_status(
     _admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Get status of all job types with missing counts and progress."""
+    """Get status of all job types with missing counts and active task counts."""
     from sqlalchemy import func, select
 
     from app.models.book import Book
 
-    # Count image books
     img_result = await db.execute(
         select(func.count(Book.id)).where(Book.is_image_book.is_(True))
     )
@@ -73,19 +63,7 @@ async def get_jobs_status(
     jobs = []
     for key, job_type in JOB_TYPES.items():
         total, missing, blocked = await count_missing_books(db, key)
-        run_id = await get_active_run_id(key)
-
-        # Fetch progress if there's an active run
-        progress_out = None
-        if run_id is not None:
-            progress = await get_job_progress(run_id)
-            if progress is not None:
-                progress_out = JobProgressOut(
-                    total=progress.total,
-                    completed=progress.completed,
-                    failed=progress.failed,
-                    last_activity=progress.last_activity,
-                )
+        active = await get_active_count(key)
 
         jobs.append(
             JobStatusOut(
@@ -96,9 +74,8 @@ async def get_jobs_status(
                 missing=missing,
                 blocked=blocked,
                 blocked_label=BLOCKED_LABELS.get(key, "Needs Text"),
-                active=run_id is not None,
+                active=active,
                 requires_ai=job_type.requires_ai,
-                progress=progress_out,
             )
         )
 
@@ -117,32 +94,25 @@ async def trigger_job(
             detail=f"Unknown job type: {job_type}",
         )
 
-    # Start a new run (overwrites any previous run_id, effectively stopping it)
-    run_id = await start_job_run(job_type)
+    generation = await start_job(job_type)
 
     from app.tasks.bulk_jobs import run_bulk_job
 
-    run_bulk_job.delay(job_type, run_id)
+    run_bulk_job.delay(job_type, generation)
     return {"status": "accepted", "job_type": job_type}
 
 
 @router.delete("/{job_type}", status_code=status.HTTP_200_OK)
-async def stop_job(
+async def stop_job_endpoint(
     job_type: str,
     _admin: Annotated[User, Depends(require_admin)],
 ):
-    """Stop a running bulk job by clearing its run_id."""
+    """Stop a running bulk job by incrementing the generation."""
     if job_type not in JOB_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown job type: {job_type}",
         )
 
-    was_active = await stop_job_run(job_type)
-    if not was_active:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Job '{job_type}' is not running",
-        )
-
-    return {"status": "stopped", "job_type": job_type}
+    generation = await stop_job(job_type)
+    return {"status": "stopped", "job_type": job_type, "generation": generation}

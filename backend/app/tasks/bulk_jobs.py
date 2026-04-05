@@ -10,20 +10,20 @@ logger = logging.getLogger(__name__)
 
 
 @celery.task(name="app.tasks.bulk_jobs.run_bulk_job", bind=True, acks_late=False)
-def run_bulk_job(self, job_type: str, run_id: str) -> None:
+def run_bulk_job(self, job_type: str, generation: int) -> None:
     """Orchestrator: query missing book IDs, dispatch per-book tasks, return quickly."""
     from app.celeryapp import run_async
 
-    run_async(_run_bulk_job(job_type, run_id))
+    run_async(_run_bulk_job(job_type, generation))
 
 
-async def _run_bulk_job(job_type: str, run_id: str) -> None:
+async def _run_bulk_job(job_type: str, generation: int) -> None:
     from app.database import create_task_engine
-    from app.services.job_queue import init_job_progress, is_run_active
+    from app.services.job_queue import is_current_generation
 
-    # Check if this run is still active (may have been stopped before worker picked it up)
-    if not await is_run_active(job_type, run_id):
-        logger.info(f"bulk_job {job_type}: run {run_id} no longer active, skipping")
+    # Check if this generation is still current (may have been stopped)
+    if not await is_current_generation(job_type, generation):
+        logger.info(f"bulk_job {job_type}: generation {generation} is stale, skipping")
         return
 
     async with create_task_engine() as (_engine, session_factory):
@@ -35,15 +35,14 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
         logger.info(f"bulk_job {job_type}: nothing to do")
         return
 
-    # Initialize progress counters in Redis
-    await init_job_progress(job_type, run_id, total)
-
-    logger.info(f"bulk_job {job_type}: dispatching {total} tasks (run {run_id})")
+    logger.info(
+        f"bulk_job {job_type}: dispatching {total} tasks (generation {generation})"
+    )
 
     for bid in book_ids:
         bid_str = str(bid)
         try:
-            _dispatch_single(job_type, bid_str, run_id)
+            run_book_job.delay(job_type, bid_str, generation)
         except Exception:
             logger.exception(
                 f"bulk_job {job_type}: failed to dispatch for book {bid_str}"
@@ -53,26 +52,27 @@ async def _run_bulk_job(job_type: str, run_id: str) -> None:
 
 
 @celery.task(name="app.tasks.bulk_jobs.run_book_job", bind=True, max_retries=2)
-def run_book_job(self, job_type: str, book_id: str, run_id: str) -> None:
-    """Run a single book job: guard check, work, and progress tracking."""
+def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
+    """Run a single book job: generation guard, active tracking, work."""
     from app.celeryapp import run_async
-    from app.services.job_queue import is_run_active, record_task_completion
+    from app.services.job_queue import decr_active, incr_active, is_current_generation
 
-    if not run_async(is_run_active(job_type, run_id)):
+    # Skip if generation is stale (job was stopped)
+    if not run_async(is_current_generation(job_type, generation)):
         return
 
+    run_async(incr_active(job_type))
     try:
         _execute_book_task(job_type, book_id)
     except Exception as exc:
         if self.request.retries < self.max_retries:
+            run_async(decr_active(job_type))
             raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
-        run_async(record_task_completion(run_id, job_type, success=False))
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )
-        return
-
-    run_async(record_task_completion(run_id, job_type, success=True))
+    finally:
+        run_async(decr_active(job_type))
 
 
 def _execute_book_task(job_type: str, book_id: str) -> None:
@@ -124,14 +124,12 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
     from app.models.tag import BookTag
 
     if job_type == "text_extraction":
-        # Books not yet classified (is_image_book IS NULL)
         result = await db.execute(
             select(Book.id)
             .where(Book.is_image_book.is_(None))
             .order_by(Book.created_at)
         )
     elif job_type == "embedding":
-        # Only non-image books that already have text chunks but no embeddings
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
@@ -146,7 +144,6 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             .order_by(Book.created_at)
         )
     elif job_type == "summarize":
-        # Non-image books without text, plus non-image books with unsummarized chunks
         has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         has_unsummarized = (
             select(BookTextChunk.book_id)
@@ -165,7 +162,6 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
         )
         no_text_ids = [row[0] for row in no_text_result.all()]
         unsummarized_ids = [row[0] for row in unsummarized_result.all()]
-        # Deduplicate and preserve order
         seen = set()
         book_ids = []
         for bid in no_text_ids + unsummarized_ids:
@@ -192,7 +188,6 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
             select(Book.id).where(Book.id.notin_(has_tags)).order_by(Book.created_at)
         )
     elif job_type == "book_embedding":
-        # Books with ALL chunks summarized but no BookEmbedding row, excluding image books
         from app.models.book_embedding_unified import BookEmbedding
 
         has_unsummarized = (
@@ -219,8 +214,3 @@ async def _get_missing_book_ids(db, job_type: str) -> list:
         return []
 
     return [row[0] for row in result.all()]
-
-
-def _dispatch_single(job_type: str, book_id: str, run_id: str) -> None:
-    """Dispatch a single book job task."""
-    run_book_job.delay(job_type, book_id, run_id)

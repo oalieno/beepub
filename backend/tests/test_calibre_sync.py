@@ -183,8 +183,8 @@ class TestMetadataChainDispatch:
         """Verify that extract_book_text task has a delay method."""
         assert hasattr(mock_extract, "delay")
 
-    def test_metadata_import_available(self):
-        """Verify fetch_metadata task can be imported."""
-        from app.tasks.metadata import fetch_metadata
+    def test_auto_start_backfill_import_available(self):
+        """Verify auto_start_backfill can be imported."""
+        from app.tasks.metadata import auto_start_backfill
 
-        assert hasattr(fetch_metadata, "apply_async")
+        assert callable(auto_start_backfill)

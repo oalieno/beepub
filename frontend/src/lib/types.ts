@@ -317,13 +317,6 @@ export interface CompanionConversationSummary {
   updated_at: string;
 }
 
-export interface JobProgress {
-  total: number;
-  completed: number;
-  failed: number;
-  last_activity: number | null;
-}
-
 export interface JobStatus {
   key: string;
   label: string;
@@ -332,9 +325,8 @@ export interface JobStatus {
   missing: number;
   blocked: number;
   blocked_label: string;
-  active: boolean;
+  active: number;
   requires_ai: boolean;
-  progress: JobProgress | null;
 }
 
 export interface AllJobsResponse {

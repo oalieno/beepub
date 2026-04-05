@@ -421,13 +421,15 @@ async def sync_calibre_library(
 
             await db.commit()
 
-        # Dispatch tasks AFTER commit to avoid race conditions
-        from app.tasks.auto_tag import auto_tag_book
-        from app.tasks.metadata import fetch_metadata
-
+        # Dispatch text extraction tasks AFTER commit
         for book_id in new_book_ids:
             extract_book_text.delay(book_id)
-            fetch_metadata.apply_async(args=[book_id], link=auto_tag_book.si(book_id))
+
+        # Auto-start metadata backfill if new books were added
+        if new_book_ids:
+            from app.tasks.metadata import auto_start_backfill
+
+            auto_start_backfill()
 
         await _update_progress(result, total, total, "completed")
 

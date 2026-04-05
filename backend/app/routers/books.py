@@ -72,7 +72,7 @@ from app.services.storage import (
     save_upload_file,
 )
 from app.tasks.auto_tag import auto_tag_book
-from app.tasks.metadata import fetch_metadata, fetch_single_source
+from app.tasks.metadata import auto_start_backfill, fetch_single_source
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -145,8 +145,8 @@ async def upload_book(
     await db.commit()
     await db.refresh(book)
 
-    fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
     extract_book_text.delay(str(book_id))
+    auto_start_backfill()
     return book
 
 
@@ -197,12 +197,10 @@ async def upload_books_bulk(
             )
             db.add(lb)
         books.append(book)
-        fetch_metadata.apply_async(
-            args=[str(book_id)], link=auto_tag_book.si(str(book_id))
-        )
         extract_book_text.delay(str(book_id))
 
     await db.commit()
+    auto_start_backfill()
     for book in books:
         await db.refresh(book)
     return books
@@ -904,7 +902,7 @@ async def refresh_book_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    fetch_metadata.apply_async(args=[str(book_id)], link=auto_tag_book.si(str(book_id)))
+    auto_start_backfill()
     return {"status": "queued"}
 
 

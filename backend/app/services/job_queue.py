@@ -1,10 +1,8 @@
-"""Job queue service — run_id tracking, progress counters, and missing book counts."""
+"""Job queue service — generation-based run/stop, active counters, and missing book counts."""
 
 from __future__ import annotations
 
 import logging
-import time
-import uuid
 from dataclasses import dataclass
 
 import redis.asyncio as aioredis
@@ -19,12 +17,8 @@ from app.models.tag import BookTag
 
 logger = logging.getLogger(__name__)
 
-RUN_ID_KEY_PREFIX = "beepub:job:run_id"
-PROGRESS_KEY_PREFIX = "beepub:job:progress"
-
-STOPPED_SENTINEL = "stopped"
-COMPLETED_SENTINEL = "completed"
-_TERMINAL_VALUES = {STOPPED_SENTINEL, COMPLETED_SENTINEL}
+GEN_KEY_PREFIX = "beepub:job:gen"
+ACTIVE_KEY_PREFIX = "beepub:job:active"
 
 
 @dataclass
@@ -73,12 +67,12 @@ JOB_TYPES: dict[str, JobType] = {
 }
 
 
-def _run_id_key(job_type: str) -> str:
-    return f"{RUN_ID_KEY_PREFIX}:{job_type}"
+def _gen_key(job_type: str) -> str:
+    return f"{GEN_KEY_PREFIX}:{job_type}"
 
 
-def _progress_key(run_id: str) -> str:
-    return f"{PROGRESS_KEY_PREFIX}:{run_id}"
+def _active_key(job_type: str) -> str:
+    return f"{ACTIVE_KEY_PREFIX}:{job_type}"
 
 
 async def _get_redis() -> aioredis.Redis:
@@ -91,161 +85,85 @@ async def _get_redis() -> aioredis.Redis:
 # ---------------------------------------------------------------------------
 
 
-async def start_job_run(job_type: str) -> str:
-    """Generate a new run_id for a job and store it in Redis. Returns the run_id."""
-    run_id = str(uuid.uuid4())
+async def start_job(job_type: str) -> int:
+    """Start a new run by incrementing the generation counter. Returns the new generation."""
     client = await _get_redis()
     try:
-        # Cleanup old progress hash if a previous run exists
-        old = await client.get(_run_id_key(job_type))
-        if old:
-            old_value = old.decode()
-            if old_value not in _TERMINAL_VALUES:
-                await client.delete(_progress_key(old_value))
-        await client.set(_run_id_key(job_type), run_id)
-    finally:
-        await client.aclose()
-    return run_id
-
-
-async def stop_job_run(job_type: str) -> bool:
-    """Mark a job as stopped. Returns True if there was an active run."""
-    client = await _get_redis()
-    try:
-        current = await client.get(_run_id_key(job_type))
-        if not current:
-            return False
-        value = current.decode()
-        if value in _TERMINAL_VALUES:
-            return False
-        run_id = value
-        pipe = client.pipeline()
-        pipe.set(_run_id_key(job_type), STOPPED_SENTINEL)
-        pipe.hset(_progress_key(run_id), "status", "stopped")
-        await pipe.execute()
-        return True
+        gen = await client.incr(_gen_key(job_type))
+        return gen
     finally:
         await client.aclose()
 
 
-async def get_active_run_id(job_type: str) -> str | None:
-    """Get the current active run_id, or None if no run is active."""
-    client = await _get_redis()
-    try:
-        data = await client.get(_run_id_key(job_type))
-        if not data:
-            return None
-        value = data.decode()
-        return None if value in _TERMINAL_VALUES else value
-    finally:
-        await client.aclose()
+async def stop_job(job_type: str) -> int:
+    """Stop a run by incrementing the generation counter.
 
-
-async def is_run_active(job_type: str, run_id: str) -> bool:
-    """Check if the given run_id is still the active run.
-
-    Returns True only if the key exists and matches this run_id.
-    Returns False if key is missing, stopped, completed, or a different run_id.
+    In-flight tasks with the old generation will finish, but pending tasks
+    will see a different generation and skip.
+    Returns the new generation.
     """
     client = await _get_redis()
     try:
-        data = await client.get(_run_id_key(job_type))
-        if not data:
-            return False
-        value = data.decode()
-        if value in _TERMINAL_VALUES:
-            return False
-        return value == run_id
+        gen = await client.incr(_gen_key(job_type))
+        return gen
+    finally:
+        await client.aclose()
+
+
+async def get_generation(job_type: str) -> int:
+    """Get the current generation counter. Returns 0 if no job has ever run."""
+    client = await _get_redis()
+    try:
+        data = await client.get(_gen_key(job_type))
+        return int(data) if data else 0
+    finally:
+        await client.aclose()
+
+
+async def is_current_generation(job_type: str, generation: int) -> bool:
+    """Check if the given generation is still the current one."""
+    return await get_generation(job_type) == generation
+
+
+# ---------------------------------------------------------------------------
+# Active task counter
+# ---------------------------------------------------------------------------
+
+
+async def incr_active(job_type: str) -> int:
+    """Increment the active task counter. Returns the new count."""
+    client = await _get_redis()
+    try:
+        return await client.incr(_active_key(job_type))
+    finally:
+        await client.aclose()
+
+
+async def decr_active(job_type: str) -> int:
+    """Decrement the active task counter. Returns the new count (min 0)."""
+    client = await _get_redis()
+    try:
+        val = await client.decr(_active_key(job_type))
+        if val < 0:
+            await client.set(_active_key(job_type), 0)
+            return 0
+        return val
+    finally:
+        await client.aclose()
+
+
+async def get_active_count(job_type: str) -> int:
+    """Get the number of currently active tasks for a job type."""
+    client = await _get_redis()
+    try:
+        data = await client.get(_active_key(job_type))
+        return max(int(data), 0) if data else 0
     finally:
         await client.aclose()
 
 
 # ---------------------------------------------------------------------------
-# Progress tracking
-# ---------------------------------------------------------------------------
-
-
-async def init_job_progress(job_type: str, run_id: str, total: int) -> None:
-    """Create a progress hash for a new run. Called by the bulk job orchestrator."""
-    client = await _get_redis()
-    try:
-        await client.hset(
-            _progress_key(run_id),
-            mapping={
-                "total": total,
-                "completed": 0,
-                "failed": 0,
-                "status": "running",
-                "last_activity": int(time.time()),
-            },
-        )
-    finally:
-        await client.aclose()
-
-
-async def record_task_completion(run_id: str, job_type: str, *, success: bool) -> None:
-    """Increment completed or failed counter and auto-complete if all tasks are done."""
-    client = await _get_redis()
-    try:
-        key = _progress_key(run_id)
-        field = "completed" if success else "failed"
-        pipe = client.pipeline()
-        pipe.hincrby(key, field, 1)
-        pipe.hset(key, "last_activity", int(time.time()))
-        pipe.hgetall(key)
-        results = await pipe.execute()
-
-        progress = results[2]
-        if not progress:
-            return
-
-        total = int(progress.get(b"total", 0))
-        completed = int(progress.get(b"completed", 0))
-        failed = int(progress.get(b"failed", 0))
-
-        if total > 0 and completed + failed >= total:
-            auto_pipe = client.pipeline()
-            auto_pipe.hset(key, "status", "completed")
-            auto_pipe.set(_run_id_key(job_type), COMPLETED_SENTINEL)
-            await auto_pipe.execute()
-            logger.info(
-                f"Job {job_type} run {run_id} auto-completed: {completed}/{total} ({failed} failed)"
-            )
-    finally:
-        await client.aclose()
-
-
-@dataclass
-class JobProgress:
-    total: int
-    completed: int
-    failed: int
-    status: str
-    last_activity: float | None
-
-
-async def get_job_progress(run_id: str) -> JobProgress | None:
-    """Read progress hash for a run. Returns None if no progress data exists."""
-    client = await _get_redis()
-    try:
-        data = await client.hgetall(_progress_key(run_id))
-        if not data:
-            return None
-        return JobProgress(
-            total=int(data.get(b"total", 0)),
-            completed=int(data.get(b"completed", 0)),
-            failed=int(data.get(b"failed", 0)),
-            status=data.get(b"status", b"running").decode(),
-            last_activity=float(data[b"last_activity"])
-            if b"last_activity" in data
-            else None,
-        )
-    finally:
-        await client.aclose()
-
-
-# ---------------------------------------------------------------------------
-# Missing book counts (for display when no active run)
+# Missing book counts
 # ---------------------------------------------------------------------------
 
 
@@ -262,13 +180,10 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
     has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
 
     if job_type == "text_extraction":
-        # Books not yet classified (is_image_book IS NULL) — either no chunks or unclassified
-        # Excludes books already classified (even image books with 0 chunks)
         missing_result = await db.execute(
             select(func.count(Book.id)).where(Book.is_image_book.is_(None))
         )
     elif job_type == "embedding":
-        # Missing: non-image books with text but no embeddings
         has_embed = select(BookEmbeddingChunk.book_id).group_by(
             BookEmbeddingChunk.book_id
         )
@@ -282,7 +197,6 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
                 non_image_text.except_(has_embed).subquery()
             )
         )
-        # Blocked: non-image books without text
         blocked_result = await db.execute(
             select(func.count(Book.id)).where(
                 Book.id.notin_(has_text), Book.is_image_book.isnot(True)
@@ -290,7 +204,6 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         )
         blocked = blocked_result.scalar() or 0
     elif job_type == "summarize":
-        # Missing: non-image books with text chunks that have unsummarized content
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
@@ -301,7 +214,6 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
                 Book.id.in_(has_unsummarized), Book.is_image_book.isnot(True)
             )
         )
-        # Blocked: non-image books without text
         blocked_result = await db.execute(
             select(func.count(Book.id)).where(
                 Book.id.notin_(has_text), Book.is_image_book.isnot(True)
@@ -309,13 +221,11 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
         )
         blocked = blocked_result.scalar() or 0
     elif job_type == "auto_tag":
-        # Books without any AI tags (uses metadata, not text chunks)
         has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
         missing_result = await db.execute(
             select(func.count(Book.id)).where(Book.id.notin_(has_tags))
         )
     elif job_type == "metadata_backfill":
-        # Books missing at least one metadata source (4 sources total)
         from app.models.book import ExternalMetadata
 
         fully_fetched = (
@@ -327,10 +237,8 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             select(func.count(Book.id)).where(Book.id.notin_(fully_fetched))
         )
     elif job_type == "book_embedding":
-        # Non-image books with ALL chunks summarized but no book-level embedding
         from app.models.book_embedding_unified import BookEmbedding
 
-        # Books where every chunk has a summary (no unsummarized chunks remain)
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
@@ -349,7 +257,6 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
                 Book.is_image_book.isnot(True),
             )
         )
-        # Blocked: non-image books not fully summarized (no text OR partial summaries)
         blocked_result = await db.execute(
             select(func.count(Book.id)).where(
                 Book.id.notin_(fully_summarized),

@@ -1,27 +1,8 @@
-"""Tests for app.tasks.bulk_jobs — fat task dispatch and execution."""
+"""Tests for app.tasks.bulk_jobs — task execution."""
 
 from unittest.mock import MagicMock, patch
 
-from app.tasks.bulk_jobs import _dispatch_single, _execute_book_task
-
-
-class TestDispatchSingle:
-    """Verify _dispatch_single dispatches run_book_job.delay() with correct args."""
-
-    @patch("app.tasks.bulk_jobs.run_book_job")
-    def test_dispatches_run_book_job(self, mock_task):
-        _dispatch_single("text_extraction", "book-123", "run-abc")
-        mock_task.delay.assert_called_once_with(
-            "text_extraction", "book-123", "run-abc"
-        )
-
-    @patch("app.tasks.bulk_jobs.run_book_job")
-    def test_unknown_type_still_dispatches(self, mock_task):
-        # Unknown types are handled in _execute_book_task, not _dispatch_single
-        _dispatch_single("nonexistent_job", "book-xxx", "run-abc")
-        mock_task.delay.assert_called_once_with(
-            "nonexistent_job", "book-xxx", "run-abc"
-        )
+from app.tasks.bulk_jobs import _execute_book_task
 
 
 class TestExecuteBookTask:
