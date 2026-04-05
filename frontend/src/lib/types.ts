@@ -325,7 +325,7 @@ export interface JobStatus {
   missing: number;
   blocked: number;
   blocked_label: string;
-  active: number;
+  pending: number;
   requires_ai: boolean;
 }
 

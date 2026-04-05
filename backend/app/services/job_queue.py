@@ -18,7 +18,7 @@ from app.models.tag import BookTag
 logger = logging.getLogger(__name__)
 
 GEN_KEY_PREFIX = "beepub:job:gen"
-ACTIVE_KEY_PREFIX = "beepub:job:active"
+PENDING_KEY_PREFIX = "beepub:job:pending"
 
 
 @dataclass
@@ -71,8 +71,8 @@ def _gen_key(job_type: str) -> str:
     return f"{GEN_KEY_PREFIX}:{job_type}"
 
 
-def _active_key(job_type: str) -> str:
-    return f"{ACTIVE_KEY_PREFIX}:{job_type}"
+def _pending_key(job_type: str) -> str:
+    return f"{PENDING_KEY_PREFIX}:{job_type}"
 
 
 async def _get_redis() -> aioredis.Redis:
@@ -96,7 +96,7 @@ async def start_job(job_type: str) -> int:
 
 
 async def stop_job(job_type: str) -> int:
-    """Stop a run by incrementing the generation counter.
+    """Stop a run by incrementing the generation counter and resetting pending.
 
     In-flight tasks with the old generation will finish, but pending tasks
     will see a different generation and skip.
@@ -105,6 +105,7 @@ async def stop_job(job_type: str) -> int:
     client = await _get_redis()
     try:
         gen = await client.incr(_gen_key(job_type))
+        await client.delete(_pending_key(job_type))
         return gen
     finally:
         await client.aclose()
@@ -130,34 +131,43 @@ async def is_current_generation(job_type: str, generation: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def incr_active(job_type: str) -> int:
-    """Increment the active task counter. Returns the new count."""
+async def incr_pending(job_type: str, count: int = 1) -> int:
+    """Increment the pending counter (called on dispatch). Returns the new count."""
     client = await _get_redis()
     try:
-        return await client.incr(_active_key(job_type))
+        return await client.incrby(_pending_key(job_type), count)
     finally:
         await client.aclose()
 
 
-async def decr_active(job_type: str) -> int:
-    """Decrement the active task counter. Returns the new count (min 0)."""
+async def decr_pending(job_type: str) -> int:
+    """Decrement the pending counter (called on task completion). Returns the new count (min 0)."""
     client = await _get_redis()
     try:
-        val = await client.decr(_active_key(job_type))
+        val = await client.decr(_pending_key(job_type))
         if val < 0:
-            await client.set(_active_key(job_type), 0)
+            await client.set(_pending_key(job_type), 0)
             return 0
         return val
     finally:
         await client.aclose()
 
 
-async def get_active_count(job_type: str) -> int:
-    """Get the number of currently active tasks for a job type."""
+async def get_pending_count(job_type: str) -> int:
+    """Get the number of pending tasks (queued + active) for a job type."""
     client = await _get_redis()
     try:
-        data = await client.get(_active_key(job_type))
+        data = await client.get(_pending_key(job_type))
         return max(int(data), 0) if data else 0
+    finally:
+        await client.aclose()
+
+
+async def reset_pending(job_type: str) -> None:
+    """Reset the pending counter to 0 (called on stop)."""
+    client = await _get_redis()
+    try:
+        await client.delete(_pending_key(job_type))
     finally:
         await client.aclose()
 

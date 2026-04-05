@@ -6,10 +6,10 @@ import pytest
 
 from app.services.job_queue import (
     JOB_TYPES,
-    decr_active,
-    get_active_count,
+    decr_pending,
     get_generation,
-    incr_active,
+    get_pending_count,
+    incr_pending,
     is_current_generation,
     start_job,
     stop_job,
@@ -22,7 +22,9 @@ def _mock_redis(**overrides) -> MagicMock:
     client.get = AsyncMock(return_value=None)
     client.set = AsyncMock()
     client.incr = AsyncMock(return_value=1)
+    client.incrby = AsyncMock(return_value=1)
     client.decr = AsyncMock(return_value=0)
+    client.delete = AsyncMock()
     client.exists = AsyncMock(return_value=0)
     client.aclose = AsyncMock()
     for k, v in overrides.items():
@@ -129,39 +131,40 @@ class TestIsCurrentGeneration:
             assert await is_current_generation("embedding", 5) is False
 
 
-class TestActiveCounter:
+class TestPendingCounter:
     @pytest.mark.asyncio
-    async def test_incr_active(self):
-        client = _mock_redis(incr=AsyncMock(return_value=3))
+    @pytest.mark.asyncio
+    async def test_incr_pending(self):
+        client = _mock_redis(incrby=AsyncMock(return_value=3))
         with _patch_redis(client):
-            count = await incr_active("embedding")
+            count = await incr_pending("embedding")
         assert count == 3
 
     @pytest.mark.asyncio
-    async def test_decr_active(self):
+    async def test_decr_pending(self):
         client = _mock_redis(decr=AsyncMock(return_value=2))
         with _patch_redis(client):
-            count = await decr_active("embedding")
+            count = await decr_pending("embedding")
         assert count == 2
 
     @pytest.mark.asyncio
-    async def test_decr_active_floors_at_zero(self):
+    async def test_decr_pending_floors_at_zero(self):
         client = _mock_redis(decr=AsyncMock(return_value=-1))
         with _patch_redis(client):
-            count = await decr_active("embedding")
+            count = await decr_pending("embedding")
         assert count == 0
         client.set.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_get_active_count(self):
+    async def test_get_pending_count(self):
         client = _mock_redis(get=AsyncMock(return_value=b"5"))
         with _patch_redis(client):
-            count = await get_active_count("embedding")
+            count = await get_pending_count("embedding")
         assert count == 5
 
     @pytest.mark.asyncio
-    async def test_get_active_count_zero_when_no_key(self):
+    async def test_get_pending_count_zero_when_no_key(self):
         client = _mock_redis()
         with _patch_redis(client):
-            count = await get_active_count("embedding")
+            count = await get_pending_count("embedding")
         assert count == 0

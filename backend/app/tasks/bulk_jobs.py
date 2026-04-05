@@ -19,7 +19,7 @@ def run_bulk_job(self, job_type: str, generation: int) -> None:
 
 async def _run_bulk_job(job_type: str, generation: int) -> None:
     from app.database import create_task_engine
-    from app.services.job_queue import is_current_generation
+    from app.services.job_queue import incr_pending, is_current_generation
 
     # Check if this generation is still current (may have been stopped)
     if not await is_current_generation(job_type, generation):
@@ -34,6 +34,9 @@ async def _run_bulk_job(job_type: str, generation: int) -> None:
     if total == 0:
         logger.info(f"bulk_job {job_type}: nothing to do")
         return
+
+    # Set pending count upfront
+    await incr_pending(job_type, total)
 
     logger.info(
         f"bulk_job {job_type}: dispatching {total} tasks (generation {generation})"
@@ -53,26 +56,24 @@ async def _run_bulk_job(job_type: str, generation: int) -> None:
 
 @celery.task(name="app.tasks.bulk_jobs.run_book_job", bind=True, max_retries=2)
 def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
-    """Run a single book job: generation guard, active tracking, work."""
+    """Run a single book job: generation guard, pending tracking, work."""
     from app.celeryapp import run_async
-    from app.services.job_queue import decr_active, incr_active, is_current_generation
+    from app.services.job_queue import decr_pending, is_current_generation
 
     # Skip if generation is stale (job was stopped)
     if not run_async(is_current_generation(job_type, generation)):
         return
 
-    run_async(incr_active(job_type))
     try:
         _execute_book_task(job_type, book_id)
     except Exception as exc:
         if self.request.retries < self.max_retries:
-            run_async(decr_active(job_type))
             raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )
     finally:
-        run_async(decr_active(job_type))
+        run_async(decr_pending(job_type))
 
 
 def _execute_book_task(job_type: str, book_id: str) -> None:

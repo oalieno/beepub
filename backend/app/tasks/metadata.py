@@ -10,12 +10,12 @@ logger = logging.getLogger(__name__)
 
 
 async def _auto_start_backfill() -> None:
-    """Start a metadata_backfill run if none is currently active (active count = 0)."""
-    from app.services.job_queue import get_active_count, start_job
+    """Start a metadata_backfill run if none is currently pending."""
+    from app.services.job_queue import get_pending_count, start_job
 
-    active = await get_active_count("metadata_backfill")
-    if active > 0:
-        logger.debug("Metadata backfill already active (%d tasks), skipping", active)
+    pending = await get_pending_count("metadata_backfill")
+    if pending > 0:
+        logger.debug("Metadata backfill already pending (%d tasks), skipping", pending)
         return
 
     generation = await start_job("metadata_backfill")

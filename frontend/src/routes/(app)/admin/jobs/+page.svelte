@@ -122,7 +122,7 @@
       {#each jobs as job (job.key)}
         {@const Icon = JOB_ICONS[job.key] ?? FileText}
         {@const isTriggering = triggeringJob === job.key}
-        {@const running = job.active > 0}
+        {@const running = job.pending > 0}
 
         <div
           class="bg-card card-soft rounded-2xl overflow-hidden flex border border-border/50"
@@ -181,11 +181,11 @@
                 <div
                   class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-primary/5"
                 >
-                  <span class="text-xs sm:text-sm text-primary">Active</span>
+                  <span class="text-xs sm:text-sm text-primary">Pending</span>
                   <span
                     class="text-xs sm:text-sm font-semibold text-primary font-sans tabular-nums"
                   >
-                    {job.active.toLocaleString()}
+                    {job.pending.toLocaleString()}
                   </span>
                 </div>
               {/if}

@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.job_queue import (
     JOB_TYPES,
     count_missing_books,
-    get_active_count,
+    get_pending_count,
     start_job,
     stop_job,
 )
@@ -36,7 +36,7 @@ class JobStatusOut(BaseModel):
     missing: int
     blocked: int
     blocked_label: str
-    active: int
+    pending: int
     requires_ai: bool
 
 
@@ -63,7 +63,7 @@ async def get_jobs_status(
     jobs = []
     for key, job_type in JOB_TYPES.items():
         total, missing, blocked = await count_missing_books(db, key)
-        active = await get_active_count(key)
+        pending = await get_pending_count(key)
 
         jobs.append(
             JobStatusOut(
@@ -74,7 +74,7 @@ async def get_jobs_status(
                 missing=missing,
                 blocked=blocked,
                 blocked_label=BLOCKED_LABELS.get(key, "Needs Text"),
-                active=active,
+                pending=pending,
                 requires_ai=job_type.requires_ai,
             )
         )
