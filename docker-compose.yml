@@ -50,21 +50,7 @@ services:
     build: ./backend
     restart: unless-stopped
     mem_limit: 4g
-    command:
-      [
-        "uv",
-        "run",
-        "celery",
-        "-A",
-        "app.celeryapp:celery",
-        "worker",
-        "-Q",
-        "default",
-        "--loglevel=info",
-        "--concurrency=2",
-        "--max-tasks-per-child=50",
-        "--max-memory-per-child=1500000",
-      ]
+    command: ["sh", "start-worker.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -100,42 +86,6 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
     depends_on:
-      redis:
-        condition: service_healthy
-
-  worker-bulk:
-    build: ./backend
-    restart: unless-stopped
-    mem_limit: 4g
-    command:
-      [
-        "uv",
-        "run",
-        "celery",
-        "-A",
-        "app.celeryapp:celery",
-        "worker",
-        "-Q",
-        "bulk",
-        "--loglevel=info",
-        "--concurrency=2",
-        "--max-tasks-per-child=50",
-        "--max-memory-per-child=1500000",
-      ]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
-      BOOKS_DIR: ${BOOKS_DIR:-/data/books}
-      COVERS_DIR: ${COVERS_DIR:-/data/covers}
-      ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
-    volumes:
-      - books_data:/data/books
-      - covers_data:/data/covers
-      - illustrations_data:/data/illustrations
-    depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
 

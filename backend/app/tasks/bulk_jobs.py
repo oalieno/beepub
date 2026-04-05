@@ -36,10 +36,10 @@ async def _run_bulk_job(job_type: str, generation: int) -> None:
         return
 
     # Set pending count upfront
-    await incr_pending(job_type, total)
+    pending_val = await incr_pending(job_type, total)
 
     logger.info(
-        f"bulk_job {job_type}: dispatching {total} tasks (generation {generation})"
+        f"bulk_job {job_type}: dispatching {total} tasks (generation {generation}), pending set to {pending_val}"
     )
 
     for bid in book_ids:
@@ -74,7 +74,10 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )
-    run_async(decr_pending(job_type))
+    pending_after = run_async(decr_pending(job_type))
+    logger.info(
+        f"run_book_job {job_type} book {book_id} done, pending now {pending_after}"
+    )
 
 
 def _execute_book_task(job_type: str, book_id: str) -> None:
