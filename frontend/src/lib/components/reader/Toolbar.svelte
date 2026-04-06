@@ -77,7 +77,7 @@
   class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-1 sm:gap-3 py-2 z-10 relative touch-manipulation select-none {darkMode
     ? 'bg-gray-900 border-gray-800 text-gray-200'
     : 'bg-background border-border text-foreground'}"
-  style="padding-top: env(safe-area-inset-top, 0px);"
+  style="padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);"
 >
   <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"

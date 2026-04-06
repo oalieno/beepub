@@ -11,7 +11,6 @@
     Pencil,
     Check,
     ArrowLeft,
-    EllipsisVertical,
   } from "@lucide/svelte";
   import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
@@ -22,7 +21,6 @@
     CompanionMessageOut,
   } from "$lib/types";
   import Spinner from "$lib/components/Spinner.svelte";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
 
   let {
     bookId,
@@ -141,11 +139,6 @@
     loadingList = true;
     try {
       conversations = await booksApi.listCompanionConversations(bookId);
-      if (conversations.length === 1) {
-        await selectConversation(conversations[0].id);
-      } else if (conversations.length > 1 && !selectedText) {
-        showSessionList = true;
-      }
     } catch {
       toastStore.error("Failed to load conversations");
     } finally {
@@ -516,8 +509,8 @@
           <Plus size={20} />
         </button>
       {:else}
-        <!-- Chat view: mobile uses dropdown, desktop uses icon buttons -->
-        <div class="hidden sm:flex items-center gap-0.5">
+        <!-- Chat view: icon buttons -->
+        <div class="flex items-center gap-0.5">
           <button
             class="p-2 rounded-lg transition-colors {darkMode
               ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
@@ -536,33 +529,6 @@
           >
             <History size={18} />
           </button>
-        </div>
-
-        <!-- Mobile: overflow menu -->
-        <div class="sm:hidden">
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger
-              class="p-2 rounded-lg transition-colors {darkMode
-                ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-              aria-label="More options"
-            >
-              <EllipsisVertical size={20} />
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" class="w-48">
-              <DropdownMenu.Item onclick={startNewConversation} class="gap-2">
-                <Plus size={16} />
-                New conversation
-              </DropdownMenu.Item>
-              <DropdownMenu.Item
-                onclick={() => (showSessionList = true)}
-                class="gap-2"
-              >
-                <History size={16} />
-                Past conversations
-              </DropdownMenu.Item>
-            </DropdownMenu.Content>
-          </DropdownMenu.Root>
         </div>
       {/if}
 
