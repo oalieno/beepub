@@ -133,6 +133,14 @@ async def _run_embed_book(book_id: str) -> None:
             if total_embedded > 0:
                 await _upsert_chunk_avg_embedding(db, bid, model)
 
+                # Mark book as having an embedding
+                from sqlalchemy import update
+
+                await db.execute(
+                    update(Book).where(Book.id == bid).values(has_embedding=True)
+                )
+                await db.commit()
+
 
 @celery.task(
     name="app.tasks.embed.embed_book",
@@ -329,6 +337,13 @@ async def _run_embed_book_summary(book_id: str) -> None:
                 },
             )
             await db.execute(stmt)
+
+            # Mark book as having an embedding
+            from sqlalchemy import update as sa_update
+
+            await db.execute(
+                sa_update(Book).where(Book.id == bid).values(has_embedding=True)
+            )
             await db.commit()
 
             logger.info(

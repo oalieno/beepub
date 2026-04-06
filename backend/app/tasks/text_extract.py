@@ -41,7 +41,12 @@ async def _run_extract_book_text(book_id: str) -> None:
                 select(BookTextChunk.id).where(BookTextChunk.book_id == bid).limit(1)
             )
             if existing.scalar_one_or_none() is not None:
-                # Chunks exist — check if classification is needed
+                # Chunks exist — ensure has_text flag is set
+                await db.execute(
+                    update(Book).where(Book.id == bid).values(has_text=True)
+                )
+
+                # Check if classification is needed
                 book_row = await db.execute(
                     select(Book.word_count, Book.is_image_book).where(Book.id == bid)
                 )
@@ -51,6 +56,7 @@ async def _run_extract_book_text(book_id: str) -> None:
 
                 if current_wc is not None and current_is_image is not None:
                     # Already fully classified, nothing to do
+                    await db.commit()
                     return
 
                 if current_wc is not None:
@@ -155,7 +161,7 @@ async def _run_extract_book_text(book_id: str) -> None:
             await db.execute(
                 update(Book)
                 .where(Book.id == bid)
-                .values(word_count=wc, is_image_book=is_image)
+                .values(word_count=wc, is_image_book=is_image, has_text=True)
             )
 
             await db.commit()

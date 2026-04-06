@@ -141,6 +141,22 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
                         )
                         await db.rollback()
 
+            # Update metadata_count flag on the book
+            async with session_factory() as db:
+                count_result = await db.execute(
+                    text(
+                        "SELECT COUNT(DISTINCT source) FROM external_metadata "
+                        "WHERE book_id = :book_id"
+                    ),
+                    {"book_id": book_id},
+                )
+                count = count_result.scalar() or 0
+                await db.execute(
+                    text("UPDATE books SET metadata_count = :count WHERE id = :id"),
+                    {"count": count, "id": book_id},
+                )
+                await db.commit()
+
             # Run deterministic tag mapping (no AI)
             await run_tag_mapping(session_factory, book_id)
 

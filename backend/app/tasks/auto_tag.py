@@ -73,8 +73,12 @@ async def _run_auto_tag_book(book_id: str) -> None:
                 logger.warning(f"No valid AI tags generated for book {book_id}")
                 return
 
-            # Save tags
+            # Save tags and update status flag
             await save_ai_tags(db, uuid.UUID(book_id), tags)
+            await db.execute(
+                text("UPDATE books SET has_tags = true WHERE id = :id"),
+                {"id": book_id},
+            )
             await db.commit()
             logger.info(
                 f"Auto-tagged book {book_id} with {len(tags)} tags: {[t['tag'] for t in tags]}"

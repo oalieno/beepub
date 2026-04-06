@@ -77,6 +77,23 @@ class Book(Base, TimestampMixin):
     word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_image_book: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
+    # Job status flags — maintained by Celery tasks, used by /api/admin/jobs
+    has_text: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    is_summarized: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    has_embedding: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    has_tags: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
+    metadata_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0"
+    )
+
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     calibre_added_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

@@ -12,9 +12,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.book import Book
-from app.models.book_embedding_unified import BookEmbedding
-from app.models.book_text import BookTextChunk
-from app.models.tag import BookTag
 
 logger = logging.getLogger(__name__)
 
@@ -168,73 +165,37 @@ async def reset_pending(job_type: str) -> None:
 def _missing_filters(job_type: str):
     """Return (missing_where, blocked_where) filter clauses for a job type.
 
-    Each is a list of SQLAlchemy WHERE conditions to apply on Book.id.
+    Each is a list of SQLAlchemy WHERE conditions to apply on Book columns.
     blocked_where is None if the job type has no "blocked" concept.
     """
-    from app.models.book import ExternalMetadata
-
-    has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+    not_image = Book.is_image_book.isnot(True)
 
     if job_type == "text_extraction":
         return [Book.is_image_book.is_(None)], None
 
     elif job_type == "embedding":
-        has_embed = select(BookEmbedding.book_id)
-        missing = [
-            Book.id.in_(has_text),
-            Book.id.notin_(has_embed),
-            Book.is_image_book.isnot(True),
-        ]
-        blocked = [Book.id.notin_(has_text), Book.is_image_book.isnot(True)]
-        return missing, blocked
+        return (
+            [Book.has_text.is_(True), Book.has_embedding.is_(False), not_image],
+            [Book.has_text.is_(False), not_image],
+        )
 
     elif job_type == "summarize":
-        has_unsummarized = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.is_(None))
-            .group_by(BookTextChunk.book_id)
+        return (
+            [Book.has_text.is_(True), Book.is_summarized.is_(False), not_image],
+            [Book.has_text.is_(False), not_image],
         )
-        missing = [
-            Book.id.in_(has_unsummarized),
-            Book.is_image_book.isnot(True),
-        ]
-        blocked = [Book.id.notin_(has_text), Book.is_image_book.isnot(True)]
-        return missing, blocked
-
-    elif job_type == "auto_tag":
-        has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
-        return [Book.id.notin_(has_tags)], None
-
-    elif job_type == "metadata_backfill":
-        fully_fetched = (
-            select(ExternalMetadata.book_id)
-            .group_by(ExternalMetadata.book_id)
-            .having(func.count(ExternalMetadata.source) >= NUM_METADATA_SOURCES)
-        )
-        return [Book.id.notin_(fully_fetched)], None
 
     elif job_type == "book_embedding":
-        has_unsummarized = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.is_(None))
-            .group_by(BookTextChunk.book_id)
+        return (
+            [Book.is_summarized.is_(True), Book.has_embedding.is_(False), not_image],
+            [Book.is_summarized.is_(False), not_image],
         )
-        fully_summarized = (
-            select(BookTextChunk.book_id)
-            .group_by(BookTextChunk.book_id)
-            .except_(has_unsummarized)
-        )
-        has_book_embed = select(BookEmbedding.book_id)
-        missing = [
-            Book.id.in_(fully_summarized),
-            Book.id.notin_(has_book_embed),
-            Book.is_image_book.isnot(True),
-        ]
-        blocked = [
-            Book.id.notin_(fully_summarized),
-            Book.is_image_book.isnot(True),
-        ]
-        return missing, blocked
+
+    elif job_type == "auto_tag":
+        return [Book.has_tags.is_(False)], None
+
+    elif job_type == "metadata_backfill":
+        return [Book.metadata_count < NUM_METADATA_SOURCES], None
 
     return None, None
 
@@ -249,9 +210,7 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
     if missing_where is None:
         return 0, 0
 
-    missing_result = await db.execute(
-        select(func.count(Book.id)).where(*missing_where)
-    )
+    missing_result = await db.execute(select(func.count(Book.id)).where(*missing_where))
     missing = missing_result.scalar() or 0
 
     blocked = 0
@@ -280,10 +239,9 @@ async def get_missing_book_ids(db: AsyncSession, job_type: str) -> list:
 
     # Summarize also needs books without text (extraction runs first)
     if job_type == "summarize":
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
         no_text_result = await db.execute(
             select(Book.id)
-            .where(Book.id.notin_(has_text), Book.is_image_book.isnot(True))
+            .where(Book.has_text.is_(False), Book.is_image_book.isnot(True))
             .order_by(Book.created_at)
         )
         no_text_ids = [row[0] for row in no_text_result.all()]

@@ -112,9 +112,7 @@ async def _run_summarize_chunks(
                     BookTextChunk.summary.is_(None),
                 ]
                 if up_to_spine_index is not None:
-                    filters.append(
-                        BookTextChunk.spine_index <= up_to_spine_index
-                    )
+                    filters.append(BookTextChunk.spine_index <= up_to_spine_index)
                 result = await db.execute(
                     select(BookTextChunk)
                     .where(*filters)
@@ -176,6 +174,25 @@ async def _run_summarize_chunks(
                 logger.info(
                     f"Summarized {summarized}/{len(chunks)} chunks for book {book_id} (up to spine {up_to_spine_index})"
                 )
+
+                # Check if all chunks are now summarized and update flag
+                from sqlalchemy import func as sa_func
+
+                unsummarized_result = await db.execute(
+                    select(sa_func.count())
+                    .select_from(BookTextChunk)
+                    .where(
+                        BookTextChunk.book_id == bid,
+                        BookTextChunk.summary.is_(None),
+                    )
+                )
+                if unsummarized_result.scalar() == 0:
+                    from sqlalchemy import update
+
+                    await db.execute(
+                        update(Book).where(Book.id == bid).values(is_summarized=True)
+                    )
+                    await db.commit()
     finally:
         try:
             await lock.release()
