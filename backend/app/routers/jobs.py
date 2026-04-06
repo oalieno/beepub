@@ -13,7 +13,6 @@ from app.deps import require_admin
 from app.models.user import User
 from app.services.job_queue import (
     JOB_TYPES,
-    count_missing_books,
     get_pending_count,
     start_job,
     stop_job,
@@ -51,20 +50,35 @@ async def get_jobs_status(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get status of all job types with missing counts and active task counts."""
+    import asyncio
+
     from sqlalchemy import func, select
 
     from app.models.book import Book
+    from app.services.job_queue import count_missing_books
 
+    # Total and image count — query once
+    total_result = await db.execute(select(func.count(Book.id)))
+    total = total_result.scalar() or 0
     img_result = await db.execute(
         select(func.count(Book.id)).where(Book.is_image_book.is_(True))
     )
     image_book_count = img_result.scalar() or 0
 
-    jobs = []
-    for key, job_type in JOB_TYPES.items():
-        total, missing, blocked = await count_missing_books(db, key)
-        pending = await get_pending_count(key)
+    # Per-job-type missing/blocked counts (sequential — single DB session)
+    keys = list(JOB_TYPES.keys())
+    missing_results = []
+    for key in keys:
+        missing_results.append(await count_missing_books(db, key))
 
+    # Redis calls can run in parallel
+    pending_results = await asyncio.gather(*[get_pending_count(k) for k in keys])
+
+    jobs = []
+    for i, key in enumerate(keys):
+        job_type = JOB_TYPES[key]
+        missing, blocked = missing_results[i]
+        pending = pending_results[i]
         jobs.append(
             JobStatusOut(
                 key=key,

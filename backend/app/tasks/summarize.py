@@ -48,10 +48,13 @@ Text:
 {text}"""
 
 
-async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
+async def _run_summarize_chunks(
+    book_id: str, up_to_spine_index: int | None = None
+) -> None:
     """Generate summaries for book text chunks that don't have one yet.
 
-    Summarizes all chunks with spine_index <= up_to_spine_index.
+    If up_to_spine_index is None, summarizes all chunks.
+    Otherwise, summarizes chunks with spine_index <= up_to_spine_index.
     Does NOT auto-trigger embed_book_summary — caller decides follow-up.
     """
     import redis.asyncio as aioredis
@@ -104,13 +107,17 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
                     book_lang = None  # will detect per-chunk below
 
                 # Get chunks that need summaries
+                filters = [
+                    BookTextChunk.book_id == bid,
+                    BookTextChunk.summary.is_(None),
+                ]
+                if up_to_spine_index is not None:
+                    filters.append(
+                        BookTextChunk.spine_index <= up_to_spine_index
+                    )
                 result = await db.execute(
                     select(BookTextChunk)
-                    .where(
-                        BookTextChunk.book_id == bid,
-                        BookTextChunk.spine_index <= up_to_spine_index,
-                        BookTextChunk.summary.is_(None),
-                    )
+                    .where(*filters)
                     .order_by(BookTextChunk.spine_index)
                 )
                 chunks = result.scalars().all()
@@ -182,7 +189,7 @@ async def _run_summarize_chunks(book_id: str, up_to_spine_index: int) -> None:
     bind=True,
     max_retries=2,
 )
-def summarize_chunks(self, book_id: str, up_to_spine_index: int) -> None:
+def summarize_chunks(self, book_id: str, up_to_spine_index: int | None = None) -> None:
     """Celery wrapper for _run_summarize_chunks.
 
     Also auto-triggers embed_book_summary after completion.

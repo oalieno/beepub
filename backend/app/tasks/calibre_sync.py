@@ -87,7 +87,7 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
 
                     # All gates passed — dispatch per-library sync task
                     logger.info(f"Dispatching auto-sync for {lib.name}")
-                    sync_calibre_library_task.delay(
+                    sync_calibre_library.delay(
                         lib.calibre_path,
                         str(lib.id),
                         str(lib.created_by),
@@ -106,8 +106,8 @@ def check_and_sync_calibre(force: bool = False) -> None:
     run_async(_check_and_sync_calibre(force=force))
 
 
-@celery.task(name="app.tasks.calibre_sync.sync_calibre_library_task")
-def sync_calibre_library_task(
+@celery.task(name="app.tasks.calibre_sync.sync_calibre_library")
+def sync_calibre_library(
     calibre_path: str, library_id: str, admin_user_id: str
 ) -> None:
     """Celery task: run sync for a single library."""

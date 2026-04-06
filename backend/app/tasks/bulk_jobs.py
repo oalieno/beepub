@@ -8,6 +8,31 @@ from app.celeryapp import celery
 
 logger = logging.getLogger(__name__)
 
+# Registry: job_type → list of (module_path, function_name) to call in order.
+# Each function is called with (book_id: str) via run_async().
+_TASK_REGISTRY: dict[str, list[tuple[str, str]]] = {
+    "text_extraction": [
+        ("app.tasks.text_extract", "_run_extract_book_text"),
+    ],
+    "embedding": [
+        ("app.tasks.text_extract", "_run_extract_book_text"),
+        ("app.tasks.embed", "_run_embed_book"),
+    ],
+    "summarize": [
+        ("app.tasks.text_extract", "_run_extract_book_text"),
+        ("app.tasks.summarize", "_run_summarize_chunks"),
+    ],
+    "metadata_backfill": [
+        ("app.tasks.metadata", "_run_fetch_book_metadata"),
+    ],
+    "auto_tag": [
+        ("app.tasks.auto_tag", "_run_auto_tag_book"),
+    ],
+    "book_embedding": [
+        ("app.tasks.embed", "_run_embed_book_summary"),
+    ],
+}
+
 
 @celery.task(name="app.tasks.bulk_jobs.run_bulk_job", bind=True, acks_late=False)
 def run_bulk_job(self, job_type: str, generation: int) -> None:
@@ -19,7 +44,11 @@ def run_bulk_job(self, job_type: str, generation: int) -> None:
 
 async def _run_bulk_job(job_type: str, generation: int) -> None:
     from app.database import create_task_engine
-    from app.services.job_queue import incr_pending, is_current_generation
+    from app.services.job_queue import (
+        get_missing_book_ids,
+        incr_pending,
+        is_current_generation,
+    )
 
     # Check if this generation is still current (may have been stopped)
     if not await is_current_generation(job_type, generation):
@@ -28,7 +57,7 @@ async def _run_bulk_job(job_type: str, generation: int) -> None:
 
     async with create_task_engine() as (_engine, session_factory):
         async with session_factory() as db:
-            book_ids = await _get_missing_book_ids(db, job_type)
+            book_ids = await get_missing_book_ids(db, job_type)
 
     total = len(book_ids)
     if total == 0:
@@ -82,140 +111,18 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
 
 def _execute_book_task(job_type: str, book_id: str) -> None:
     """Run the actual work for a book. Called inline — no Celery dispatch."""
+    import importlib
+
     from app.celeryapp import run_async
 
-    if job_type == "text_extraction":
-        from app.tasks.text_extract import _run_text_extract
+    steps = _TASK_REGISTRY.get(job_type)
+    if not steps:
+        return
 
-        run_async(_run_text_extract(book_id))
-
-    elif job_type == "embedding":
-        from app.tasks.embed import _run_embed_book
-        from app.tasks.text_extract import _run_text_extract
-
-        run_async(_run_text_extract(book_id))
-        run_async(_run_embed_book(book_id))
-
-    elif job_type == "summarize":
-        from app.tasks.summarize import _run_summarize_chunks
-        from app.tasks.text_extract import _run_text_extract
-
-        run_async(_run_text_extract(book_id))
-        run_async(_run_summarize_chunks(book_id, 999999))
-
-    elif job_type == "metadata_backfill":
-        from app.tasks.metadata_backfill import _run_metadata_backfill
-
-        run_async(_run_metadata_backfill(book_id))
-
-    elif job_type == "auto_tag":
-        from app.tasks.auto_tag import _run_auto_tag_book
-
-        run_async(_run_auto_tag_book(book_id))
-
-    elif job_type == "book_embedding":
-        from app.tasks.embed import _run_embed_book_summary
-
-        run_async(_run_embed_book_summary(book_id))
-
-
-async def _get_missing_book_ids(db, job_type: str) -> list:
-    """Get book IDs that haven't been processed for the given job type."""
-    from sqlalchemy import func, select
-
-    from app.models.book import Book
-    from app.models.book_embedding import BookEmbeddingChunk
-    from app.models.book_text import BookTextChunk
-    from app.models.tag import BookTag
-
-    if job_type == "text_extraction":
-        result = await db.execute(
-            select(Book.id)
-            .where(Book.is_image_book.is_(None))
-            .order_by(Book.created_at)
-        )
-    elif job_type == "embedding":
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
-        has_embed = select(BookEmbeddingChunk.book_id).group_by(
-            BookEmbeddingChunk.book_id
-        )
-        result = await db.execute(
-            select(Book.id)
-            .where(
-                Book.id.in_(has_text),
-                Book.id.notin_(has_embed),
-                Book.is_image_book.isnot(True),
-            )
-            .order_by(Book.created_at)
-        )
-    elif job_type == "summarize":
-        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
-        has_unsummarized = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.is_(None))
-            .group_by(BookTextChunk.book_id)
-        )
-        no_text_result = await db.execute(
-            select(Book.id)
-            .where(Book.id.notin_(has_text), Book.is_image_book.isnot(True))
-            .order_by(Book.created_at)
-        )
-        unsummarized_result = await db.execute(
-            select(Book.id)
-            .where(Book.id.in_(has_unsummarized), Book.is_image_book.isnot(True))
-            .order_by(Book.created_at)
-        )
-        no_text_ids = [row[0] for row in no_text_result.all()]
-        unsummarized_ids = [row[0] for row in unsummarized_result.all()]
-        seen = set()
-        book_ids = []
-        for bid in no_text_ids + unsummarized_ids:
-            if bid not in seen:
-                seen.add(bid)
-                book_ids.append(bid)
-        return book_ids
-    elif job_type == "metadata_backfill":
-        from app.models.book import ExternalMetadata
-
-        fully_fetched = (
-            select(ExternalMetadata.book_id)
-            .group_by(ExternalMetadata.book_id)
-            .having(func.count(ExternalMetadata.source) >= 4)
-        )
-        result = await db.execute(
-            select(Book.id)
-            .where(Book.id.notin_(fully_fetched))
-            .order_by(Book.created_at)
-        )
-    elif job_type == "auto_tag":
-        has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
-        result = await db.execute(
-            select(Book.id).where(Book.id.notin_(has_tags)).order_by(Book.created_at)
-        )
-    elif job_type == "book_embedding":
-        from app.models.book_embedding_unified import BookEmbedding
-
-        has_unsummarized = (
-            select(BookTextChunk.book_id)
-            .where(BookTextChunk.summary.is_(None))
-            .group_by(BookTextChunk.book_id)
-        )
-        fully_summarized = (
-            select(BookTextChunk.book_id)
-            .group_by(BookTextChunk.book_id)
-            .except_(has_unsummarized)
-        )
-        has_book_embed = select(BookEmbedding.book_id)
-        result = await db.execute(
-            select(Book.id)
-            .where(
-                Book.id.in_(fully_summarized),
-                Book.id.notin_(has_book_embed),
-                Book.is_image_book.isnot(True),
-            )
-            .order_by(Book.created_at)
-        )
-    else:
-        return []
-
-    return [row[0] for row in result.all()]
+    for module_path, func_name in steps:
+        mod = importlib.import_module(module_path)
+        fn = getattr(mod, func_name)
+        if func_name == "_run_summarize_chunks":
+            run_async(fn(book_id, None))  # None = all chapters
+        else:
+            run_async(fn(book_id))

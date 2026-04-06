@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 import redis.asyncio as aioredis
@@ -11,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.book import Book
-from app.models.book_embedding import BookEmbeddingChunk
+from app.models.book_embedding_unified import BookEmbedding
 from app.models.book_text import BookTextChunk
 from app.models.tag import BookTag
 
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 
 GEN_KEY_PREFIX = "beepub:job:gen"
 PENDING_KEY_PREFIX = "beepub:job:pending"
+
+# Number of external metadata sources. Used to determine when a book has been
+# fully fetched (all sources attempted). Must match init_metadata_sources().
+NUM_METADATA_SOURCES = 4
 
 
 @dataclass
@@ -75,9 +80,14 @@ def _pending_key(job_type: str) -> str:
     return f"{PENDING_KEY_PREFIX}:{job_type}"
 
 
-async def _get_redis() -> aioredis.Redis:
-    """Create a Redis client. Caller must call aclose() when done."""
-    return aioredis.from_url(settings.redis_url)
+@asynccontextmanager
+async def _redis():
+    """Async context manager for a short-lived Redis client."""
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        yield client
+    finally:
+        await client.aclose()
 
 
 # ---------------------------------------------------------------------------
@@ -87,12 +97,8 @@ async def _get_redis() -> aioredis.Redis:
 
 async def start_job(job_type: str) -> int:
     """Start a new run by incrementing the generation counter. Returns the new generation."""
-    client = await _get_redis()
-    try:
-        gen = await client.incr(_gen_key(job_type))
-        return gen
-    finally:
-        await client.aclose()
+    async with _redis() as client:
+        return await client.incr(_gen_key(job_type))
 
 
 async def stop_job(job_type: str) -> int:
@@ -102,23 +108,17 @@ async def stop_job(job_type: str) -> int:
     will see a different generation and skip.
     Returns the new generation.
     """
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         gen = await client.incr(_gen_key(job_type))
         await client.delete(_pending_key(job_type))
         return gen
-    finally:
-        await client.aclose()
 
 
 async def get_generation(job_type: str) -> int:
     """Get the current generation counter. Returns 0 if no job has ever run."""
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         data = await client.get(_gen_key(job_type))
         return int(data) if data else 0
-    finally:
-        await client.aclose()
 
 
 async def is_current_generation(job_type: str, generation: int) -> bool:
@@ -133,122 +133,87 @@ async def is_current_generation(job_type: str, generation: int) -> bool:
 
 async def incr_pending(job_type: str, count: int = 1) -> int:
     """Increment the pending counter (called on dispatch). Returns the new count."""
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         return await client.incrby(_pending_key(job_type), count)
-    finally:
-        await client.aclose()
 
 
 async def decr_pending(job_type: str) -> int:
     """Decrement the pending counter (called on task completion). Returns the new count (min 0)."""
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         val = await client.decr(_pending_key(job_type))
         if val < 0:
             await client.set(_pending_key(job_type), 0)
             return 0
         return val
-    finally:
-        await client.aclose()
 
 
 async def get_pending_count(job_type: str) -> int:
     """Get the number of pending tasks (queued + active) for a job type."""
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         data = await client.get(_pending_key(job_type))
         return max(int(data), 0) if data else 0
-    finally:
-        await client.aclose()
 
 
 async def reset_pending(job_type: str) -> None:
     """Reset the pending counter to 0 (called on stop)."""
-    client = await _get_redis()
-    try:
+    async with _redis() as client:
         await client.delete(_pending_key(job_type))
-    finally:
-        await client.aclose()
 
 
 # ---------------------------------------------------------------------------
-# Missing book counts
+# Missing book queries (shared by count + list endpoints)
 # ---------------------------------------------------------------------------
 
 
-async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int, int]:
-    """Return (total_books, missing_count, blocked_count) for a job type.
+def _missing_filters(job_type: str):
+    """Return (missing_where, blocked_where) filter clauses for a job type.
 
-    'missing' = books ready to process (prerequisites met but not yet done).
-    'blocked' = books that need a prerequisite first (e.g. text extraction).
+    Each is a list of SQLAlchemy WHERE conditions to apply on Book.id.
+    blocked_where is None if the job type has no "blocked" concept.
     """
-    total_result = await db.execute(select(func.count(Book.id)))
-    total = total_result.scalar() or 0
-    blocked = 0
+    from app.models.book import ExternalMetadata
 
     has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
 
     if job_type == "text_extraction":
-        missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.is_image_book.is_(None))
-        )
+        return [Book.is_image_book.is_(None)], None
+
     elif job_type == "embedding":
-        has_embed = select(BookEmbeddingChunk.book_id).group_by(
-            BookEmbeddingChunk.book_id
-        )
-        non_image_text = has_text.where(
-            BookTextChunk.book_id.in_(
-                select(Book.id).where(Book.is_image_book.isnot(True))
-            )
-        )
-        missing_result = await db.execute(
-            select(func.count()).select_from(
-                non_image_text.except_(has_embed).subquery()
-            )
-        )
-        blocked_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.notin_(has_text), Book.is_image_book.isnot(True)
-            )
-        )
-        blocked = blocked_result.scalar() or 0
+        has_embed = select(BookEmbedding.book_id)
+        missing = [
+            Book.id.in_(has_text),
+            Book.id.notin_(has_embed),
+            Book.is_image_book.isnot(True),
+        ]
+        blocked = [Book.id.notin_(has_text), Book.is_image_book.isnot(True)]
+        return missing, blocked
+
     elif job_type == "summarize":
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
             .group_by(BookTextChunk.book_id)
         )
-        missing_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.in_(has_unsummarized), Book.is_image_book.isnot(True)
-            )
-        )
-        blocked_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.notin_(has_text), Book.is_image_book.isnot(True)
-            )
-        )
-        blocked = blocked_result.scalar() or 0
+        missing = [
+            Book.id.in_(has_unsummarized),
+            Book.is_image_book.isnot(True),
+        ]
+        blocked = [Book.id.notin_(has_text), Book.is_image_book.isnot(True)]
+        return missing, blocked
+
     elif job_type == "auto_tag":
         has_tags = select(BookTag.book_id).group_by(BookTag.book_id)
-        missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(has_tags))
-        )
-    elif job_type == "metadata_backfill":
-        from app.models.book import ExternalMetadata
+        return [Book.id.notin_(has_tags)], None
 
+    elif job_type == "metadata_backfill":
         fully_fetched = (
             select(ExternalMetadata.book_id)
             .group_by(ExternalMetadata.book_id)
-            .having(func.count(ExternalMetadata.source) >= 4)
+            .having(func.count(ExternalMetadata.source) >= NUM_METADATA_SOURCES)
         )
-        missing_result = await db.execute(
-            select(func.count(Book.id)).where(Book.id.notin_(fully_fetched))
-        )
-    elif job_type == "book_embedding":
-        from app.models.book_embedding_unified import BookEmbedding
+        return [Book.id.notin_(fully_fetched)], None
 
+    elif job_type == "book_embedding":
         has_unsummarized = (
             select(BookTextChunk.book_id)
             .where(BookTextChunk.summary.is_(None))
@@ -260,22 +225,73 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
             .except_(has_unsummarized)
         )
         has_book_embed = select(BookEmbedding.book_id)
-        missing_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.in_(fully_summarized),
-                Book.id.notin_(has_book_embed),
-                Book.is_image_book.isnot(True),
-            )
-        )
+        missing = [
+            Book.id.in_(fully_summarized),
+            Book.id.notin_(has_book_embed),
+            Book.is_image_book.isnot(True),
+        ]
+        blocked = [
+            Book.id.notin_(fully_summarized),
+            Book.is_image_book.isnot(True),
+        ]
+        return missing, blocked
+
+    return None, None
+
+
+async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int]:
+    """Return (missing_count, blocked_count) for a job type.
+
+    'missing' = books ready to process (prerequisites met but not yet done).
+    'blocked' = books that need a prerequisite first (e.g. text extraction).
+    """
+    missing_where, blocked_where = _missing_filters(job_type)
+    if missing_where is None:
+        return 0, 0
+
+    missing_result = await db.execute(
+        select(func.count(Book.id)).where(*missing_where)
+    )
+    missing = missing_result.scalar() or 0
+
+    blocked = 0
+    if blocked_where is not None:
         blocked_result = await db.execute(
-            select(func.count(Book.id)).where(
-                Book.id.notin_(fully_summarized),
-                Book.is_image_book.isnot(True),
-            )
+            select(func.count(Book.id)).where(*blocked_where)
         )
         blocked = blocked_result.scalar() or 0
-    else:
-        return total, 0, 0
 
-    missing = missing_result.scalar() or 0
-    return total, missing, blocked
+    return missing, blocked
+
+
+async def get_missing_book_ids(db: AsyncSession, job_type: str) -> list:
+    """Return book IDs that need processing for a job type.
+
+    For 'summarize', also includes books without text (they need extraction first).
+    """
+    missing_where, _ = _missing_filters(job_type)
+    if missing_where is None:
+        return []
+
+    result = await db.execute(
+        select(Book.id).where(*missing_where).order_by(Book.created_at)
+    )
+    book_ids = [row[0] for row in result.all()]
+
+    # Summarize also needs books without text (extraction runs first)
+    if job_type == "summarize":
+        has_text = select(BookTextChunk.book_id).group_by(BookTextChunk.book_id)
+        no_text_result = await db.execute(
+            select(Book.id)
+            .where(Book.id.notin_(has_text), Book.is_image_book.isnot(True))
+            .order_by(Book.created_at)
+        )
+        no_text_ids = [row[0] for row in no_text_result.all()]
+        # Merge: no_text first, then unsummarized (deduped)
+        seen = set(book_ids)
+        for bid in no_text_ids:
+            if bid not in seen:
+                seen.add(bid)
+                book_ids.append(bid)
+
+    return book_ids

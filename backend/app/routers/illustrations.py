@@ -15,7 +15,7 @@ from app.routers.books import _get_book_with_access
 from app.schemas.illustration import IllustrationCreate, IllustrationOut, StylePromptOut
 from app.services.gemini import get_style_prompts
 from app.services.storage import delete_file, get_illustration_path
-from app.tasks.illustration import generate_illustration_task
+from app.tasks.illustration import generate_illustration
 
 router = APIRouter(prefix="/api/books", tags=["illustrations"])
 
@@ -122,7 +122,7 @@ async def create_illustration(
     await db.commit()
     await db.refresh(illustration)
 
-    generate_illustration_task.delay(
+    generate_illustration.delay(
         str(illustration_id),
         body.text,
         body.style_prompt,

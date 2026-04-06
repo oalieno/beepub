@@ -30,7 +30,7 @@ def _load_reference_images(reference_images: list[dict] | None) -> list[bytes] |
     return result or None
 
 
-async def _run(
+async def _run_generate_illustration(
     illustration_id: str,
     text: str,
     style_prompt: str | None,
@@ -119,11 +119,11 @@ def _safe_mark(
 
 
 @celery.task(
-    name="app.tasks.illustration.generate_illustration_task",
+    name="app.tasks.illustration.generate_illustration",
     bind=True,
     max_retries=2,
 )
-def generate_illustration_task(
+def generate_illustration(
     self,
     illustration_id: str,
     text: str,
@@ -137,7 +137,7 @@ def generate_illustration_task(
         from app.celeryapp import run_async
 
         run_async(
-            _run(
+            _run_generate_illustration(
                 illustration_id,
                 text,
                 style_prompt,
@@ -155,7 +155,7 @@ def generate_illustration_task(
         # Non-retryable errors — mark failed immediately
         if any(marker in exc_msg for marker in NO_RETRY_MARKERS):
             logger.warning(
-                f"generate_illustration_task permanently failed for {illustration_id}: {exc_msg}"
+                f"generate_illustration permanently failed for {illustration_id}: {exc_msg}"
             )
             _safe_mark(illustration_id, "failed", exc_msg)
             return
@@ -164,12 +164,12 @@ def generate_illustration_task(
         retries_left = self.max_retries - self.request.retries
         if retries_left <= 0:
             logger.error(
-                f"generate_illustration_task exhausted retries for {illustration_id}: {exc_msg}"
+                f"generate_illustration exhausted retries for {illustration_id}: {exc_msg}"
             )
             _safe_mark(illustration_id, "failed", exc_msg)
             return
 
         logger.warning(
-            f"generate_illustration_task retrying for {illustration_id} (attempt {self.request.retries + 1}/{self.max_retries + 1}): {exc_msg}"
+            f"generate_illustration retrying for {illustration_id} (attempt {self.request.retries + 1}/{self.max_retries + 1}): {exc_msg}"
         )
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

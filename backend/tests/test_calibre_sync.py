@@ -99,7 +99,7 @@ async def _run_check(
             new_callable=AsyncMock,
             return_value=sync_status_value,
         ),
-        patch("app.tasks.calibre_sync.sync_calibre_library_task") as mock_task,
+        patch("app.tasks.calibre_sync.sync_calibre_library") as mock_task,
     ):
         from app.tasks.calibre_sync import _check_and_sync_calibre
 

@@ -10,7 +10,7 @@ from app.celeryapp import celery
 logger = logging.getLogger(__name__)
 
 
-async def _process_auto_tag(book_id: str) -> None:
+async def _run_auto_tag_book(book_id: str) -> None:
     """Generate AI tags for the given book."""
     from sqlalchemy import text
 
@@ -81,16 +81,13 @@ async def _process_auto_tag(book_id: str) -> None:
             )
 
 
-_run_auto_tag_book = _process_auto_tag  # alias for bulk_jobs
-
-
 @celery.task(name="app.tasks.auto_tag.auto_tag_book", bind=True, max_retries=2)
 def auto_tag_book(self, book_id: str) -> None:
     """Celery task: generate AI tags for a book."""
     try:
         from app.celeryapp import run_async
 
-        run_async(_process_auto_tag(book_id))
+        run_async(_run_auto_tag_book(book_id))
     except Exception as exc:
         logger.exception(f"auto_tag_book failed for book {book_id}")
         raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))

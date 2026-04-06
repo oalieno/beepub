@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 _IMAGE_BOOK_THRESHOLD = 500
 
 
-async def _run_text_extract(book_id: str) -> None:
+async def _run_extract_book_text(book_id: str) -> None:
     """Extract text from an EPUB and store as BookTextChunk rows.
 
     Also computes word_count and sets is_image_book = (word_count < 500).
@@ -170,11 +170,11 @@ async def _run_text_extract(book_id: str) -> None:
     max_retries=2,
 )
 def extract_book_text(self, book_id: str) -> None:
-    """Celery wrapper for _run_text_extract."""
+    """Celery wrapper for _run_extract_book_text."""
     try:
         from app.celeryapp import run_async
 
-        run_async(_run_text_extract(book_id))
+        run_async(_run_extract_book_text(book_id))
     except Exception as exc:
         logger.exception(f"extract_book_text failed for book {book_id}")
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

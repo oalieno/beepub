@@ -72,7 +72,7 @@ from app.services.storage import (
     save_upload_file,
 )
 from app.tasks.auto_tag import auto_tag_book
-from app.tasks.metadata import auto_start_backfill, fetch_single_source
+from app.tasks.metadata import fetch_book_metadata, fetch_metadata_source
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["books"])
@@ -146,7 +146,7 @@ async def upload_book(
     await db.refresh(book)
 
     extract_book_text.delay(str(book_id))
-    auto_start_backfill()
+    fetch_book_metadata.delay(str(book_id))
     return book
 
 
@@ -198,9 +198,9 @@ async def upload_books_bulk(
             db.add(lb)
         books.append(book)
         extract_book_text.delay(str(book_id))
+        fetch_book_metadata.delay(str(book_id))
 
     await db.commit()
-    auto_start_backfill()
     for book in books:
         await db.refresh(book)
     return books
@@ -902,7 +902,7 @@ async def refresh_book_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    auto_start_backfill()
+    fetch_book_metadata.delay(str(book_id))
     return {"status": "queued"}
 
 
@@ -1187,7 +1187,7 @@ async def update_external_metadata_url(
         await db.commit()
         await db.refresh(meta)
         # Fetch data from the pinned URL and re-map tags
-        fetch_single_source.delay(str(book_id), source)
+        fetch_metadata_source.delay(str(book_id), source)
         return meta
 
 
