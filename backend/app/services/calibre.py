@@ -12,7 +12,7 @@ from pathlib import Path
 import redis.asyncio as aioredis
 
 from app.config import settings
-from app.database import AsyncSessionLocal
+from app.database import create_task_engine
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.services.storage import get_cover_path
@@ -260,7 +260,10 @@ async def sync_calibre_library(
         total = len(calibre_books)
         await _update_progress(result, total, 0)
 
-        async with AsyncSessionLocal() as db:
+        async with (
+            create_task_engine() as (_engine, SessionLocal),
+            SessionLocal() as db,
+        ):
             # Verify library still exists (may have been deleted)
             from sqlalchemy import select
 
