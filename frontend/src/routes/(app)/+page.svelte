@@ -20,6 +20,7 @@
   import type { DownloadEntry } from "$lib/services/offline";
   import { BookOpen, Download, WifiOff } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
   let recentBooks = $state<BookOut[]>([]);
@@ -111,7 +112,7 @@
 </script>
 
 <svelte:head>
-  <title>BeePub - Home</title>
+  <title>{m.home_page_title()}</title>
 </svelte:head>
 
 <div class="max-w-6xl mx-auto px-6 sm:px-8 py-6">
@@ -126,7 +127,7 @@
       >
         <WifiOff class="text-amber-500 shrink-0" size={20} />
         <p class="text-sm text-foreground">
-          You're offline. Your downloaded books are available below.
+          {m.home_offline_message()}
         </p>
       </div>
     </section>
@@ -135,15 +136,17 @@
       <section>
         <div class="flex items-end justify-between mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-foreground">Downloaded Books</h2>
+            <h2 class="text-2xl font-bold text-foreground">
+              {m.home_downloaded_books()}
+            </h2>
             <p class="text-muted-foreground text-sm mt-1">
-              Available for offline reading
+              {m.home_downloaded_subtitle()}
             </p>
           </div>
           <a
             href="/downloads"
             class="text-primary hover:text-primary/80 text-sm font-medium"
-            >Manage →</a
+            >{m.home_manage()}</a
           >
         </div>
         <div
@@ -181,9 +184,9 @@
     {:else}
       <div class="bg-card card-soft rounded-2xl p-12 text-center">
         <Download class="mx-auto text-muted-foreground/30 mb-4" size={48} />
-        <p class="text-muted-foreground text-lg">No downloaded books</p>
+        <p class="text-muted-foreground text-lg">{m.home_no_downloaded()}</p>
         <p class="text-muted-foreground/70 text-sm mt-1">
-          Download books from their detail page to read them offline.
+          {m.home_no_downloaded_subtitle()}
         </p>
       </div>
     {/if}
@@ -197,7 +200,7 @@
           <h1
             class="text-4xl md:text-5xl font-bold leading-tight text-foreground"
           >
-            Happy reading{$authStore.user
+            {m.home_greeting()}{$authStore.user
               ? `,\n${$authStore.user.username}`
               : ""}
           </h1>
@@ -205,7 +208,9 @@
         <div class="flex items-center gap-6 text-center">
           <a href="/libraries" class="hover:opacity-80 transition-opacity">
             <p class="text-3xl font-bold text-primary">{libraries.length}</p>
-            <p class="text-muted-foreground text-xs mt-0.5">Libraries</p>
+            <p class="text-muted-foreground text-xs mt-0.5">
+              {m.home_libraries()}
+            </p>
           </a>
           <div class="w-px h-8 bg-border"></div>
           <div>
@@ -214,7 +219,7 @@
                 .reduce((sum, lib) => sum + (lib.book_count ?? 0), 0)
                 .toLocaleString()}
             </p>
-            <p class="text-muted-foreground text-xs mt-0.5">Books</p>
+            <p class="text-muted-foreground text-xs mt-0.5">{m.home_books()}</p>
           </div>
         </div>
       </div>
@@ -225,15 +230,17 @@
       <section class="mb-12">
         <div class="flex items-end justify-between mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-foreground">Continue Reading</h2>
+            <h2 class="text-2xl font-bold text-foreground">
+              {m.home_continue_reading()}
+            </h2>
             <p class="text-muted-foreground text-sm mt-1">
-              Pick up where you left off
+              {m.home_continue_reading_subtitle()}
             </p>
           </div>
           <a
             href="/my-books?tab=currently_reading"
             class="text-primary hover:text-primary/80 text-sm font-medium"
-            >See all →</a
+            >{m.home_see_all()}</a
           >
         </div>
         <div
@@ -313,25 +320,27 @@
     <section class="mb-12">
       <div class="flex items-end justify-between mb-6">
         <div>
-          <h2 class="text-2xl font-bold text-foreground">Recently Added</h2>
+          <h2 class="text-2xl font-bold text-foreground">
+            {m.home_recently_added()}
+          </h2>
           <p class="text-muted-foreground text-sm mt-1">
-            Fresh additions to your library
+            {m.home_recently_added_subtitle()}
           </p>
         </div>
         {#if libraries.length > 0}
           <a
             href="/libraries"
             class="text-primary hover:text-primary/80 text-sm font-medium"
-            >Browse all →</a
+            >{m.home_browse_all()}</a
           >
         {/if}
       </div>
       {#if recentBooks.length === 0}
         <div class="bg-card card-soft rounded-2xl p-12 text-center">
           <BookOpen class="mx-auto text-muted-foreground/30 mb-4" size={48} />
-          <p class="text-muted-foreground text-lg">No books yet</p>
+          <p class="text-muted-foreground text-lg">{m.home_no_books()}</p>
           <p class="text-muted-foreground/70 text-sm mt-1">
-            Upload some EPUBs to get started.
+            {m.home_no_books_subtitle()}
           </p>
         </div>
       {:else}
@@ -344,15 +353,17 @@
       <section class="mb-12">
         <div class="flex items-end justify-between mb-6">
           <div>
-            <h2 class="text-2xl font-bold text-foreground">Downloaded Books</h2>
+            <h2 class="text-2xl font-bold text-foreground">
+              {m.home_downloaded_books()}
+            </h2>
             <p class="text-muted-foreground text-sm mt-1">
-              Available for offline reading
+              {m.home_downloaded_subtitle()}
             </p>
           </div>
           <a
             href="/downloads"
             class="text-primary hover:text-primary/80 text-sm font-medium"
-            >See all →</a
+            >{m.home_see_all()}</a
           >
         </div>
         <div

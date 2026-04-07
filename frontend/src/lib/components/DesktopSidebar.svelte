@@ -4,6 +4,7 @@
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import {
     Home,
     BookOpen,
@@ -26,49 +27,49 @@
   const navLinks = $derived([
     {
       href: "/",
-      label: "Home",
+      label: m.nav_home(),
       icon: Home,
       active: page.url.pathname === "/",
       requiresOnline: false,
     },
     {
       href: "/my-books",
-      label: "My Books",
+      label: m.nav_my_books(),
       icon: BookOpen,
       active: page.url.pathname.startsWith("/my-books"),
       requiresOnline: true,
     },
     {
       href: "/all-books",
-      label: "All Books",
+      label: m.nav_all_books(),
       icon: BookCopy,
       active: page.url.pathname.startsWith("/all-books"),
       requiresOnline: true,
     },
     {
       href: "/libraries",
-      label: "Libraries",
+      label: m.nav_libraries(),
       icon: Library,
       active: page.url.pathname.startsWith("/libraries"),
       requiresOnline: true,
     },
     {
       href: "/bookshelves",
-      label: "Shelves",
+      label: m.nav_shelves(),
       icon: ShelvingUnit,
       active: page.url.pathname.startsWith("/bookshelves"),
       requiresOnline: true,
     },
     {
       href: "/highlights",
-      label: "Highlights",
+      label: m.nav_highlights(),
       icon: Highlighter,
       active: page.url.pathname.startsWith("/highlights"),
       requiresOnline: true,
     },
     {
       href: "/discover",
-      label: "Discover",
+      label: m.nav_discover(),
       icon: Compass,
       active: page.url.pathname.startsWith("/discover"),
       requiresOnline: true,
@@ -77,7 +78,7 @@
       ? [
           {
             href: "/downloads",
-            label: "Downloads",
+            label: m.nav_downloads(),
             icon: Download,
             active: page.url.pathname.startsWith("/downloads"),
             requiresOnline: false,
@@ -88,7 +89,7 @@
 
   function handleDisabledClick(e: Event) {
     e.preventDefault();
-    toastStore.info("Available when online");
+    toastStore.info(m.nav_available_when_online());
   }
 </script>
 
@@ -113,7 +114,7 @@
         : 'text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
       onclick={() => {
         if (!online) {
-          toastStore.info("Available when online");
+          toastStore.info(m.nav_available_when_online());
           return;
         }
         onSearchOpen();
@@ -121,7 +122,7 @@
       aria-disabled={!online || undefined}
     >
       <SearchIcon size={16} />
-      Search
+      {m.nav_search()}
       <kbd
         class="ml-auto text-xs text-sidebar-foreground/30 bg-sidebar-accent/50 px-1.5 py-0.5 rounded"
         >⌘K</kbd
@@ -142,7 +143,7 @@
             : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
         aria-current={link.active ? "page" : undefined}
         aria-disabled={disabled || undefined}
-        title={disabled ? "Available when online" : undefined}
+        title={disabled ? m.nav_available_when_online() : undefined}
         onclick={disabled ? handleDisabledClick : undefined}
       >
         <link.icon size={20} />
@@ -164,7 +165,7 @@
       onclick={!online ? handleDisabledClick : undefined}
     >
       <Dices size={20} />
-      Gacha
+      {m.nav_gacha()}
     </a>
   </div>
 

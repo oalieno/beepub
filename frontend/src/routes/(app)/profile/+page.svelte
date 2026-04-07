@@ -24,9 +24,15 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Button } from "$lib/components/ui/button";
+  import * as m from "$lib/paraglide/messages.js";
+  import { getLocale, setLocale, locales } from "$lib/paraglide/runtime.js";
+  import { Globe } from "@lucide/svelte";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let online = $derived($isOnline);
+
+  // Language
+  let showLanguage = $state(false);
 
   // Change password
   let showChangePassword = $state(false);
@@ -40,7 +46,7 @@
 
   function handleDisabledClick(e: Event) {
     e.preventDefault();
-    toastStore.info("Available when online");
+    toastStore.info(m.nav_available_when_online());
   }
 
   async function logout() {
@@ -51,13 +57,13 @@
   async function handleChangePassword() {
     passwordError = "";
     if (newPassword !== confirmPassword) {
-      passwordError = "New passwords do not match";
+      passwordError = m.profile_password_mismatch();
       return;
     }
     changingPassword = true;
     try {
       await authApi.changePassword(currentPassword, newPassword);
-      toastStore.success("Password changed successfully");
+      toastStore.success(m.profile_password_changed());
       showChangePassword = false;
       currentPassword = "";
       newPassword = "";
@@ -80,25 +86,25 @@
   let mobileLinks = $derived<ProfileLink[]>([
     {
       href: "/my-books",
-      label: "My Books",
+      label: m.nav_my_books(),
       icon: BookOpen,
       requiresOnline: true,
     },
     {
       href: "/all-books",
-      label: "All Books",
+      label: m.nav_all_books(),
       icon: BookCopy,
       requiresOnline: true,
     },
     {
       href: "/highlights",
-      label: "Highlights",
+      label: m.nav_highlights(),
       icon: Highlighter,
       requiresOnline: true,
     },
     {
       href: "/bookshelves",
-      label: "Shelves",
+      label: m.nav_shelves(),
       icon: ShelvingUnit,
       requiresOnline: true,
     },
@@ -106,18 +112,18 @@
       ? [
           {
             href: "/downloads",
-            label: "Downloads",
+            label: m.nav_downloads(),
             icon: Download,
             requiresOnline: false,
           } satisfies ProfileLink,
         ]
       : []),
-    { href: "/gacha", label: "Gacha", icon: Dices, requiresOnline: true },
+    { href: "/gacha", label: m.nav_gacha(), icon: Dices, requiresOnline: true },
     ...(isAdmin
       ? [
           {
             href: "/admin",
-            label: "Admin",
+            label: m.nav_admin(),
             icon: Settings,
             requiresOnline: true,
           } satisfies ProfileLink,
@@ -143,8 +149,66 @@
     </div>
   </div>
 
-  <!-- Change Password -->
+  <!-- Language & Password settings -->
   <div class="bg-card card-soft rounded-2xl overflow-hidden mb-4">
+    <!-- Language -->
+    <button
+      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
+      onclick={() => (showLanguage = !showLanguage)}
+    >
+      <Globe size={20} class="text-muted-foreground shrink-0" />
+      <span class="text-sm font-medium flex-1">{m.profile_language()}</span>
+      <span class="text-sm text-muted-foreground"
+        >{getLocale() === "en" ? "English" : "繁體中文"}</span
+      >
+      <ChevronRight
+        size={16}
+        class="text-muted-foreground/50 transition-transform {showLanguage
+          ? 'rotate-90'
+          : ''}"
+      />
+    </button>
+    {#if showLanguage}
+      <div class="px-4 py-3 space-y-1">
+        {#each locales as locale}
+          {@const active = getLocale() === locale}
+          <button
+            class="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-colors {active
+              ? 'bg-primary/10 text-primary font-medium'
+              : 'text-foreground hover:bg-secondary/50'}"
+            onclick={() => {
+              setLocale(locale);
+            }}
+          >
+            <span class="flex-1 text-left"
+              >{locale === "en" ? "English" : "繁體中文"}</span
+            >
+            {#if active}
+              <svg
+                class="w-4 h-4 text-primary"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="2.5"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+            {/if}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    <!-- Divider -->
+    <div class="flex justify-center">
+      <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
+    </div>
+
+    <!-- Change Password -->
     <button
       class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
       onclick={() => {
@@ -153,7 +217,9 @@
       }}
     >
       <KeyRound size={20} class="text-muted-foreground shrink-0" />
-      <span class="text-sm font-medium flex-1">Change Password</span>
+      <span class="text-sm font-medium flex-1"
+        >{m.profile_change_password()}</span
+      >
       <ChevronRight
         size={16}
         class="text-muted-foreground/50 transition-transform {showChangePassword
@@ -170,13 +236,15 @@
         class="px-4 py-4 space-y-3"
       >
         <div class="space-y-1.5">
-          <Label for="current-pw" class="text-sm">Current Password</Label>
+          <Label for="current-pw" class="text-sm"
+            >{m.profile_current_password()}</Label
+          >
           <div class="relative">
             <Input
               id="current-pw"
               type={showCurrentPw ? "text" : "password"}
               bind:value={currentPassword}
-              placeholder="Current password"
+              placeholder={m.profile_current_password_placeholder()}
               required
               class="pr-10"
             />
@@ -195,13 +263,13 @@
           </div>
         </div>
         <div class="space-y-1.5">
-          <Label for="new-pw" class="text-sm">New Password</Label>
+          <Label for="new-pw" class="text-sm">{m.profile_new_password()}</Label>
           <div class="relative">
             <Input
               id="new-pw"
               type={showNewPw ? "text" : "password"}
               bind:value={newPassword}
-              placeholder="New password"
+              placeholder={m.profile_new_password_placeholder()}
               required
               class="pr-10"
             />
@@ -220,12 +288,14 @@
           </div>
         </div>
         <div class="space-y-1.5">
-          <Label for="confirm-pw" class="text-sm">Confirm New Password</Label>
+          <Label for="confirm-pw" class="text-sm"
+            >{m.profile_confirm_password()}</Label
+          >
           <Input
             id="confirm-pw"
             type="password"
             bind:value={confirmPassword}
-            placeholder="Confirm new password"
+            placeholder={m.profile_confirm_password_placeholder()}
             required
           />
         </div>
@@ -237,7 +307,9 @@
           disabled={changingPassword}
           class="rounded-xl text-sm"
         >
-          {changingPassword ? "Changing..." : "Change Password"}
+          {changingPassword
+            ? m.profile_changing()
+            : m.profile_change_password()}
         </Button>
       </form>
     {/if}
@@ -278,7 +350,7 @@
         class="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50 active:bg-secondary"
       >
         <Settings size={20} class="text-muted-foreground shrink-0" />
-        <span class="text-sm font-medium flex-1">Admin</span>
+        <span class="text-sm font-medium flex-1">{m.nav_admin()}</span>
         <ChevronRight size={16} class="text-muted-foreground/50" />
       </a>
     </div>
@@ -291,7 +363,7 @@
       onclick={logout}
     >
       <LogOut size={20} class="shrink-0" />
-      <span class="text-sm font-medium">Logout</span>
+      <span class="text-sm font-medium">{m.profile_logout()}</span>
     </button>
   </div>
 </div>

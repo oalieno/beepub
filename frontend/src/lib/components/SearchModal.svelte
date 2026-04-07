@@ -9,6 +9,7 @@
     type KeywordSearchResult,
   } from "$lib/api/search";
   import type { BookOut } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
   import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -83,8 +84,8 @@
         content.results = [];
         content.error =
           err.message === "Semantic search is not configured"
-            ? "Semantic search is not configured. Set up embedding in Admin settings."
-            : "Search unavailable — please try again";
+            ? m.search_content_not_configured()
+            : m.search_unavailable();
       })
       .finally(() => {
         content.loading = false;
@@ -109,7 +110,7 @@
       .catch(() => {
         keyword.results = [];
         keyword.total = 0;
-        keyword.error = "Search unavailable — please try again";
+        keyword.error = m.search_unavailable();
       })
       .finally(() => {
         keyword.loading = false;
@@ -216,7 +217,7 @@
       <div
         class="flex border-b border-border/50"
         role="tablist"
-        aria-label="Search type"
+        aria-label={m.search_type()}
       >
         <button
           role="tab"
@@ -228,7 +229,7 @@
           onclick={() => switchTab("books")}
         >
           <BookOpen size={14} />
-          Books
+          {m.search_tab_books()}
         </button>
         <button
           role="tab"
@@ -240,7 +241,7 @@
           onclick={() => switchTab("content")}
         >
           <FileText size={14} />
-          Content
+          {m.search_tab_content()}
         </button>
         <button
           role="tab"
@@ -252,7 +253,7 @@
           onclick={() => switchTab("keyword")}
         >
           <TextSearch size={14} />
-          Keyword
+          {m.search_tab_keyword()}
         </button>
       </div>
 
@@ -265,10 +266,10 @@
           oninput={handleInput}
           onkeydown={handleKeydown}
           placeholder={activeTab === "books"
-            ? "Search books across all libraries..."
+            ? m.search_placeholder_books()
             : activeTab === "content"
-              ? "Search book content by meaning..."
-              : "Search book content by keyword..."}
+              ? m.search_placeholder_content()
+              : m.search_placeholder_keyword()}
           class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-base"
         />
         {#if query}
@@ -301,11 +302,11 @@
           >
             {#if books.loading && books.results.length === 0}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-                Searching...
+                {m.search_searching()}
               </div>
             {:else if books.results.length === 0 && !books.loading}
               <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-                No books found
+                {m.search_no_books_found()}
               </div>
             {:else}
               {#each books.results as result, i (result.id)}
@@ -331,7 +332,7 @@
                   </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-sm font-medium text-foreground truncate">
-                      {result.display_title ?? "Untitled"}
+                      {result.display_title ?? m.common_untitled()}
                     </p>
                     <p class="text-xs text-muted-foreground truncate">
                       {(result.display_authors ?? []).join(", ") || "\u00A0"}
@@ -350,7 +351,10 @@
                 <div
                   class="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50"
                 >
-                  Showing {books.results.length} of {books.total} results
+                  {m.search_showing_results({
+                    count: String(books.results.length),
+                    total: String(books.total),
+                  })}
                 </div>
               {/if}
             {/if}
@@ -362,9 +366,9 @@
           <div
             class="px-4 py-8 text-center text-muted-foreground text-sm space-y-1"
           >
-            <p>Type a concept or question and press Enter</p>
+            <p>{m.search_content_hint()}</p>
             <p class="text-xs">
-              Searches across all your books by meaning, not just keywords
+              {m.search_content_description()}
             </p>
           </div>
         {:else if content.loading}
@@ -388,8 +392,7 @@
         {:else if content.results.length === 0}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
             <BookOpen size={24} class="mx-auto mb-2 opacity-30" />
-            No matching passages found. Try different keywords or check that your
-            books have been indexed.
+            {m.search_no_passages()}
           </div>
         {:else}
           <div
@@ -460,9 +463,9 @@
           <div
             class="px-4 py-8 text-center text-muted-foreground text-sm space-y-1"
           >
-            <p>Type a word or phrase and press Enter</p>
+            <p>{m.search_keyword_hint()}</p>
             <p class="text-xs">
-              Searches across all your books by exact keyword match
+              {m.search_keyword_description()}
             </p>
           </div>
         {:else if keyword.loading}
@@ -486,8 +489,7 @@
         {:else if keyword.results.length === 0}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
             <TextSearch size={24} class="mx-auto mb-2 opacity-30" />
-            No matching passages found. Try different keywords or check that your
-            books have been indexed.
+            {m.search_no_passages()}
           </div>
         {:else}
           <div
@@ -544,7 +546,10 @@
               <div
                 class="px-4 py-2 text-center text-xs text-muted-foreground border-t border-border/50"
               >
-                Showing {keyword.results.length} of {keyword.total} results
+                {m.search_showing_results({
+                  count: String(keyword.results.length),
+                  total: String(keyword.total),
+                })}
               </div>
             {/if}
           </div>

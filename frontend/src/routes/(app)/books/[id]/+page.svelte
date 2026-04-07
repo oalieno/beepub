@@ -49,6 +49,7 @@
   import BookMetadataEditModal from "$lib/components/BookMetadataEditModal.svelte";
   import BookNotesModal from "$lib/components/BookNotesModal.svelte";
   import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   function newInteraction(
     overrides: Partial<InteractionOut> = {},
@@ -216,9 +217,11 @@
         },
       );
       offlineAvailable = true;
-      toastStore.success("Book downloaded for offline reading");
+      toastStore.success(m.book_downloaded());
     } catch (e) {
-      toastStore.error(`Download failed: ${(e as Error).message}`);
+      toastStore.error(
+        m.book_download_failed({ error: String((e as Error).message) }),
+      );
     } finally {
       downloading = false;
     }
@@ -230,7 +233,7 @@
       const { deleteLocalBook } = await import("$lib/services/offline");
       await deleteLocalBook(bookId);
       offlineAvailable = false;
-      toastStore.success("Offline copy removed");
+      toastStore.success(m.book_offline_removed());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -243,7 +246,7 @@
       interaction = interaction
         ? { ...interaction, rating }
         : newInteraction({ rating });
-      toastStore.success("Rating updated");
+      toastStore.success(m.book_rating_updated());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -258,7 +261,7 @@
         ? { ...interaction, is_favorite: newVal }
         : newInteraction({ is_favorite: newVal });
       toastStore.success(
-        newVal ? "Added to favorites" : "Removed from favorites",
+        newVal ? m.book_favorite_added() : m.book_favorite_removed(),
       );
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -266,10 +269,10 @@
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this book permanently?")) return;
+    if (!confirm(m.book_delete_confirm())) return;
     try {
       await booksApi.delete(bookId);
-      toastStore.success("Book deleted");
+      toastStore.success(m.book_deleted());
       goto("/");
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -279,7 +282,7 @@
   async function handleRefreshMeta() {
     try {
       await booksApi.refreshMetadata(bookId);
-      toastStore.success("Metadata refresh queued");
+      toastStore.success(m.book_refresh_queued());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -449,7 +452,7 @@
             class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
           >
             <BookOpen size={16} />
-            Start Reading
+            {m.book_start_reading()}
           </button>
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status ===
@@ -463,8 +466,8 @@
                   : "want_to_read",
               )}
             title={interaction?.reading_status === "want_to_read"
-              ? "Remove from Want to Read"
-              : "Want to Read"}
+              ? m.book_remove_want_to_read()
+              : m.book_want_to_read()}
           >
             <Bookmark
               size={16}
@@ -480,7 +483,7 @@
                 onpointerdown={startLongPress}
                 onpointerup={cancelLongPress}
                 onpointerleave={cancelLongPress}
-                title="Downloaded — long press to remove"
+                title={m.book_downloaded_long_press()}
               >
                 <Check size={16} />
               </button>
@@ -525,7 +528,7 @@
               <button
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
                 onclick={handleDownload}
-                title="Download for offline"
+                title={m.book_download_offline()}
               >
                 <Download size={16} />
               </button>
@@ -535,7 +538,7 @@
               href="/api/books/{bookId}/file"
               download
               class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-              title="Download EPUB"
+              title={m.book_download_epub()}
             >
               <Download size={16} />
             </a>
@@ -544,7 +547,7 @@
             <DropdownMenu.Trigger>
               <button
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
-                title="More actions"
+                title={m.book_more_actions()}
               >
                 <EllipsisVertical size={16} />
               </button>
@@ -558,41 +561,41 @@
                     : ""}
                 />
                 {interaction?.is_favorite
-                  ? "Remove from favorites"
-                  : "Add to favorites"}
+                  ? m.book_remove_favorite()
+                  : m.book_add_favorite()}
               </DropdownMenu.Item>
               <DropdownMenu.Item onclick={() => (showAddToShelf = true)}>
                 <ShelvingUnit size={14} />
-                Add to shelf
+                {m.book_add_to_shelf()}
               </DropdownMenu.Item>
               <DropdownMenu.Item onclick={() => (showNotesModal = true)}>
                 <NotebookPen
                   size={14}
                   class={interaction?.notes ? "text-primary" : ""}
                 />
-                Notes
+                {m.book_notes()}
               </DropdownMenu.Item>
               <DropdownMenu.Item onclick={() => (showReportModal = true)}>
                 <Flag
                   size={14}
                   class={book.has_unresolved_reports ? "text-destructive" : ""}
                 />
-                Report issue
+                {m.book_report_issue()}
               </DropdownMenu.Item>
               {#if isAdmin}
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item onclick={() => (showEditModal = true)}>
                   <Pencil size={14} />
-                  Edit metadata
+                  {m.book_edit_metadata()}
                 </DropdownMenu.Item>
                 <DropdownMenu.Item onclick={handleRefreshMeta}>
                   <RefreshCw size={14} />
-                  Refresh metadata
+                  {m.book_refresh_metadata()}
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item variant="destructive" onclick={handleDelete}>
                   <Trash2 size={14} />
-                  Delete book
+                  {m.book_delete()}
                 </DropdownMenu.Item>
               {/if}
             </DropdownMenu.Content>
@@ -607,7 +610,7 @@
       >
         <TriangleAlert size={18} class="text-destructive shrink-0" />
         <p class="text-sm text-destructive">
-          This book's file may be corrupted or unreadable.
+          {m.book_corrupted_warning()}
         </p>
       </div>
     {/if}
@@ -619,7 +622,9 @@
     <div class="flex flex-col md:flex-row gap-10">
       {#if book.description ?? book.epub_description}
         <div class="flex-1 min-w-0 order-last md:order-none">
-          <h2 class="text-xl font-bold mb-3 text-foreground">Description</h2>
+          <h2 class="text-xl font-bold mb-3 text-foreground">
+            {m.book_description()}
+          </h2>
           <div class="text-muted-foreground leading-relaxed prose-description">
             {@html book.description ?? book.epub_description}
           </div>
@@ -638,14 +643,14 @@
       <div class="border-t border-border my-8"></div>
       <div>
         <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xl font-bold text-foreground">Notes</h2>
+          <h2 class="text-xl font-bold text-foreground">{m.book_notes()}</h2>
           <button
             class="text-sm text-muted-foreground hover:text-foreground transition-colors"
             onclick={() => {
               showNotesModal = true;
             }}
           >
-            Edit
+            {m.common_edit()}
           </button>
         </div>
         <div
@@ -660,7 +665,9 @@
     {#if bookHighlights.length > 0}
       <div class="border-t border-border my-8"></div>
       <div>
-        <h2 class="text-xl font-bold mb-3 text-foreground">Highlights</h2>
+        <h2 class="text-xl font-bold mb-3 text-foreground">
+          {m.book_highlights()}
+        </h2>
         <div class="bg-card card-soft rounded-2xl p-4 max-h-80 overflow-y-auto">
           <HighlightList
             highlights={bookHighlights}
@@ -671,9 +678,9 @@
               if (pendingHighlightDeleteTimer)
                 clearTimeout(pendingHighlightDeleteTimer);
 
-              toastStore.info("Highlight removed", {
+              toastStore.info(m.book_highlight_removed(), {
                 action: {
-                  label: "Undo",
+                  label: m.common_undo(),
                   onclick: () => {
                     if (pendingHighlightDeleteTimer)
                       clearTimeout(pendingHighlightDeleteTimer);
@@ -755,7 +762,7 @@
         class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
       >
         <BookOpen size={16} />
-        Start Reading
+        {m.book_start_reading()}
       </button>
       <button
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status ===
@@ -769,8 +776,8 @@
               : "want_to_read",
           )}
         title={interaction?.reading_status === "want_to_read"
-          ? "Remove from Want to Read"
-          : "Want to Read"}
+          ? m.book_remove_want_to_read()
+          : m.book_want_to_read()}
       >
         <Bookmark
           size={18}
@@ -786,7 +793,7 @@
             onpointerdown={startLongPress}
             onpointerup={cancelLongPress}
             onpointerleave={cancelLongPress}
-            title="Downloaded — long press to remove"
+            title={m.book_downloaded_long_press()}
           >
             <Check size={18} />
           </button>
@@ -839,7 +846,7 @@
           href="/api/books/{bookId}/file"
           download
           class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
-          title="Download EPUB"
+          title={m.book_download_epub()}
         >
           <Download size={18} />
         </a>
@@ -867,7 +874,9 @@
           ? "fill-red-500 text-red-500 shrink-0"
           : "text-muted-foreground shrink-0"}
       />
-      {interaction?.is_favorite ? "Remove from favorites" : "Add to favorites"}
+      {interaction?.is_favorite
+        ? m.book_remove_favorite()
+        : m.book_add_favorite()}
     </button>
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
@@ -877,7 +886,7 @@
       }}
     >
       <ShelvingUnit size={20} class="text-muted-foreground shrink-0" />
-      Add to shelf
+      {m.book_add_to_shelf()}
     </button>
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
@@ -892,7 +901,7 @@
           ? "text-primary shrink-0"
           : "text-muted-foreground shrink-0"}
       />
-      Notes
+      {m.book_notes()}
     </button>
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors {book.has_unresolved_reports
@@ -909,7 +918,7 @@
           ? "text-destructive shrink-0"
           : "text-muted-foreground shrink-0"}
       />
-      Report issue
+      {m.book_report_issue()}
     </button>
     {#if isAdmin}
       <div class="border-t border-border my-1"></div>
@@ -921,7 +930,7 @@
         }}
       >
         <Pencil size={20} class="text-muted-foreground shrink-0" />
-        Edit metadata
+        {m.book_edit_metadata()}
       </button>
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
@@ -931,7 +940,7 @@
         }}
       >
         <RefreshCw size={20} class="text-muted-foreground shrink-0" />
-        Refresh metadata
+        {m.book_refresh_metadata()}
       </button>
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
@@ -941,7 +950,7 @@
         }}
       >
         <Trash2 size={20} class="text-destructive shrink-0" />
-        Delete book
+        {m.book_delete()}
       </button>
     {/if}
   </BottomSheet>
@@ -962,15 +971,15 @@
   />
 
   <Modal
-    title="Add to Bookshelf"
+    title={m.book_add_to_bookshelf()}
     open={showAddToShelf}
     onclose={() => (showAddToShelf = false)}
   >
     <div class="space-y-2">
       {#if bookshelves.length === 0}
         <p class="text-muted-foreground text-sm">
-          No bookshelves yet. <a href="/bookshelves" class="text-primary"
-            >Create one</a
+          {m.book_no_bookshelves()}<a href="/bookshelves" class="text-primary"
+            >{m.book_create_bookshelf()}</a
           >.
         </p>
       {:else}
@@ -1002,9 +1011,9 @@
 <Dialog.Root bind:open={showRemoveDownloadDialog}>
   <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
     <Dialog.Header>
-      <Dialog.Title>Remove offline copy?</Dialog.Title>
+      <Dialog.Title>{m.book_remove_offline_title()}</Dialog.Title>
       <Dialog.Description>
-        The book will still be in your library.
+        {m.book_remove_offline_desc()}
       </Dialog.Description>
     </Dialog.Header>
     <Dialog.Footer>
@@ -1013,7 +1022,7 @@
         class="rounded-xl"
         onclick={() => (showRemoveDownloadDialog = false)}
       >
-        Cancel
+        {m.common_cancel()}
       </Button>
       <Button
         class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
@@ -1022,7 +1031,7 @@
           showRemoveDownloadDialog = false;
         }}
       >
-        Remove
+        {m.common_remove()}
       </Button>
     </Dialog.Footer>
   </Dialog.Content>

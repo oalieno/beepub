@@ -15,6 +15,7 @@
     Square,
   } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let jobs = $state<JobStatus[]>([]);
   let aiStatus = $state<AiStatus | null>(null);
@@ -99,7 +100,7 @@
 </script>
 
 <svelte:head>
-  <title>Jobs - Admin - BeePub</title>
+  <title>{m.admin_jobs_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
@@ -107,11 +108,11 @@
     <a
       href="/admin"
       class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >&larr; Admin</a
+      >{m.admin_llm_back()}</a
     >
-    <h1 class="text-3xl font-bold text-foreground">Jobs</h1>
+    <h1 class="text-3xl font-bold text-foreground">{m.admin_jobs_heading()}</h1>
     <p class="text-muted-foreground mt-1">
-      Monitor and trigger background processing tasks
+      {m.admin_jobs_subtitle()}
     </p>
   </div>
 
@@ -145,7 +146,7 @@
                 <span
                   class="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-md bg-purple-500/15 text-purple-600 dark:text-purple-400 leading-none"
                 >
-                  AI
+                  {m.admin_jobs_ai_badge()}
                 </span>
               {/if}
               {#if running}
@@ -168,7 +169,7 @@
                 class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2"
               >
                 <span class="text-xs sm:text-sm text-muted-foreground"
-                  >Missing</span
+                  >{m.admin_jobs_status_missing()}</span
                 >
                 <span
                   class="text-xs sm:text-sm font-semibold text-foreground font-sans tabular-nums"
@@ -181,7 +182,9 @@
                 <div
                   class="flex items-center gap-2 sm:gap-5 px-2.5 sm:px-3.5 py-2 bg-primary/5"
                 >
-                  <span class="text-xs sm:text-sm text-primary">Pending</span>
+                  <span class="text-xs sm:text-sm text-primary"
+                    >{m.admin_jobs_status_pending()}</span
+                  >
                   <span
                     class="text-xs sm:text-sm font-semibold text-primary font-sans tabular-nums"
                   >
@@ -216,7 +219,7 @@
                 class="flex-1 flex flex-col items-center justify-center gap-1.5 hover:bg-destructive/10 active:bg-destructive/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 disabled={stoppingJob === job.key}
                 onclick={() => stopJob(job.key)}
-                title="Stop this job"
+                title={m.admin_jobs_stop()}
               >
                 {#if stoppingJob === job.key}
                   <LoaderCircle
@@ -227,7 +230,7 @@
                   <Square size={16} class="text-destructive fill-destructive" />
                 {/if}
                 <span class="text-xs text-destructive font-sans font-medium"
-                  >Stop</span
+                  >{m.admin_jobs_stop_label()}</span
                 >
               </button>
             {:else}
@@ -238,8 +241,8 @@
                   !isAiReady(job.key)}
                 onclick={() => triggerJob(job.key)}
                 title={!isAiReady(job.key)
-                  ? "AI provider not configured — check Admin Settings"
-                  : "Process unprocessed books"}
+                  ? m.admin_jobs_ai_not_configured()
+                  : m.admin_jobs_run_tooltip()}
               >
                 {#if isTriggering}
                   <LoaderCircle class="text-primary animate-spin" size={18} />
@@ -248,7 +251,7 @@
                 {/if}
                 <span
                   class="text-xs text-muted-foreground font-sans font-medium"
-                  >Run</span
+                  >{m.admin_jobs_run_label()}</span
                 >
               </button>
             {/if}

@@ -7,6 +7,7 @@
   import type { BookshelfOut } from "$lib/types";
   import { Plus, ShelvingUnit, Trash2 } from "@lucide/svelte";
   import { CardListSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let bookshelves = $state<BookshelfOut[]>([]);
   let loading = $state(true);
@@ -48,7 +49,7 @@
       createName = "";
       createDesc = "";
       isPublic = false;
-      toastStore.success("Bookshelf created");
+      toastStore.success(m.shelves_created());
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -57,11 +58,11 @@
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete "${name}"?`)) return;
+    if (!confirm(m.shelves_confirm_delete({ name }))) return;
     try {
       await bookshelvesApi.delete(id);
       bookshelves = bookshelves.filter((s) => s.id !== id);
-      toastStore.success("Bookshelf deleted");
+      toastStore.success(m.shelves_deleted());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -69,7 +70,7 @@
 </script>
 
 <svelte:head>
-  <title>My Bookshelves - BeePub</title>
+  <title>{m.shelves_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -80,7 +81,7 @@
         onclick={() => (showCreateModal = true)}
       >
         <Plus size={16} />
-        New Shelf
+        {m.shelves_new()}
       </button>
     </div>
   {/if}
@@ -92,17 +93,18 @@
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
         <ShelvingUnit class="text-primary/50" size={28} />
       </div>
-      <p class="text-foreground text-lg font-medium mb-2">No shelves yet</p>
+      <p class="text-foreground text-lg font-medium mb-2">
+        {m.shelves_no_shelves()}
+      </p>
       <p class="text-muted-foreground text-sm max-w-xs mb-6">
-        Shelves help you organize books into custom collections like "To read
-        this summer" or "Favorites".
+        {m.shelves_empty_description()}
       </p>
       <button
         class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors text-sm"
         onclick={() => (showCreateModal = true)}
       >
         <Plus size={16} />
-        Create a shelf
+        {m.shelves_create_shelf()}
       </button>
     </div>
   {:else}
@@ -113,7 +115,9 @@
           name={shelf.name}
           previewBookIds={shelf.preview_book_ids}
           bookCount={shelf.book_count}
-          badgeLabel={shelf.is_public ? "Public" : "Private"}
+          badgeLabel={shelf.is_public
+            ? m.shelves_public()
+            : m.shelves_private()}
           badgeClass={shelf.is_public
             ? "bg-primary/15 text-primary"
             : "bg-secondary text-muted-foreground"}
@@ -136,41 +140,41 @@
 </div>
 
 <Modal
-  title="Create Bookshelf"
+  title={m.shelves_create_title()}
   open={showCreateModal}
   onclose={() => (showCreateModal = false)}
 >
   <div class="space-y-4">
     <div class="space-y-1">
       <label class="block text-sm font-medium text-foreground" for="shelf-name"
-        >Name</label
+        >{m.shelves_name()}</label
       >
       <input
         id="shelf-name"
         bind:value={createName}
-        placeholder="e.g. To Read, Sci-Fi Favorites"
+        placeholder={m.shelves_name_placeholder()}
         class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <div class="space-y-1">
       <label class="block text-sm font-medium text-foreground" for="shelf-desc"
-        >Description (optional)</label
+        >{m.shelves_description()}</label
       >
       <input
         id="shelf-desc"
         bind:value={createDesc}
-        placeholder="A description..."
+        placeholder={m.shelves_description_placeholder()}
         class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <label class="flex items-center gap-2 cursor-pointer">
       <input type="checkbox" bind:checked={isPublic} class="accent-primary" />
-      <span class="text-sm text-foreground">Make public</span>
+      <span class="text-sm text-foreground">{m.shelves_make_public()}</span>
     </label>
     <div class="flex justify-end gap-2 pt-2">
       <button
         class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-        onclick={() => (showCreateModal = false)}>Cancel</button
+        onclick={() => (showCreateModal = false)}>{m.common_cancel()}</button
       >
       <button
         disabled={!createName || creating}

@@ -14,6 +14,7 @@
     BookOpen,
   } from "@lucide/svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   type TabKey =
     | "currently_reading"
@@ -27,11 +28,23 @@
     label: string;
     icon: typeof BookOpenCheck;
   }[] = [
-    { key: "currently_reading", label: "Reading", icon: BookOpenCheck },
-    { key: "want_to_read", label: "Want to Read", icon: Bookmark },
-    { key: "read", label: "Read", icon: CircleCheck },
-    { key: "did_not_finish", label: "Did Not Finish", icon: CircleX },
-    { key: "favorites", label: "Favorites", icon: Heart },
+    {
+      key: "currently_reading",
+      label: m.mybooks_tab_reading(),
+      icon: BookOpenCheck,
+    },
+    {
+      key: "want_to_read",
+      label: m.mybooks_tab_want_to_read(),
+      icon: Bookmark,
+    },
+    { key: "read", label: m.mybooks_tab_read(), icon: CircleCheck },
+    {
+      key: "did_not_finish",
+      label: m.mybooks_tab_did_not_finish(),
+      icon: CircleX,
+    },
+    { key: "favorites", label: m.mybooks_tab_favorites(), icon: Heart },
   ];
 
   let books = $state<BookWithInteractionOut[]>([]);
@@ -76,7 +89,7 @@
 </script>
 
 <svelte:head>
-  <title>My Books - BeePub</title>
+  <title>{m.mybooks_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -103,19 +116,20 @@
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
         <BookOpen class="text-primary/50" size={28} />
       </div>
-      <p class="text-foreground text-lg font-medium mb-2">No books here yet</p>
+      <p class="text-foreground text-lg font-medium mb-2">
+        {m.mybooks_no_books()}
+      </p>
       <p class="text-muted-foreground text-sm max-w-xs">
         {#if activeTab === "favorites"}
-          Tap the heart icon on a book to add it to your favorites.
+          {m.mybooks_empty_favorites()}
         {:else}
-          Set a book's reading status to see it here.
+          {m.mybooks_empty_default()}
         {/if}
       </p>
     </div>
   {:else}
     <p class="text-sm text-muted-foreground mb-4">
-      {total}
-      {total === 1 ? "book" : "books"}
+      {m.mybooks_book_count({ count: String(total) })}
     </p>
     <BookGrid {books} />
   {/if}

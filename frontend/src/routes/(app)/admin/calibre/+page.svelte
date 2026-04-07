@@ -15,6 +15,7 @@
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
+  import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<CalibreLibraryInfo[]>([]);
   let loading = $state(true);
@@ -172,9 +173,10 @@
   }
 
   function formatIntervalLabel(minutes: number): string {
-    if (minutes < 60) return `Every ${minutes} min`;
-    if (minutes === 60) return "Every 1 hour";
-    return `Every ${minutes / 60} hours`;
+    if (minutes < 60)
+      return m.admin_calibre_every_min({ minutes: String(minutes) });
+    if (minutes === 60) return m.admin_calibre_every_1h();
+    return m.admin_calibre_every_hours({ hours: String(minutes / 60) });
   }
 
   function formatRelativeTime(isoString: string | null): string {
@@ -183,12 +185,14 @@
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMin = Math.floor(diffMs / 60000);
-    if (diffMin < 1) return "Just now";
-    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffMin < 1) return m.admin_calibre_just_now();
+    if (diffMin < 60)
+      return m.admin_calibre_minutes_ago({ minutes: String(diffMin) });
     const diffHours = Math.floor(diffMin / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 24)
+      return m.admin_calibre_hours_ago({ hours: String(diffHours) });
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    return m.admin_calibre_days_ago({ days: String(diffDays) });
   }
 
   function formatNumber(n: number | null): string {
@@ -201,31 +205,40 @@
   ): string | null {
     if (!syncInfo) return null;
     if (syncInfo.status === "completed") {
-      let text = `${syncInfo.added} added, ${syncInfo.updated} updated, ${syncInfo.unchanged} unchanged`;
-      if (syncInfo.skipped > 0) text += `, ${syncInfo.skipped} skipped`;
+      let text: string = m.admin_calibre_sync_result({
+        added: String(syncInfo.added),
+        updated: String(syncInfo.updated),
+        unchanged: String(syncInfo.unchanged),
+      });
+      if (syncInfo.skipped > 0)
+        text += m.admin_calibre_sync_skipped({
+          skipped: String(syncInfo.skipped),
+        });
       return text;
     }
     if (syncInfo.status === "failed") {
       const msg =
         syncInfo.errors.length > 0 ? syncInfo.errors[0] : "Unknown error";
-      return `Sync failed: ${msg}`;
+      return m.admin_calibre_sync_failed({ msg });
     }
     return null;
   }
 </script>
 
 <svelte:head>
-  <title>Calibre Import - Admin - BeePub</title>
+  <title>{m.admin_calibre_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
     <div class="mb-1">
-      <BackButton href="/admin" label="Admin" />
+      <BackButton href="/admin" label={m.nav_admin()} />
     </div>
-    <h1 class="text-3xl font-bold text-foreground">Calibre Import</h1>
+    <h1 class="text-3xl font-bold text-foreground">
+      {m.admin_calibre_heading()}
+    </h1>
     <p class="text-muted-foreground mt-1">
-      Link and sync Calibre libraries (read-only)
+      {m.admin_calibre_subtitle()}
     </p>
   </div>
 
@@ -248,9 +261,9 @@
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
       <HardDrive class="mx-auto text-muted-foreground/40 mb-3" size={48} />
-      <p class="text-muted-foreground text-lg">No Calibre libraries found</p>
+      <p class="text-muted-foreground text-lg">{m.admin_calibre_empty()}</p>
       <p class="text-muted-foreground/70 text-sm mt-1">
-        Mount a Calibre library to <code>/calibre/</code> in the backend container.
+        {m.admin_calibre_empty_subtitle()}
       </p>
     </div>
   {:else}
@@ -259,7 +272,7 @@
       <div class="flex items-center justify-between gap-3 mb-5">
         <div class="flex items-center gap-2">
           <span class="text-sm font-semibold text-foreground whitespace-nowrap"
-            >Auto-sync</span
+            >{m.admin_calibre_auto_sync()}</span
           >
           <Timer size={14} class="text-muted-foreground shrink-0" />
           <Select.Root
@@ -273,12 +286,24 @@
               {formatIntervalLabel(syncIntervalMinutes)}
             </Select.Trigger>
             <Select.Content align="start">
-              <Select.Item value="5">5 minutes</Select.Item>
-              <Select.Item value="15">15 minutes</Select.Item>
-              <Select.Item value="30">30 minutes</Select.Item>
-              <Select.Item value="60">1 hour</Select.Item>
-              <Select.Item value="360">6 hours</Select.Item>
-              <Select.Item value="1440">24 hours</Select.Item>
+              <Select.Item value="5"
+                >{m.admin_calibre_interval_5m()}</Select.Item
+              >
+              <Select.Item value="15"
+                >{m.admin_calibre_interval_15m()}</Select.Item
+              >
+              <Select.Item value="30"
+                >{m.admin_calibre_interval_30m()}</Select.Item
+              >
+              <Select.Item value="60"
+                >{m.admin_calibre_interval_1h()}</Select.Item
+              >
+              <Select.Item value="360"
+                >{m.admin_calibre_interval_6h()}</Select.Item
+              >
+              <Select.Item value="1440"
+                >{m.admin_calibre_interval_24h()}</Select.Item
+              >
             </Select.Content>
           </Select.Root>
         </div>
@@ -287,7 +312,7 @@
           onclick={handleSyncAll}
           disabled={anySyncing}
         >
-          Sync all now
+          {m.admin_calibre_sync_all()}
         </button>
       </div>
     {/if}
@@ -298,11 +323,11 @@
       <div
         class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3 border-b border-border/50 text-xs font-medium text-muted-foreground uppercase tracking-wider"
       >
-        <span>Library</span>
-        <span>Path</span>
-        <span class="text-right">Books</span>
-        <span class="text-center">Auto</span>
-        <span class="text-center">Synced</span>
+        <span>{m.admin_calibre_col_library()}</span>
+        <span>{m.admin_calibre_col_path()}</span>
+        <span class="text-right">{m.admin_calibre_col_books()}</span>
+        <span class="text-center">{m.admin_calibre_col_auto()}</span>
+        <span class="text-center">{m.admin_calibre_col_synced()}</span>
         <span></span>
       </div>
 
@@ -412,7 +437,10 @@
                 class="flex items-center gap-2 text-xs text-muted-foreground mb-1.5"
               >
                 <LoaderCircle size={12} class="animate-spin" />
-                Syncing {syncInfo.processed} / {syncInfo.total}
+                {m.admin_calibre_syncing({
+                  processed: String(syncInfo.processed),
+                  total: String(syncInfo.total),
+                })}
               </div>
               <div class="w-full bg-secondary rounded-full h-1.5">
                 <div
@@ -487,7 +515,7 @@
 
     {#if linkedLibraries.length > 0}
       <p class="text-xs text-muted-foreground mt-3">
-        Unchanged libraries are skipped automatically.
+        {m.admin_calibre_unchanged_note()}
       </p>
     {/if}
   {/if}
@@ -515,14 +543,14 @@
   >
     <div class="bg-card rounded-2xl p-6 w-full max-w-md shadow-xl">
       <h2 class="text-lg font-semibold text-foreground mb-4">
-        Link Calibre Library
+        {m.admin_calibre_link_title()}
       </h2>
       <p class="text-sm text-muted-foreground mb-4">{linkingPath}</p>
       <div class="space-y-3">
         <div class="space-y-1">
           <label
             class="block text-sm font-medium text-foreground"
-            for="lib-name">Library Name</label
+            for="lib-name">{m.admin_calibre_link_name()}</label
           >
           <Input id="lib-name" bind:value={linkName} class="rounded-xl" />
         </div>
@@ -533,12 +561,13 @@
             onclick={() => {
               linkingPath = null;
               linkName = "";
-            }}>Cancel</Button
+            }}>{m.common_cancel()}</Button
           >
           <Button
             class="rounded-xl"
             disabled={!linkName}
-            onclick={() => handleLink(linkingPath!)}>Link & Sync</Button
+            onclick={() => handleLink(linkingPath!)}
+            >{m.admin_calibre_link_sync()}</Button
           >
         </div>
       </div>

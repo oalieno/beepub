@@ -2,6 +2,7 @@
   import { goto } from "$app/navigation";
   import { setServerUrl } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import { BookOpen, Server, LoaderCircle } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -15,7 +16,7 @@
     error = "";
     let url = serverUrl.trim().replace(/\/+$/, "");
     if (!url) {
-      error = "Please enter your server URL";
+      error = m.setup_error_empty();
       return;
     }
 
@@ -33,18 +34,17 @@
       // 401 is fine — means the server is reachable and responding
       if (res.ok || res.status === 401) {
         setServerUrl(url);
-        toastStore.success("Connected to server!");
+        toastStore.success(m.setup_connected());
         goto("/login");
         return;
       }
-      error = `Server responded with HTTP ${res.status}`;
+      error = m.setup_error_status({ status: String(res.status) });
     } catch (e) {
       const msg = (e as Error).message || "";
       if (msg.includes("timeout") || msg.includes("TimeoutError")) {
-        error = "Connection timed out. Check the URL and try again.";
+        error = m.setup_error_timeout();
       } else {
-        error =
-          "Cannot reach server. Check the URL and make sure the server is running.";
+        error = m.setup_error_unreachable();
       }
     } finally {
       loading = false;
@@ -53,7 +53,7 @@
 </script>
 
 <svelte:head>
-  <title>BeePub - Server Setup</title>
+  <title>{m.setup_page_title()}</title>
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center px-4">
@@ -68,14 +68,14 @@
       <h1 class="text-3xl font-bold" style="font-family: var(--font-heading)">
         BeePub
       </h1>
-      <p class="text-muted-foreground mt-1">Connect to your server</p>
+      <p class="text-muted-foreground mt-1">{m.setup_subtitle()}</p>
     </div>
 
     <!-- Card -->
     <div class="bg-card card-soft rounded-2xl p-6">
       <div class="flex items-center gap-2 mb-4 text-muted-foreground">
         <Server size={18} />
-        <span class="text-sm">Enter your BeePub server address</span>
+        <span class="text-sm">{m.setup_instruction()}</span>
       </div>
 
       <form
@@ -86,12 +86,14 @@
         class="space-y-4"
       >
         <div class="space-y-1.5">
-          <Label for="server-url" class="text-sm font-medium">Server URL</Label>
+          <Label for="server-url" class="text-sm font-medium"
+            >{m.setup_server_url()}</Label
+          >
           <Input
             id="server-url"
             type="url"
             bind:value={serverUrl}
-            placeholder="https://beepub.example.com"
+            placeholder={m.setup_placeholder()}
             required
             class="rounded-xl h-11"
           />
@@ -108,9 +110,9 @@
         >
           {#if loading}
             <LoaderCircle size={16} class="animate-spin mr-2" />
-            Connecting...
+            {m.setup_connecting()}
           {:else}
-            Connect
+            {m.setup_connect()}
           {/if}
         </Button>
       </form>

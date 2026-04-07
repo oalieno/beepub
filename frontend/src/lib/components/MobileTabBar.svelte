@@ -2,45 +2,46 @@
   import { page } from "$app/state";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import { Home, Library, Compass, User } from "@lucide/svelte";
   import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
 
-  const tabs = [
+  const tabs = $derived([
     {
       href: "/",
-      label: "Home",
+      label: m.nav_home(),
       icon: Home,
       match: (p: string) => p === "/",
       requiresOnline: false,
     },
     {
       href: "/libraries",
-      label: "Library",
+      label: m.nav_library(),
       icon: Library,
       match: (p: string) => p.startsWith("/libraries"),
       requiresOnline: true,
     },
     {
       href: "/discover",
-      label: "Discover",
+      label: m.nav_discover(),
       icon: Compass,
       match: (p: string) => p.startsWith("/discover"),
       requiresOnline: true,
     },
     {
       href: "/profile",
-      label: "Profile",
+      label: m.nav_profile(),
       icon: User,
       match: (p: string) => p.startsWith("/profile"),
       requiresOnline: false,
     },
-  ];
+  ]);
 
   function handleDisabledClick(e: Event) {
     e.preventDefault();
-    toastStore.info("Available when online");
+    toastStore.info(m.nav_available_when_online());
   }
 
   // Hide tab bar when iOS keyboard is visible

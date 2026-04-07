@@ -7,6 +7,7 @@
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
   import { Library } from "@lucide/svelte";
   import type { Snapshot } from "./$types";
+  import * as m from "$lib/paraglide/messages.js";
 
   let bookBrowser = $state<BookBrowser>();
   let restoreData = $state<BookBrowserState | null>(null);
@@ -84,17 +85,17 @@
 </script>
 
 <svelte:head>
-  <title>All Books - BeePub</title>
+  <title>{m.allbooks_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
   <div class="mb-8">
     <div class="flex items-center gap-2">
       <Library size={24} class="text-primary" />
-      <h1 class="text-3xl font-bold text-foreground">All Books</h1>
+      <h1 class="text-3xl font-bold text-foreground">{m.allbooks_heading()}</h1>
     </div>
     <p class="text-muted-foreground mt-1">
-      Browse all books across your libraries.
+      {m.allbooks_subtitle()}
     </p>
   </div>
 

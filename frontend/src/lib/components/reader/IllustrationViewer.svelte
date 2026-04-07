@@ -3,15 +3,16 @@
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import * as m from "$lib/paraglide/messages.js";
 
-  const STYLE_LABELS: Record<string, string> = {
-    ink_wash: "Ink Wash",
-    watercolor: "Watercolor",
-    pencil_sketch: "Pencil Sketch",
-    woodcut: "Woodcut",
-    anime: "Light Novel",
-    oil_painting: "Oil Painting",
-  };
+  const STYLE_LABELS: Record<string, string> = $derived({
+    ink_wash: m.reader_style_ink_wash(),
+    watercolor: m.reader_style_watercolor(),
+    pencil_sketch: m.reader_style_pencil_sketch(),
+    woodcut: m.reader_style_woodcut(),
+    anime: m.illustration_style_light_novel(),
+    oil_painting: m.reader_style_oil_painting(),
+  });
 
   let {
     illustration,
@@ -28,10 +29,10 @@
   let showText = $state(false);
 
   function getStyleLabel(ill: IllustrationOut): string {
-    if (ill.custom_prompt) return "Custom";
+    if (ill.custom_prompt) return m.reader_style_custom();
     if (ill.style_prompt)
       return STYLE_LABELS[ill.style_prompt] ?? ill.style_prompt;
-    return "Default";
+    return m.reader_style_default();
   }
 </script>
 
@@ -70,7 +71,7 @@
           bookId,
           illustration.id,
         )}
-        alt="AI Generated Illustration"
+        alt={m.illustration_alt()}
         class="w-full h-full object-contain"
       />
     </div>
@@ -94,10 +95,10 @@
         >
           {#if showText}
             <ChevronUp size={14} />
-            Hide source text
+            {m.illustration_hide_source()}
           {:else}
             <ChevronDown size={14} />
-            Show source text
+            {m.illustration_show_source()}
           {/if}
         </button>
       </div>

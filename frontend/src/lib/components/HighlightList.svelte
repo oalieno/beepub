@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Trash2, Share2 } from "@lucide/svelte";
   import type { HighlightOut } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     highlights = [],
@@ -44,7 +45,7 @@
       ? 'text-gray-500'
       : 'text-muted-foreground'} py-4 text-center"
   >
-    No highlights yet.
+    {m.highlight_empty()}
   </p>
 {:else}
   <div class="flex flex-col gap-1">
@@ -103,7 +104,7 @@
               class="p-2 rounded-md transition-all cursor-pointer {darkMode
                 ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800 active:bg-gray-700'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent/80'}"
-              title="Share as card"
+              title={m.highlight_action_share()}
               onclick={(e) => {
                 e.stopPropagation();
                 onshare?.(hl);
@@ -117,7 +118,7 @@
               class="p-2 rounded-md transition-all cursor-pointer {darkMode
                 ? 'text-gray-500 hover:text-red-400 hover:bg-gray-800 active:bg-red-900/30'
                 : 'text-muted-foreground hover:text-destructive hover:bg-accent active:bg-destructive/10'}"
-              title="Delete highlight"
+              title={m.highlight_action_delete()}
               onclick={(e) => {
                 e.stopPropagation();
                 ondelete?.(hl);

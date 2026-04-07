@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Flame, Check, Pencil, Target, Minus, Plus } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
+  import * as m from "$lib/paraglide/messages.js";
   import type { ReadingStats } from "$lib/types";
 
   let {
@@ -128,7 +129,7 @@
           {stats.current_streak}
         </p>
         <p class="text-xs text-muted-foreground mt-0.5">
-          day{stats.current_streak !== 1 ? "s" : ""} streak
+          {m.streak_days({ count: String(stats.current_streak) })}
         </p>
       </div>
     </div>
@@ -162,7 +163,7 @@
                   class="text-xs text-muted-foreground/60 hover:text-muted-foreground transition-colors inline-flex items-center gap-1 cursor-pointer rounded px-1 -mx-1 hover:bg-muted"
                 >
                   <Target size={12} />
-                  set goal
+                  {m.streak_set_goal()}
                 </button>
               {/if}
             {/snippet}
@@ -171,7 +172,7 @@
             <!-- Stepper -->
             <div class="px-5 pt-5 pb-4">
               <p class="text-xs text-muted-foreground text-center mb-3">
-                Daily goal
+                {m.streak_daily_goal()}
               </p>
               <div class="flex items-center justify-center gap-4">
                 <button
@@ -203,7 +204,9 @@
                 onclick={() => setGoal(pendingMinutes)}
                 disabled={saving || pendingMinutes === goalMinutes}
               >
-                {goalMinutes != null ? "Update goal" : "Set goal"}
+                {goalMinutes != null
+                  ? m.streak_update_goal()
+                  : m.streak_set_goal_button()}
               </button>
               {#if goalMinutes != null}
                 <button
@@ -211,7 +214,7 @@
                   onclick={() => setGoal(null)}
                   disabled={saving}
                 >
-                  Remove goal
+                  {m.streak_remove_goal()}
                 </button>
               {/if}
             </div>
@@ -233,7 +236,7 @@
           <span class="text-xs text-muted-foreground">{progressPercent}%</span>
         </div>
       {:else if goalMinutes == null}
-        <p class="text-xs text-muted-foreground mt-0.5">today</p>
+        <p class="text-xs text-muted-foreground mt-0.5">{m.streak_today()}</p>
       {/if}
     </div>
   </div>

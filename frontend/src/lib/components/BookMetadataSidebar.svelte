@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import type { BookOut, SeriesNeighborsOut } from "$lib/types";
 
   let {
@@ -33,7 +34,9 @@
       {@const total = seriesNeighbors?.progress?.total_in_library ?? 0}
       {@const currentIdx = book.display_series_index}
       <div>
-        <span class="text-muted-foreground block text-xs mb-0.5">Series</span>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_series()}</span
+        >
         <div class="flex items-baseline gap-2">
           <button
             class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
@@ -43,7 +46,12 @@
           </button>
           {#if currentIdx != null}
             <span class="text-muted-foreground text-xs whitespace-nowrap">
-              vol. {formatSeriesIndex(currentIdx)}{#if total > 0}{" "}of {total}{/if}
+              {#if total > 0}{m.metadata_series_vol_of({
+                  index: formatSeriesIndex(currentIdx),
+                  total: String(total),
+                })}{:else}{m.metadata_series_vol({
+                  index: formatSeriesIndex(currentIdx),
+                })}{/if}
             </span>
           {/if}
         </div>
@@ -53,7 +61,7 @@
               <a
                 href="/books/{seriesNeighbors.previous.id}"
                 class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
-                title={seriesNeighbors.previous.title ?? "Previous"}
+                title={seriesNeighbors.previous.title ?? m.metadata_previous()}
               >
                 <ChevronLeft class="w-3.5 h-3.5" />
               </a>
@@ -76,7 +84,7 @@
               <a
                 href="/books/{seriesNeighbors.next.id}"
                 class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
-                title={seriesNeighbors.next.title ?? "Next"}
+                title={seriesNeighbors.next.title ?? m.metadata_next()}
               >
                 <ChevronRight class="w-3.5 h-3.5" />
               </a>
@@ -90,7 +98,9 @@
     {#if book.library_names?.length > 0}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5"
-          >{book.library_names.length === 1 ? "Library" : "Libraries"}</span
+          >{book.library_names.length === 1
+            ? m.metadata_label_library()
+            : m.metadata_label_libraries()}</span
         >
         <div class="flex flex-wrap gap-1.5">
           {#each book.library_names as name}
@@ -101,7 +111,8 @@
     {/if}
     {#if book.publisher ?? book.epub_publisher}
       <div>
-        <span class="text-muted-foreground block text-xs mb-0.5">Publisher</span
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_publisher()}</span
         >
         <span class="text-foreground font-medium"
           >{book.publisher ?? book.epub_publisher}</span
@@ -110,7 +121,8 @@
     {/if}
     {#if book.published_date ?? book.epub_published_date}
       <div>
-        <span class="text-muted-foreground block text-xs mb-0.5">Published</span
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_published()}</span
         >
         <span class="text-foreground font-medium"
           >{book.published_date ?? book.epub_published_date}</span
@@ -119,18 +131,24 @@
     {/if}
     {#if book.epub_language}
       <div>
-        <span class="text-muted-foreground block text-xs mb-0.5">Language</span>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_language()}</span
+        >
         <span class="text-foreground font-medium">{book.epub_language}</span>
       </div>
     {/if}
     {#if book.epub_isbn}
       <div>
-        <span class="text-muted-foreground block text-xs mb-0.5">ISBN</span>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_isbn()}</span
+        >
         <span class="text-foreground font-medium">{book.epub_isbn}</span>
       </div>
     {/if}
     <div>
-      <span class="text-muted-foreground block text-xs mb-0.5">File Size</span>
+      <span class="text-muted-foreground block text-xs mb-0.5"
+        >{m.metadata_label_file_size()}</span
+      >
       <span class="text-foreground font-medium"
         >{book.file_size < 1_048_576
           ? (book.file_size / 1024).toFixed(1) + " KB"
@@ -140,7 +158,7 @@
     {#if book.word_count}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5"
-          >Word Count</span
+          >{m.metadata_label_word_count()}</span
         >
         <span class="text-foreground font-medium"
           >{book.word_count.toLocaleString()}</span
@@ -149,7 +167,9 @@
     {/if}
     {#if (book.book_tags ?? []).length > 0}
       <div>
-        <span class="text-muted-foreground block text-xs mb-1">Tags</span>
+        <span class="text-muted-foreground block text-xs mb-1"
+          >{m.metadata_label_tags()}</span
+        >
         <div class="flex flex-wrap gap-1.5">
           {#each book.book_tags ?? [] as bookTag}
             <button

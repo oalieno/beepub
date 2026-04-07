@@ -1,5 +1,6 @@
 <script lang="ts">
   import { booksApi } from "$lib/api/books";
+  import * as m from "$lib/paraglide/messages.js";
   import { toastStore } from "$lib/stores/toast";
   import { Pencil, Plus, Unlink, Ban } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
@@ -23,32 +24,32 @@
       idPattern: RegExp;
       idHint: string;
     }
-  > = {
+  > = $derived({
     goodreads: {
-      label: "Goodreads",
+      label: m.external_goodreads(),
       urlPrefix: "https://www.goodreads.com/book/show/",
       idPattern: /^\d+[\w-]*$/,
       idHint: "e.g. 33017208",
     },
     readmoo: {
-      label: "Readmoo",
+      label: m.external_readmoo(),
       urlPrefix: "https://readmoo.com/book/",
       idPattern: /^\d+$/,
       idHint: "e.g. 210227953000101",
     },
     google_books: {
-      label: "Google Books",
+      label: m.external_google_books(),
       urlPrefix: "https://books.google.com/books?id=",
       idPattern: /^[\w-]+$/,
       idHint: "e.g. qixiEAAAQBAJ",
     },
     hardcover: {
-      label: "Hardcover",
+      label: m.external_hardcover(),
       urlPrefix: "https://hardcover.app/books/",
       idPattern: /^[\w-]+$/,
       idHint: "e.g. the-left-hand-of-darkness",
     },
-  };
+  });
 
   let editingUrlSource = $state<string | null>(null);
   let editingUrlValue = $state("");

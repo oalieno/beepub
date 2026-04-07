@@ -9,6 +9,7 @@
   import * as Select from "$lib/components/ui/select";
   import DatePicker from "$lib/components/DatePicker.svelte";
   import type { ReadingStatus, InteractionOut } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     interaction,
@@ -22,20 +23,22 @@
     ondatechange: (field: "started_at" | "finished_at", value: string) => void;
   } = $props();
 
-  const READING_STATUS_OPTIONS: {
-    value: ReadingStatus;
-    label: string;
-    icon: typeof Bookmark;
-  }[] = [
-    { value: "want_to_read", label: "Want to Read", icon: Bookmark },
+  const READING_STATUS_OPTIONS = $derived<
+    { value: ReadingStatus; label: string; icon: typeof Bookmark }[]
+  >([
+    { value: "want_to_read", label: m.status_want_to_read(), icon: Bookmark },
     {
       value: "currently_reading",
-      label: "Currently Reading",
+      label: m.status_reading(),
       icon: BookOpenCheck,
     },
-    { value: "read", label: "Read", icon: CircleCheck },
-    { value: "did_not_finish", label: "Did Not Finish", icon: CircleX },
-  ];
+    { value: "read", label: m.status_read(), icon: CircleCheck },
+    {
+      value: "did_not_finish",
+      label: m.status_did_not_finish(),
+      icon: CircleX,
+    },
+  ]);
 
   const CLEAR_STATUS_VALUE = "__clear_status__";
 
@@ -75,14 +78,14 @@
           {current.label}
         {/if}
       {:else}
-        Set status
+        {m.status_set()}
       {/if}
     </Select.Trigger>
     <Select.Content align="start">
       <Select.Item value={CLEAR_STATUS_VALUE}>
         {#snippet children()}
           <BookMarked size={14} class="text-muted-foreground" />
-          <span>Clear status</span>
+          <span>{m.status_clear()}</span>
         {/snippet}
       </Select.Item>
       <Select.Separator />
@@ -106,7 +109,7 @@
       class="mt-2 flex items-center justify-center md:justify-start gap-3 text-sm text-muted-foreground"
     >
       <span class="flex items-center gap-1.5">
-        Started
+        {m.status_started()}
         <DatePicker
           variant="text"
           value={interaction?.started_at ?? null}
@@ -115,7 +118,7 @@
       </span>
       {#if interaction?.reading_status === "read"}
         <span class="flex items-center gap-1.5">
-          Finished
+          {m.status_finished()}
           <DatePicker
             variant="text"
             value={interaction?.finished_at ?? null}

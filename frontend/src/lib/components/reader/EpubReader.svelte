@@ -13,6 +13,7 @@
   import { prefetchSections } from "./image-prefetch";
   import { findActiveTocHref } from "./toc-utils";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     bookId,
@@ -1072,7 +1073,7 @@
         "fill-opacity": "0.5",
       });
       onhighlightschange?.(highlights);
-      toastStore.success("Highlight saved");
+      toastStore.success(m.highlight_saved());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -1089,9 +1090,9 @@
     if (!selectedText) return;
     try {
       await navigator.clipboard.writeText(selectedText);
-      toastStore.success("Copied");
+      toastStore.success(m.highlight_copied());
     } catch {
-      toastStore.error("Copy failed");
+      toastStore.error(m.highlight_copy_failed());
     }
   }
 
@@ -1115,7 +1116,7 @@
       highlights = highlights.filter((h) => h.id !== existingHighlight!.id);
       rendition?.annotations.remove(selectedCfi, "highlight");
       onhighlightschange?.(highlights);
-      toastStore.success("Highlight removed");
+      toastStore.success(m.book_highlight_removed());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -1138,13 +1139,13 @@
   <button
     type="button"
     class="absolute inset-y-0 left-0 z-10 w-12"
-    aria-label="Previous page"
+    aria-label={m.reader_prev_page()}
     onclick={handleLeftTapNav}
   ></button>
   <button
     type="button"
     class="absolute inset-y-0 right-0 z-10 w-12"
-    aria-label="Next page"
+    aria-label={m.reader_next_page()}
     onclick={handleRightTapNav}
   ></button>
 

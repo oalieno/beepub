@@ -1,19 +1,20 @@
 <script lang="ts">
   import { Search, X, ArrowUpDown, SlidersHorizontal } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
+  import * as m from "$lib/paraglide/messages.js";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import type { BookOut, PaginatedBooks } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
 
-  const SORT_OPTIONS = [
-    { value: "added_at:desc", label: "Newest added" },
-    { value: "added_at:asc", label: "Oldest added" },
-    { value: "display_title:asc", label: "Title A → Z" },
-    { value: "display_title:desc", label: "Title Z → A" },
-    { value: "series_index:asc", label: "Series order ↑" },
-    { value: "series_index:desc", label: "Series order ↓" },
-  ] as const;
+  const SORT_OPTIONS = $derived([
+    { value: "added_at:desc", label: m.browser_sort_newest() },
+    { value: "added_at:asc", label: m.browser_sort_oldest() },
+    { value: "display_title:asc", label: m.browser_sort_title_asc() },
+    { value: "display_title:desc", label: m.browser_sort_title_desc() },
+    { value: "series_index:asc", label: m.browser_sort_series_asc() },
+    { value: "series_index:desc", label: m.browser_sort_series_desc() },
+  ]);
 
   const PAGE_SIZE = 60;
 
@@ -35,7 +36,7 @@
     initialAuthor = "",
     initialSeries = "",
     initialSort = "added_at:desc",
-    emptyMessage = "No books found",
+    emptyMessage = "",
     restoreData,
     onStateChange,
   }: {
@@ -91,7 +92,8 @@
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
   let sortLabel = $derived(
-    SORT_OPTIONS.find((o) => o.value === sortValue)?.label ?? "Newest added",
+    SORT_OPTIONS.find((o) => o.value === sortValue)?.label ??
+      m.browser_sort_newest(),
   );
 
   // Filter panel
@@ -227,7 +229,7 @@
       type="text"
       bind:value={searchQuery}
       oninput={handleSearchInput}
-      placeholder="Search by title, author, or topic..."
+      placeholder={m.browser_search_placeholder()}
       class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
     />
     {#if searchQuery}
@@ -276,7 +278,7 @@
       onclick={() => (showFilters = !showFilters)}
     >
       <SlidersHorizontal size={12} />
-      Filters
+      {m.browser_filters()}
     </button>
 
     {#if filterAuthor}
@@ -284,7 +286,7 @@
         class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
         onclick={() => clearFilter("author")}
       >
-        Author: {filterAuthor}
+        {m.browser_filter_author({ author: filterAuthor })}
         <X size={12} />
       </button>
     {/if}
@@ -293,7 +295,7 @@
         class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
         onclick={() => clearFilter("series")}
       >
-        Series: {filterSeries}
+        {m.browser_filter_series({ series: filterSeries })}
         <X size={12} />
       </button>
     {/if}
@@ -302,7 +304,7 @@
         class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
         onclick={() => clearFilter("tag")}
       >
-        Tag: {filterTag}
+        {m.browser_filter_tag({ tag: filterTag })}
         <X size={12} />
       </button>
     {/if}
@@ -315,7 +317,7 @@
         <input
           type="text"
           bind:value={filterAuthorInput}
-          placeholder="Filter by author..."
+          placeholder={m.browser_filter_author_placeholder()}
           class="w-full bg-card card-soft rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           onkeydown={(e) => e.key === "Enter" && applyFilterInput("author")}
         />
@@ -324,7 +326,7 @@
             class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary font-medium"
             onclick={() => applyFilterInput("author")}
           >
-            Apply
+            {m.browser_apply()}
           </button>
         {/if}
       </div>
@@ -332,7 +334,7 @@
         <input
           type="text"
           bind:value={filterTagInput}
-          placeholder="Filter by tag..."
+          placeholder={m.browser_filter_tag_placeholder()}
           class="w-full bg-card card-soft rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           onkeydown={(e) => e.key === "Enter" && applyFilterInput("tag")}
         />
@@ -341,7 +343,7 @@
             class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary font-medium"
             onclick={() => applyFilterInput("tag")}
           >
-            Apply
+            {m.browser_apply()}
           </button>
         {/if}
       </div>
@@ -349,7 +351,7 @@
         <input
           type="text"
           bind:value={filterSeriesInput}
-          placeholder="Filter by series..."
+          placeholder={m.browser_filter_series_placeholder()}
           class="w-full bg-card card-soft rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
           onkeydown={(e) => e.key === "Enter" && applyFilterInput("series")}
         />
@@ -358,7 +360,7 @@
             class="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-primary font-medium"
             onclick={() => applyFilterInput("series")}
           >
-            Apply
+            {m.browser_apply()}
           </button>
         {/if}
       </div>
@@ -383,11 +385,16 @@
   <div
     class="border-2 border-dashed border-border rounded-2xl p-12 text-center"
   >
-    <p class="text-muted-foreground text-lg">{emptyMessage}</p>
+    <p class="text-muted-foreground text-lg">
+      {emptyMessage || m.browser_no_books()}
+    </p>
   </div>
 {:else}
   <p class="text-muted-foreground text-sm mb-4">
-    Showing {books.length} of {totalBooks.toLocaleString()} books
+    {m.browser_showing({
+      count: String(books.length),
+      total: String(totalBooks),
+    })}
   </p>
   <BookGrid {books} enableInteractions />
   {#if hasMore}
@@ -400,10 +407,10 @@
         {#if loadingMore}
           <span class="flex items-center gap-2">
             <Spinner size="sm" color="foreground" />
-            Loading...
+            {m.common_loading()}
           </span>
         {:else}
-          Load more
+          {m.browser_load_more()}
         {/if}
       </button>
     </div>

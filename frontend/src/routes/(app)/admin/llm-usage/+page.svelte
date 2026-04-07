@@ -5,19 +5,20 @@
   import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { TableSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let data = $state<LlmUsageResponse | null>(null);
   let loading = $state(true);
   let period = $state("month");
 
-  const FEATURE_LABELS: Record<string, string> = {
-    companion: "Companion Chat",
-    auto_tag: "Auto Tagging",
-    summarize: "Summarization",
-    embedding: "Embedding",
-    illustration: "Illustration",
-    search: "Semantic Search",
-  };
+  const FEATURE_LABELS = $derived<Record<string, string>>({
+    companion: m.admin_llm_feat_companion(),
+    auto_tag: m.admin_llm_feat_tagging(),
+    summarize: m.admin_llm_feat_summarization(),
+    embedding: m.admin_llm_feat_embedding(),
+    illustration: m.admin_llm_feat_illustration(),
+    search: m.admin_llm_feat_search(),
+  });
 
   function formatTokens(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -53,7 +54,7 @@
 </script>
 
 <svelte:head>
-  <title>LLM Usage - Admin - BeePub</title>
+  <title>{m.admin_llm_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
@@ -62,11 +63,11 @@
     <a
       href="/admin"
       class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >&larr; Admin</a
+      >{m.admin_llm_back()}</a
     >
-    <h1 class="text-3xl font-bold text-foreground">LLM Usage</h1>
+    <h1 class="text-3xl font-bold text-foreground">{m.admin_llm_heading()}</h1>
     <p class="text-muted-foreground mt-1">
-      Token consumption across AI features
+      {m.admin_llm_subtitle()}
     </p>
   </div>
 
@@ -116,63 +117,76 @@
         <p class="text-2xl font-bold text-foreground">
           {formatCost(data.totals.estimated_cost)}
         </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Est. Cost</p>
+        <p class="text-muted-foreground text-sm mt-0.5">
+          {m.admin_llm_est_cost()}
+        </p>
       </div>
       <div class="bg-card card-soft rounded-2xl p-5 text-center">
         <p class="text-2xl font-bold text-foreground">
           {formatTokens(data.totals.total_tokens)}
         </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Total Tokens</p>
+        <p class="text-muted-foreground text-sm mt-0.5">
+          {m.admin_llm_total_tokens()}
+        </p>
       </div>
       <div class="bg-card card-soft rounded-2xl p-5 text-center">
         <p class="text-2xl font-bold text-foreground">
           {formatTokens(data.totals.input_tokens)}
         </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Input Tokens</p>
+        <p class="text-muted-foreground text-sm mt-0.5">
+          {m.admin_llm_input_tokens()}
+        </p>
       </div>
       <div class="bg-card card-soft rounded-2xl p-5 text-center">
         <p class="text-2xl font-bold text-foreground">
           {formatTokens(data.totals.output_tokens)}
         </p>
-        <p class="text-muted-foreground text-sm mt-0.5">Output Tokens</p>
+        <p class="text-muted-foreground text-sm mt-0.5">
+          {m.admin_llm_output_tokens()}
+        </p>
       </div>
       <div class="bg-card card-soft rounded-2xl p-5 text-center">
         <p class="text-2xl font-bold text-foreground">
           {data.totals.call_count.toLocaleString()}
         </p>
-        <p class="text-muted-foreground text-sm mt-0.5">API Calls</p>
+        <p class="text-muted-foreground text-sm mt-0.5">
+          {m.admin_llm_api_calls()}
+        </p>
       </div>
     </div>
 
     <!-- By User -->
     <div class="mb-8">
-      <h2 class="text-lg font-semibold text-foreground mb-4">By User</h2>
+      <h2 class="text-lg font-semibold text-foreground mb-4">
+        {m.admin_llm_by_user()}
+      </h2>
       {#if data.by_user.length === 0}
         <div class="bg-card card-soft rounded-2xl p-8 text-center">
-          <p class="text-muted-foreground">No per-user usage data yet.</p>
+          <p class="text-muted-foreground">{m.admin_llm_by_user_empty()}</p>
         </div>
       {:else}
         <div class="bg-card card-soft rounded-2xl overflow-x-auto">
           <table class="w-full text-sm whitespace-nowrap">
             <thead>
               <tr class="border-b border-border text-left">
-                <th class="px-4 py-3 font-medium text-muted-foreground">User</th
+                <th class="px-4 py-3 font-medium text-muted-foreground"
+                  >{m.admin_llm_col_user()}</th
                 >
                 <th
                   class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Input</th
+                  >{m.admin_llm_col_input()}</th
                 >
                 <th
                   class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Output</th
+                  >{m.admin_llm_col_output()}</th
                 >
                 <th
                   class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Total</th
+                  >{m.admin_llm_col_total()}</th
                 >
                 <th
                   class="px-4 py-3 font-medium text-muted-foreground text-right"
-                  >Calls</th
+                  >{m.admin_llm_col_calls()}</th
                 >
               </tr>
             </thead>

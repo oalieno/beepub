@@ -6,6 +6,7 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import type { BookOut } from "$lib/types";
   import { BookOpen, RotateCcw } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   type Phase = "idle" | "tearing" | "revealed";
 
@@ -181,7 +182,7 @@
                     <span
                       class="text-muted-foreground/60 text-xs text-center line-clamp-3"
                     >
-                      {book.display_title ?? "Untitled"}
+                      {book.display_title ?? m.common_untitled()}
                     </span>
                   </div>
                 {/if}
@@ -230,7 +231,7 @@
                   <span
                     class="text-muted-foreground/60 text-xs text-center line-clamp-3"
                   >
-                    {book.display_title ?? "Untitled"}
+                    {book.display_title ?? m.common_untitled()}
                   </span>
                 </div>
               {/if}
@@ -260,7 +261,7 @@
   {#if phase === "revealed" && book}
     <div class="text-center reveal-fade-in max-w-xs">
       <h3 class="font-semibold text-lg text-foreground line-clamp-2">
-        {book.display_title ?? "Untitled"}
+        {book.display_title ?? m.common_untitled()}
       </h3>
       <p class="text-muted-foreground text-sm mt-1 line-clamp-1">
         {(book.display_authors ?? []).join(", ") || "\u00A0"}
@@ -272,13 +273,13 @@
   <div class="flex items-center gap-3">
     {#if phase === "idle"}
       <div class="text-muted-foreground/50 text-sm">
-        從你的書庫中隨機抽出一本書
+        {m.gacha_subtitle()}
       </div>
     {:else if phase === "tearing"}
       <div
         class="px-6 py-3 text-muted-foreground text-sm font-medium flex items-center gap-2"
       >
-        開包中...
+        {m.gacha_opening()}
       </div>
     {:else if phase === "revealed" && book}
       <a
@@ -286,14 +287,14 @@
         class="px-6 py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all duration-200 flex items-center gap-2 active:scale-95"
       >
         <BookOpen size={18} />
-        去看看
+        {m.gacha_view_book()}
       </a>
       <button
         onclick={repull}
         class="px-4 py-3 bg-secondary text-foreground rounded-xl font-medium text-sm hover:bg-secondary/80 transition-all duration-200 flex items-center gap-2 active:scale-95"
       >
         <RotateCcw size={16} />
-        再開一包
+        {m.gacha_pull_again()}
       </button>
     {/if}
   </div>

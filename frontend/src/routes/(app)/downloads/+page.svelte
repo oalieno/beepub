@@ -5,6 +5,7 @@
   import { toastStore } from "$lib/stores/toast";
   import { BookOpen, Trash2, Download } from "@lucide/svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
   import type { DownloadEntry } from "$lib/services/offline";
 
   let entries = $state<DownloadEntry[]>([]);
@@ -57,7 +58,7 @@
 </script>
 
 <svelte:head>
-  <title>Downloads - BeePub</title>
+  <title>{m.downloads_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -67,7 +68,7 @@
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
       <Download class="mx-auto mb-4 text-muted-foreground/30" size={48} />
       <p class="text-muted-foreground text-lg">
-        Downloads are available in the mobile app
+        {m.downloads_mobile_only()}
       </p>
     </div>
   {:else if entries.length === 0}
@@ -75,9 +76,11 @@
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
         <Download class="text-primary/50" size={28} />
       </div>
-      <p class="text-foreground text-lg font-medium mb-2">No downloads yet</p>
+      <p class="text-foreground text-lg font-medium mb-2">
+        {m.downloads_empty()}
+      </p>
       <p class="text-muted-foreground text-sm max-w-xs mb-6">
-        Download books from their detail page to read them offline.
+        {m.downloads_empty_subtitle()}
       </p>
     </div>
   {:else}
@@ -126,7 +129,7 @@
                 class="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white/80 hover:bg-destructive hover:text-white transition-all duration-200
                   opacity-70 can-hover:opacity-0 can-hover:group-hover:opacity-100"
                 style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
-                title="Remove download"
+                title={m.downloads_remove()}
                 onclick={(e) => handleDelete(e, entry.bookId, entry.title)}
               >
                 <Trash2 size={14} />

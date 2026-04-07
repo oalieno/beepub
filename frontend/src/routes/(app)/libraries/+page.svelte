@@ -6,6 +6,7 @@
   import { Library, HardDrive } from "@lucide/svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import { CardListSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -22,7 +23,7 @@
 </script>
 
 <svelte:head>
-  <title>Libraries - BeePub</title>
+  <title>{m.libraries_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -34,10 +35,10 @@
         <Library class="text-primary/50" size={28} />
       </div>
       <p class="text-foreground text-lg font-medium mb-2">
-        No libraries available
+        {m.libraries_empty()}
       </p>
       <p class="text-muted-foreground text-sm max-w-xs">
-        Libraries will appear here once they are created by an admin.
+        {m.libraries_empty_subtitle()}
       </p>
     </div>
   {:else}

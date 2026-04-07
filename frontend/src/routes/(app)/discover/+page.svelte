@@ -14,6 +14,7 @@
     BrowseSectionSkeleton,
   } from "$lib/components/skeletons";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);
@@ -85,7 +86,7 @@
 </script>
 
 <svelte:head>
-  <title>Discover - BeePub</title>
+  <title>{m.discover_page_title()}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6 space-y-10">
@@ -95,11 +96,11 @@
       <div class="flex items-center gap-2">
         <Sparkles size={24} class="text-primary" />
         <h1 class="text-2xl sm:text-3xl font-bold text-foreground">
-          Recommended for You
+          {m.discover_recommendations()}
         </h1>
       </div>
       <p class="text-muted-foreground mt-1">
-        Based on your reading activity and favorites.
+        {m.discover_recommendations_subtitle()}
       </p>
     </div>
 
@@ -111,10 +112,10 @@
           <Sparkles class="text-primary/50" size={28} />
         </div>
         <p class="text-foreground text-lg font-medium mb-2">
-          No recommendations yet
+          {m.discover_no_recommendations()}
         </p>
         <p class="text-muted-foreground text-sm max-w-xs">
-          Start reading and rating books to get personalized recommendations.
+          {m.discover_no_recommendations_subtitle()}
         </p>
       </div>
     {:else}
@@ -127,9 +128,11 @@
     <div class="mb-8">
       <div class="flex items-center gap-2">
         <Compass size={24} class="text-primary" />
-        <h1 class="text-3xl font-bold text-foreground">Browse</h1>
+        <h1 class="text-3xl font-bold text-foreground">
+          {m.discover_browse()}
+        </h1>
       </div>
-      <p class="text-muted-foreground mt-1">Explore books by tags.</p>
+      <p class="text-muted-foreground mt-1">{m.discover_browse_subtitle()}</p>
     </div>
 
     <!-- Category Tabs -->
@@ -137,18 +140,18 @@
       <div
         class="inline-flex items-center bg-card card-soft rounded-full px-1.5 py-1.5 gap-1 overflow-x-auto scrollbar-none max-w-full"
       >
-        {#each ["genre", "subgenre", "mood", "theme", "trope"] as cat}
+        {#each [{ key: "genre", label: m.discover_category_genre() }, { key: "subgenre", label: m.discover_category_subgenre() }, { key: "mood", label: m.discover_category_mood() }, { key: "theme", label: m.discover_category_theme() }, { key: "trope", label: m.discover_category_trope() }] as cat}
           <button
-            class="shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 capitalize {activeCategory ===
-            cat
+            class="shrink-0 px-5 py-2 rounded-full text-sm font-medium transition-all duration-200 {activeCategory ===
+            cat.key
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
             onclick={() =>
               switchCategory(
-                cat as "genre" | "subgenre" | "mood" | "theme" | "trope",
+                cat.key as "genre" | "subgenre" | "mood" | "theme" | "trope",
               )}
           >
-            {cat}
+            {cat.label}
           </button>
         {/each}
       </div>
@@ -165,9 +168,11 @@
         <div class="mb-4 p-3 bg-primary/10 rounded-xl">
           <Compass class="text-primary/50" size={28} />
         </div>
-        <p class="text-foreground text-lg font-medium mb-2">No books found</p>
+        <p class="text-foreground text-lg font-medium mb-2">
+          {m.search_no_books_found()}
+        </p>
         <p class="text-muted-foreground text-sm max-w-xs">
-          No books tagged with {activeCategory} tags yet.
+          {m.discover_no_books_tagged({ category: activeCategory })}
         </p>
       </div>
     {:else}
@@ -182,7 +187,7 @@
                 href="/all-books?tag={encodeURIComponent(section.tag)}"
                 class="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
               >
-                See all →
+                {m.discover_see_all()}
               </a>
             </div>
             <div

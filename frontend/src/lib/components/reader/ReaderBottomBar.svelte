@@ -9,6 +9,7 @@
     Settings,
   } from "@lucide/svelte";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     percentage = 0,
@@ -59,14 +60,14 @@
     : 'bg-background border-t border-border/50'}"
   style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));"
   role="toolbar"
-  aria-label="Reading controls"
+  aria-label={m.reader_controls()}
 >
   <!-- Progress row -->
   <div class="flex items-center gap-2 px-3 py-2">
     <button
       class="p-1 rounded-md transition-colors {btnClass}"
       onclick={() => (isRtl ? onnext?.() : onprev?.())}
-      aria-label="Previous page"
+      aria-label={m.reader_prev_page()}
     >
       <ChevronLeft size={20} />
     </button>
@@ -85,7 +86,7 @@
     <button
       class="p-1 rounded-md transition-colors {btnClass}"
       onclick={() => (isRtl ? onprev?.() : onnext?.())}
-      aria-label="Next page"
+      aria-label={m.reader_next_page()}
     >
       <ChevronRight size={20} />
     </button>
@@ -96,31 +97,31 @@
     <button
       class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {actionBtnClass}"
       onclick={() => ontoc?.()}
-      aria-label="Table of Contents"
+      aria-label={m.reader_toc()}
     >
       <List size={20} />
-      <span class="text-[10px]">TOC</span>
+      <span class="text-[10px]">{m.reader_toc_short()}</span>
     </button>
 
     {#if !isImageBook}
       <button
         class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {actionBtnClass}"
         onclick={() => onsearch?.()}
-        aria-label="Search"
+        aria-label={m.nav_search()}
       >
         <Search size={20} />
-        <span class="text-[10px]">Search</span>
+        <span class="text-[10px]">{m.nav_search()}</span>
       </button>
 
       <button
         class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors relative {actionBtnClass}"
         onclick={() => onhighlights?.()}
-        aria-label="Highlights{highlightCount > 0
+        aria-label="{m.reader_highlights()}{highlightCount > 0
           ? ` (${highlightCount})`
           : ''}"
       >
         <Highlighter size={20} />
-        <span class="text-[10px]">Highlights</span>
+        <span class="text-[10px]">{m.reader_highlights()}</span>
         {#if highlightCount > 0}
           <span
             class="absolute -top-0.5 right-0.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-1 {darkMode
@@ -138,26 +139,26 @@
           : actionBtnClass}"
         onclick={() => {
           if (offline) {
-            toastStore.info("AI features require an internet connection");
+            toastStore.info(m.reader_ai_offline());
             return;
           }
           oncompanion?.();
         }}
-        aria-label="AI Companion"
+        aria-label={m.reader_ai_companion()}
         aria-disabled={offline || undefined}
       >
         <MessageCircle size={20} />
-        <span class="text-[10px]">AI</span>
+        <span class="text-[10px]">{m.reader_ai_short()}</span>
       </button>
     {/if}
 
     <button
       class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {actionBtnClass}"
       onclick={() => onsettings?.()}
-      aria-label="Reader settings"
+      aria-label={m.reader_settings_title()}
     >
       <Settings size={20} />
-      <span class="text-[10px]">Settings</span>
+      <span class="text-[10px]">{m.reader_settings()}</span>
     </button>
   </div>
 </div>

@@ -21,6 +21,7 @@
     CompanionMessageOut,
   } from "$lib/types";
   import Spinner from "$lib/components/Spinner.svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     bookId,
@@ -42,11 +43,11 @@
     onclose?: () => void;
   } = $props();
 
-  const suggestedPrompts = [
-    "Summarize what's happened so far",
-    "What are the main themes?",
-    "Who are the key characters?",
-  ];
+  const suggestedPrompts = $derived([
+    m.companion_prompt_summarize(),
+    m.companion_prompt_themes(),
+    m.companion_prompt_characters(),
+  ]);
 
   // Session list state
   let conversations = $state<CompanionConversationSummary[]>([]);
@@ -140,7 +141,7 @@
     try {
       conversations = await booksApi.listCompanionConversations(bookId);
     } catch {
-      toastStore.error("Failed to load conversations");
+      toastStore.error(m.companion_failed_load_list());
     } finally {
       loadingList = false;
     }
@@ -155,7 +156,7 @@
       const conv = await booksApi.getCompanionConversation(bookId, convId);
       messages = conv.messages;
     } catch {
-      toastStore.error("Failed to load conversation");
+      toastStore.error(m.companion_failed_load());
     } finally {
       loading = false;
     }
@@ -281,7 +282,7 @@
       }
     } catch (e) {
       toastStore.error((e as Error).message);
-      messages = messages.filter((m) => m.id !== userMsg.id);
+      messages = messages.filter((msg) => msg.id !== userMsg.id);
     } finally {
       activeReader = null;
       isStreaming = false;
@@ -296,9 +297,9 @@
     // Clear any existing timer
     if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
 
-    toastStore.info("Conversation deleted", {
+    toastStore.info(m.companion_deleted(), {
       action: {
-        label: "Undo",
+        label: m.common_undo(),
         onclick: () => {
           if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
           pendingDeleteId = null;
@@ -442,7 +443,7 @@
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
   aria-modal="true"
-  aria-label="Reading Companion"
+  aria-label={m.companion_title()}
 >
   <!-- Header -->
   <div
@@ -458,7 +459,7 @@
           class="p-2 -ml-1 rounded-lg transition-colors {darkMode
             ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-          aria-label="Back to chat"
+          aria-label={m.companion_back_to_chat()}
           onclick={() => (showSessionList = false)}
         >
           <ArrowLeft size={20} />
@@ -468,7 +469,7 @@
             ? 'text-gray-200'
             : 'text-foreground'}"
         >
-          Conversations
+          {m.companion_conversations()}
         </p>
       {:else}
         <!-- Chat view -->
@@ -476,7 +477,7 @@
           class="p-2 -ml-1 rounded-lg sm:hidden transition-colors {darkMode
             ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-          aria-label="Close"
+          aria-label={m.common_close()}
           onclick={() => close()}
         >
           <ArrowLeft size={20} />
@@ -489,7 +490,7 @@
           {#if activeTitle}
             {activeTitle}
           {:else}
-            Reading Companion
+            {m.companion_title()}
           {/if}
         </p>
       {/if}
@@ -503,7 +504,7 @@
           class="p-2 rounded-lg transition-colors {darkMode
             ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-          aria-label="New conversation"
+          aria-label={m.companion_new_conv()}
           onclick={startNewConversation}
         >
           <Plus size={20} />
@@ -515,7 +516,7 @@
             class="p-2 rounded-lg transition-colors {darkMode
               ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-            aria-label="New conversation"
+            aria-label={m.companion_new_conv()}
             onclick={startNewConversation}
           >
             <Plus size={18} />
@@ -524,7 +525,7 @@
             class="p-2 rounded-lg transition-colors {darkMode
               ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-            aria-label="Past conversations"
+            aria-label={m.companion_past_conv()}
             onclick={() => (showSessionList = true)}
           >
             <History size={18} />
@@ -537,7 +538,7 @@
         class="hidden sm:flex p-2 rounded-lg transition-colors {darkMode
           ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
-        aria-label="Close"
+        aria-label={m.common_close()}
         onclick={() => close()}
       >
         <X size={18} />
@@ -566,7 +567,7 @@
             ? 'text-gray-300'
             : 'text-foreground'}"
         >
-          Companion AI not configured
+          {m.companion_not_configured()}
         </p>
         {#if isAdmin}
           <p
@@ -574,7 +575,7 @@
               ? 'text-gray-500'
               : 'text-muted-foreground'}"
           >
-            Set up a provider and model in admin settings.
+            {m.companion_admin_setup()}
           </p>
           <a
             href="/admin/settings"
@@ -583,7 +584,7 @@
               : 'text-primary hover:text-primary/80'}"
           >
             <Settings size={14} />
-            Go to Settings
+            {m.companion_go_to_settings()}
           </a>
         {:else}
           <p
@@ -591,7 +592,7 @@
               ? 'text-gray-500'
               : 'text-muted-foreground'}"
           >
-            Ask your admin to enable AI features in the settings.
+            {m.companion_user_msg()}
           </p>
         {/if}
       </div>
@@ -612,7 +613,7 @@
               ? 'text-gray-400'
               : 'text-muted-foreground'}"
           >
-            No conversations yet. Start a new one!
+            {m.companion_no_conversations()}
           </p>
           <button
             class="inline-flex items-center gap-1.5 px-4 py-2.5 text-base rounded-lg transition-colors {darkMode
@@ -621,7 +622,7 @@
             onclick={startNewConversation}
           >
             <Plus size={16} />
-            New conversation
+            {m.companion_new_conv()}
           </button>
         </div>
       {:else}
@@ -666,7 +667,7 @@
                       class="p-2 rounded-lg {darkMode
                         ? 'text-gray-400 hover:text-gray-200'
                         : 'text-muted-foreground hover:text-foreground'}"
-                      aria-label="Confirm rename"
+                      aria-label={m.companion_confirm_rename()}
                       onclick={confirmRename}
                     >
                       <Check size={16} />
@@ -698,7 +699,7 @@
                       class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
                         ? 'text-gray-400 hover:bg-gray-700'
                         : 'text-muted-foreground hover:bg-muted'}"
-                      aria-label="Rename conversation"
+                      aria-label={m.companion_rename()}
                       onclick={() => startRename(conv)}
                     >
                       <Pencil size={14} />
@@ -707,7 +708,7 @@
                       class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
                         ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
                         : 'text-muted-foreground hover:text-red-500 hover:bg-muted'}"
-                      aria-label="Delete conversation"
+                      aria-label={m.companion_delete()}
                       onclick={() => deleteConversation(conv.id)}
                     >
                       <Trash2 size={14} />
@@ -751,7 +752,7 @@
               ? 'text-gray-400'
               : 'text-muted-foreground'}"
           >
-            Ask anything about this book
+            {m.companion_empty_prompt()}
           </p>
           <div class="flex flex-col gap-2 w-full max-w-[18rem]">
             {#each suggestedPrompts as prompt}
@@ -871,7 +872,7 @@
             <p class="flex-1 line-clamp-2 italic">{pendingSelectedText}</p>
             <button
               class="shrink-0 p-1 rounded hover:opacity-70"
-              aria-label="Clear selection"
+              aria-label={m.companion_clear_selection()}
               onclick={clearPendingSelection}
             >
               <X size={14} />
@@ -881,7 +882,7 @@
         <textarea
           bind:this={inputEl}
           bind:value={inputText}
-          placeholder="Ask about the book..."
+          placeholder={m.companion_input_placeholder()}
           rows={1}
           class="w-full resize-none bg-transparent px-3.5 py-2.5 text-base outline-none overflow-hidden {darkMode
             ? 'text-gray-200 placeholder:text-gray-500'
@@ -909,7 +910,7 @@
                 ? 'text-white bg-blue-600 hover:bg-blue-500'
                 : 'text-primary-foreground bg-primary hover:bg-primary/90'}"
             disabled={isStreaming || !inputText.trim()}
-            aria-label="Send message"
+            aria-label={m.companion_send()}
             onclick={sendMessage}
           >
             <ArrowUp size={18} strokeWidth={2.5} />

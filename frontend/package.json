@@ -9,10 +9,11 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "build:app": "node scripts/build-app.js",
     "cap:sync": "pnpm build:app && npx cap sync",
-    "format": "prettier --plugin prettier-plugin-svelte --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
+    "format": "prettier --plugin prettier-plugin-svelte --ignore-path .prettierignore --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
   },
   "devDependencies": {
     "@capacitor/cli": "^8.3.0",
+    "@inlang/paraglide-js": "^2.15.1",
     "@internationalized/date": "^3.11.0",
     "@lucide/svelte": "^1.7.0",
     "@sveltejs/adapter-node": "^5.2.9",

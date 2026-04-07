@@ -3,6 +3,7 @@
   import { X, Download, Share2, LoaderCircle } from "@lucide/svelte";
   import ShareHighlightCard from "./ShareHighlightCard.svelte";
   import type { HighlightOut } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     open = false,
@@ -131,7 +132,7 @@
   >
     <button
       class="absolute inset-0 bg-black/40 backdrop-blur-sm"
-      aria-label="Close modal"
+      aria-label={m.common_close()}
       onclick={close}
     ></button>
 
@@ -142,11 +143,13 @@
     >
       <!-- Header -->
       <div class="flex items-center justify-between px-5 py-3 flex-shrink-0">
-        <h2 class="text-base font-bold text-foreground">Share Highlight</h2>
+        <h2 class="text-base font-bold text-foreground">
+          {m.share_highlight_title()}
+        </h2>
         <button
           class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
           onclick={close}
-          aria-label="Close"
+          aria-label={m.common_close()}
         >
           <X size={16} />
         </button>
@@ -193,7 +196,7 @@
           {:else}
             <Download size={16} />
           {/if}
-          Save
+          {m.common_save()}
         </button>
         {#if canShare}
           <button
@@ -206,7 +209,7 @@
             {:else}
               <Share2 size={16} />
             {/if}
-            Share
+            {m.common_share()}
           </button>
         {/if}
       </div>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import Modal from "$lib/components/Modal.svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import { Undo2 } from "@lucide/svelte";
@@ -66,7 +67,7 @@
       });
       open = false;
       onupdate(updated);
-      toastStore.success("Metadata updated");
+      toastStore.success(m.metadata_updated());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -76,14 +77,14 @@
     "w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-primary/30";
 </script>
 
-<Modal title="Edit Metadata" {open} onclose={() => (open = false)}>
+<Modal title={m.metadata_edit_title()} {open} onclose={() => (open = false)}>
   <div class="space-y-4">
     <!-- Title -->
     <div class="space-y-1">
       <div class="flex items-center justify-between">
         <label
           class="block text-sm font-medium text-foreground"
-          for="edit-title">Title</label
+          for="edit-title">{m.metadata_field_title()}</label
         >
         {#if editForm.title && book.epub_title}
           <button
@@ -91,7 +92,7 @@
             onclick={() => (editForm.title = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -103,7 +104,7 @@
       />
       {#if editForm.title && book.epub_title && editForm.title !== book.epub_title}
         <p class="text-xs text-muted-foreground">
-          Original: {book.epub_title}
+          {m.metadata_original({ value: book.epub_title })}
         </p>
       {/if}
     </div>
@@ -113,7 +114,7 @@
       <div class="flex items-center justify-between">
         <label
           class="block text-sm font-medium text-foreground"
-          for="edit-authors">Authors (comma-separated)</label
+          for="edit-authors">{m.metadata_field_authors()}</label
         >
         {#if editForm.authors && book.epub_authors?.length}
           <button
@@ -121,7 +122,7 @@
             onclick={() => (editForm.authors = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -133,7 +134,7 @@
       />
       {#if editForm.authors && book.epub_authors?.length && editForm.authors !== (book.epub_authors ?? []).join(", ")}
         <p class="text-xs text-muted-foreground">
-          Original: {(book.epub_authors ?? []).join(", ")}
+          {m.metadata_original({ value: (book.epub_authors ?? []).join(", ") })}
         </p>
       {/if}
     </div>
@@ -143,7 +144,7 @@
       <div class="flex items-center justify-between">
         <label
           class="block text-sm font-medium text-foreground"
-          for="edit-publisher">Publisher</label
+          for="edit-publisher">{m.metadata_field_publisher()}</label
         >
         {#if editForm.publisher && book.epub_publisher}
           <button
@@ -151,7 +152,7 @@
             onclick={() => (editForm.publisher = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -163,7 +164,7 @@
       />
       {#if editForm.publisher && book.epub_publisher && editForm.publisher !== book.epub_publisher}
         <p class="text-xs text-muted-foreground">
-          Original: {book.epub_publisher}
+          {m.metadata_original({ value: book.epub_publisher })}
         </p>
       {/if}
     </div>
@@ -172,7 +173,7 @@
     <div class="space-y-1">
       <div class="flex items-center justify-between">
         <label class="block text-sm font-medium text-foreground" for="edit-date"
-          >Published Date</label
+          >{m.metadata_field_published_date()}</label
         >
         {#if editForm.published_date && book.epub_published_date}
           <button
@@ -180,7 +181,7 @@
             onclick={() => (editForm.published_date = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -192,7 +193,7 @@
       />
       {#if editForm.published_date && book.epub_published_date && editForm.published_date !== book.epub_published_date}
         <p class="text-xs text-muted-foreground">
-          Original: {book.epub_published_date}
+          {m.metadata_original({ value: book.epub_published_date })}
         </p>
       {/if}
     </div>
@@ -202,7 +203,7 @@
       <div class="flex items-center justify-between">
         <label
           class="block text-sm font-medium text-foreground"
-          for="edit-series">Series</label
+          for="edit-series">{m.metadata_field_series()}</label
         >
         {#if editForm.series && book.epub_series}
           <button
@@ -213,7 +214,7 @@
             }}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -237,7 +238,9 @@
       </div>
       {#if editForm.series && book.epub_series && editForm.series !== book.epub_series}
         <p class="text-xs text-muted-foreground">
-          Original: {book.epub_series}{#if book.epub_series_index != null}
+          {m.metadata_original({
+            value: book.epub_series,
+          })}{#if book.epub_series_index != null}
             [{book.epub_series_index}]{/if}
         </p>
       {/if}
@@ -247,7 +250,7 @@
     <div class="space-y-1">
       <div class="flex items-center justify-between">
         <label class="block text-sm font-medium text-foreground" for="edit-tags"
-          >Tags (comma-separated)</label
+          >{m.metadata_field_tags()}</label
         >
         {#if editForm.tags && book.epub_tags?.length}
           <button
@@ -255,7 +258,7 @@
             onclick={() => (editForm.tags = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -267,7 +270,7 @@
       />
       {#if editForm.tags && book.epub_tags?.length && editForm.tags !== (book.epub_tags ?? []).join(", ")}
         <p class="text-xs text-muted-foreground">
-          Original: {(book.epub_tags ?? []).join(", ")}
+          {m.metadata_original({ value: (book.epub_tags ?? []).join(", ") })}
         </p>
       {/if}
     </div>
@@ -276,7 +279,7 @@
     <div class="space-y-1">
       <div class="flex items-center justify-between">
         <label class="block text-sm font-medium text-foreground" for="edit-desc"
-          >Description</label
+          >{m.metadata_field_description()}</label
         >
         {#if editForm.description && book.epub_description}
           <button
@@ -284,7 +287,7 @@
             onclick={() => (editForm.description = "")}
           >
             <Undo2 size={12} />
-            Reset
+            {m.metadata_reset()}
           </button>
         {/if}
       </div>
@@ -297,7 +300,9 @@
       ></textarea>
       {#if editForm.description && book.epub_description && editForm.description !== book.epub_description}
         <p class="text-xs text-muted-foreground">
-          Original: {book.epub_description.slice(0, 100)}...
+          {m.metadata_original({
+            value: book.epub_description.slice(0, 100) + "...",
+          })}
         </p>
       {/if}
     </div>
@@ -305,11 +310,11 @@
     <div class="flex justify-end gap-2 pt-2">
       <button
         class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
-        onclick={() => (open = false)}>Cancel</button
+        onclick={() => (open = false)}>{m.common_cancel()}</button
       >
       <button
         class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-xl"
-        onclick={handleSave}>Save</button
+        onclick={handleSave}>{m.common_save()}</button
       >
     </div>
   </div>

@@ -7,13 +7,14 @@
   import type { BookReport } from "$lib/types";
   import { Check, Flag, CircleCheck } from "@lucide/svelte";
   import { TableSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
-  const ISSUE_LABELS: Record<string, string> = {
-    corrupt_file: "Corrupt file",
-    wrong_metadata: "Wrong metadata",
-    cant_open: "Can't open",
-    other: "Other",
-  };
+  let ISSUE_LABELS = $derived<Record<string, string>>({
+    corrupt_file: m.admin_reports_corrupt_file(),
+    wrong_metadata: m.admin_reports_wrong_metadata(),
+    cant_open: m.admin_reports_cant_open(),
+    other: m.admin_reports_other(),
+  });
 
   let reports = $state<BookReport[]>([]);
   let loading = $state(true);
@@ -46,7 +47,7 @@
 </script>
 
 <svelte:head>
-  <title>Book Reports - Admin - BeePub</title>
+  <title>{m.admin_reports_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
@@ -54,11 +55,13 @@
     <a
       href="/admin"
       class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >&larr; Admin</a
+      >{m.admin_llm_back()}</a
     >
-    <h1 class="text-3xl font-bold text-foreground">Book Reports</h1>
+    <h1 class="text-3xl font-bold text-foreground">
+      {m.admin_reports_heading()}
+    </h1>
     <p class="text-muted-foreground mt-1">
-      User-reported and system-detected book issues
+      {m.admin_reports_subtitle()}
     </p>
   </div>
 
@@ -74,7 +77,7 @@
         loadReports();
       }}
     >
-      Unresolved
+      {m.admin_reports_unresolved()}
     </button>
     <button
       class="px-4 py-2 text-sm font-medium rounded-lg transition-colors {filter ===
@@ -86,7 +89,7 @@
         loadReports();
       }}
     >
-      Resolved
+      {m.admin_reports_resolved()}
     </button>
   </div>
 
@@ -96,10 +99,10 @@
     <div class="text-center py-16 text-muted-foreground">
       {#if filter === "unresolved"}
         <CircleCheck size={40} class="mx-auto mb-3 opacity-30" />
-        <p>No unresolved reports</p>
+        <p>{m.admin_reports_empty_unresolved()}</p>
       {:else}
         <Flag size={40} class="mx-auto mb-3 opacity-30" />
-        <p>No resolved reports</p>
+        <p>{m.admin_reports_empty_resolved()}</p>
       {/if}
     </div>
   {:else}
@@ -130,7 +133,7 @@
                 href="/books/{report.book_id}"
                 class="font-semibold text-foreground hover:text-primary transition-colors line-clamp-1 text-base"
               >
-                {report.book_title || "Unknown book"}
+                {report.book_title || m.admin_reports_unknown_book()}
               </a>
               <div class="flex flex-wrap items-center gap-2 mt-1.5">
                 <span
@@ -145,7 +148,7 @@
                   {#if report.reporter_name}
                     {report.reporter_name}
                   {:else}
-                    system
+                    {m.admin_reports_system()}
                   {/if}
                   &middot;
                   {new Date(report.created_at).toLocaleDateString()}

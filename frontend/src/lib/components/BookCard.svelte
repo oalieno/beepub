@@ -11,6 +11,7 @@
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     book,
@@ -73,7 +74,7 @@
           <BookOpen class="text-muted-foreground/30" size={36} />
           <span
             class="text-muted-foreground/60 text-xs text-center line-clamp-3"
-            >{book.display_title ?? "Untitled"}</span
+            >{book.display_title ?? m.common_untitled()}</span
           >
         </div>
       {/if}
@@ -138,7 +139,7 @@
     <h3
       class="font-medium text-sm line-clamp-2 leading-snug text-foreground group-hover:text-primary transition-colors"
     >
-      {book.display_title ?? "Untitled"}
+      {book.display_title ?? m.common_untitled()}
     </h3>
     <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
       {(book.display_authors ?? []).join(", ") || "\u00A0"}

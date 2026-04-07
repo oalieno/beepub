@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Minus, Plus, Sun, Moon } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     open = $bindable(false),
@@ -59,11 +60,11 @@
     class="fixed inset-0 z-50 md:hidden"
     role="dialog"
     aria-modal="true"
-    aria-label="Reader settings"
+    aria-label={m.reader_settings_title()}
   >
     <button
       class="absolute inset-0 bg-black/40"
-      aria-label="Close"
+      aria-label={m.common_close()}
       onclick={close}
     ></button>
 
@@ -86,13 +87,13 @@
         {#if !isImageBook}
           <!-- Font size -->
           <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">Font size</span>
+            <span class="text-sm {labelClass}">{m.reader_font_size()}</span>
             <div class="flex items-center gap-3">
               <button
                 class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
                 onclick={() => onfontDecrease?.()}
                 disabled={fontSize <= 10}
-                aria-label="Decrease font size"
+                aria-label={m.reader_decrease_font()}
               >
                 <Minus size={14} />
               </button>
@@ -103,7 +104,7 @@
                 class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
                 onclick={() => onfontIncrease?.()}
                 disabled={fontSize >= 32}
-                aria-label="Increase font size"
+                aria-label={m.reader_increase_font()}
               >
                 <Plus size={14} />
               </button>
@@ -112,7 +113,7 @@
 
           <!-- Font family -->
           <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">Font</span>
+            <span class="text-sm {labelClass}">{m.reader_font()}</span>
             <div class="flex gap-1">
               <button
                 class="px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
@@ -121,7 +122,7 @@
                   : inactiveBtnClass}"
                 onclick={() => onfontToggle?.()}
               >
-                Sans
+                {m.reader_font_sans()}
               </button>
               <button
                 class="px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
@@ -130,7 +131,7 @@
                   : inactiveBtnClass}"
                 onclick={() => onfontToggle?.()}
               >
-                Serif
+                {m.reader_font_serif()}
               </button>
             </div>
           </div>
@@ -138,7 +139,7 @@
 
         <!-- Theme -->
         <div class="flex items-center justify-between">
-          <span class="text-sm {labelClass}">Theme</span>
+          <span class="text-sm {labelClass}">{m.reader_theme()}</span>
           <div class="flex gap-1">
             <button
               class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {!darkMode
@@ -149,7 +150,7 @@
               }}
             >
               <Sun size={14} />
-              Light
+              {m.reader_theme_light()}
             </button>
             <button
               class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {darkMode
@@ -160,7 +161,7 @@
               }}
             >
               <Moon size={14} />
-              Dark
+              {m.reader_theme_dark()}
             </button>
           </div>
         </div>

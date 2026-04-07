@@ -2,6 +2,7 @@
   import { page } from "$app/state";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import { Search, Dices } from "@lucide/svelte";
 
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
@@ -9,18 +10,18 @@
   let online = $derived($isOnline);
 
   // Derive page title from route
-  const titleMap: Record<string, string> = {
-    "/": "Home",
-    "/my-books": "My Books",
-    "/libraries": "Libraries",
-    "/bookshelves": "Shelves",
-    "/highlights": "Highlights",
-    "/discover": "Discover",
-    "/gacha": "Gacha",
-    "/downloads": "Downloads",
-    "/admin": "Admin",
-    "/profile": "Profile",
-  };
+  const titleMap = $derived<Record<string, string>>({
+    "/": m.nav_home(),
+    "/my-books": m.nav_my_books(),
+    "/libraries": m.nav_libraries(),
+    "/bookshelves": m.nav_shelves(),
+    "/highlights": m.nav_highlights(),
+    "/discover": m.nav_discover(),
+    "/gacha": m.nav_gacha(),
+    "/downloads": m.nav_downloads(),
+    "/admin": m.nav_admin(),
+    "/profile": m.nav_profile(),
+  });
 
   let pageTitle = $derived(() => {
     const path = page.url.pathname;
@@ -52,12 +53,12 @@
           : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
         onclick={() => {
           if (!online) {
-            toastStore.info("Available when online");
+            toastStore.info(m.nav_available_when_online());
             return;
           }
           onSearchOpen();
         }}
-        aria-label="Search"
+        aria-label={m.nav_search()}
         aria-disabled={!online || undefined}
       >
         <Search size={20} />
@@ -74,7 +75,7 @@
         onclick={!online
           ? (e: Event) => {
               e.preventDefault();
-              toastStore.info("Available when online");
+              toastStore.info(m.nav_available_when_online());
             }
           : undefined}
       >

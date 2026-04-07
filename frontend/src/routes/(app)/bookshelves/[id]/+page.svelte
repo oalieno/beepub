@@ -8,6 +8,7 @@
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { BookOpen } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import type { BookshelfOut, BookOut } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
@@ -45,9 +46,9 @@
 
     if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
 
-    toastStore.info("Book removed from shelf", {
+    toastStore.info(m.bookshelf_removed(), {
       action: {
-        label: "Undo",
+        label: m.common_undo(),
         onclick: () => {
           if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
           pendingRemoveTimer = null;
@@ -70,7 +71,7 @@
 </script>
 
 <svelte:head>
-  <title>{shelf?.name ?? "Bookshelf"} - BeePub</title>
+  <title>{m.bookshelf_page_title({ name: shelf?.name ?? "Bookshelf" })}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -83,7 +84,7 @@
   {:else if shelf}
     <div class="mb-8">
       <div class="mb-1">
-        <BackButton href="/bookshelves" label="Shelves" />
+        <BackButton href="/bookshelves" label={m.nav_shelves()} />
       </div>
       <h1 class="text-3xl font-bold text-foreground">{shelf.name}</h1>
       {#if shelf.description}
@@ -97,10 +98,10 @@
           <BookOpen class="text-primary/50" size={28} />
         </div>
         <p class="text-foreground text-lg font-medium mb-2">
-          No books in this shelf yet
+          {m.bookshelf_empty()}
         </p>
         <p class="text-muted-foreground text-sm max-w-xs">
-          Add books from book detail pages.
+          {m.bookshelf_empty_subtitle()}
         </p>
       </div>
     {:else}

@@ -21,6 +21,7 @@
   import { Label } from "$lib/components/ui/label";
   import * as Dialog from "$lib/components/ui/dialog";
   import { goto } from "$app/navigation";
+  import * as m from "$lib/paraglide/messages.js";
 
   let userId = $derived(page.params.id as string);
   let user = $state<UserOut | null>(null);
@@ -165,12 +166,12 @@
 </script>
 
 <svelte:head>
-  <title>{user?.username ?? "User"} - Admin - BeePub</title>
+  <title>{user?.username ?? m.admin_users_heading()} - Admin - BeePub</title>
 </svelte:head>
 
 <div class="max-w-3xl mx-auto px-4 sm:px-8 py-6">
   <div class="mb-1">
-    <BackButton href="/admin/users" label="Users" />
+    <BackButton href="/admin/users" label={m.admin_users_heading()} />
   </div>
 
   {#if loading}
@@ -180,7 +181,7 @@
       <div class="h-32 bg-secondary/20 rounded-2xl"></div>
     </div>
   {:else if !user}
-    <p class="text-muted-foreground mt-6">User not found.</p>
+    <p class="text-muted-foreground mt-6">{m.admin_user_not_found()}</p>
   {:else}
     <!-- Header -->
     <div class="flex items-center justify-between mt-4 mb-8">
@@ -211,7 +212,7 @@
         class="flex items-center gap-2 px-4 py-3 mb-6 rounded-xl bg-amber-500/10 text-amber-700 text-sm"
       >
         <TriangleAlert size={16} class="shrink-0" />
-        This is the only admin. Cannot demote or delete.
+        {m.admin_user_last_admin()}
       </div>
     {/if}
 
@@ -224,7 +225,7 @@
         disabled={isLastAdmin}
       >
         <Shield size={14} />
-        {isAdmin ? "Demote to User" : "Promote to Admin"}
+        {isAdmin ? m.admin_user_demote() : m.admin_user_promote()}
       </Button>
       <Button
         variant="outline"
@@ -235,7 +236,7 @@
         }}
       >
         <KeyRound size={14} />
-        Reset Password
+        {m.admin_user_reset_password()}
       </Button>
     </div>
 
@@ -244,22 +245,24 @@
       <div class="bg-card card-soft rounded-2xl p-5 mb-6">
         <div class="flex items-center gap-2 text-muted-foreground">
           <Shield size={16} />
-          <span class="text-sm"
-            >Admin users have full access to all features and libraries.</span
-          >
+          <span class="text-sm">{m.admin_user_admin_info()}</span>
         </div>
       </div>
     {:else}
       <!-- Download Permission -->
       <div class="bg-card card-soft rounded-2xl p-5 mb-6">
-        <h2 class="text-lg font-semibold text-foreground mb-4">Permissions</h2>
+        <h2 class="text-lg font-semibold text-foreground mb-4">
+          {m.admin_user_permissions()}
+        </h2>
         <div class="flex items-center justify-between gap-4">
           <div class="flex items-center gap-3 min-w-0">
             <Download size={18} class="text-muted-foreground shrink-0" />
             <div class="min-w-0">
-              <p class="text-sm font-medium text-foreground">Download EPUBs</p>
+              <p class="text-sm font-medium text-foreground">
+                {m.admin_user_download_label()}
+              </p>
               <p class="text-xs text-muted-foreground">
-                Allow this user to download EPUB files to their device
+                {m.admin_user_download_help()}
               </p>
             </div>
           </div>
@@ -283,7 +286,7 @@
       <div class="bg-card card-soft rounded-2xl p-5 mb-6">
         <div class="flex items-center justify-between gap-3 mb-4">
           <h2 class="text-lg font-semibold text-foreground shrink-0">
-            Library Access
+            {m.admin_user_library_access()}
           </h2>
           {#if libraryAccess.length > 1}
             <div class="flex items-center gap-1.5">
@@ -292,20 +295,22 @@
                 onclick={() => setAllLibraryAccess(true)}
                 disabled={allGranted}
               >
-                Select all
+                {m.admin_user_select_all()}
               </button>
               <button
                 class="text-xs px-2 py-1 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground font-medium transition-colors disabled:opacity-40 whitespace-nowrap"
                 onclick={() => setAllLibraryAccess(false)}
                 disabled={allExcluded}
               >
-                Deselect all
+                {m.admin_user_deselect_all()}
               </button>
             </div>
           {/if}
         </div>
         {#if libraryAccess.length === 0}
-          <p class="text-sm text-muted-foreground">No libraries configured.</p>
+          <p class="text-sm text-muted-foreground">
+            {m.admin_user_no_libraries()}
+          </p>
         {:else}
           <div class="space-y-3">
             {#each libraryAccess as lib}
@@ -338,14 +343,16 @@
 
     <!-- Danger Zone -->
     <h2 class="text-sm font-semibold text-destructive mb-2 ml-1">
-      Danger Zone
+      {m.admin_user_danger_zone()}
     </h2>
     <div class="border border-destructive/30 rounded-2xl p-5">
       <div class="flex items-center justify-between gap-4">
         <div class="min-w-0">
-          <p class="text-sm font-medium text-foreground">Delete this user</p>
+          <p class="text-sm font-medium text-foreground">
+            {m.admin_user_delete()}
+          </p>
           <p class="text-xs text-muted-foreground">
-            Permanently remove this user and all their data.
+            {m.admin_user_delete_help()}
           </p>
         </div>
         <Button
@@ -366,9 +373,11 @@
 <Dialog.Root bind:open={showResetDialog}>
   <Dialog.Content class="sm:max-w-md bg-white dark:bg-neutral-900">
     <Dialog.Header>
-      <Dialog.Title>Reset Password</Dialog.Title>
+      <Dialog.Title>{m.admin_user_reset_title()}</Dialog.Title>
       <Dialog.Description
-        >Set a new password for {user?.username}</Dialog.Description
+        >{m.admin_user_reset_desc({
+          username: user?.username ?? "",
+        })}</Dialog.Description
       >
     </Dialog.Header>
     <form
@@ -379,12 +388,12 @@
       class="space-y-4"
     >
       <div class="space-y-1.5">
-        <Label for="reset-password">New Password</Label>
+        <Label for="reset-password">{m.admin_user_new_password()}</Label>
         <Input
           id="reset-password"
           type="password"
           bind:value={resetPassword}
-          placeholder="New password"
+          placeholder={m.admin_user_new_password_placeholder()}
           required
         />
       </div>
@@ -392,10 +401,10 @@
         <Button
           variant="outline"
           class="rounded-xl"
-          onclick={() => (showResetDialog = false)}>Cancel</Button
+          onclick={() => (showResetDialog = false)}>{m.common_cancel()}</Button
         >
         <Button type="submit" disabled={resetting} class="rounded-xl">
-          {resetting ? "Resetting..." : "Reset Password"}
+          {resetting ? m.admin_user_resetting() : m.admin_user_reset_password()}
         </Button>
       </Dialog.Footer>
     </form>

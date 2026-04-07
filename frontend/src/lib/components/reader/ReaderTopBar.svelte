@@ -2,6 +2,7 @@
   import { ArrowLeft } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { getIsOnline } from "$lib/services/network";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     bookId = "",
@@ -31,7 +32,7 @@
         goto(getIsOnline() ? `/books/${bookId}` : "/downloads", {
           replaceState: true,
         })}
-      aria-label="Back to book detail"
+      aria-label={m.reader_back_to_detail()}
     >
       <ArrowLeft size={20} />
     </button>
@@ -41,7 +42,7 @@
           ? 'text-gray-200'
           : 'text-foreground'}"
       >
-        {title || "Loading..."}
+        {title || m.common_loading()}
       </p>
     </div>
     <span

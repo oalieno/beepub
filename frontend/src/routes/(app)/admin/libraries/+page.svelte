@@ -10,6 +10,7 @@
   import { Plus, Trash2, Library, Settings, HardDrive } from "@lucide/svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import BackButton from "$lib/components/BackButton.svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
   let loading = $state(true);
@@ -67,17 +68,19 @@
 </script>
 
 <svelte:head>
-  <title>Libraries - Admin - BeePub</title>
+  <title>{m.admin_libraries_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="flex items-end justify-between mb-8">
     <div>
       <div class="mb-1">
-        <BackButton href="/admin" label="Admin" />
+        <BackButton href="/admin" label={m.nav_admin()} />
       </div>
-      <h1 class="text-3xl font-bold text-foreground">Libraries</h1>
-      <p class="text-muted-foreground mt-1">Manage libraries and books</p>
+      <h1 class="text-3xl font-bold text-foreground">
+        {m.admin_libraries_heading()}
+      </h1>
+      <p class="text-muted-foreground mt-1">{m.admin_libraries_subtitle()}</p>
     </div>
     <Button class="rounded-xl" onclick={() => (showCreateModal = true)}>
       <Plus size={16} />

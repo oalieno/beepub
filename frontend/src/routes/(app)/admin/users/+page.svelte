@@ -12,6 +12,7 @@
   import { Label } from "$lib/components/ui/label";
   import * as Dialog from "$lib/components/ui/dialog";
   import { goto } from "$app/navigation";
+  import * as m from "$lib/paraglide/messages.js";
 
   let users = $state<UserOut[]>([]);
   let loading = $state(true);
@@ -61,17 +62,19 @@
 </script>
 
 <svelte:head>
-  <title>Users - Admin - BeePub</title>
+  <title>{m.admin_users_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="flex items-start justify-between mb-8">
     <div>
       <div class="mb-1">
-        <BackButton href="/admin" label="Admin" />
+        <BackButton href="/admin" label={m.nav_admin()} />
       </div>
-      <h1 class="text-3xl font-bold text-foreground">Users</h1>
-      <p class="text-muted-foreground mt-1">Manage user accounts and roles</p>
+      <h1 class="text-3xl font-bold text-foreground">
+        {m.admin_users_heading()}
+      </h1>
+      <p class="text-muted-foreground mt-1">{m.admin_users_subtitle()}</p>
     </div>
     <Button
       class="rounded-xl"
@@ -81,7 +84,7 @@
       }}
     >
       <UserPlus size={16} />
-      Create User
+      {m.admin_users_create()}
     </Button>
   </div>
 
@@ -94,15 +97,15 @@
           <tr>
             <th
               class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >Username</th
+              >{m.admin_col_username()}</th
             >
             <th
               class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >Role</th
+              >{m.admin_col_role()}</th
             >
             <th
               class="text-left px-5 py-3.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider"
-              >Joined</th
+              >{m.admin_col_joined()}</th
             >
             <th class="w-10 px-5 py-3.5"></th>
           </tr>
@@ -149,8 +152,8 @@
 <Dialog.Root bind:open={showCreateDialog}>
   <Dialog.Content class="sm:max-w-md bg-white dark:bg-neutral-900">
     <Dialog.Header>
-      <Dialog.Title>Create User</Dialog.Title>
-      <Dialog.Description>Create a new user account</Dialog.Description>
+      <Dialog.Title>{m.admin_users_dialog_title()}</Dialog.Title>
+      <Dialog.Description>{m.admin_users_dialog_desc()}</Dialog.Description>
     </Dialog.Header>
     <form
       onsubmit={(e) => {
@@ -160,21 +163,21 @@
       class="space-y-4"
     >
       <div class="space-y-1.5">
-        <Label for="new-username">Username</Label>
+        <Label for="new-username">{m.admin_col_username()}</Label>
         <Input
           id="new-username"
           bind:value={newUsername}
-          placeholder="Username"
+          placeholder={m.admin_col_username()}
           required
         />
       </div>
       <div class="space-y-1.5">
-        <Label for="new-password">Password</Label>
+        <Label for="new-password">{m.admin_col_password()}</Label>
         <Input
           id="new-password"
           type="password"
           bind:value={newPassword}
-          placeholder="Password"
+          placeholder={m.admin_col_password()}
           required
         />
       </div>
@@ -185,10 +188,10 @@
         <Button
           variant="outline"
           class="rounded-xl"
-          onclick={() => (showCreateDialog = false)}>Cancel</Button
+          onclick={() => (showCreateDialog = false)}>{m.common_cancel()}</Button
         >
         <Button type="submit" disabled={creating} class="rounded-xl">
-          {creating ? "Creating..." : "Create"}
+          {creating ? m.admin_users_creating() : m.admin_create()}
         </Button>
       </Dialog.Footer>
     </form>

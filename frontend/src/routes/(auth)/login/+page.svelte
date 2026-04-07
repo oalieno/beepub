@@ -4,6 +4,7 @@
   import { authApi } from "$lib/api/auth";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import { BookOpen, Eye, EyeOff, Settings } from "@lucide/svelte";
   import { isNative } from "$lib/platform";
   import { getServerUrl } from "$lib/api/client";
@@ -37,7 +38,9 @@
     try {
       const loginResponse = await authApi.login(username, password);
       authStore.login(loginResponse);
-      toastStore.success("Welcome back, " + loginResponse.username + "!");
+      toastStore.success(
+        m.auth_welcome_back({ username: loginResponse.username }),
+      );
       goto("/");
     } catch (e) {
       errorMessage = (e as Error).message;
@@ -52,7 +55,7 @@
     errorMessage = "";
     try {
       await authApi.register({ username, password });
-      toastStore.success("Account created! Please log in.");
+      toastStore.success(m.auth_account_created());
       showRegister = false;
     } catch (e) {
       errorMessage = (e as Error).message;
@@ -71,24 +74,28 @@
     class="space-y-4"
   >
     <div class="space-y-1.5">
-      <Label for="username" class="text-sm font-medium">Username</Label>
+      <Label for="username" class="text-sm font-medium"
+        >{m.auth_username()}</Label
+      >
       <Input
         id="username"
         type="text"
         bind:value={username}
-        placeholder="Enter username"
+        placeholder={m.auth_enter_username()}
         required
         class="rounded-xl h-11"
       />
     </div>
     <div class="space-y-1.5">
-      <Label for="password" class="text-sm font-medium">Password</Label>
+      <Label for="password" class="text-sm font-medium"
+        >{m.auth_password()}</Label
+      >
       <div class="relative">
         <Input
           id="password"
           type={showPassword ? "text" : "password"}
           bind:value={password}
-          placeholder="Enter password"
+          placeholder={m.auth_enter_password()}
           required
           class="rounded-xl h-11 pr-10"
         />
@@ -114,13 +121,13 @@
       disabled={loading}
       class="w-full rounded-xl h-11 text-sm font-semibold"
     >
-      {loading ? "Logging in..." : "Login"}
+      {loading ? m.auth_logging_in() : m.auth_login()}
     </Button>
   </form>
 {/snippet}
 
 <svelte:head>
-  <title>BeePub - Login</title>
+  <title>{m.auth_page_title()}</title>
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center px-4">
@@ -135,14 +142,14 @@
       <h1 class="text-3xl font-bold" style="font-family: var(--font-heading)">
         BeePub
       </h1>
-      <p class="text-muted-foreground mt-1">Your personal ebook library</p>
+      <p class="text-muted-foreground mt-1">{m.auth_subtitle()}</p>
       {#if isNative()}
         <button
           onclick={() => goto("/setup")}
           class="mt-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <Settings size={12} />
-          {getServerUrl() || "No server configured"}
+          {getServerUrl() || m.auth_no_server()}
         </button>
       {/if}
     </div>
@@ -161,7 +168,7 @@
                 errorMessage = "";
               }}
               class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
-              >Login</Tabs.Trigger
+              >{m.auth_login()}</Tabs.Trigger
             >
             <Tabs.Trigger
               value="register"
@@ -170,7 +177,7 @@
                 errorMessage = "";
               }}
               class="rounded-full data-[state=active]:bg-card data-[state=active]:shadow-sm"
-              >Register</Tabs.Trigger
+              >{m.auth_register()}</Tabs.Trigger
             >
           </Tabs.List>
 
@@ -188,27 +195,27 @@
             >
               <div class="space-y-1.5">
                 <Label for="reg-username" class="text-sm font-medium"
-                  >Username</Label
+                  >{m.auth_username()}</Label
                 >
                 <Input
                   id="reg-username"
                   type="text"
                   bind:value={username}
-                  placeholder="Choose username"
+                  placeholder={m.auth_choose_username()}
                   required
                   class="rounded-xl h-11"
                 />
               </div>
               <div class="space-y-1.5">
                 <Label for="reg-password" class="text-sm font-medium"
-                  >Password</Label
+                  >{m.auth_password()}</Label
                 >
                 <div class="relative">
                   <Input
                     id="reg-password"
                     type={showPassword ? "text" : "password"}
                     bind:value={password}
-                    placeholder="Choose password"
+                    placeholder={m.auth_choose_password()}
                     required
                     class="rounded-xl h-11 pr-10"
                   />
@@ -234,7 +241,7 @@
                 disabled={loading}
                 class="w-full rounded-xl h-11 text-sm font-semibold"
               >
-                {loading ? "Creating account..." : "Register"}
+                {loading ? m.auth_creating_account() : m.auth_register()}
               </Button>
             </form>
           </Tabs.Content>

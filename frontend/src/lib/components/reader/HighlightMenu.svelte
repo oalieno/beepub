@@ -9,6 +9,7 @@
     MessageCircle,
   } from "@lucide/svelte";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     hasExisting = false,
@@ -39,7 +40,7 @@
   {#if !hasExisting}
     <button
       class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-      title="Highlight"
+      title={m.highlight_action_highlight()}
       onclick={() => onhighlight?.()}
     >
       <Highlighter size={14} />
@@ -49,7 +50,7 @@
 
   <button
     class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-    title="Copy"
+    title={m.highlight_action_copy()}
     onclick={() => oncopy?.()}
   >
     <Copy size={14} />
@@ -59,7 +60,7 @@
     <div class="w-px h-4 bg-border"></div>
     <button
       class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-      title="Share as card"
+      title={m.highlight_action_share()}
       onclick={() => onshare?.()}
     >
       <Share2 size={14} />
@@ -71,13 +72,11 @@
     class="p-0.5 transition-colors transform {offline
       ? 'text-muted-foreground/40 cursor-not-allowed'
       : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
-    title={offline
-      ? "AI features require an internet connection"
-      : "AI Illustration"}
+    title={offline ? m.reader_ai_offline() : m.highlight_action_illustrate()}
     aria-disabled={offline || undefined}
     onclick={() => {
       if (offline) {
-        toastStore.info("AI features require an internet connection");
+        toastStore.info(m.reader_ai_offline());
         return;
       }
       onillustrate?.();
@@ -91,13 +90,11 @@
     class="p-0.5 transition-colors transform {offline
       ? 'text-muted-foreground/40 cursor-not-allowed'
       : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
-    title={offline
-      ? "AI features require an internet connection"
-      : "Ask Companion"}
+    title={offline ? m.reader_ai_offline() : m.highlight_action_companion()}
     aria-disabled={offline || undefined}
     onclick={() => {
       if (offline) {
-        toastStore.info("AI features require an internet connection");
+        toastStore.info(m.reader_ai_offline());
         return;
       }
       oncompanion?.();
@@ -110,7 +107,7 @@
     <div class="w-px h-4 bg-border"></div>
     <button
       class="text-destructive hover:text-destructive/80 transition-colors p-0.5"
-      title="Remove highlight"
+      title={m.highlight_action_remove()}
       onclick={() => onremove?.()}
     >
       <Trash2 size={14} />

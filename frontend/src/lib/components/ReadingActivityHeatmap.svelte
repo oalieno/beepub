@@ -1,4 +1,6 @@
 <script lang="ts">
+  import * as m from "$lib/paraglide/messages.js";
+
   let {
     data = [],
     year,
@@ -63,10 +65,10 @@
 
   function formatTooltip(date: string, seconds: number): string {
     if (!date) return "";
-    if (seconds === 0) return `${date}: No reading`;
+    if (seconds === 0) return `${date}: ${m.heatmap_no_reading()}`;
     const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const timeStr = h > 0 ? `${h}h ${m}m` : `${m}m`;
+    const min = Math.floor((seconds % 3600) / 60);
+    const timeStr = h > 0 ? `${h}h ${min}m` : `${min}m`;
     return `${date}: ${timeStr}`;
   }
 </script>
@@ -82,13 +84,16 @@
 >
   <div class="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
     <h3 class="text-lg font-semibold text-foreground">
-      Reading Activity ({year})
+      {m.heatmap_title({ year: String(year) })}
     </h3>
     <span class="text-sm text-muted-foreground">
       {#if totalHours > 0}
-        {totalHours}h {remainingMinutes}m total
+        {m.heatmap_total_time({
+          hours: String(totalHours),
+          minutes: String(remainingMinutes),
+        })}
       {:else}
-        {remainingMinutes}m total
+        {m.heatmap_total_minutes({ minutes: String(remainingMinutes) })}
       {/if}
     </span>
   </div>
@@ -119,7 +124,7 @@
   <div
     class="mt-1 flex flex-wrap items-center justify-end gap-1.5 text-xs text-muted-foreground"
   >
-    <span>Less</span>
+    <span>{m.heatmap_less()}</span>
     <div
       class="size-[11px] rounded-[2px]"
       style="background: var(--muted)"
@@ -127,6 +132,6 @@
     {#each LEVELS as color}
       <div class="size-[11px] rounded-[2px]" style="background: {color}"></div>
     {/each}
-    <span>More</span>
+    <span>{m.heatmap_more()}</span>
   </div>
 </div>

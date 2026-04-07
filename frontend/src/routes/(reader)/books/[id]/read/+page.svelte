@@ -23,6 +23,7 @@
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { UserRole } from "$lib/types";
+  import * as m from "$lib/paraglide/messages.js";
   import type {
     AiStatus,
     HighlightOut,
@@ -348,7 +349,7 @@
 </script>
 
 <svelte:head>
-  <title>{title || "Reading"} - BeePub</title>
+  <title>{m.reader_page_title({ title: title || "Reading" })}</title>
 </svelte:head>
 
 <div
@@ -649,7 +650,7 @@
                   ? 'bg-gray-700 text-gray-400'
                   : 'bg-gray-200 text-muted-foreground'}"
               >
-                No cover
+                {m.reader_no_cover()}
               </div>
             {/if}
           </div>
@@ -661,7 +662,9 @@
                 ? 'text-gray-500'
                 : 'text-muted-foreground'}"
             >
-              Up next in {seriesNeighbors.series_name}
+              {m.reader_series_up_next({
+                series: seriesNeighbors.series_name ?? "",
+              })}
             </p>
             <p class="mt-3 text-center text-xl font-semibold">
               {seriesNeighbors.next.title ?? "Untitled"}
@@ -672,8 +675,12 @@
                   ? 'text-gray-400'
                   : 'text-muted-foreground'}"
               >
-                Book {seriesNeighbors.next.series_index} of {seriesNeighbors
-                  .progress?.total_in_library ?? "?"}
+                {m.reader_series_book_of({
+                  index: String(seriesNeighbors.next.series_index),
+                  total: String(
+                    seriesNeighbors.progress?.total_in_library ?? "?",
+                  ),
+                })}
               </p>
             {/if}
             <div class="mt-6 flex gap-3">
@@ -683,7 +690,7 @@
                   : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
                 onclick={() => (showSeriesOverlay = false)}
               >
-                Close
+                {m.common_close()}
               </button>
               <button
                 class="flex-1 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
@@ -691,7 +698,7 @@
                   window.location.href = `/books/${seriesNeighbors!.next!.id}/read`;
                 }}
               >
-                Start reading
+                {m.reader_start_reading()}
               </button>
             </div>
           </div>
@@ -699,14 +706,16 @@
           <div class="flex flex-col items-center gap-6 px-10 py-14">
             <span class="text-6xl">🎉</span>
             <div class="text-center">
-              <p class="text-2xl font-semibold">Series Complete!</p>
+              <p class="text-2xl font-semibold">{m.reader_series_complete()}</p>
               <p
                 class="mt-2 {darkMode
                   ? 'text-gray-400'
                   : 'text-muted-foreground'}"
               >
-                You've finished all {seriesNeighbors.progress.total_in_library} books
-                in {seriesNeighbors.series_name}
+                {m.reader_series_complete_msg({
+                  count: String(seriesNeighbors.progress.total_in_library),
+                  series: seriesNeighbors.series_name ?? "",
+                })}
               </p>
             </div>
             <button
@@ -715,7 +724,7 @@
                 : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
               onclick={() => (showSeriesOverlay = false)}
             >
-              Close
+              {m.common_close()}
             </button>
           </div>
         {/if}

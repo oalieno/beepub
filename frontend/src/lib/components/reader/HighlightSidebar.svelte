@@ -4,15 +4,16 @@
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import * as m from "$lib/paraglide/messages.js";
 
-  const STYLE_LABELS: Record<string, string> = {
-    ink_wash: "Ink Wash",
-    watercolor: "Watercolor",
-    pencil_sketch: "Pencil Sketch",
-    woodcut: "Woodcut",
-    anime: "Light Novel",
-    oil_painting: "Oil Painting",
-  };
+  const STYLE_LABELS: Record<string, string> = $derived({
+    ink_wash: m.reader_style_ink_wash(),
+    watercolor: m.reader_style_watercolor(),
+    pencil_sketch: m.reader_style_pencil_sketch(),
+    woodcut: m.reader_style_woodcut(),
+    anime: m.reader_style_anime(),
+    oil_painting: m.reader_style_oil_painting(),
+  });
 
   let {
     highlights = [],
@@ -58,17 +59,17 @@
   }
 
   function getStyleLabel(ill: IllustrationOut): string {
-    if (ill.custom_prompt) return "Custom";
+    if (ill.custom_prompt) return m.reader_style_custom();
     if (ill.style_prompt)
       return STYLE_LABELS[ill.style_prompt] ?? ill.style_prompt;
-    return "Default";
+    return m.reader_style_default();
   }
 
   function friendlyError(msg: string): string {
     if (msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY"))
-      return "Blocked by safety filters";
-    if (msg.includes("ReadTimeout")) return "API timed out";
-    if (msg.includes("500")) return "API server error, please retry";
+      return m.reader_error_safety();
+    if (msg.includes("ReadTimeout")) return m.reader_error_timeout();
+    if (msg.includes("500")) return m.reader_error_server();
     return msg.length > 80 ? msg.slice(0, 80) + "…" : msg;
   }
 </script>
@@ -91,7 +92,7 @@
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
   aria-modal="true"
-  aria-label="Highlights & Illustrations"
+  aria-label={m.reader_highlight_illustrations()}
 >
   <!-- Header with tabs -->
   <div
@@ -111,7 +112,7 @@
             : 'text-muted-foreground hover:text-foreground'}"
         onclick={() => (activeTab = "highlights")}
       >
-        Highlights
+        {m.reader_highlight_tab()}
         {#if highlights.length > 0}
           <span
             class="ml-1 {darkMode ? 'text-gray-500' : 'text-muted-foreground'}"
@@ -130,7 +131,7 @@
             : 'text-muted-foreground hover:text-foreground'}"
         onclick={() => (activeTab = "illustrations")}
       >
-        Illustrations
+        {m.reader_illustration_tab()}
         {#if illustrations.length > 0}
           <span
             class="ml-1 {darkMode ? 'text-gray-500' : 'text-muted-foreground'}"
@@ -159,7 +160,7 @@
           ? 'text-gray-500'
           : 'text-muted-foreground'} py-4 text-center"
       >
-        No illustrations yet.
+        {m.reader_no_illustrations()}
       </p>
     {:else}
       <div class="flex flex-col gap-1">
@@ -237,10 +238,12 @@
                     <span
                       class="text-[10px] {darkMode
                         ? 'text-purple-400'
-                        : 'text-purple-500'}">generating...</span
+                        : 'text-purple-500'}">{m.reader_generating()}</span
                     >
                   {:else if ill.status === "failed"}
-                    <span class="text-[10px] text-red-400">failed</span>
+                    <span class="text-[10px] text-red-400"
+                      >{m.reader_failed()}</span
+                    >
                   {/if}
                 </div>
                 <p
@@ -269,7 +272,7 @@
                   class="self-center opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode
                     ? 'text-gray-500 hover:text-red-400'
                     : 'text-muted-foreground hover:text-destructive'}"
-                  title="Delete illustration"
+                  title={m.reader_delete_illustration()}
                   onclick={(e) => {
                     e.stopPropagation();
                     onillustrationdelete?.(ill);

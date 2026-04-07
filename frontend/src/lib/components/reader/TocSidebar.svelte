@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
   import { tick } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     toc = [],
@@ -52,7 +53,7 @@
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
   aria-modal="true"
-  aria-label="Table of Contents"
+  aria-label={m.reader_toc()}
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
@@ -64,7 +65,7 @@
         ? 'text-gray-200'
         : 'text-foreground'}"
     >
-      Table of Contents
+      {m.reader_toc()}
     </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
@@ -82,7 +83,7 @@
           ? 'text-gray-500'
           : 'text-muted-foreground'} py-4 text-center"
       >
-        No table of contents.
+        {m.reader_toc_empty()}
       </p>
     {:else}
       <div class="flex flex-col gap-0.5">

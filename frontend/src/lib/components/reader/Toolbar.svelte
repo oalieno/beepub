@@ -15,6 +15,7 @@
   import { goto } from "$app/navigation";
   import { getIsOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     bookId = "",
@@ -81,7 +82,7 @@
 >
   <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
-    aria-label="Go back"
+    aria-label={m.reader_go_back()}
     onclick={() =>
       goto(getIsOnline() ? `/books/${bookId}` : "/downloads", {
         replaceState: true,
@@ -93,7 +94,7 @@
   <!-- TOC button -->
   <button
     class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-    title="Table of contents"
+    title={m.reader_toc()}
     onclick={() => ontoc_toggle?.()}
   >
     <List size={18} />
@@ -103,7 +104,7 @@
     <!-- Search button -->
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-      title="Search in book"
+      title={m.reader_search_in_book()}
       onclick={() => onsearch?.()}
     >
       <Search size={18} />
@@ -112,7 +113,7 @@
     <!-- Highlights button -->
     <button
       class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
-      title="Highlights"
+      title={m.reader_highlights()}
       onclick={() => onhighlights?.()}
     >
       <Highlighter size={18} />
@@ -132,13 +133,11 @@
       class="p-1.5 rounded-md transition-colors {offline
         ? 'opacity-40'
         : btnClass(darkMode)}"
-      title={offline
-        ? "AI features require an internet connection"
-        : "AI Companion"}
+      title={offline ? m.reader_ai_offline() : m.reader_ai_companion()}
       aria-disabled={offline || undefined}
       onclick={() => {
         if (offline) {
-          toastStore.info("AI features require an internet connection");
+          toastStore.info(m.reader_ai_offline());
           return;
         }
         oncompanion?.();
@@ -167,10 +166,10 @@
         class="hidden sm:inline-flex px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(
           darkMode,
         )}"
-        title="Toggle font family"
+        title={m.reader_font_toggle()}
         onclick={() => onfontToggle?.()}
       >
-        {fontFamily === "serif" ? "Serif" : "Sans"}
+        {fontFamily === "serif" ? m.reader_font_serif() : m.reader_font_sans()}
       </button>
 
       <div
@@ -212,7 +211,7 @@
 
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
-      title="Toggle dark/light mode"
+      title={m.reader_theme_toggle()}
       onclick={() => onthemeToggle?.()}
     >
       {#if darkMode}

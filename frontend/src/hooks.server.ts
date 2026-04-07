@@ -1,10 +1,25 @@
 import { redirect, type Handle } from "@sveltejs/kit";
+import { sequence } from "@sveltejs/kit/hooks";
 import { env } from "$env/dynamic/private";
 import { building } from "$app/environment";
+import { paraglideMiddleware } from "$lib/paraglide/server.js";
 
 const BACKEND_URL = env.BACKEND_URL || "http://backend:8000";
 
-export const handle: Handle = async ({ event, resolve }) => {
+const i18nHandle: Handle = ({ event, resolve }) =>
+  paraglideMiddleware(
+    event.request,
+    ({ request: localizedRequest, locale }) => {
+      event.request = localizedRequest;
+      return resolve(event, {
+        transformPageChunk: ({ html }) => {
+          return html.replace("%lang%", locale);
+        },
+      });
+    },
+  );
+
+const authHandle: Handle = async ({ event, resolve }) => {
   // Skip auth during static build (adapter-static fallback page generation)
   if (building) {
     return resolve(event);
@@ -50,3 +65,5 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   return resolve(event);
 };
+
+export const handle = sequence(i18nHandle, authHandle);

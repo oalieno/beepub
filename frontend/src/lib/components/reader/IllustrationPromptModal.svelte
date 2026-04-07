@@ -17,6 +17,7 @@
   import { booksApi } from "$lib/api/books";
   import { apiBase } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import * as m from "$lib/paraglide/messages.js";
 
   const MAX_REFS = 4;
 
@@ -157,7 +158,7 @@
             ? 'text-gray-200'
             : 'text-foreground'}"
         >
-          AI Illustration
+          {m.illustration_title()}
         </h2>
       </div>
       <button
@@ -191,7 +192,7 @@
               ? 'text-gray-300'
               : 'text-foreground'}"
           >
-            Image AI not configured
+            {m.illustration_not_configured()}
           </p>
           {#if isAdmin}
             <p
@@ -199,7 +200,7 @@
                 ? 'text-gray-500'
                 : 'text-muted-foreground'}"
             >
-              Set up a provider and model in admin settings.
+              {m.companion_admin_setup()}
             </p>
             <a
               href="/admin/settings"
@@ -208,7 +209,7 @@
                 : 'text-primary hover:text-primary/80'}"
             >
               <Settings size={12} />
-              Go to Settings
+              {m.companion_go_to_settings()}
             </a>
           {:else}
             <p
@@ -216,7 +217,7 @@
                 ? 'text-gray-500'
                 : 'text-muted-foreground'}"
             >
-              Ask your admin to enable AI features in the settings.
+              {m.companion_user_msg()}
             </p>
           {/if}
         </div>
@@ -230,7 +231,7 @@
               ? 'text-gray-500'
               : 'text-muted-foreground'}"
           >
-            Selected text
+            {m.illustration_selected_text()}
           </p>
           <p
             class="text-sm leading-relaxed {darkMode
@@ -248,7 +249,7 @@
               ? 'text-gray-400'
               : 'text-muted-foreground'}"
           >
-            Choose a style
+            {m.illustration_choose_style()}
           </p>
           <div class="grid grid-cols-2 gap-2">
             {#each styles as style}
@@ -285,7 +286,9 @@
             onclick={toggleRefs}
           >
             <ImageIcon size={12} />
-            {showRefs ? "- Reference images" : "+ Reference images"}
+            {showRefs
+              ? m.illustration_ref_images_hide()
+              : m.illustration_ref_images_add()}
             {#if selectedRefs.length > 0}
               <span
                 class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold {darkMode
@@ -310,7 +313,7 @@
                     ? 'text-gray-500'
                     : 'text-muted-foreground'}"
                 >
-                  Book images
+                  {m.illustration_book_images()}
                 </p>
                 {#if loadingEpubImages}
                   <div
@@ -319,7 +322,7 @@
                       : 'text-muted-foreground'}"
                   >
                     <LoaderCircle size={14} class="animate-spin" />
-                    <span class="text-xs">Loading...</span>
+                    <span class="text-xs">{m.common_loading()}</span>
                   </div>
                 {:else if epubImages.length === 0}
                   <p
@@ -327,7 +330,7 @@
                       ? 'text-gray-600'
                       : 'text-muted-foreground'}"
                   >
-                    No images found in this book
+                    {m.illustration_no_book_images()}
                   </p>
                 {:else}
                   <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
@@ -377,7 +380,7 @@
                       ? 'text-gray-500'
                       : 'text-muted-foreground'}"
                   >
-                    Generated illustrations
+                    {m.illustration_generated()}
                   </p>
                   <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
                     {#each completedIllustrations as ill}
@@ -439,12 +442,14 @@
                 : 'text-muted-foreground hover:text-foreground'}"
             onclick={toggleCustom}
           >
-            {useCustom ? "- Custom prompt" : "+ Custom prompt"}
+            {useCustom
+              ? m.illustration_custom_prompt_hide()
+              : m.illustration_custom_prompt_add()}
           </button>
           {#if useCustom}
             <textarea
               bind:value={customPrompt}
-              placeholder="Describe the illustration style you want..."
+              placeholder={m.illustration_custom_placeholder()}
               rows={3}
               class="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 {darkMode
                 ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600'
@@ -466,7 +471,7 @@
             : 'text-muted-foreground hover:bg-accent'}"
           onclick={() => onclose?.()}
         >
-          Cancel
+          {m.common_cancel()}
         </button>
         <button
           class="px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 {canGenerate
@@ -478,7 +483,7 @@
           onclick={handleGenerate}
         >
           <Sparkles size={14} />
-          Generate
+          {m.illustration_generate()}
         </button>
       </div>
     {/if}

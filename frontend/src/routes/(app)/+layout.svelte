@@ -10,7 +10,7 @@
   let { children }: { children: Snippet } = $props();
 
   let searchOpen = $state(false);
-  let isAuthenticated = $derived(!!$authStore.user);
+  let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
   let isBookDetail = $derived(/^\/books\/[^/]+$/.test(page.url.pathname));
 </script>
 

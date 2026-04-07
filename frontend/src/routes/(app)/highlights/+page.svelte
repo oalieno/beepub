@@ -8,6 +8,7 @@
   import type { HighlightOut } from "$lib/types";
   import { Highlighter } from "@lucide/svelte";
   import { HighlightListSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let highlights = $state<HighlightOut[]>([]);
   let bookData = $state<Record<string, { title: string; authors: string[] }>>(
@@ -57,7 +58,7 @@
               authors: book.display_authors ?? book.epub_authors ?? [],
             };
           } catch {
-            data[id] = { title: "Unknown Book", authors: [] };
+            data[id] = { title: m.common_untitled(), authors: [] };
           }
         }),
       );
@@ -75,9 +76,9 @@
 
     if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
 
-    toastStore.info("Highlight removed", {
+    toastStore.info(m.highlights_removed(), {
       action: {
-        label: "Undo",
+        label: m.highlights_undo(),
         onclick: () => {
           if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
           pendingDeleteTimer = null;
@@ -105,7 +106,7 @@
 </script>
 
 <svelte:head>
-  <title>Highlights - BeePub</title>
+  <title>{m.highlights_page_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
@@ -116,9 +117,11 @@
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
         <Highlighter class="text-primary/50" size={28} />
       </div>
-      <p class="text-foreground text-lg font-medium mb-2">No highlights yet</p>
+      <p class="text-foreground text-lg font-medium mb-2">
+        {m.highlights_no_highlights()}
+      </p>
       <p class="text-muted-foreground text-sm max-w-xs">
-        Select text while reading to create highlights.
+        {m.highlights_empty_description()}
       </p>
     </div>
   {:else}
@@ -128,7 +131,7 @@
           href="/books/{bookId}"
           class="text-sm font-semibold text-foreground hover:text-primary transition-colors mb-2 block"
         >
-          {bookTitles()[bookId] ?? "Unknown Book"}
+          {bookTitles()[bookId] ?? m.common_untitled()}
         </a>
         <div class="bg-card card-soft rounded-2xl p-3">
           <HighlightList

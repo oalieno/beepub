@@ -11,6 +11,7 @@
   import { Eye, EyeOff, Save } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
 
   let settings = $state<AdminSettings | null>(null);
   let loading = $state(true);
@@ -132,9 +133,9 @@
   }
 
   function providerLabel(value: string): string {
-    if (value === "gemini") return "Gemini";
-    if (value === "openai") return "OpenAI Compatible";
-    return "Not configured";
+    if (value === "gemini") return m.admin_settings_provider_gemini();
+    if (value === "openai") return m.admin_settings_provider_openai();
+    return m.admin_settings_not_configured();
   }
 
   onMount(async () => {
@@ -182,12 +183,12 @@
 
   let openaiBaseUrlError = $derived(
     openaiBaseUrl.trim() && !isValidUrl(openaiBaseUrl)
-      ? "Must start with http:// or https://"
+      ? m.admin_settings_url_validation()
       : "",
   );
   let embeddingApiUrlError = $derived(
     embeddingApiUrl.trim() && !isValidUrl(embeddingApiUrl)
-      ? "Must start with http:// or https://"
+      ? m.admin_settings_url_validation()
       : "",
   );
 
@@ -280,18 +281,24 @@
           {providerLabel(value)}
         </Select.Trigger>
         <Select.Content align="start">
-          <Select.Item value="none">Not configured</Select.Item>
+          <Select.Item value="none"
+            >{m.admin_settings_not_configured()}</Select.Item
+          >
           {#if hasGemini}
-            <Select.Item value="gemini">Gemini</Select.Item>
+            <Select.Item value="gemini"
+              >{m.admin_settings_provider_gemini()}</Select.Item
+            >
           {/if}
           {#if hasOpenai}
-            <Select.Item value="openai">OpenAI Compatible</Select.Item>
+            <Select.Item value="openai"
+              >{m.admin_settings_provider_openai()}</Select.Item
+            >
           {/if}
         </Select.Content>
       </Select.Root>
       {#if !hasGemini && !hasOpenai}
         <p class="text-xs text-muted-foreground">
-          Add API keys in the AI Providers section above first
+          {m.admin_settings_api_keys_help()}
         </p>
       {/if}
     </div>
@@ -305,7 +312,7 @@
             class="flex items-center gap-2 h-9 px-3 text-sm text-muted-foreground"
           >
             <Spinner size="sm" />
-            Loading models…
+            {m.admin_settings_loading_models()}
           </div>
         {:else if models.length > 0}
           <Select.Root
@@ -314,12 +321,14 @@
             onValueChange={(v) => onModelChange(v === "none" ? "" : v)}
           >
             <Select.Trigger id="{prefix}-model" class="w-full bg-background">
-              {model || "Select a model"}
+              {model || m.admin_settings_select_model()}
             </Select.Trigger>
             <Select.Content align="start" class="max-h-64">
-              <Select.Item value="none">Select a model</Select.Item>
-              {#each models as m}
-                <Select.Item value={m.id}>{m.name}</Select.Item>
+              <Select.Item value="none"
+                >{m.admin_settings_select_model()}</Select.Item
+              >
+              {#each models as mdl}
+                <Select.Item value={mdl.id}>{mdl.name}</Select.Item>
               {/each}
             </Select.Content>
           </Select.Root>
@@ -331,7 +340,7 @@
             oninput={(e) => onModelChange(e.currentTarget.value)}
           />
           <p class="text-xs text-muted-foreground">
-            Could not load models — type a model name manually
+            {m.admin_settings_model_load_error()}
           </p>
         {/if}
       </div>
@@ -340,7 +349,7 @@
 {/snippet}
 
 <svelte:head>
-  <title>Settings - Admin - BeePub</title>
+  <title>{m.admin_settings_title()}</title>
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
@@ -348,10 +357,12 @@
     <a
       href="/admin"
       class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >&larr; Admin</a
+      >{m.admin_llm_back()}</a
     >
-    <h1 class="text-3xl font-bold text-foreground">Settings</h1>
-    <p class="text-muted-foreground mt-1">Configure application settings</p>
+    <h1 class="text-3xl font-bold text-foreground">
+      {m.admin_settings_heading()}
+    </h1>
+    <p class="text-muted-foreground mt-1">{m.admin_settings_subtitle()}</p>
   </div>
 
   {#if loading}
@@ -361,9 +372,9 @@
       <!-- User Registration -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>User Registration</Card.Title>
+          <Card.Title>{m.admin_settings_registration()}</Card.Title>
           <Card.Description
-            >Control whether new users can register accounts</Card.Description
+            >{m.admin_settings_registration_desc()}</Card.Description
           >
         </Card.Header>
         <Card.Content>
@@ -374,12 +385,11 @@
               class="h-4 w-4 rounded border-border text-primary focus:ring-primary/50"
             />
             <span class="text-sm text-foreground"
-              >Allow public registration</span
+              >{m.admin_settings_registration_label()}</span
             >
           </label>
           <p class="text-xs text-muted-foreground mt-2">
-            When disabled, only admins can create new user accounts. The first
-            user can always register.
+            {m.admin_settings_registration_help()}
           </p>
         </Card.Content>
       </Card.Root>
@@ -387,14 +397,13 @@
       <!-- Timezone -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>Timezone</Card.Title>
-          <Card.Description
-            >Used for reading activity tracking and scheduled tasks</Card.Description
+          <Card.Title>{m.admin_settings_timezone()}</Card.Title>
+          <Card.Description>{m.admin_settings_timezone_desc()}</Card.Description
           >
         </Card.Header>
         <Card.Content>
           <div class="max-w-sm space-y-1.5">
-            <Label for="timezone">Application timezone</Label>
+            <Label for="timezone">{m.admin_settings_timezone_label()}</Label>
             <Select.Root
               type="single"
               value={timezone}
@@ -416,16 +425,17 @@
       <!-- External Metadata APIs -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>External Metadata APIs</Card.Title>
+          <Card.Title>{m.admin_settings_external_apis()}</Card.Title>
           <Card.Description>
-            API keys for fetching book genres and tags from external platforms.
-            Goodreads and Readmoo work without keys.
+            {m.admin_settings_external_apis_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content class="space-y-5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div class="space-y-1.5">
-              <Label for="google-books-key">Google Books API Key</Label>
+              <Label for="google-books-key"
+                >{m.admin_settings_google_books()}</Label
+              >
               {@render passwordInput(
                 "google-books-key",
                 "AIza...",
@@ -433,19 +443,20 @@
                 (v) => (googleBooksApiKey = v),
               )}
               <p class="text-xs text-muted-foreground">
-                Free, 1000 requests/day
+                {m.admin_settings_google_books_help()}
               </p>
             </div>
             <div class="space-y-1.5">
-              <Label for="hardcover-token">Hardcover API Token</Label>
+              <Label for="hardcover-token">{m.admin_settings_hardcover()}</Label
+              >
               {@render passwordInput(
                 "hardcover-token",
-                "Bearer token from hardcover.app",
+                m.admin_settings_hardcover_placeholder(),
                 hardcoverApiToken,
                 (v) => (hardcoverApiToken = v),
               )}
               <p class="text-xs text-muted-foreground">
-                Free, 60 requests/min. Provides genres, moods, and tags.
+                {m.admin_settings_hardcover_help()}
               </p>
             </div>
           </div>
@@ -455,15 +466,14 @@
       <!-- AI Providers -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>AI Providers</Card.Title>
+          <Card.Title>{m.admin_settings_ai_providers()}</Card.Title>
           <Card.Description>
-            Configure API keys for AI providers. Each feature below can use any
-            configured provider.
+            {m.admin_settings_ai_providers_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content class="space-y-5">
           <div class="max-w-sm space-y-1.5">
-            <Label for="gemini-key">Gemini API Key</Label>
+            <Label for="gemini-key">{m.admin_settings_gemini()}</Label>
             {@render passwordInput(
               "gemini-key",
               "AIza...",
@@ -474,16 +484,16 @@
           <div class="border-t border-border/30 pt-5">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div class="space-y-1.5">
-                <Label for="openai-key">OpenAI Compatible API Key</Label>
+                <Label for="openai-key">{m.admin_settings_openai_key()}</Label>
                 {@render passwordInput(
                   "openai-key",
-                  "sk-... (optional for Ollama)",
+                  m.admin_settings_openai_key_placeholder(),
                   openaiApiKey,
                   (v) => (openaiApiKey = v),
                 )}
               </div>
               <div class="space-y-1.5">
-                <Label for="openai-url">Base URL</Label>
+                <Label for="openai-url">{m.admin_settings_base_url()}</Label>
                 <Input
                   id="openai-url"
                   placeholder="https://api.openai.com/v1"
@@ -494,7 +504,7 @@
                   <p class="text-xs text-red-600">{openaiBaseUrlError}</p>
                 {:else}
                   <p class="text-xs text-muted-foreground">
-                    For Ollama: http://host:11434/v1
+                    {m.admin_settings_openai_url_help()}
                   </p>
                 {/if}
               </div>
@@ -506,9 +516,9 @@
       <!-- Companion AI -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>Companion AI</Card.Title>
+          <Card.Title>{m.admin_settings_companion()}</Card.Title>
           <Card.Description>
-            For the AI Reading Companion chat sidebar
+            {m.admin_settings_companion_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content>
@@ -526,9 +536,9 @@
       <!-- Tag AI -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>Tag AI</Card.Title>
+          <Card.Title>{m.admin_settings_tag()}</Card.Title>
           <Card.Description>
-            For AI-powered book tagging and recommendations
+            {m.admin_settings_tag_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content>
@@ -546,9 +556,9 @@
       <!-- Image AI -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>Image AI</Card.Title>
+          <Card.Title>{m.admin_settings_image()}</Card.Title>
           <Card.Description>
-            For AI Illustrations (requires Gemini with image generation support)
+            {m.admin_settings_image_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content>
@@ -566,16 +576,17 @@
       <!-- Embedding AI -->
       <Card.Root>
         <Card.Header>
-          <Card.Title>Embedding AI</Card.Title>
+          <Card.Title>{m.admin_settings_embedding()}</Card.Title>
           <Card.Description>
-            For semantic search and similar book recommendations. Connects to
-            any OpenAI-compatible embedding API (LM Studio, Ollama, etc).
+            {m.admin_settings_embedding_desc()}
           </Card.Description>
         </Card.Header>
         <Card.Content class="space-y-5">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div class="space-y-1.5">
-              <Label for="embedding-api-url">API Base URL</Label>
+              <Label for="embedding-api-url"
+                >{m.admin_settings_embedding_url()}</Label
+              >
               <Input
                 id="embedding-api-url"
                 placeholder="http://localhost:1234/v1"
@@ -586,12 +597,14 @@
                 <p class="text-xs text-red-600">{embeddingApiUrlError}</p>
               {:else}
                 <p class="text-xs text-muted-foreground">
-                  OpenAI-compatible /v1/embeddings endpoint
+                  {m.admin_settings_embedding_url_help()}
                 </p>
               {/if}
             </div>
             <div class="space-y-1.5">
-              <Label for="embedding-model">Model</Label>
+              <Label for="embedding-model"
+                >{m.admin_settings_embedding_model()}</Label
+              >
               <Input
                 id="embedding-model"
                 placeholder="text-embedding-qwen3-embedding-0.6b"
@@ -601,10 +614,12 @@
             </div>
           </div>
           <div class="max-w-sm space-y-1.5">
-            <Label for="embedding-api-key">API Key</Label>
+            <Label for="embedding-api-key"
+              >{m.admin_settings_embedding_key()}</Label
+            >
             {@render passwordInput(
               "embedding-api-key",
-              "Optional — not needed for local servers",
+              m.admin_settings_embedding_key_placeholder(),
               embeddingApiKey,
               (v) => (embeddingApiKey = v),
             )}
@@ -616,7 +631,7 @@
       <div class="flex justify-end">
         <Button disabled={saving} class="rounded-xl" onclick={handleSave}>
           <Save size={16} />
-          {saving ? "Saving..." : "Save Settings"}
+          {saving ? m.admin_settings_saving() : m.admin_settings_save()}
         </Button>
       </div>
     </div>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Search, X, LoaderCircle } from "@lucide/svelte";
   import type { SearchResult } from "./EpubReader.svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     darkMode = false,
@@ -128,7 +129,7 @@
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
   aria-modal="true"
-  aria-label="Search in Book"
+  aria-label={m.reader_search_in_book()}
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
@@ -140,7 +141,7 @@
         ? 'text-gray-200'
         : 'text-foreground'}"
     >
-      Search in Book
+      {m.reader_search_in_book()}
     </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
@@ -169,7 +170,7 @@
         oninput={handleInput}
         onkeydown={handleKeydown}
         type="text"
-        placeholder="Search..."
+        placeholder={m.reader_search_placeholder()}
         class="w-full pl-8 pr-3 py-1.5 text-base rounded-md outline-none {darkMode
           ? 'bg-gray-800 text-gray-200 placeholder-gray-500 border border-gray-700 focus:border-gray-600'
           : 'bg-muted text-foreground placeholder-muted-foreground border border-border focus:border-ring'}"
@@ -190,7 +191,7 @@
         <span
           class="text-sm {darkMode ? 'text-gray-400' : 'text-muted-foreground'}"
         >
-          Searching... ({results.length} found)
+          {m.reader_search_searching({ count: String(results.length) })}
         </span>
       </div>
     {:else if searched && results.length === 0}
@@ -199,7 +200,7 @@
           ? 'text-gray-500'
           : 'text-muted-foreground'}"
       >
-        No results found.
+        {m.reader_search_no_results()}
       </p>
     {:else if results.length > 0}
       <div class="p-2">
@@ -208,7 +209,7 @@
             ? 'text-gray-500'
             : 'text-muted-foreground'}"
         >
-          {results.length} result{results.length !== 1 ? "s" : ""}
+          {m.reader_search_results({ count: String(results.length) })}
         </p>
         <div class="flex flex-col gap-0.5 mt-1">
           {#each results as result}
@@ -240,7 +241,7 @@
           ? 'text-gray-500'
           : 'text-muted-foreground'}"
       >
-        Type to search in this book.
+        {m.reader_search_empty_prompt()}
       </p>
     {/if}
   </div>

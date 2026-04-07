@@ -14,6 +14,7 @@
   import { Upload, HardDrive } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { LibraryDetailSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
   let libraryId = $derived(page.params.id as string);
@@ -129,7 +130,7 @@
       }
     }
     if (successCount > 0) {
-      toastStore.success(`Uploaded ${successCount} book(s)`);
+      toastStore.success(m.library_uploaded({ count: String(successCount) }));
       // Reload the BookBrowser by re-mounting
       // (the simplest approach — BookBrowser loads on mount)
       libraryLoading = true;
@@ -148,7 +149,7 @@
 </script>
 
 <svelte:head>
-  <title>{library?.name ?? "Library"} - BeePub</title>
+  <title>{m.library_page_title({ name: library?.name ?? "Library" })}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
@@ -165,7 +166,7 @@
               class="text-xs px-2.5 py-1 rounded-full font-medium bg-amber-500/15 text-amber-600 flex items-center gap-1"
             >
               <HardDrive size={12} />
-              Calibre
+              {m.library_calibre_badge()}
             </span>
           {/if}
         </div>
@@ -180,7 +181,7 @@
           onclick={() => (showUploadModal = true)}
         >
           <Upload size={16} />
-          Upload Books
+          {m.library_upload()}
         </button>
       {/if}
     </div>
@@ -214,7 +215,7 @@
 </div>
 
 <Modal
-  title="Upload Books"
+  title={m.library_upload()}
   open={showUploadModal}
   onclose={() => (showUploadModal = false)}
 >
@@ -232,8 +233,10 @@
       onkeydown={(e) => e.key === "Enter" && fileInput?.click()}
     >
       <Upload class="mx-auto text-muted-foreground/40 mb-3" size={36} />
-      <p class="text-foreground font-medium">Click or drag files</p>
-      <p class="text-muted-foreground text-sm mt-1">EPUB format supported</p>
+      <p class="text-foreground font-medium">{m.library_upload_drag()}</p>
+      <p class="text-muted-foreground text-sm mt-1">
+        {m.library_upload_hint()}
+      </p>
       <input
         bind:this={fileInput}
         type="file"
@@ -246,7 +249,7 @@
     {#if uploading}
       <div class="flex items-center gap-2 text-primary text-sm">
         <Spinner size="sm" />
-        Uploading...
+        {m.library_uploading()}
       </div>
     {/if}
   </div>
