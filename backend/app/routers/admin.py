@@ -33,6 +33,9 @@ from app.services.settings import get_all_settings, update_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
+# Hold strong references to background tasks so they aren't garbage-collected
+_background_tasks: set[asyncio.Task] = set()
+
 
 @router.get("/users", response_model=list[UserOut])
 async def list_users(
@@ -298,10 +301,12 @@ async def link_calibre_library(
     await db.commit()
     await db.refresh(library)
 
-    # Start background sync
-    asyncio.create_task(
+    # Start background sync (must hold a reference to prevent GC)
+    task = asyncio.create_task(
         sync_calibre_library(body.calibre_path, library.id, current_user.id)
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return {
         "library_id": str(library.id),
@@ -349,9 +354,11 @@ async def trigger_calibre_sync(
             # No started_at (old format) — block to be safe
             raise HTTPException(status_code=409, detail="Sync already in progress")
 
-    asyncio.create_task(
+    task = asyncio.create_task(
         sync_calibre_library(library.calibre_path, library.id, current_user.id)
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
     return {"status": "sync_started"}
 
 
