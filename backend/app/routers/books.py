@@ -566,7 +566,7 @@ async def search_books(
 async def get_discover_recommendations(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    limit: int = Query(20, ge=1, le=50),
+    limit: int = Query(30, ge=1, le=50),
 ):
     """Personalized book recommendations based on reading history."""
     from app.services.recommendations import get_personalized_recommendations

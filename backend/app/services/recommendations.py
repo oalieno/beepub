@@ -270,20 +270,23 @@ async def get_personalized_recommendations(
             else:
                 all_scores[bid] = (score, sid, score)
 
-    # Remove books user has already read or is currently reading,
-    # AND books that share a work_id with read/seed books (same-work dedup)
-    read_result = await db.execute(
+    # Remove books user has already interacted with (read, reading, want to read),
+    # AND books that share a work_id or series with those books (same-work/series dedup)
+    interacted_result = await db.execute(
         text("""
             SELECT book_id FROM user_book_interactions
             WHERE user_id = :user_id
-              AND reading_status IN ('read', 'currently_reading')
+              AND (
+                  reading_status IN ('read', 'currently_reading', 'want_to_read')
+                  OR is_favorite = true
+              )
         """),
         {"user_id": str(user_id)},
     )
-    read_ids = {uuid.UUID(str(row[0])) for row in read_result.fetchall()}
+    interacted_ids = {uuid.UUID(str(row[0])) for row in interacted_result.fetchall()}
 
     # Also remove seed books themselves
-    exclude_ids = read_ids | {uuid.UUID(str(sid)) for sid in seed_book_ids}
+    exclude_ids = interacted_ids | {uuid.UUID(str(sid)) for sid in seed_book_ids}
 
     # Exclude books sharing a work_id with any excluded book
     if exclude_ids:
@@ -301,18 +304,60 @@ async def get_personalized_recommendations(
         }
         exclude_ids = exclude_ids | work_siblings
 
-    filtered = [
-        {
-            "book_id": bid,
-            "score": total,
-            "seed_book_id": seed_id,
-        }
-        for bid, (total, seed_id, _) in all_scores.items()
-        if bid not in exclude_ids
-    ]
+    # Get series names for excluded books to also exclude same-series books
+    exclude_series_result = await db.execute(
+        text("""
+            SELECT DISTINCT COALESCE(series, epub_series)
+            FROM books
+            WHERE id = ANY(:exclude_ids)
+              AND COALESCE(series, epub_series) IS NOT NULL
+        """),
+        {"exclude_ids": [str(eid) for eid in exclude_ids]},
+    )
+    exclude_series = {row[0] for row in exclude_series_result.fetchall()}
 
-    filtered.sort(key=lambda x: x["score"], reverse=True)
-    return filtered[:limit]
+    # Get series info for all candidate books (for dedup)
+    candidate_ids = [bid for bid in all_scores if bid not in exclude_ids]
+    candidate_series: dict[uuid.UUID, str | None] = {}
+    if candidate_ids:
+        series_result = await db.execute(
+            text("""
+                SELECT id, COALESCE(series, epub_series) AS series_name
+                FROM books
+                WHERE id = ANY(:ids)
+            """),
+            {"ids": [str(cid) for cid in candidate_ids]},
+        )
+        for row in series_result.fetchall():
+            candidate_series[uuid.UUID(str(row[0]))] = row[1]
+
+    filtered = []
+    seen_series: set[str] = set()
+    # Sort by score first so we keep the highest-scoring book per series
+    sorted_candidates = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
+    for bid, (total, seed_id, _) in sorted_candidates:
+        if bid in exclude_ids:
+            continue
+        series_name = candidate_series.get(bid)
+        # Skip if this book's series is in the excluded set
+        if series_name and series_name in exclude_series:
+            continue
+        # Keep only one book per series
+        if series_name:
+            if series_name in seen_series:
+                continue
+            seen_series.add(series_name)
+        filtered.append(
+            {
+                "book_id": bid,
+                "score": total,
+                "seed_book_id": seed_id,
+            }
+        )
+        if len(filtered) >= limit:
+            break
+
+    return filtered
 
 
 async def get_books_by_tag_category(
