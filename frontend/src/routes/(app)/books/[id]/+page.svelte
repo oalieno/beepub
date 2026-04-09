@@ -1348,6 +1348,7 @@
       <!-- Search input -->
       <div class="flex items-center gap-3 px-4 py-3 border-b border-border/50">
         <Search size={20} class="text-muted-foreground shrink-0" />
+        <!-- svelte-ignore a11y_autofocus -->
         <input
           bind:value={workSearchQuery}
           oninput={() => handleWorkSearch(workSearchQuery)}
