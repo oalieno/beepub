@@ -233,7 +233,7 @@ export const booksApi = {
 
   retag: (bookId: string) => post(`/books/${bookId}/retag`),
 
-  getRecommendations: (limit: number = 20) =>
+  getRecommendations: (limit: number = 30) =>
     get(`/books/discover/recommendations?limit=${limit}`) as Promise<
       BookWithInteractionOut[]
     >,

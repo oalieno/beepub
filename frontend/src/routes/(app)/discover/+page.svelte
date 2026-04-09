@@ -35,7 +35,7 @@
   async function loadRecommendations() {
     loadingRecs = true;
     try {
-      recommendations = await booksApi.getRecommendations(20);
+      recommendations = await booksApi.getRecommendations();
     } catch (e) {
       toastStore.error("Failed to load recommendations");
     } finally {
