@@ -60,6 +60,7 @@
             {#if seriesNeighbors?.previous}
               <a
                 href="/books/{seriesNeighbors.previous.id}"
+                data-sveltekit-replacestate
                 class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
                 title={seriesNeighbors.previous.title ?? m.metadata_previous()}
               >
@@ -83,6 +84,7 @@
             {#if seriesNeighbors?.next}
               <a
                 href="/books/{seriesNeighbors.next.id}"
+                data-sveltekit-replacestate
                 class="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-colors"
                 title={seriesNeighbors.next.title ?? m.metadata_next()}
               >

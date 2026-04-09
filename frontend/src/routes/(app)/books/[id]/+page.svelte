@@ -875,7 +875,11 @@
         <div class="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
           {#each editions as edition}
             <div class="flex-shrink-0 w-28 relative group/edition">
-              <a href="/books/{edition.id}" class="group">
+              <a
+                href="/books/{edition.id}"
+                class="group"
+                data-sveltekit-replacestate
+              >
                 <div
                   class="aspect-[2/3] rounded-lg overflow-hidden bg-secondary mb-2 book-shadow group-hover:book-shadow-hover transition-shadow"
                 >
@@ -927,7 +931,11 @@
         <h2 class="text-xl font-bold mb-3 text-foreground">Similar Books</h2>
         <div class="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
           {#each similarBooks as simBook}
-            <a href="/books/{simBook.id}" class="flex-shrink-0 w-28 group">
+            <a
+              href="/books/{simBook.id}"
+              class="flex-shrink-0 w-28 group"
+              data-sveltekit-replacestate
+            >
               <div
                 class="aspect-[2/3] rounded-lg overflow-hidden bg-secondary mb-2 book-shadow group-hover:book-shadow-hover transition-shadow"
               >
