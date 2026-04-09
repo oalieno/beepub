@@ -81,6 +81,19 @@ export const booksApi = {
       source_url: sourceUrl,
     }) as Promise<ExternalMetadataOut>,
 
+  getEditions: (bookId: string) =>
+    get(`/books/${bookId}/editions`) as Promise<
+      Array<{
+        id: string;
+        display_title: string | null;
+        display_authors: string[] | null;
+        cover_path: string | null;
+        epub_isbn: string | null;
+        metadata_count: number;
+        created_at: string;
+      }>
+    >,
+
   getInteraction: (bookId: string) =>
     get(`/books/${bookId}/interaction`) as Promise<InteractionOut>,
 

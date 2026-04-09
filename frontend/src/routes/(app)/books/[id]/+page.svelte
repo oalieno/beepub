@@ -3,6 +3,7 @@
   import { goto, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
+  import { worksApi } from "$lib/api/works";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
@@ -36,6 +37,13 @@
     TriangleAlert,
     Download,
     Check,
+    Layers,
+    Link,
+    Unlink,
+    Scissors,
+    Plus,
+    X,
+    Search,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -83,6 +91,15 @@
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
   let similarBooks = $state<BookOut[]>([]);
+  let editions = $state<
+    Array<{
+      id: string;
+      display_title: string | null;
+      display_authors: string[] | null;
+      cover_path: string | null;
+      metadata_count: number;
+    }>
+  >([]);
   let seriesNeighbors = $state<SeriesNeighborsOut | null>(null);
   let loading = $state(true);
   let showEditModal = $state(false);
@@ -91,6 +108,16 @@
   let showReportModal = $state(false);
   let showMobileActions = $state(false);
   let showRemoveDownloadDialog = $state(false);
+
+  // Work management state
+  let showWorkRemoveConfirm = $state(false);
+  let showWorkSplitConfirm = $state(false);
+  let showWorkSearchModal = $state(false);
+  let workSearchMode = $state<"add" | "create">("add");
+  let workSearchQuery = $state("");
+  let workSearchResults = $state<BookOut[]>([]);
+  let workSearching = $state(false);
+  let workSearchTimeout: ReturnType<typeof setTimeout> | null = null;
   let savingStatus = $state(false);
 
   // Offline download state (native only)
@@ -180,6 +207,14 @@
           })
           .catch(() => {
             seriesNeighbors = null;
+          }),
+        booksApi
+          .getEditions(bookId)
+          .then((v) => {
+            editions = v;
+          })
+          .catch(() => {
+            editions = [];
           }),
       ];
       if (isNative()) {
@@ -274,6 +309,98 @@
       await booksApi.delete(bookId);
       toastStore.success(m.book_deleted());
       goto("/");
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  // --- Work management handlers ---
+
+  async function handleWorkRemove() {
+    if (!book?.work_id) return;
+    try {
+      await worksApi.removeBook(book.work_id, bookId);
+      book.work_id = null;
+      editions = [];
+      showWorkRemoveConfirm = false;
+      toastStore.success(m.work_book_removed());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleWorkSplit() {
+    if (!book?.work_id) return;
+    try {
+      await worksApi.deleteWork(book.work_id);
+      book.work_id = null;
+      editions = [];
+      showWorkSplitConfirm = false;
+      toastStore.success(m.work_split_success());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleWorkAddBook(targetBookId: string) {
+    if (!book) return;
+    try {
+      if (workSearchMode === "add" && book.work_id) {
+        await worksApi.addBook(book.work_id, targetBookId);
+        toastStore.success(m.work_book_added());
+      } else {
+        const work = await worksApi.create([bookId, targetBookId]);
+        book.work_id = work.id;
+        toastStore.success(m.work_created());
+      }
+      editions = await booksApi.getEditions(bookId);
+      showWorkSearchModal = false;
+      workSearchQuery = "";
+      workSearchResults = [];
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function handleWorkSearch(query: string) {
+    if (workSearchTimeout) clearTimeout(workSearchTimeout);
+    if (query.length < 2) {
+      workSearchResults = [];
+      workSearching = false;
+      return;
+    }
+    workSearching = true;
+    workSearchTimeout = setTimeout(async () => {
+      try {
+        const res = await booksApi.search(query, 10);
+        const editionIds = new Set(editions.map((e) => e.id));
+        workSearchResults = res.items.filter(
+          (b) => b.id !== bookId && !editionIds.has(b.id),
+        );
+      } catch {
+        workSearchResults = [];
+      } finally {
+        workSearching = false;
+      }
+    }, 300);
+  }
+
+  function openWorkSearch(mode: "add" | "create") {
+    workSearchMode = mode;
+    workSearchQuery = "";
+    workSearchResults = [];
+    showWorkSearchModal = true;
+  }
+
+  async function handleRemoveEdition(editionId: string) {
+    if (!book?.work_id) return;
+    try {
+      await worksApi.removeBook(book.work_id, editionId);
+      editions = editions.filter((e) => e.id !== editionId);
+      if (editions.length === 0) {
+        book.work_id = null;
+      }
+      toastStore.success(m.work_book_removed());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -409,6 +536,15 @@
           <h1 class="text-4xl font-bold leading-tight text-foreground">
             {book.display_title ?? "Untitled"}
           </h1>
+          {#if editions.length > 0}
+            <a
+              href="#editions"
+              class="inline-flex items-center gap-1.5 mt-2 px-3 py-1 bg-secondary rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Layers size={14} />
+              {m.book_editions_count({ count: editions.length + 1 })}
+            </a>
+          {/if}
           {#if (book.display_authors ?? []).length > 0}
             <p class="text-muted-foreground text-lg mt-2">
               {#each book.display_authors ?? [] as author, idx}
@@ -593,6 +729,29 @@
                   {m.book_refresh_metadata()}
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
+                {#if book.work_id}
+                  <DropdownMenu.Item onclick={() => openWorkSearch("add")}>
+                    <Plus size={14} />
+                    {m.work_add_to_work()}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onclick={() => (showWorkRemoveConfirm = true)}
+                  >
+                    <Unlink size={14} />
+                    {m.work_remove_from_work()}
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item
+                    onclick={() => (showWorkSplitConfirm = true)}
+                  >
+                    <Scissors size={14} />
+                    {m.work_split_work()}
+                  </DropdownMenu.Item>
+                {:else}
+                  <DropdownMenu.Item onclick={() => openWorkSearch("create")}>
+                    <Link size={14} />
+                    {m.work_link_book()}
+                  </DropdownMenu.Item>
+                {/if}
                 <DropdownMenu.Item variant="destructive" onclick={handleDelete}>
                   <Trash2 size={14} />
                   {m.book_delete()}
@@ -702,6 +861,61 @@
               }, 5000);
             }}
           />
+        </div>
+      </div>
+    {/if}
+
+    <!-- Other Editions -->
+    {#if editions.length > 0}
+      <div class="border-t border-border my-8"></div>
+      <div id="editions">
+        <h2 class="text-xl font-bold mb-3 text-foreground">
+          {m.book_other_editions()}
+        </h2>
+        <div class="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
+          {#each editions as edition}
+            <div class="flex-shrink-0 w-28 relative group/edition">
+              <a href="/books/{edition.id}" class="group">
+                <div
+                  class="aspect-[2/3] rounded-lg overflow-hidden bg-secondary mb-2 book-shadow group-hover:book-shadow-hover transition-shadow"
+                >
+                  {#if edition.cover_path}
+                    <img
+                      use:authedSrc={coverUrl(edition.id)}
+                      alt={edition.display_title ?? ""}
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                  {:else}
+                    <div
+                      class="w-full h-full flex items-center justify-center text-muted-foreground text-xs p-2 text-center"
+                    >
+                      {edition.display_title ?? "Untitled"}
+                    </div>
+                  {/if}
+                </div>
+                <p
+                  class="text-xs text-foreground font-medium line-clamp-2 group-hover:text-primary transition-colors"
+                >
+                  {edition.display_title ?? "Untitled"}
+                </p>
+                {#if edition.display_authors?.length}
+                  <p class="text-xs text-muted-foreground line-clamp-1">
+                    {edition.display_authors.join(", ")}
+                  </p>
+                {/if}
+              </a>
+              {#if isAdmin}
+                <button
+                  class="absolute top-1 right-1 p-1 bg-black/50 backdrop-blur-sm rounded-full text-white opacity-0 group-hover/edition:opacity-100 transition-opacity"
+                  title={m.work_remove_from_work()}
+                  onclick={() => handleRemoveEdition(edition.id)}
+                >
+                  <X size={12} />
+                </button>
+              {/if}
+            </div>
+          {/each}
         </div>
       </div>
     {/if}
@@ -942,6 +1156,50 @@
         <RefreshCw size={20} class="text-muted-foreground shrink-0" />
         {m.book_refresh_metadata()}
       </button>
+      <div class="border-t border-border my-1"></div>
+      {#if book.work_id}
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            openWorkSearch("add");
+            showMobileActions = false;
+          }}
+        >
+          <Plus size={20} class="text-muted-foreground shrink-0" />
+          {m.work_add_to_work()}
+        </button>
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            showWorkRemoveConfirm = true;
+            showMobileActions = false;
+          }}
+        >
+          <Unlink size={20} class="text-muted-foreground shrink-0" />
+          {m.work_remove_from_work()}
+        </button>
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            showWorkSplitConfirm = true;
+            showMobileActions = false;
+          }}
+        >
+          <Scissors size={20} class="text-muted-foreground shrink-0" />
+          {m.work_split_work()}
+        </button>
+      {:else}
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+          onclick={() => {
+            openWorkSearch("create");
+            showMobileActions = false;
+          }}
+        >
+          <Link size={20} class="text-muted-foreground shrink-0" />
+          {m.work_link_book()}
+        </button>
+      {/if}
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
@@ -1006,6 +1264,159 @@
   bind:open={showReportModal}
   onreported={handleReported}
 />
+
+<!-- Remove from Work Confirmation -->
+<Dialog.Root bind:open={showWorkRemoveConfirm}>
+  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+    <Dialog.Header>
+      <Dialog.Title>{m.work_remove_from_work()}</Dialog.Title>
+      <Dialog.Description
+        >{m.work_remove_from_work_confirm()}</Dialog.Description
+      >
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button
+        variant="outline"
+        class="rounded-xl"
+        onclick={() => (showWorkRemoveConfirm = false)}
+      >
+        {m.common_cancel()}
+      </Button>
+      <Button
+        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+        onclick={handleWorkRemove}
+      >
+        {m.work_remove_from_work()}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- Split Work Confirmation -->
+<Dialog.Root bind:open={showWorkSplitConfirm}>
+  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+    <Dialog.Header>
+      <Dialog.Title>{m.work_split_work()}</Dialog.Title>
+      <Dialog.Description
+        >{m.work_split_work_confirm({
+          count: editions.length + 1,
+        })}</Dialog.Description
+      >
+    </Dialog.Header>
+    <Dialog.Footer>
+      <Button
+        variant="outline"
+        class="rounded-xl"
+        onclick={() => (showWorkSplitConfirm = false)}
+      >
+        {m.common_cancel()}
+      </Button>
+      <Button
+        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
+        onclick={handleWorkSplit}
+      >
+        {m.work_split_work()}
+      </Button>
+    </Dialog.Footer>
+  </Dialog.Content>
+</Dialog.Root>
+
+<!-- Work Search Modal (Add to Work / Link to Another Book) -->
+{#if showWorkSearchModal}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
+    onclick={() => {
+      showWorkSearchModal = false;
+      workSearchQuery = "";
+      workSearchResults = [];
+    }}
+    onkeydown={(e) => e.key === "Escape" && (showWorkSearchModal = false)}
+  >
+    <div
+      role="presentation"
+      class="max-w-xl mt-[12vh] mx-4 sm:mx-auto bg-card rounded-2xl shadow-2xl border border-border/50 overflow-hidden"
+      onclick={(e) => e.stopPropagation()}
+    >
+      <!-- Header -->
+      <div class="px-4 py-3 border-b border-border/50">
+        <p class="text-sm font-medium text-foreground">
+          {workSearchMode === "add" ? m.work_add_to_work() : m.work_link_book()}
+        </p>
+      </div>
+
+      <!-- Search input -->
+      <div class="flex items-center gap-3 px-4 py-3 border-b border-border/50">
+        <Search size={20} class="text-muted-foreground shrink-0" />
+        <input
+          bind:value={workSearchQuery}
+          oninput={() => handleWorkSearch(workSearchQuery)}
+          placeholder={m.work_search_placeholder()}
+          class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-base"
+          autofocus
+        />
+        {#if workSearchQuery}
+          <button
+            class="text-muted-foreground hover:text-foreground"
+            onclick={() => {
+              workSearchQuery = "";
+              workSearchResults = [];
+            }}
+          >
+            <X size={16} />
+          </button>
+        {/if}
+        <kbd
+          class="hidden sm:inline text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded"
+          >esc</kbd
+        >
+      </div>
+
+      <!-- Results -->
+      <div class="max-h-[60vh] overflow-y-auto">
+        {#if workSearching}
+          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
+            {m.work_searching()}
+          </div>
+        {:else if workSearchQuery.length >= 2 && workSearchResults.length === 0}
+          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
+            {m.work_no_results()}
+          </div>
+        {:else}
+          {#each workSearchResults as result (result.id)}
+            <button
+              class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-secondary/50 transition-colors"
+              onclick={() => handleWorkAddBook(result.id)}
+            >
+              <div
+                class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
+              >
+                {#if result.cover_path}
+                  <img
+                    use:authedSrc={coverUrl(result.id)}
+                    alt=""
+                    class="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                {:else}
+                  <BookOpen size={16} class="text-muted-foreground/30" />
+                {/if}
+              </div>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-foreground truncate">
+                  {result.display_title ?? m.common_untitled()}
+                </p>
+                <p class="text-xs text-muted-foreground truncate">
+                  {(result.display_authors ?? []).join(", ") || "\u00A0"}
+                </p>
+              </div>
+            </button>
+          {/each}
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <!-- Remove Offline Copy Confirmation -->
 <Dialog.Root bind:open={showRemoveDownloadDialog}>

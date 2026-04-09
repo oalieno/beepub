@@ -53,6 +53,8 @@ class BookOut(BaseModel):
     display_series_index: float | None = None
     display_tags: list[str] | None = None
     book_tags: list[BookTagNested] = []
+    work_id: uuid.UUID | None = None
+    edition_count: int | None = None
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID

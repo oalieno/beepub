@@ -71,12 +71,44 @@ export interface BookOut {
   display_series_index: number | null;
   display_tags: string[] | null;
   book_tags?: BookTag[];
+  work_id: string | null;
+  edition_count: number | null;
   calibre_id: number | null;
   calibre_added_at: string | null;
   added_by: string;
   created_at: string;
   library_id: string | null;
   library_names: string[];
+}
+
+export interface WorkBookBrief {
+  id: string;
+  display_title: string | null;
+  display_authors: string[] | null;
+  cover_path: string | null;
+  epub_isbn: string | null;
+  metadata_count: number;
+  created_at: string;
+}
+
+export interface WorkOut {
+  id: string;
+  title: string;
+  authors: string[] | null;
+  primary_book_id: string | null;
+  books: WorkBookBrief[];
+  created_at: string;
+}
+
+export interface DuplicateGroup {
+  books: WorkBookBrief[];
+  match_method: string;
+}
+
+export interface DuplicateSuggestionsOut {
+  groups: DuplicateGroup[];
+  total_books_scanned: number;
+  truncated: boolean;
 }
 
 export interface SeriesBookBrief {

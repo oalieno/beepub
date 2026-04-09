@@ -13,6 +13,7 @@
     ListChecks,
     Activity,
     Flag,
+    Copy,
   } from "@lucide/svelte";
   import { DashboardSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
@@ -44,6 +45,11 @@
       href: "/admin/llm-usage",
       label: () => m.admin_link_llm_usage(),
       icon: Activity,
+    },
+    {
+      href: "/admin/duplicates",
+      label: () => m.admin_link_duplicates(),
+      icon: Copy,
     },
     {
       href: "/admin/settings",

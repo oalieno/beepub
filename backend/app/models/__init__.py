@@ -11,6 +11,7 @@ from app.models.reading import Highlight, UserBookInteraction
 from app.models.settings import AppSetting
 from app.models.tag import BookTag, TagCategory, TagSource
 from app.models.user import User, UserRole
+from app.models.work import Work, WorkScanExclusion
 
 __all__ = [
     "User",
@@ -36,4 +37,6 @@ __all__ = [
     "BookEmbeddingChunk",
     "BookEmbedding",
     "LLMUsageLog",
+    "Work",
+    "WorkScanExclusion",
 ]

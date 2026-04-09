@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from app.models.reading import Highlight, UserBookInteraction
     from app.models.tag import BookTag
     from app.models.user import User
+    from app.models.work import Work
 
 
 class MetadataSource(enum.StrEnum):
@@ -94,6 +95,11 @@ class Book(Base, TimestampMixin):
         Integer, nullable=False, server_default="0"
     )
 
+    # Work grouping (editions of the same logical work)
+    work_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("works.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     calibre_added_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -102,6 +108,9 @@ class Book(Base, TimestampMixin):
     added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
     # Relationships
+    work: Mapped[Work | None] = relationship(
+        "Work", back_populates="books", foreign_keys=[work_id]
+    )
     uploader: Mapped[User] = relationship("User", foreign_keys=[added_by])
     library_books: Mapped[list[LibraryBook]] = relationship(
         "LibraryBook", back_populates="book", cascade="all, delete-orphan"

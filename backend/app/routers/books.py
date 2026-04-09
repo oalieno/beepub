@@ -18,7 +18,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import exists, func, or_, select
+from sqlalchemy import exists, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 
@@ -354,12 +354,28 @@ async def list_my_books(
     accessible_book_ids = accessible_books.subquery()
 
     # Main query: join Book + UserBookInteraction, filter by accessible books
+    # Dedup: for books in a Work, only show the primary edition (or newest if no primary)
+    from app.models.work import Work
+
+    # Subquery: for each Work, get the primary_book_id to keep
+    work_primary = (
+        select(Work.id.label("work_id"), Work.primary_book_id)
+        .where(Work.primary_book_id.isnot(None))
+        .subquery()
+    )
+
     base_query = (
         select(Book, UserBookInteraction)
         .join(UserBookInteraction, UserBookInteraction.book_id == Book.id)
+        .outerjoin(work_primary, work_primary.c.work_id == Book.work_id)
         .where(
             UserBookInteraction.user_id == current_user.id,
             Book.id.in_(select(accessible_book_ids.c.book_id)),
+            # Dedup: if book is in a Work, only show if it's the primary edition
+            or_(
+                Book.work_id.is_(None),
+                Book.id == work_primary.c.primary_book_id,
+            ),
         )
     )
 
@@ -392,6 +408,11 @@ async def list_my_books(
     result = await db.execute(base_query)
     rows = result.all()
 
+    from app.services.work_propagation import get_edition_count_map
+
+    book_ids_list = [row[0].id for row in rows]
+    edition_counts = await get_edition_count_map(db, book_ids_list)
+
     items = []
     for book, interaction in rows:
         progress = interaction.reading_progress or {}
@@ -400,6 +421,7 @@ async def list_my_books(
         item.is_favorite = interaction.is_favorite
         item.reading_percentage = progress.get("percentage")
         item.last_read_at = progress.get("last_read_at")
+        item.edition_count = edition_counts.get(book.id)
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)
@@ -445,6 +467,8 @@ async def batch_get_interactions(
     book_ids = body.book_ids[:200]
     if not book_ids:
         return BatchInteractionResponse(interactions={})
+
+    # Direct interactions
     result = await db.execute(
         select(UserBookInteraction.book_id, UserBookInteraction.reading_status).where(
             UserBookInteraction.user_id == current_user.id,
@@ -452,8 +476,23 @@ async def batch_get_interactions(
         )
     )
     interactions = {}
-    for book_id, reading_status in result.all():
-        interactions[str(book_id)] = BatchInteractionItem(reading_status=reading_status)
+    for book_id, rs in result.all():
+        interactions[str(book_id)] = BatchInteractionItem(reading_status=rs)
+
+    # Work-level propagation for books without direct interactions
+    from app.services.work_propagation import get_work_propagated_interactions
+
+    missing_ids = [bid for bid in book_ids if str(bid) not in interactions]
+    if missing_ids:
+        propagated = await get_work_propagated_interactions(
+            db, missing_ids, current_user.id
+        )
+        for bid, prop in propagated.items():
+            if prop["reading_status"] and str(bid) not in interactions:
+                interactions[str(bid)] = BatchInteractionItem(
+                    reading_status=prop["reading_status"]
+                )
+
     return BatchInteractionResponse(interactions=interactions)
 
 
@@ -505,10 +544,19 @@ async def search_books(
     ).scalar() or 0
 
     result = await db.execute(base_query.limit(limit))
+    rows = result.all()
+
+    # Enrich with edition_count
+    from app.services.work_propagation import get_edition_count_map
+
+    book_ids_list = [row[0].id for row in rows]
+    edition_counts = await get_edition_count_map(db, book_ids_list)
+
     items = []
-    for book, library_name in result.all():
+    for book, library_name in rows:
         item = BookSearchResult.model_validate(book)
         item.library_name = library_name
+        item.edition_count = edition_counts.get(book.id)
         items.append(item)
 
     return PaginatedBookSearchResults(items=items, total=total)
@@ -559,6 +607,15 @@ async def get_discover_recommendations(
         for row in seed_result.all():
             seed_titles[row[0]] = row[1] or row[2] or ""
 
+    # Work-level propagation
+    from app.services.work_propagation import (
+        get_edition_count_map,
+        get_work_propagated_interactions,
+    )
+
+    propagated = await get_work_propagated_interactions(db, book_ids, current_user.id)
+    edition_counts = await get_edition_count_map(db, book_ids)
+
     items = []
     for bid in book_ids:
         book = books.get(bid)
@@ -566,12 +623,17 @@ async def get_discover_recommendations(
             continue
         item = BookWithInteractionOut.model_validate(book)
         interaction = interactions.get(bid)
+        prop = propagated.get(bid)
         if interaction:
             item.reading_status = interaction.reading_status
             item.is_favorite = interaction.is_favorite
             progress = interaction.reading_progress or {}
             item.reading_percentage = progress.get("percentage")
             item.last_read_at = progress.get("last_read_at")
+        elif prop:
+            item.reading_status = prop["reading_status"]
+            item.is_favorite = prop["is_favorite"]
+        item.edition_count = edition_counts.get(bid)
         seed_id = seed_map.get(bid)
         item.seed_book_id = seed_id
         if seed_id:
@@ -731,7 +793,20 @@ async def list_all_books(
     base_query = base_query.offset(offset).limit(limit)
 
     result = await db.execute(base_query)
-    return PaginatedBooks(items=result.scalars().all(), total=total)
+    books = result.scalars().all()
+
+    # Enrich with edition_count for Work books
+    from app.services.work_propagation import get_edition_count_map
+
+    book_ids_list = [b.id for b in books]
+    edition_counts = await get_edition_count_map(db, book_ids_list)
+    items = []
+    for b in books:
+        item = BookOut.model_validate(b)
+        item.edition_count = edition_counts.get(b.id)
+        items.append(item)
+
+    return PaginatedBooks(items=items, total=total)
 
 
 @router.get("/{book_id}", response_model=BookOut)
@@ -762,6 +837,37 @@ async def get_book(
     )
     out.has_unresolved_reports = report_result.scalar_one_or_none() is not None
     return out
+
+
+@router.get("/{book_id}/editions")
+async def get_book_editions(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Get other editions of the same Work. Returns empty list if book has no Work."""
+    book = await _get_book_with_access(book_id, current_user, db)
+    if not book.work_id:
+        return []
+
+    result = await db.execute(
+        select(Book)
+        .where(Book.work_id == book.work_id, Book.id != book_id)
+        .order_by(Book.created_at.desc())
+    )
+    siblings = result.scalars().all()
+    return [
+        {
+            "id": b.id,
+            "display_title": b.display_title,
+            "display_authors": b.display_authors,
+            "cover_path": b.cover_path,
+            "epub_isbn": b.epub_isbn,
+            "metadata_count": b.metadata_count,
+            "created_at": b.created_at,
+        }
+        for b in siblings
+    ]
 
 
 @router.put("/{book_id}/metadata", response_model=BookOut)
@@ -1023,7 +1129,32 @@ async def get_series_neighbors(
         prev_book = result.scalar_one_or_none()
 
     # Series progress: count distinct volumes (not books, since editions share index)
+    # Work-aware: a volume is "read" if ANY edition in its Work is read by this user
     from sqlalchemy import case
+
+    # Subquery: book IDs that this user has read (direct or via work propagation)
+    user_read_books = (
+        select(UserBookInteraction.book_id)
+        .where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.reading_status == "read",
+        )
+        .scalar_subquery()
+    )
+
+    # A book counts as "read" if it's directly read OR any work-sibling is read
+    is_read = or_(
+        Book.id.in_(user_read_books),
+        exists(
+            select(literal_column("1"))
+            .select_from(Book.__table__.alias("sibling"))
+            .where(
+                literal_column("sibling.work_id").isnot(None),
+                literal_column("sibling.work_id") == Book.work_id,
+                literal_column("sibling.id").in_(user_read_books),
+            )
+        ),
+    )
 
     progress_result = await db.execute(
         select(
@@ -1031,18 +1162,13 @@ async def get_series_neighbors(
             func.count(
                 func.distinct(
                     case(
-                        (UserBookInteraction.reading_status == "read", index_col),
+                        (is_read, index_col),
                     )
                 )
             ),
         )
         .select_from(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
-        .outerjoin(
-            UserBookInteraction,
-            (UserBookInteraction.book_id == Book.id)
-            & (UserBookInteraction.user_id == current_user.id),
-        )
         .where(
             series_col == series_name,
             index_col.isnot(None),
@@ -1240,6 +1366,7 @@ async def get_interaction(
         )
     )
     interaction = result.scalar_one_or_none()
+
     if not interaction:
         return InteractionOut(
             rating=None,
@@ -1277,9 +1404,21 @@ async def update_favorite(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    book = await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.is_favorite = body.is_favorite
+
+    # Sync to all sibling editions in the same Work
+    if book.work_id:
+        siblings = await db.execute(
+            select(Book.id).where(Book.work_id == book.work_id, Book.id != book_id)
+        )
+        for (sib_id,) in siblings.all():
+            sib_interaction = await _get_or_create_interaction(
+                current_user.id, sib_id, db
+            )
+            sib_interaction.is_favorite = body.is_favorite
+
     await db.commit()
     return {"status": "updated"}
 
@@ -1293,7 +1432,7 @@ async def update_reading_status(
 ):
     from app.models.reading import ReadingStatus
 
-    await _get_book_with_access(book_id, current_user, db)
+    book = await _get_book_with_access(book_id, current_user, db)
     if body.reading_status is not None:
         valid = {s.value for s in ReadingStatus}
         if body.reading_status not in valid:
@@ -1305,6 +1444,20 @@ async def update_reading_status(
     interaction.reading_status = body.reading_status
     interaction.started_at = body.started_at
     interaction.finished_at = body.finished_at
+
+    # Sync to all sibling editions in the same Work
+    if book.work_id:
+        siblings = await db.execute(
+            select(Book.id).where(Book.work_id == book.work_id, Book.id != book_id)
+        )
+        for (sib_id,) in siblings.all():
+            sib_interaction = await _get_or_create_interaction(
+                current_user.id, sib_id, db
+            )
+            sib_interaction.reading_status = body.reading_status
+            sib_interaction.started_at = body.started_at
+            sib_interaction.finished_at = body.finished_at
+
     await db.commit()
     return {"status": "updated"}
 

@@ -171,12 +171,21 @@ async def get_similar_books(
             UNION ALL
             SELECT book_id, score FROM semantic_candidates
         ),
+        -- Exclude same-work editions (different editions of the target book)
+        target_work AS (
+            SELECT work_id FROM books WHERE id = :book_id AND work_id IS NOT NULL
+        ),
         aggregated AS (
             SELECT a.book_id, SUM(a.score) AS total_score
             FROM all_scores a
             WHERE a.book_id IN (
                 SELECT lb.book_id FROM library_books lb
                 WHERE lb.library_id IN (SELECT library_id FROM accessible_libs)
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM target_work tw
+                JOIN books b ON b.work_id = tw.work_id
+                WHERE b.id = a.book_id
             )
             GROUP BY a.book_id
         )
@@ -261,7 +270,8 @@ async def get_personalized_recommendations(
             else:
                 all_scores[bid] = (score, sid, score)
 
-    # Remove books user has already read or is currently reading
+    # Remove books user has already read or is currently reading,
+    # AND books that share a work_id with read/seed books (same-work dedup)
     read_result = await db.execute(
         text("""
             SELECT book_id FROM user_book_interactions
@@ -274,6 +284,23 @@ async def get_personalized_recommendations(
 
     # Also remove seed books themselves
     exclude_ids = read_ids | {uuid.UUID(str(sid)) for sid in seed_book_ids}
+
+    # Exclude books sharing a work_id with any excluded book
+    if exclude_ids:
+        work_sibling_result = await db.execute(
+            text("""
+                SELECT b2.id
+                FROM books b1
+                JOIN books b2 ON b2.work_id = b1.work_id AND b2.id != b1.id
+                WHERE b1.id = ANY(:exclude_ids) AND b1.work_id IS NOT NULL
+            """),
+            {"exclude_ids": [str(eid) for eid in exclude_ids]},
+        )
+        work_siblings = {
+            uuid.UUID(str(row[0])) for row in work_sibling_result.fetchall()
+        }
+        exclude_ids = exclude_ids | work_siblings
+
     filtered = [
         {
             "book_id": bid,

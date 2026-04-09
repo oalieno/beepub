@@ -13,7 +13,7 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
-from app.schemas.book import PaginatedBooks
+from app.schemas.book import BookOut, PaginatedBooks
 from app.schemas.library import (
     LibraryBookAdd,
     LibraryCreate,
@@ -256,7 +256,20 @@ async def list_library_books(
     base_query = base_query.offset(offset).limit(limit)
 
     result = await db.execute(base_query)
-    return PaginatedBooks(items=result.scalars().all(), total=total)
+    books = result.scalars().all()
+
+    # Enrich with edition_count for Work books
+    from app.services.work_propagation import get_edition_count_map
+
+    book_ids_list = [b.id for b in books]
+    edition_counts = await get_edition_count_map(db, book_ids_list)
+    items = []
+    for b in books:
+        item = BookOut.model_validate(b)
+        item.edition_count = edition_counts.get(b.id)
+        items.append(item)
+
+    return PaginatedBooks(items=items, total=total)
 
 
 @router.post("/{library_id}/books", status_code=status.HTTP_201_CREATED)

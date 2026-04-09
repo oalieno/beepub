@@ -7,6 +7,7 @@
     Bookmark,
     Check,
     Image,
+    Layers,
   } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
@@ -95,6 +96,16 @@
           style:top={book.is_image_book ? "2.25rem" : "0.5rem"}
         >
           <TriangleAlert size={13} class="text-destructive-foreground" />
+        </div>
+      {/if}
+
+      <!-- Editions count pill — bottom-left -->
+      {#if book.edition_count && book.edition_count > 1}
+        <div
+          class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm rounded-full text-[11px] px-1.5 py-0.5 text-white font-medium flex items-center gap-0.5"
+        >
+          <Layers size={10} />
+          {book.edition_count}
         </div>
       {/if}
 
