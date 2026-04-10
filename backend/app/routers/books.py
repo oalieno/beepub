@@ -1046,6 +1046,16 @@ async def get_similar_books_endpoint(
         reverse=True,
     )
 
+    # Dedup by Work: keep only the highest-scoring book per Work
+    seen_work_ids: set[uuid.UUID] = set()
+    deduped = []
+    for book in ordered:
+        if book.work_id:
+            if book.work_id in seen_work_ids:
+                continue
+            seen_work_ids.add(book.work_id)
+        deduped.append(book)
+
     from app.schemas.tag import SimilarBookOut
 
     return [
@@ -1054,7 +1064,7 @@ async def get_similar_books_endpoint(
             similarity_score=similar_map.get(book.id, {}).get("score", 0),
             cosine_similarity=similar_map.get(book.id, {}).get("cosine_similarity"),
         )
-        for book in ordered
+        for book in deduped
     ]
 
 
