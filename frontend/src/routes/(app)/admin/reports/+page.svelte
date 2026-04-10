@@ -7,6 +7,7 @@
   import type { BookReport } from "$lib/types";
   import { Check, Flag, CircleCheck } from "@lucide/svelte";
   import { TableSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let ISSUE_LABELS = $derived<Record<string, string>>({
@@ -52,11 +53,9 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
-    <a
-      href="/admin"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >{m.admin_llm_back()}</a
-    >
+    <div class="mb-1">
+      <BackButton href="/admin" label={m.nav_admin()} />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">
       {m.admin_reports_heading()}
     </h1>

@@ -288,7 +288,7 @@
   "reader_search_empty_prompt": "輸入文字以在書中搜尋。",
 
   "admin_page_title": "管理 - BeePub",
-  "admin_back_to_profile": "← 個人資料",
+  "admin_back_to_profile": "個人資料",
   "admin_stat_users": "使用者",
   "admin_stat_books": "書籍",
   "admin_stat_libraries": "書庫",
@@ -324,7 +324,6 @@
   "admin_library_saving": "儲存中...",
 
   "admin_llm_title": "LLM 用量 - 管理 - BeePub",
-  "admin_llm_back": "← 管理",
   "admin_llm_heading": "LLM 用量",
   "admin_llm_subtitle": "各 AI 功能的 Token 消耗量",
   "admin_llm_est_cost": "預估費用",

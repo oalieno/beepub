@@ -16,6 +16,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
+  import BackButton from "$lib/components/BackButton.svelte";
 
   let allGroups = $state<DuplicateGroup[]>([]);
   let scanning = $state(false);
@@ -127,7 +128,10 @@
   }
 </script>
 
-<div class="max-w-3xl mx-auto px-4 py-8">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
+  <div class="mb-1">
+    <BackButton href="/admin" label={m.nav_admin()} />
+  </div>
   <!-- Header row: title + progress -->
   <div class="flex items-baseline justify-between mb-2">
     <h1 class="text-2xl font-bold">{m.duplicates_title()}</h1>

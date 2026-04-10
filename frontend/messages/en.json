@@ -288,7 +288,7 @@
   "reader_search_empty_prompt": "Type to search in this book.",
 
   "admin_page_title": "Admin - BeePub",
-  "admin_back_to_profile": "← Profile",
+  "admin_back_to_profile": "Profile",
   "admin_stat_users": "Users",
   "admin_stat_books": "Books",
   "admin_stat_libraries": "Libraries",
@@ -324,7 +324,6 @@
   "admin_library_saving": "Saving...",
 
   "admin_llm_title": "LLM Usage - Admin - BeePub",
-  "admin_llm_back": "← Admin",
   "admin_llm_heading": "LLM Usage",
   "admin_llm_subtitle": "Token consumption across AI features",
   "admin_llm_est_cost": "Est. Cost",

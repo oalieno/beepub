@@ -11,6 +11,7 @@
   import { Eye, EyeOff, Save } from "@lucide/svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let settings = $state<AdminSettings | null>(null);
@@ -354,11 +355,9 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-8">
-    <a
-      href="/admin"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >{m.admin_llm_back()}</a
-    >
+    <div class="mb-1">
+      <BackButton href="/admin" label={m.nav_admin()} />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">
       {m.admin_settings_heading()}
     </h1>

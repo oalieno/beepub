@@ -5,6 +5,7 @@
   import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import { TableSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let data = $state<LlmUsageResponse | null>(null);
@@ -60,11 +61,9 @@
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <!-- Header -->
   <div class="mb-8">
-    <a
-      href="/admin"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >{m.admin_llm_back()}</a
-    >
+    <div class="mb-1">
+      <BackButton href="/admin" label={m.nav_admin()} />
+    </div>
     <h1 class="text-3xl font-bold text-foreground">{m.admin_llm_heading()}</h1>
     <p class="text-muted-foreground mt-1">
       {m.admin_llm_subtitle()}

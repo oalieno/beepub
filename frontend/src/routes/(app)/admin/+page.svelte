@@ -16,6 +16,7 @@
     Copy,
   } from "@lucide/svelte";
   import { DashboardSkeleton } from "$lib/components/skeletons";
+  import BackButton from "$lib/components/BackButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let stats = $state<AdminStats | null>(null);
@@ -75,11 +76,7 @@
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-6">
-    <a
-      href="/profile"
-      class="text-muted-foreground hover:text-foreground text-sm mb-1 inline-block"
-      >{@html "&larr;"} {m.admin_back_to_profile()}</a
-    >
+    <BackButton href="/profile" label={m.admin_back_to_profile()} />
   </div>
 
   {#if loading}
