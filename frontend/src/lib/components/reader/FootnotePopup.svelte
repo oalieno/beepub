@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { sanitizeHtml } from "$lib/sanitize";
+
   let {
     content,
     darkMode = false,
@@ -68,7 +70,7 @@
     }}
     onkeydown={(e) => e.stopPropagation()}
   >
-    {@html content}
+    {@html sanitizeHtml(content)}
   </div>
 </div>
 
