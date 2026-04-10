@@ -87,18 +87,79 @@ export function coverUrl(bookId: string): string {
     : `/covers/${bookId}.jpg`;
 }
 
+function isNativePlatform(): boolean {
+  if (typeof window === "undefined") return false;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).Capacitor?.isNativePlatform?.() ?? false;
+}
+
 export function getAuthHeader(): Record<string, string> {
   if (typeof window !== "undefined") {
     // Only send Authorization header in native (Capacitor) mode.
     // Web mode relies on HttpOnly cookies; a stale Bearer token would
     // override the valid cookie (backend prioritises Bearer over cookie).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const isNative = (window as any).Capacitor?.isNativePlatform?.() ?? false;
-    if (!isNative) return {};
+    if (!isNativePlatform()) return {};
     const token = localStorage.getItem("token");
     if (token) return { Authorization: `Bearer ${token}` };
   }
   return {};
+}
+
+// Dedupe parallel refreshes: if many in-flight calls 401 at once, only the
+// first one talks to /auth/refresh; the others await the same promise.
+let refreshInFlight: Promise<boolean> | null = null;
+
+async function refreshAccessToken(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    try {
+      const headers: Record<string, string> = {};
+      if (isNativePlatform()) {
+        const refresh = localStorage.getItem("refresh_token");
+        if (!refresh) return false;
+        headers["X-Refresh-Token"] = refresh;
+      }
+      const res = await fetch(`${apiBase()}/auth/refresh`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+      });
+      if (!res.ok) return false;
+      if (isNativePlatform()) {
+        const body = (await res.json()) as { access_token?: string };
+        if (body.access_token) {
+          localStorage.setItem("token", body.access_token);
+        }
+      }
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // Allow the next refresh attempt after this one settles.
+      // Defer the clear so concurrent awaiters all see the same result.
+      setTimeout(() => {
+        refreshInFlight = null;
+      }, 0);
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+async function doFetch(
+  method: string,
+  path: string,
+  bodyContent: string | URLSearchParams | undefined,
+  baseHeaders: Record<string, string>,
+): Promise<Response> {
+  return fetch(`${apiBase()}${path}`, {
+    method,
+    headers: { ...getAuthHeader(), ...baseHeaders },
+    body: bodyContent,
+    credentials: "include",
+  });
 }
 
 async function request(
@@ -107,24 +168,30 @@ async function request(
   body?: unknown,
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
-  const headers: Record<string, string> = {
-    ...getAuthHeader(),
-    ...extraHeaders,
-  };
+  const baseHeaders: Record<string, string> = { ...extraHeaders };
 
   let bodyContent: string | URLSearchParams | undefined;
   if (body instanceof URLSearchParams) {
     bodyContent = body;
   } else if (body !== undefined) {
-    headers["Content-Type"] = "application/json";
+    baseHeaders["Content-Type"] = "application/json";
     bodyContent = JSON.stringify(body);
   }
 
-  const res = await fetch(`${apiBase()}${path}`, {
-    method,
-    headers,
-    body: bodyContent,
-  });
+  let res = await doFetch(method, path, bodyContent, baseHeaders);
+
+  // On 401, try to silently refresh the access token once and retry.
+  // Skip for the auth endpoints themselves to avoid infinite loops.
+  const isAuthEndpoint =
+    path.startsWith("/auth/login") ||
+    path.startsWith("/auth/refresh") ||
+    path.startsWith("/auth/logout");
+  if (res.status === 401 && !isAuthEndpoint && typeof window !== "undefined") {
+    const refreshed = await refreshAccessToken();
+    if (refreshed) {
+      res = await doFetch(method, path, bodyContent, baseHeaders);
+    }
+  }
 
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
@@ -139,8 +206,8 @@ async function request(
       // ignore
     }
 
-    // Auto-redirect on expired/invalid token (only when online —
-    // offline 401s may be stale/proxy responses, token could still be valid)
+    // Auto-redirect on persistent 401 (refresh already failed above).
+    // Only when online — offline 401s may be stale/proxy responses.
     if (res.status === 401 && typeof window !== "undefined") {
       const { getIsOnline } = await import("$lib/services/network");
       if (getIsOnline() && window.location.pathname !== "/login") {

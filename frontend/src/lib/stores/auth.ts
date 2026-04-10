@@ -44,8 +44,11 @@ function createAuthStore() {
     login: (loginResponse: LoginResponse) => {
       if (isNative()) {
         localStorage.setItem("token", loginResponse.access_token);
+        localStorage.setItem("refresh_token", loginResponse.refresh_token);
       }
-      const { access_token, ...user } = loginResponse;
+      const { access_token: _a, refresh_token: _r, ...user } = loginResponse;
+      void _a;
+      void _r;
       set({ user: user as UserOut });
       cacheUser(user as UserOut);
     },
@@ -53,6 +56,7 @@ function createAuthStore() {
       set({ user: null });
       if (isNative()) {
         localStorage.removeItem("token");
+        localStorage.removeItem("refresh_token");
         try {
           const { Preferences } = await import("@capacitor/preferences");
           await Preferences.remove({ key: CACHED_USER_KEY });

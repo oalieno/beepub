@@ -232,6 +232,7 @@ export interface LoginResponse {
   role: UserRole;
   is_active: boolean;
   access_token: string;
+  refresh_token: string;
 }
 
 export interface IllustrationOut {

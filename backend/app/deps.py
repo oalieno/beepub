@@ -35,6 +35,11 @@ async def get_current_user(
     payload = decode_token(jwt_token)
     if payload is None:
         raise credentials_exception
+    # Refresh tokens cannot be used to authenticate normal API calls.
+    # Tokens issued before the refresh-token feature have no "type" claim,
+    # so default to "access" for backward compatibility.
+    if payload.get("type", "access") != "access":
+        raise credentials_exception
     user_id = payload.get("sub")
     if user_id is None:
         raise credentials_exception

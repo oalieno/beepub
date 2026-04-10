@@ -27,3 +27,8 @@ class LoginResponse(BaseModel):
     role: str
     is_active: bool
     access_token: str
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str

@@ -10,25 +10,65 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User, UserRole
 from app.rate_limit import limiter
-from app.schemas.auth import ChangePasswordRequest, LoginResponse, RegisterRequest
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    LoginResponse,
+    RefreshResponse,
+    RegisterRequest,
+)
 from app.schemas.user import UserOut
-from app.services.auth import create_access_token, hash_password, verify_password
+from app.services.auth import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.services.settings import get_setting
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-COOKIE_MAX_AGE = settings.access_token_expire_minutes * 60  # seconds
+ACCESS_COOKIE_NAME = "token"
+REFRESH_COOKIE_NAME = "refresh_token"
+# Refresh cookie is scoped to /api/auth so it's only sent to refresh/logout —
+# this is a CSRF defence in depth (it's never attached to normal API calls).
+REFRESH_COOKIE_PATH = "/api/auth"
 
 
-def _set_token_cookie(response: Response, token: str) -> None:
+def _set_access_cookie(response: Response, token: str) -> None:
     response.set_cookie(
-        key="token",
+        key=ACCESS_COOKIE_NAME,
         value=token,
         httponly=True,
         secure=True,
         samesite="lax",
-        max_age=COOKIE_MAX_AGE,
+        max_age=settings.access_token_expire_minutes * 60,
         path="/",
+    )
+
+
+def _set_refresh_cookie(response: Response, token: str) -> None:
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_auth_cookies(response: Response) -> None:
+    response.delete_cookie(
+        key=ACCESS_COOKIE_NAME, httponly=True, secure=True, samesite="lax", path="/"
+    )
+    response.delete_cookie(
+        key=REFRESH_COOKIE_NAME,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path=REFRESH_COOKIE_PATH,
     )
 
 
@@ -96,22 +136,67 @@ async def login(
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
-    token = create_access_token({"sub": str(user.id)})
-    _set_token_cookie(response, token)
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+    _set_access_cookie(response, access_token)
+    _set_refresh_cookie(response, refresh_token)
     return LoginResponse(
         id=str(user.id),
         username=user.username,
         role=user.role.value,
         is_active=user.is_active,
-        access_token=token,
+        access_token=access_token,
+        refresh_token=refresh_token,
     )
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh(
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Exchange a valid refresh token for a fresh access token.
+
+    Accepts the refresh token from either the HttpOnly `refresh_token` cookie
+    (web) or the `X-Refresh-Token` header (Capacitor / native clients, where
+    cookies don't reliably cross the capacitor://localhost ↔ https origin gap).
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid refresh token",
+    )
+
+    raw = request.headers.get("X-Refresh-Token") or request.cookies.get(
+        REFRESH_COOKIE_NAME
+    )
+    if not raw:
+        raise invalid
+
+    payload = decode_token(raw)
+    if payload is None or payload.get("type") != "refresh":
+        _clear_auth_cookies(response)
+        raise invalid
+
+    user_id = payload.get("sub")
+    if not user_id:
+        _clear_auth_cookies(response)
+        raise invalid
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if user is None or not user.is_active:
+        _clear_auth_cookies(response)
+        raise invalid
+
+    new_access = create_access_token({"sub": str(user.id)})
+    _set_access_cookie(response, new_access)
+    return RefreshResponse(access_token=new_access)
 
 
 @router.post("/logout")
 async def logout(response: Response):
-    response.delete_cookie(
-        key="token", httponly=True, secure=True, samesite="lax", path="/"
-    )
+    _clear_auth_cookies(response)
     return {"ok": True}
 
 

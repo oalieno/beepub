@@ -16,7 +16,12 @@ from app.config import settings
 from app.database import get_db
 from app.main import app
 from app.models.user import User, UserRole
-from app.services.auth import ALGORITHM, create_access_token, hash_password
+from app.services.auth import (
+    ALGORITHM,
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -164,17 +169,26 @@ class TestLogin:
             assert body["username"] == "testuser"
             assert "id" in body
 
-            # Check Set-Cookie header
-            cookie_header = resp.headers.get("set-cookie", "")
+            # Check Set-Cookie headers — both access and refresh
+            set_cookies = resp.headers.get_list("set-cookie")
+            cookie_header = " ; ".join(set_cookies).lower()
             assert "token=" in cookie_header
-            assert "httponly" in cookie_header.lower()
-            assert "samesite=lax" in cookie_header.lower()
-            assert "path=/" in cookie_header.lower()
+            assert "refresh_token=" in cookie_header
+            assert "httponly" in cookie_header
+            assert "samesite=lax" in cookie_header
+            # Refresh cookie is scoped to /api/auth
+            assert any(
+                "refresh_token=" in c.lower() and "path=/api/auth" in c.lower()
+                for c in set_cookies
+            )
 
-            # Login response includes access_token for SPA/Capacitor clients
+            # Login response includes both tokens for SPA/Capacitor clients
             assert "access_token" in body
             assert isinstance(body["access_token"], str)
             assert len(body["access_token"]) > 0
+            assert "refresh_token" in body
+            assert isinstance(body["refresh_token"], str)
+            assert len(body["refresh_token"]) > 0
         finally:
             _cleanup()
 
@@ -269,7 +283,7 @@ class TestLogin:
 
 class TestLogout:
     @pytest.mark.asyncio
-    async def test_logout_clears_cookie(self):
+    async def test_logout_clears_both_cookies(self):
         try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
@@ -278,13 +292,13 @@ class TestLogout:
             assert resp.status_code == 200
             assert resp.json() == {"ok": True}
 
-            cookie_header = resp.headers.get("set-cookie", "")
-            assert "token=" in cookie_header
-            # Max-Age=0 or expires in the past means cookie deletion
-            assert (
-                "max-age=0" in cookie_header.lower()
-                or "expires=" in cookie_header.lower()
-            )
+            set_cookies = resp.headers.get_list("set-cookie")
+            joined = " ; ".join(set_cookies).lower()
+            assert "token=" in joined
+            assert "refresh_token=" in joined
+            # Both should be expired (max-age=0 or past expires)
+            for c in set_cookies:
+                assert "max-age=0" in c.lower() or "expires=" in c.lower()
         finally:
             _cleanup()
 
@@ -400,6 +414,152 @@ class TestMe:
                 cookies={"token": token},
             ) as client:
                 resp = await client.get("/api/auth/me")
+            assert resp.status_code == 401
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_me_rejects_refresh_token(self, test_user):
+        """A refresh token must NOT be usable as an access token."""
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            refresh = create_refresh_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    "/api/auth/me",
+                    headers={"Authorization": f"Bearer {refresh}"},
+                )
+            assert resp.status_code == 401
+        finally:
+            _cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Refresh
+# ---------------------------------------------------------------------------
+
+
+class TestRefresh:
+    @pytest.mark.asyncio
+    async def test_refresh_via_cookie(self, test_user):
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            refresh = create_refresh_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                cookies={"refresh_token": refresh},
+            ) as client:
+                resp = await client.post("/api/auth/refresh")
+            assert resp.status_code == 200
+            body = resp.json()
+            assert "access_token" in body and len(body["access_token"]) > 0
+
+            # New access cookie set
+            set_cookies = resp.headers.get_list("set-cookie")
+            assert any("token=" in c.lower() for c in set_cookies)
+
+            # The new access token actually works against /me
+            new_access = body["access_token"]
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                me_resp = await client.get(
+                    "/api/auth/me",
+                    headers={"Authorization": f"Bearer {new_access}"},
+                )
+            assert me_resp.status_code == 200
+            assert me_resp.json()["username"] == "testuser"
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_refresh_via_header(self, test_user):
+        """Native (Capacitor) clients send the refresh token via header."""
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            refresh = create_refresh_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.post(
+                    "/api/auth/refresh",
+                    headers={"X-Refresh-Token": refresh},
+                )
+            assert resp.status_code == 200
+            assert "access_token" in resp.json()
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_refresh_rejects_access_token(self, test_user):
+        """An access token must NOT be usable on the refresh endpoint."""
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            access = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                cookies={"refresh_token": access},
+            ) as client:
+                resp = await client.post("/api/auth/refresh")
+            assert resp.status_code == 401
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_refresh_no_token_returns_401(self):
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.post("/api/auth/refresh")
+            assert resp.status_code == 401
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_refresh_inactive_user_returns_401(self, inactive_user):
+        session = _mock_db_session(users=[inactive_user])
+        _override_db(session)
+        try:
+            refresh = create_refresh_token({"sub": str(inactive_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                cookies={"refresh_token": refresh},
+            ) as client:
+                resp = await client.post("/api/auth/refresh")
+            assert resp.status_code == 401
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_refresh_expired_token_returns_401(self, test_user):
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            expired = jwt.encode(
+                {
+                    "sub": str(test_user.id),
+                    "type": "refresh",
+                    "exp": datetime.now(UTC) - timedelta(hours=1),
+                },
+                settings.secret_key,
+                algorithm=ALGORITHM,
+            )
+            async with AsyncClient(
+                transport=ASGITransport(app=app),
+                base_url="http://test",
+                cookies={"refresh_token": expired},
+            ) as client:
+                resp = await client.post("/api/auth/refresh")
             assert resp.status_code == 401
         finally:
             _cleanup()

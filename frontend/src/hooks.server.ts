@@ -19,30 +19,101 @@ const i18nHandle: Handle = ({ event, resolve }) =>
     },
   );
 
+const REFRESH_COOKIE_PATH = "/api/auth";
+const ACCESS_MAX_AGE = 30 * 60; // must match backend access_token_expire_minutes
+
+async function tryRefresh(
+  refreshToken: string,
+): Promise<{ accessToken: string; setCookie: string | null } | null> {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
+      method: "POST",
+      headers: { Cookie: `refresh_token=${refreshToken}` },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { access_token?: string };
+    if (!body.access_token) return null;
+    return {
+      accessToken: body.access_token,
+      setCookie: res.headers.get("set-cookie"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const authHandle: Handle = async ({ event, resolve }) => {
   // Skip auth during static build (adapter-static fallback page generation)
   if (building) {
     return resolve(event);
   }
 
-  const token = event.cookies.get("token") ?? null;
+  let token = event.cookies.get("token") ?? null;
+  const refreshToken = event.cookies.get("refresh_token") ?? null;
   event.locals.token = token;
   event.locals.user = null;
 
+  const fetchMe = async (bearer: string) =>
+    fetch(`${BACKEND_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${bearer}` },
+    });
+
   if (token) {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      let res = await fetchMe(token);
+      if ((res.status === 401 || res.status === 403) && refreshToken) {
+        // Access token rejected — try refreshing it transparently before
+        // bouncing the user to /login.
+        const refreshed = await tryRefresh(refreshToken);
+        if (refreshed) {
+          token = refreshed.accessToken;
+          event.locals.token = token;
+          event.cookies.set("token", token, {
+            path: "/",
+            httpOnly: true,
+            secure: true,
+            sameSite: "lax",
+            maxAge: ACCESS_MAX_AGE,
+          });
+          res = await fetchMe(token);
+        }
+      }
       if (res.ok) {
         event.locals.user = await res.json();
       } else if (res.status === 401 || res.status === 403) {
         event.cookies.delete("token", { path: "/" });
+        event.cookies.delete("refresh_token", { path: REFRESH_COOKIE_PATH });
         event.locals.token = null;
       }
     } catch {
       // Keep existing token on transient backend/network errors.
       // We only clear cookie when backend explicitly says the token is invalid.
+    }
+  } else if (refreshToken) {
+    // Access cookie missing (expired and pruned by browser) but refresh
+    // cookie still valid — mint a new access token from refresh.
+    const refreshed = await tryRefresh(refreshToken);
+    if (refreshed) {
+      token = refreshed.accessToken;
+      event.locals.token = token;
+      event.cookies.set("token", token, {
+        path: "/",
+        httpOnly: true,
+        secure: true,
+        sameSite: "lax",
+        maxAge: ACCESS_MAX_AGE,
+      });
+      try {
+        const res = await fetchMe(token);
+        if (res.ok) {
+          event.locals.user = await res.json();
+        }
+      } catch {
+        // Network glitch — let the page render unauthenticated and let
+        // the client retry on its own.
+      }
+    } else {
+      event.cookies.delete("refresh_token", { path: REFRESH_COOKIE_PATH });
     }
   }
 

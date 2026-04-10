@@ -9,6 +9,7 @@ from app.services.auth import (
     ALGORITHM,
     _prehash,
     create_access_token,
+    create_refresh_token,
     decode_token,
     hash_password,
     verify_password,
@@ -131,6 +132,41 @@ class TestCreateAccessToken:
         token = create_access_token({"sub": "u", "role": "admin"})
         payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
         assert payload["role"] == "admin"
+
+    def test_token_has_access_type_claim(self):
+        token = create_access_token({"sub": "u"})
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        assert payload["type"] == "access"
+
+
+# ---------------------------------------------------------------------------
+# create_refresh_token
+# ---------------------------------------------------------------------------
+
+
+class TestCreateRefreshToken:
+    def test_returns_string(self):
+        assert isinstance(create_refresh_token({"sub": "u"}), str)
+
+    def test_token_has_refresh_type_claim(self):
+        token = create_refresh_token({"sub": "u"})
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        assert payload["type"] == "refresh"
+
+    def test_refresh_token_expiry_is_longer_than_access(self):
+        access = create_access_token({"sub": "u"})
+        refresh = create_refresh_token({"sub": "u"})
+        access_payload = jwt.decode(access, settings.secret_key, algorithms=[ALGORITHM])
+        refresh_payload = jwt.decode(
+            refresh, settings.secret_key, algorithms=[ALGORITHM]
+        )
+        assert refresh_payload["exp"] > access_payload["exp"]
+
+    def test_does_not_mutate_input(self):
+        data = {"sub": "u"}
+        original = data.copy()
+        create_refresh_token(data)
+        assert data == original
 
 
 # ---------------------------------------------------------------------------
