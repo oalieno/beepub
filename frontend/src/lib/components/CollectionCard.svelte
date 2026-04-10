@@ -9,8 +9,8 @@
     name: string;
     previewBookIds: string[];
     bookCount: number;
-    badgeLabel: string;
-    badgeClass: string;
+    badgeLabel?: string;
+    badgeClass?: string;
     icon?: Snippet;
     overlay?: Snippet;
   }
@@ -80,9 +80,13 @@
         </h2>
       </div>
       <div class="flex items-center gap-2 shrink-0 ml-3">
-        <span class="text-xs px-2.5 py-1 rounded-full font-medium {badgeClass}">
-          {badgeLabel}
-        </span>
+        {#if badgeLabel}
+          <span
+            class="text-xs px-2.5 py-1 rounded-full font-medium {badgeClass}"
+          >
+            {badgeLabel}
+          </span>
+        {/if}
         <span class="text-xs text-muted-foreground">
           {bookCount}
           {bookCount === 1 ? "book" : "books"}

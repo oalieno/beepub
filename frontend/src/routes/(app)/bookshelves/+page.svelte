@@ -15,7 +15,6 @@
   let createName = $state("");
   let createDesc = $state("");
   let creating = $state(false);
-  let isPublic = $state(false);
 
   onMount(async () => {
     await loadData();
@@ -39,7 +38,6 @@
       const shelf = await bookshelvesApi.create({
         name: createName,
         description: createDesc,
-        is_public: isPublic,
       });
       bookshelves = [
         ...bookshelves,
@@ -48,7 +46,6 @@
       showCreateModal = false;
       createName = "";
       createDesc = "";
-      isPublic = false;
       toastStore.success(m.shelves_created());
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -115,12 +112,6 @@
           name={shelf.name}
           previewBookIds={shelf.preview_book_ids}
           bookCount={shelf.book_count}
-          badgeLabel={shelf.is_public
-            ? m.shelves_public()
-            : m.shelves_private()}
-          badgeClass={shelf.is_public
-            ? "bg-primary/15 text-primary"
-            : "bg-secondary text-muted-foreground"}
         >
           {#snippet icon()}
             <ShelvingUnit class="text-muted-foreground/50 shrink-0" size={16} />
@@ -167,10 +158,6 @@
         class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
-    <label class="flex items-center gap-2 cursor-pointer">
-      <input type="checkbox" bind:checked={isPublic} class="accent-primary" />
-      <span class="text-sm text-foreground">{m.shelves_make_public()}</span>
-    </label>
     <div class="flex justify-end gap-2 pt-2">
       <button
         class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"

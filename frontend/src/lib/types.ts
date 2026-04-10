@@ -164,7 +164,6 @@ export interface BookshelfOut {
   user_id: string;
   name: string;
   description: string | null;
-  is_public: boolean;
   created_at: string;
   book_count: number;
   preview_book_ids: string[];

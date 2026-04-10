@@ -7,13 +7,11 @@ from pydantic import BaseModel
 class BookshelfCreate(BaseModel):
     name: str
     description: str | None = None
-    is_public: bool = False
 
 
 class BookshelfUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    is_public: bool | None = None
 
 
 class BookshelfOut(BaseModel):
@@ -21,7 +19,6 @@ class BookshelfOut(BaseModel):
     user_id: uuid.UUID
     name: str
     description: str | None
-    is_public: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}

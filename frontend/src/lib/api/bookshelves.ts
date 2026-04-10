@@ -6,13 +6,11 @@ export const bookshelvesApi = {
 
   get: (id: string) => get(`/bookshelves/${id}`) as Promise<BookshelfOut>,
 
-  create: (data: { name: string; description?: string; is_public?: boolean }) =>
+  create: (data: { name: string; description?: string }) =>
     post("/bookshelves", data) as Promise<BookshelfOut>,
 
-  update: (
-    id: string,
-    data: { name?: string; description?: string; is_public?: boolean },
-  ) => put(`/bookshelves/${id}`, data) as Promise<BookshelfOut>,
+  update: (id: string, data: { name?: string; description?: string }) =>
+    put(`/bookshelves/${id}`, data) as Promise<BookshelfOut>,
 
   delete: (id: string) => del(`/bookshelves/${id}`),
 
