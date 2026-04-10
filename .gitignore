@@ -1,6 +1,41 @@
 .env
+.env.local
+.env.*.local
 
 docker-compose.override.yml
 
 .gstack/
 .claude/
+
+# Secrets / keys
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local databases / data dumps
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+node_modules/
+.svelte-kit/
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+.idea/
+*.swp
