@@ -4,8 +4,10 @@ import uuid
 from unittest.mock import AsyncMock, mock_open, patch
 
 import pytest
+from fastapi import HTTPException
 
 from app.services.storage import (
+    MAX_UPLOAD_SIZE,
     delete_file,
     get_book_path,
     get_cover_path,
@@ -141,6 +143,27 @@ class TestSaveUploadFile:
             await save_upload_file(upload, "/data/deep/nested/dir/file.epub")
 
         mock_makedirs.assert_called_once_with("/data/deep/nested/dir", exist_ok=True)
+
+    @pytest.mark.asyncio
+    async def test_rejects_file_exceeding_max_upload_size(self):
+        # First chunk is exactly MAX_UPLOAD_SIZE; the second chunk pushes us over.
+        chunk1 = b"x" * MAX_UPLOAD_SIZE
+        chunk2 = b"x"
+        upload = AsyncMock(spec=["read"])
+        upload.read = AsyncMock(side_effect=[chunk1, chunk2, b""])
+
+        m = mock_open()
+        with (
+            patch("app.services.storage.os.makedirs"),
+            patch("builtins.open", m),
+            patch("app.services.storage.os.remove") as mock_remove,
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await save_upload_file(upload, "/data/books/huge.epub")
+
+        assert exc_info.value.status_code == 413
+        # Partial file must be cleaned up.
+        mock_remove.assert_called_once_with("/data/books/huge.epub")
 
     @pytest.mark.asyncio
     async def test_empty_file_returns_zero(self):
