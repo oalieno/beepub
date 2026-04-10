@@ -23,6 +23,7 @@ dependencies = [
     "rapidfuzz>=3.10.0",
     "structlog>=25.5.0",
     "pgvector>=0.3.6",
+    "slowapi>=0.1.9",
 ]
 
 [dependency-groups]

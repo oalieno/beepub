@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.user import User, UserRole
+from app.rate_limit import limiter
 from app.schemas.auth import ChangePasswordRequest, LoginResponse, RegisterRequest
 from app.schemas.user import UserOut
 from app.services.auth import create_access_token, hash_password, verify_password
@@ -42,7 +43,12 @@ async def registration_status(db: Annotated[AsyncSession, Depends(get_db)]):
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]):
+@limiter.limit("10/minute")
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
     # Check username uniqueness
     existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
@@ -73,7 +79,9 @@ async def register(body: RegisterRequest, db: Annotated[AsyncSession, Depends(ge
 
 
 @router.post("/login", response_model=LoginResponse)
+@limiter.limit("10/minute")
 async def login(
+    request: Request,
     response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],

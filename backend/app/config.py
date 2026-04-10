@@ -12,5 +12,30 @@ class Settings(BaseSettings):
     covers_dir: str = "/data/covers"
     illustrations_dir: str = "/data/illustrations"
 
+    # Comma-separated list of additional web origins allowed by CORS, e.g.
+    # "https://beepub.example.com,https://reader.example.com". Capacitor and
+    # localhost dev origins are always allowed automatically.
+    cors_origins: str = ""
+    dev: bool = False
+
+    @property
+    def cors_allowed_origins(self) -> list[str]:
+        # Native iOS/Android Capacitor apps and the reverse proxy itself.
+        origins: list[str] = [
+            "capacitor://localhost",
+            "ionic://localhost",
+            "http://localhost",
+            "https://localhost",
+        ]
+        if self.dev:
+            origins += [
+                "http://localhost:5173",
+                "http://localhost:80",
+                "http://localhost:8080",
+            ]
+        if self.cors_origins:
+            origins += [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return origins
+
 
 settings = Settings()

@@ -4,9 +4,13 @@ import uuid
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.extension import _rate_limit_exceeded_handler
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.config import settings
 from app.logging import setup_logging
+from app.rate_limit import limiter
 from app.routers import (
     admin,
     auth,
@@ -26,6 +30,9 @@ from app.services.auth import decode_token
 setup_logging(log_format=os.environ.get("LOG_FORMAT", "console"))
 
 app = FastAPI(title="BeePub API", version="1.0.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
@@ -64,10 +71,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(RequestContextMiddleware)
 
-# Self-hosted + Capacitor native app: must allow all origins.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
