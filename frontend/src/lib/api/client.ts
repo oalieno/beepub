@@ -109,7 +109,7 @@ export function getAuthHeader(): Record<string, string> {
 // first one talks to /auth/refresh; the others await the same promise.
 let refreshInFlight: Promise<boolean> | null = null;
 
-async function refreshAccessToken(): Promise<boolean> {
+export async function refreshAccessToken(): Promise<boolean> {
   if (typeof window === "undefined") return false;
   if (refreshInFlight) return refreshInFlight;
 

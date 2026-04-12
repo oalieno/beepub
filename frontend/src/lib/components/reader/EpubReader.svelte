@@ -195,21 +195,21 @@
       epubBook = Epub(localArrayBuffer, {});
     } else {
       // Online: stream page-by-page from server
-      const authHeaders = getAuthHeader();
-      const hasAuth = Object.keys(authHeaders).length > 0;
+      const hasAuth = Object.keys(getAuthHeader()).length > 0;
 
-      // In native mode, epub.js needs auth headers on XHR requests for
-      // chapter HTML, OPF, etc. Images/CSS in iframes are authenticated
-      // via WKWebView's cookie store (login sets an HttpOnly cookie).
-      // replacements: "blobUrl" ensures CSS/fonts are fetched via XHR
-      // (with auth) and blob-replaced; images are skipped by our patched
-      // resources.replacements() and load directly via cookie auth.
+      // In native mode, epub.js needs auth headers on every XHR request
+      // (chapter HTML, OPF, images, CSS). The epub.js fork's substituteAsync
+      // mechanism fetches images via XHR and replaces URLs with blob: URIs
+      // before DOM injection (see docs/debug/023-ios-manga-lazy-image-loading.md).
+      // We read getAuthHeader() fresh on each call so that if the access
+      // token is refreshed mid-session, subsequent XHR calls pick up the
+      // new token automatically.
       let nativeOpts = {};
       if (hasAuth) {
         const defaultRequest = (await import("$lib/epubjs/utils/request"))
           .default;
         nativeOpts = {
-          requestHeaders: authHeaders,
+          requestHeaders: getAuthHeader(),
           replacements: "blobUrl",
           requestMethod: (
             url: string,
@@ -218,7 +218,7 @@
             headers: Record<string, string>,
           ) => {
             return defaultRequest(url, type, withCredentials, {
-              ...authHeaders,
+              ...getAuthHeader(),
               ...(headers || {}),
             });
           },

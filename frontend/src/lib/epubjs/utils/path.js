@@ -79,7 +79,7 @@ class Path {
     var isAbsolute = what && what.indexOf("://") > -1;
 
     if (isAbsolute) {
-      return what;
+      what = new URL(what).pathname;
     }
 
     return path.relative(this.directory, what);
