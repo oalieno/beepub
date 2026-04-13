@@ -702,7 +702,7 @@
               </button>
             </div>
           </div>
-        {:else if seriesNeighbors.progress && seriesNeighbors.progress.read_count >= seriesNeighbors.progress.total_in_library}
+        {:else if seriesNeighbors.progress}
           <div class="flex flex-col items-center gap-6 px-10 py-14">
             <span class="text-6xl">🎉</span>
             <div class="text-center">
