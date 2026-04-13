@@ -37,15 +37,15 @@
         <span class="text-muted-foreground block text-xs mb-0.5"
           >{m.metadata_label_series()}</span
         >
-        <div class="flex items-baseline gap-2">
+        <div>
           <button
-            class="text-foreground font-medium hover:text-primary hover:underline transition-colors"
+            class="text-foreground font-medium hover:text-primary hover:underline transition-colors text-left"
             onclick={() => onfilter("series", book.display_series!)}
           >
             {book.display_series}
           </button>
           {#if currentIdx != null}
-            <span class="text-muted-foreground text-xs whitespace-nowrap">
+            <span class="text-muted-foreground text-xs block mt-0.5">
               {#if total > 0}{m.metadata_series_vol_of({
                   index: formatSeriesIndex(currentIdx),
                   total: String(total),
