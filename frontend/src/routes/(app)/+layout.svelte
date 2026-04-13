@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
+  import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
@@ -20,6 +21,10 @@
       e.preventDefault();
       searchOpen = !searchOpen;
     }
+    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+      e.preventDefault();
+      toggleSidebar();
+    }
   }}
 />
 
@@ -34,7 +39,9 @@
   {/if}
 
   <main
-    class="md:pl-[280px] {isBookDetail
+    class="transition-[padding-left] duration-200 ease-in-out {$sidebarCollapsed
+      ? 'md:pl-16'
+      : 'md:pl-[280px]'} {isBookDetail
       ? 'book-detail-safe-area'
       : 'pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]'} md:pt-0 md:pb-0"
   >

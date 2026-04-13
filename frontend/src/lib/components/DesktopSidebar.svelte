@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
+  import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
@@ -16,6 +17,8 @@
     Search as SearchIcon,
     Dices,
     Download,
+    PanelLeftClose,
+    PanelLeftOpen,
   } from "@lucide/svelte";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
@@ -23,6 +26,7 @@
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
 
   let online = $derived($isOnline);
+  let collapsed = $derived($sidebarCollapsed);
 
   const navLinks = $derived([
     {
@@ -94,24 +98,57 @@
 </script>
 
 <nav
-  class="hidden md:flex fixed left-0 top-0 bottom-0 z-40 w-[280px] flex-col bg-sidebar border-r border-sidebar-border"
+  class="hidden md:flex fixed left-0 top-0 bottom-0 z-40 flex-col bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-in-out overflow-hidden {collapsed
+    ? 'w-16'
+    : 'w-[280px]'}"
   aria-label="Main navigation"
 >
-  <!-- Logo -->
-  <a href="/" class="px-6 py-5 flex items-center gap-2.5">
-    <img src="/logo.png" alt="BeePub" class="h-9 w-9 object-contain" />
-    <span
-      class="text-xl font-bold tracking-tight text-sidebar-foreground"
-      style="font-family: var(--font-heading)">BeePub</span
+  <!-- Logo + Toggle -->
+  <div
+    class="py-5 flex items-center overflow-hidden whitespace-nowrap {collapsed
+      ? 'px-3 flex-col gap-2'
+      : 'px-6'}"
+  >
+    <a href="/" class="flex items-center gap-2.5 flex-shrink-0">
+      <img
+        src="/logo.png"
+        alt="BeePub"
+        class="h-9 w-9 object-contain flex-shrink-0"
+      />
+      {#if !collapsed}
+        <span
+          class="text-xl font-bold tracking-tight text-sidebar-foreground transition-opacity duration-100 opacity-100 delay-100"
+          style="font-family: var(--font-heading)"
+        >
+          BeePub
+        </span>
+      {/if}
+    </a>
+    <button
+      class="flex-shrink-0 p-1.5 rounded-md text-sidebar-foreground/40 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors {collapsed
+        ? ''
+        : 'ml-auto'}"
+      onclick={toggleSidebar}
+      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
     >
-  </a>
+      {#if collapsed}
+        <PanelLeftOpen size={16} />
+      {:else}
+        <PanelLeftClose size={16} />
+      {/if}
+    </button>
+  </div>
 
   <!-- Search -->
   <div class="px-3 mb-2">
     <button
-      class="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm transition-colors border border-sidebar-border bg-white {!online
+      class="flex items-center w-full rounded-lg text-sm transition-colors {collapsed
+        ? 'justify-center px-0 py-2.5 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+        : 'gap-3 px-3 py-2 border border-sidebar-border bg-white'} {!online
         ? 'opacity-25 cursor-default'
-        : 'text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
+        : collapsed
+          ? ''
+          : 'text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
       onclick={() => {
         if (!online) {
           toastStore.info(m.nav_available_when_online());
@@ -120,13 +157,23 @@
         onSearchOpen();
       }}
       aria-disabled={!online || undefined}
+      title={collapsed ? m.nav_search() : undefined}
     >
-      <SearchIcon size={16} />
-      {m.nav_search()}
-      <kbd
-        class="ml-auto text-xs text-sidebar-foreground/30 bg-sidebar-accent/50 px-1.5 py-0.5 rounded"
-        >⌘K</kbd
-      >
+      <SearchIcon size={collapsed ? 20 : 16} class="flex-shrink-0" />
+      {#if !collapsed}
+        <span
+          class="transition-opacity duration-100 {collapsed
+            ? 'opacity-0'
+            : 'opacity-100 delay-100'}"
+        >
+          {m.nav_search()}
+        </span>
+        <kbd
+          class="ml-auto text-xs text-sidebar-foreground/30 bg-sidebar-accent/50 px-1.5 py-0.5 rounded"
+        >
+          ⌘K
+        </kbd>
+      {/if}
     </button>
   </div>
 
@@ -136,18 +183,32 @@
       {@const disabled = !online && link.requiresOnline}
       <a
         href={disabled ? undefined : link.href}
-        class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {disabled
+        class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
+          ? 'justify-center px-0'
+          : 'px-3'} {disabled
           ? 'opacity-25 cursor-default'
           : link.active
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
         aria-current={link.active ? "page" : undefined}
         aria-disabled={disabled || undefined}
-        title={disabled ? m.nav_available_when_online() : undefined}
+        title={collapsed
+          ? link.label
+          : disabled
+            ? m.nav_available_when_online()
+            : undefined}
         onclick={disabled ? handleDisabledClick : undefined}
       >
-        <link.icon size={20} />
-        {link.label}
+        <link.icon size={20} class="flex-shrink-0" />
+        {#if !collapsed}
+          <span
+            class="transition-opacity duration-100 whitespace-nowrap {collapsed
+              ? 'opacity-0'
+              : 'opacity-100 delay-100'}"
+          >
+            {link.label}
+          </span>
+        {/if}
       </a>
     {/each}
 
@@ -156,16 +217,27 @@
     <!-- Gacha -->
     <a
       href={!online ? undefined : "/gacha"}
-      class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors {!online
+      class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
+        ? 'justify-center px-0'
+        : 'px-3'} {!online
         ? 'opacity-25 cursor-default'
         : page.url.pathname === '/gacha'
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
       aria-disabled={!online || undefined}
+      title={collapsed ? m.nav_gacha() : undefined}
       onclick={!online ? handleDisabledClick : undefined}
     >
-      <Dices size={20} />
-      {m.nav_gacha()}
+      <Dices size={20} class="flex-shrink-0" />
+      {#if !collapsed}
+        <span
+          class="transition-opacity duration-100 whitespace-nowrap {collapsed
+            ? 'opacity-0'
+            : 'opacity-100 delay-100'}"
+        >
+          {m.nav_gacha()}
+        </span>
+      {/if}
     </a>
   </div>
 
@@ -173,11 +245,13 @@
   <div class="px-3 pb-4 pt-2 border-t border-sidebar-border">
     <a
       href="/profile"
-      class="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-left transition-colors {page.url.pathname.startsWith(
-        '/profile',
-      ) || page.url.pathname.startsWith('/admin')
+      class="flex items-center gap-3 py-2.5 rounded-lg w-full text-left transition-colors {collapsed
+        ? 'justify-center px-0'
+        : 'px-3'} {page.url.pathname.startsWith('/profile') ||
+      page.url.pathname.startsWith('/admin')
         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
         : 'hover:bg-sidebar-accent/50'}"
+      title={collapsed ? $authStore.user?.username : undefined}
     >
       <Avatar.Root class="h-8 w-8 shrink-0">
         <Avatar.Fallback
@@ -186,9 +260,13 @@
           {$authStore.user?.username?.charAt(0).toUpperCase() ?? "?"}
         </Avatar.Fallback>
       </Avatar.Root>
-      <span class="text-sm font-medium text-sidebar-foreground truncate">
-        {$authStore.user?.username}
-      </span>
+      {#if !collapsed}
+        <span
+          class="text-sm font-medium text-sidebar-foreground truncate transition-opacity duration-100 opacity-100 delay-100"
+        >
+          {$authStore.user?.username}
+        </span>
+      {/if}
     </a>
   </div>
 </nav>
