@@ -101,6 +101,7 @@
   class="hidden md:flex fixed left-0 top-0 bottom-0 z-40 flex-col bg-sidebar border-r border-sidebar-border transition-[width] duration-200 ease-in-out overflow-hidden {collapsed
     ? 'w-16'
     : 'w-[280px]'}"
+  style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px);"
   aria-label="Main navigation"
 >
   <!-- Logo + Toggle -->

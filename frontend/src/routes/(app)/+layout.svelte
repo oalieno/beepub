@@ -39,7 +39,7 @@
   {/if}
 
   <main
-    class="transition-[padding-left] duration-200 ease-in-out {$sidebarCollapsed
+    class="app-main transition-[padding-left] duration-200 ease-in-out {$sidebarCollapsed
       ? 'md:pl-16'
       : 'md:pl-[280px]'} {isBookDetail
       ? 'book-detail-safe-area'
@@ -59,6 +59,12 @@
   @media (max-width: 767px) {
     .book-detail-safe-area {
       padding-top: env(safe-area-inset-top, 0px);
+    }
+  }
+  @media (min-width: 768px) {
+    .app-main {
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-right: env(safe-area-inset-right, 0px);
     }
   }
 </style>
