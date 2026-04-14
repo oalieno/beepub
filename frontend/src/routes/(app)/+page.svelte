@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
@@ -191,40 +190,6 @@
       </div>
     {/if}
   {:else}
-    <!-- Hero greeting -->
-    <section class="mb-12">
-      <div
-        class="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-2"
-      >
-        <div>
-          <h1
-            class="text-4xl md:text-5xl font-bold leading-tight text-foreground"
-          >
-            {m.home_greeting()}{$authStore.user
-              ? `,\n${$authStore.user.username}`
-              : ""}
-          </h1>
-        </div>
-        <div class="flex items-center gap-6 text-center">
-          <a href="/libraries" class="hover:opacity-80 transition-opacity">
-            <p class="text-3xl font-bold text-primary">{libraries.length}</p>
-            <p class="text-muted-foreground text-xs mt-0.5">
-              {m.home_libraries()}
-            </p>
-          </a>
-          <div class="w-px h-8 bg-border"></div>
-          <div>
-            <p class="text-3xl font-bold text-primary">
-              {libraries
-                .reduce((sum, lib) => sum + (lib.book_count ?? 0), 0)
-                .toLocaleString()}
-            </p>
-            <p class="text-muted-foreground text-xs mt-0.5">{m.home_books()}</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- Continue Reading -->
     {#if continueReadingBooks.length > 0}
       <section class="mb-12">
