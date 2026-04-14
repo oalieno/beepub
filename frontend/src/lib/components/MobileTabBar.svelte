@@ -3,7 +3,7 @@
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { Home, Library, Compass, User } from "@lucide/svelte";
+  import { Home, BookCopy, Compass, User } from "@lucide/svelte";
   import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
@@ -17,10 +17,10 @@
       requiresOnline: false,
     },
     {
-      href: "/libraries",
-      label: m.nav_library(),
-      icon: Library,
-      match: (p: string) => p.startsWith("/libraries"),
+      href: "/all-books",
+      label: m.nav_all_books(),
+      icon: BookCopy,
+      match: (p: string) => p.startsWith("/all-books"),
       requiresOnline: true,
     },
     {

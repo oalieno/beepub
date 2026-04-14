@@ -8,7 +8,7 @@
   import { UserRole } from "$lib/types";
   import {
     BookOpen,
-    BookCopy,
+    Library,
     ShelvingUnit,
     Highlighter,
     Settings,
@@ -91,9 +91,9 @@
       requiresOnline: true,
     },
     {
-      href: "/all-books",
-      label: m.nav_all_books(),
-      icon: BookCopy,
+      href: "/libraries",
+      label: m.nav_libraries(),
+      icon: Library,
       requiresOnline: true,
     },
     {

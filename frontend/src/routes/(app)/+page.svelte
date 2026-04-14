@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { librariesApi } from "$lib/api/libraries";
-  import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
   import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
@@ -294,7 +293,7 @@
         </div>
         {#if libraries.length > 0}
           <a
-            href="/libraries"
+            href="/all-books"
             class="text-primary hover:text-primary/80 text-sm font-medium"
             >{m.home_browse_all()}</a
           >
