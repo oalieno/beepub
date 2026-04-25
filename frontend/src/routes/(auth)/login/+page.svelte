@@ -82,6 +82,11 @@
         type="text"
         bind:value={username}
         placeholder={m.auth_enter_username()}
+        autocapitalize="none"
+        autocomplete="username"
+        autocorrect="off"
+        spellcheck={false}
+        inputmode="text"
         required
         class="rounded-xl h-11"
       />
@@ -202,6 +207,11 @@
                   type="text"
                   bind:value={username}
                   placeholder={m.auth_choose_username()}
+                  autocapitalize="none"
+                  autocomplete="username"
+                  autocorrect="off"
+                  spellcheck={false}
+                  inputmode="text"
                   required
                   class="rounded-xl h-11"
                 />

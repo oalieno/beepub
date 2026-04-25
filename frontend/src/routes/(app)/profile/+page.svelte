@@ -272,6 +272,11 @@
             id="new-username"
             bind:value={newUsername}
             placeholder={m.profile_new_username_placeholder()}
+            autocapitalize="none"
+            autocomplete="username"
+            autocorrect="off"
+            spellcheck={false}
+            inputmode="text"
             maxlength={50}
             required
           />
@@ -284,9 +289,7 @@
           disabled={changingUsername}
           class="rounded-xl text-sm"
         >
-          {changingUsername
-            ? m.profile_saving()
-            : m.profile_change_username()}
+          {changingUsername ? m.profile_saving() : m.profile_change_username()}
         </Button>
       </form>
     {/if}

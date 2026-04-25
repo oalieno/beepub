@@ -168,6 +168,11 @@
           id="new-username"
           bind:value={newUsername}
           placeholder={m.admin_col_username()}
+          autocapitalize="none"
+          autocomplete="username"
+          autocorrect="off"
+          spellcheck={false}
+          inputmode="text"
           required
         />
       </div>
