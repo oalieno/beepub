@@ -3,6 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -15,6 +16,7 @@ from app.schemas.auth import (
     LoginResponse,
     RefreshResponse,
     RegisterRequest,
+    UpdateUsernameRequest,
 )
 from app.schemas.user import UserOut
 from app.services.auth import (
@@ -198,6 +200,29 @@ async def refresh(
 async def logout(response: Response):
     _clear_auth_cookies(response)
     return {"ok": True}
+
+
+@router.put("/username", response_model=UserOut)
+async def update_username(
+    body: UpdateUsernameRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    if body.new_username == current_user.username:
+        return current_user
+
+    existing = await db.execute(select(User).where(User.username == body.new_username))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    current_user.username = body.new_username
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Username already exists") from None
+    await db.refresh(current_user)
+    return current_user
 
 
 @router.put("/change-password")

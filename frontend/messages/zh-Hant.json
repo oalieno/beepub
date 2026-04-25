@@ -79,6 +79,12 @@
   "home_no_books_subtitle": "上傳一些 EPUB 檔案來開始吧。",
 
   "profile_page_title": "BeePub - 個人資料",
+  "profile_change_username": "變更使用者名稱",
+  "profile_new_username": "新使用者名稱",
+  "profile_new_username_placeholder": "輸入新的使用者名稱",
+  "profile_username_required": "請輸入使用者名稱",
+  "profile_username_changed": "使用者名稱已變更",
+  "profile_saving": "儲存中...",
   "profile_change_password": "變更密碼",
   "profile_current_password": "目前密碼",
   "profile_current_password_placeholder": "目前密碼",

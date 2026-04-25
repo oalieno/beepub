@@ -1,4 +1,6 @@
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
@@ -19,6 +21,20 @@ class TokenResponse(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class UpdateUsernameRequest(BaseModel):
+    new_username: str = Field(min_length=1, max_length=50)
+
+    @field_validator("new_username", mode="before")
+    @classmethod
+    def strip_username(cls, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("Username is required")
+        return stripped
 
 
 class LoginResponse(BaseModel):

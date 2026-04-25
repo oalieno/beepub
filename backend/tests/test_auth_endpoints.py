@@ -438,6 +438,94 @@ class TestMe:
 
 
 # ---------------------------------------------------------------------------
+# Update username
+# ---------------------------------------------------------------------------
+
+
+class TestUpdateUsername:
+    @pytest.mark.asyncio
+    async def test_update_username_success(self, test_user):
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/username",
+                    json={"new_username": "renamed"},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 200
+            assert resp.json()["username"] == "renamed"
+            assert test_user.username == "renamed"
+            session.commit.assert_awaited_once()
+            session.refresh.assert_awaited_once_with(test_user)
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_update_username_trims_whitespace(self, test_user):
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/username",
+                    json={"new_username": "  renamed  "},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 200
+            assert resp.json()["username"] == "renamed"
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_update_username_duplicate_returns_400(self, test_user):
+        other_user = _make_user(username="taken")
+        session = _mock_db_session(users=[test_user, other_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/username",
+                    json={"new_username": "taken"},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 400
+            assert resp.json()["detail"] == "Username already exists"
+            session.commit.assert_not_awaited()
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_update_username_blank_returns_422(self, test_user):
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/username",
+                    json={"new_username": "   "},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 422
+            session.commit.assert_not_awaited()
+        finally:
+            _cleanup()
+
+
+# ---------------------------------------------------------------------------
 # Refresh
 # ---------------------------------------------------------------------------
 

@@ -17,6 +17,7 @@
     LogOut,
     ChevronRight,
     KeyRound,
+    UserRound,
     Eye,
     EyeOff,
   } from "@lucide/svelte";
@@ -34,7 +35,12 @@
   // Language
   let showLanguage = $state(false);
 
-  // Change password
+  // Account settings
+  let showChangeUsername = $state(false);
+  let newUsername = $state($authStore.user?.username ?? "");
+  let changingUsername = $state(false);
+  let usernameError = $state("");
+
   let showChangePassword = $state(false);
   let currentPassword = $state("");
   let newPassword = $state("");
@@ -72,6 +78,28 @@
       passwordError = (e as Error).message;
     } finally {
       changingPassword = false;
+    }
+  }
+
+  async function handleChangeUsername() {
+    usernameError = "";
+    const trimmedUsername = newUsername.trim();
+    if (!trimmedUsername) {
+      usernameError = m.profile_username_required();
+      return;
+    }
+
+    changingUsername = true;
+    try {
+      const user = await authApi.updateUsername(trimmedUsername);
+      authStore.setUser(user);
+      newUsername = user.username;
+      toastStore.success(m.profile_username_changed());
+      showChangeUsername = false;
+    } catch (e) {
+      usernameError = (e as Error).message;
+    } finally {
+      changingUsername = false;
     }
   }
 
@@ -149,7 +177,7 @@
     </div>
   </div>
 
-  <!-- Language & Password settings -->
+  <!-- Language & account settings -->
   <div class="bg-card card-soft rounded-2xl overflow-hidden mb-4">
     <!-- Language -->
     <button
@@ -201,6 +229,66 @@
           </button>
         {/each}
       </div>
+    {/if}
+
+    <!-- Divider -->
+    <div class="flex justify-center">
+      <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
+    </div>
+
+    <!-- Change Username -->
+    <button
+      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
+      onclick={() => {
+        showChangeUsername = !showChangeUsername;
+        newUsername = $authStore.user?.username ?? "";
+        usernameError = "";
+      }}
+    >
+      <UserRound size={20} class="text-muted-foreground shrink-0" />
+      <span class="text-sm font-medium flex-1"
+        >{m.profile_change_username()}</span
+      >
+      <ChevronRight
+        size={16}
+        class="text-muted-foreground/50 transition-transform {showChangeUsername
+          ? 'rotate-90'
+          : ''}"
+      />
+    </button>
+    {#if showChangeUsername}
+      <form
+        onsubmit={(e) => {
+          e.preventDefault();
+          handleChangeUsername();
+        }}
+        class="px-4 py-4 space-y-3"
+      >
+        <div class="space-y-1.5">
+          <Label for="new-username" class="text-sm"
+            >{m.profile_new_username()}</Label
+          >
+          <Input
+            id="new-username"
+            bind:value={newUsername}
+            placeholder={m.profile_new_username_placeholder()}
+            maxlength={50}
+            required
+          />
+        </div>
+        {#if usernameError}
+          <p class="text-sm text-red-600">{usernameError}</p>
+        {/if}
+        <Button
+          type="submit"
+          disabled={changingUsername}
+          class="rounded-xl text-sm"
+        >
+          {changingUsername
+            ? m.profile_saving()
+            : m.profile_change_username()}
+        </Button>
+      </form>
     {/if}
 
     <!-- Divider -->

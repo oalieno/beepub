@@ -79,6 +79,12 @@
   "home_no_books_subtitle": "Upload some EPUBs to get started.",
 
   "profile_page_title": "BeePub - Profile",
+  "profile_change_username": "Change Username",
+  "profile_new_username": "New Username",
+  "profile_new_username_placeholder": "Enter new username",
+  "profile_username_required": "Username is required",
+  "profile_username_changed": "Username changed successfully",
+  "profile_saving": "Saving...",
   "profile_change_password": "Change Password",
   "profile_current_password": "Current Password",
   "profile_current_password_placeholder": "Current password",

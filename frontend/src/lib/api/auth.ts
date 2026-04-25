@@ -25,4 +25,7 @@ export const authApi = {
       current_password: currentPassword,
       new_password: newPassword,
     }),
+
+  updateUsername: (newUsername: string) =>
+    put("/auth/username", { new_username: newUsername }) as Promise<UserOut>,
 };
