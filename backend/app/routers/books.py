@@ -1169,6 +1169,7 @@ async def get_series_neighbors(
     progress_result = await db.execute(
         select(
             func.count(func.distinct(index_col)),
+            func.max(index_col),
             func.count(
                 func.distinct(
                     case(
@@ -1185,7 +1186,7 @@ async def get_series_neighbors(
             LibraryBook.library_id.in_(accessible_libs),
         )
     )
-    total_in_library, read_count = progress_result.one()
+    total_in_library, max_series_index, read_count = progress_result.one()
     total_in_library = total_in_library or 0
     read_count = read_count or 0
 
@@ -1205,6 +1206,7 @@ async def get_series_neighbors(
         previous=_brief(prev_book) if prev_book else None,
         progress=SeriesProgress(
             total_in_library=total_in_library,
+            max_series_index=max_series_index,
             read_count=read_count,
         ),
     )

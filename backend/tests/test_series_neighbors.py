@@ -75,13 +75,24 @@ class TestSeriesBookBrief:
 
 class TestSeriesProgress:
     def test_basic(self):
-        progress = SeriesProgress(total_in_library=5, read_count=3)
+        progress = SeriesProgress(total_in_library=5, max_series_index=6.0, read_count=3)
         assert progress.total_in_library == 5
+        assert progress.max_series_index == 6.0
         assert progress.read_count == 3
+
+    def test_max_series_index_supports_gaps_and_fractional_indices(self):
+        progress = SeriesProgress(
+            total_in_library=11,
+            max_series_index=12.5,
+            read_count=4,
+        )
+        assert progress.total_in_library == 11
+        assert progress.max_series_index == 12.5
 
     def test_zero_counts(self):
         progress = SeriesProgress(total_in_library=0, read_count=0)
         assert progress.total_in_library == 0
+        assert progress.max_series_index is None
         assert progress.read_count == 0
 
     def test_all_read(self):

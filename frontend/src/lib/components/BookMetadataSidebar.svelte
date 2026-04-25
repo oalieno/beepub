@@ -17,6 +17,21 @@
     return idx == null ? "" : String(idx);
   }
 
+  function seriesDisplayTotal(
+    progress: SeriesNeighborsOut["progress"] | undefined,
+  ): number | null {
+    const total = progress?.max_series_index ?? progress?.total_in_library;
+    return total == null || total <= 0 ? null : total;
+  }
+
+  function seriesProgressPercent(
+    currentIdx: number | null | undefined,
+    total: number | null,
+  ): number | null {
+    if (currentIdx == null || total == null || total <= 0) return null;
+    return Math.min((currentIdx / total) * 100, 100);
+  }
+
   const categoryStyles: Record<string, string> = {
     genre: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
     subgenre:
@@ -31,8 +46,9 @@
 <div class="flex-shrink-0 w-full md:w-64 order-first md:order-none">
   <div class="flex flex-col gap-4 text-sm">
     {#if book.display_series}
-      {@const total = seriesNeighbors?.progress?.total_in_library ?? 0}
+      {@const total = seriesDisplayTotal(seriesNeighbors?.progress)}
       {@const currentIdx = book.display_series_index}
+      {@const progressPercent = seriesProgressPercent(currentIdx, total)}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5"
           >{m.metadata_label_series()}</span
@@ -46,9 +62,9 @@
           </button>
           {#if currentIdx != null}
             <span class="text-muted-foreground text-xs block mt-0.5">
-              {#if total > 0}{m.metadata_series_vol_of({
+              {#if total}{m.metadata_series_vol_of({
                   index: formatSeriesIndex(currentIdx),
-                  total: String(total),
+                  total: formatSeriesIndex(total),
                 })}{:else}{m.metadata_series_vol({
                   index: formatSeriesIndex(currentIdx),
                 })}{/if}
@@ -69,13 +85,13 @@
             {:else}
               <div class="w-6"></div>
             {/if}
-            {#if currentIdx != null && total > 0}
+            {#if progressPercent != null}
               <div
                 class="flex-1 h-1.5 rounded-full bg-secondary overflow-hidden"
               >
                 <div
                   class="h-full rounded-full bg-primary transition-all"
-                  style="width: {Math.min((currentIdx / total) * 100, 100)}%"
+                  style="width: {progressPercent}%"
                 ></div>
               </div>
             {:else}

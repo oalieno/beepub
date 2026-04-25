@@ -216,6 +216,17 @@
       });
   }
 
+  function formatSeriesIndex(idx: number | null | undefined): string {
+    return idx == null ? "" : String(idx);
+  }
+
+  function seriesDisplayTotal(): string {
+    return formatSeriesIndex(
+      seriesNeighbors?.progress?.max_series_index ??
+        seriesNeighbors?.progress?.total_in_library,
+    );
+  }
+
   async function handleBookEnd() {
     if (seriesFetchPromise) {
       await seriesFetchPromise;
@@ -676,10 +687,8 @@
                   : 'text-muted-foreground'}"
               >
                 {m.reader_series_book_of({
-                  index: String(seriesNeighbors.next.series_index),
-                  total: String(
-                    seriesNeighbors.progress?.total_in_library ?? "?",
-                  ),
+                  index: formatSeriesIndex(seriesNeighbors.next.series_index),
+                  total: seriesDisplayTotal() || "?",
                 })}
               </p>
             {/if}

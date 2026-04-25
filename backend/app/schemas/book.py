@@ -120,6 +120,7 @@ class SeriesBookBrief(BaseModel):
 
 class SeriesProgress(BaseModel):
     total_in_library: int
+    max_series_index: float | None = None
     read_count: int
 
 

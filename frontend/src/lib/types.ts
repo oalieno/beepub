@@ -121,6 +121,7 @@ export interface SeriesBookBrief {
 
 export interface SeriesProgress {
   total_in_library: number;
+  max_series_index: number | null;
   read_count: number;
 }
 
