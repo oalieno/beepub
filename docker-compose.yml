@@ -30,20 +30,27 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
-      BOOKS_DIR: ${BOOKS_DIR:-/data/books}
-      COVERS_DIR: ${COVERS_DIR:-/data/covers}
-      ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
     volumes:
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
+        condition: service_healthy
+
+  migrate:
+    build: ./backend
+    restart: "no"
+    command: ["sh", "migrate.sh"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+    depends_on:
+      postgres:
         condition: service_healthy
 
   worker:
@@ -53,18 +60,14 @@ services:
     command: ["bash", "start-worker.sh"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
-      BOOKS_DIR: ${BOOKS_DIR:-/data/books}
-      COVERS_DIR: ${COVERS_DIR:-/data/covers}
-      ILLUSTRATIONS_DIR: ${ILLUSTRATIONS_DIR:-/data/illustrations}
     volumes:
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
@@ -83,9 +86,10 @@ services:
       ]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 

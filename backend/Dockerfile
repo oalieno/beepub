@@ -18,6 +18,6 @@ COPY . .
 
 RUN mkdir -p /data/books /data/covers
 
-COPY start.sh /app/start.sh
-RUN chmod +x /app/start.sh
+COPY migrate.sh start.sh /app/
+RUN chmod +x /app/migrate.sh /app/start.sh
 CMD ["/app/start.sh"]

@@ -15,28 +15,24 @@ class Settings(BaseSettings):
 
     # Comma-separated list of additional web origins allowed by CORS, e.g.
     # "https://beepub.example.com,https://reader.example.com". Capacitor and
-    # localhost dev origins are always allowed automatically.
+    # localhost origins are always allowed automatically.
     cors_origins: str = ""
-    dev: bool = False
 
     @property
     def cors_allowed_origins(self) -> list[str]:
-        # Native iOS/Android Capacitor apps and the reverse proxy itself.
+        # Native iOS/Android Capacitor apps. Browser localhost origins are
+        # handled by cors_allowed_origin_regex so any local dev port works.
         origins: list[str] = [
             "capacitor://localhost",
             "ionic://localhost",
-            "http://localhost",
-            "https://localhost",
         ]
-        if self.dev:
-            origins += [
-                "http://localhost:5173",
-                "http://localhost:80",
-                "http://localhost:8080",
-            ]
         if self.cors_origins:
             origins += [o.strip() for o in self.cors_origins.split(",") if o.strip()]
         return origins
+
+    @property
+    def cors_allowed_origin_regex(self) -> str:
+        return r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
 
 
 settings = Settings()
