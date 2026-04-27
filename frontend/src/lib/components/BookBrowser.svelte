@@ -4,6 +4,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
+  import { localizedTagLabel } from "$lib/tags";
   import type { BookOut, PaginatedBooks } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
 
@@ -304,7 +305,7 @@
         class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
         onclick={() => clearFilter("tag")}
       >
-        {m.browser_filter_tag({ tag: filterTag })}
+        {m.browser_filter_tag({ tag: localizedTagLabel(filterTag) })}
         <X size={12} />
       </button>
     {/if}

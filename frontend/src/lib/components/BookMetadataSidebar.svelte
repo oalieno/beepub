@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { localizedTagLabel } from "$lib/tags";
   import type { BookOut, SeriesNeighborsOut } from "$lib/types";
 
   let {
@@ -199,7 +200,7 @@
                 bookTag.confidence * 100,
               )}%"
             >
-              {bookTag.label}
+              {localizedTagLabel(bookTag.tag, bookTag.label)}
             </button>
           {/each}
         </div>

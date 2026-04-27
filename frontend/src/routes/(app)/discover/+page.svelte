@@ -15,6 +15,7 @@
   } from "$lib/components/skeletons";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
+  import { localizedTagLabel } from "$lib/tags";
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);
@@ -181,7 +182,7 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-lg font-semibold text-foreground">
-                {section.label}
+                {localizedTagLabel(section.tag, section.label)}
               </h3>
               <a
                 href="/all-books?tag={encodeURIComponent(section.tag)}"
