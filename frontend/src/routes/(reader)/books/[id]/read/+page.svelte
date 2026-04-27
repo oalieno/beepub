@@ -47,7 +47,7 @@
   let fontFamily = $state("serif");
   let fontSize = $state(16);
   let darkMode = $state(false);
-  let percentage = $state(0);
+  let percentage = $state<number | null>(null);
   let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
   let currentHref = $state("");
   let reader: EpubReader = $state(null as any);
@@ -194,7 +194,12 @@
   }
 
   $effect(() => {
-    if (percentage >= 99 && !autoReadTriggered && interaction) {
+    if (
+      percentage != null &&
+      percentage >= 99 &&
+      !autoReadTriggered &&
+      interaction
+    ) {
       autoReadTriggered = true;
       if (readingTimer) {
         clearTimeout(readingTimer);
@@ -447,7 +452,7 @@
     {/if}
 
     <!-- Bottom percentage indicator (desktop only, mobile has it in top bar) -->
-    {#if epubLoaded}
+    {#if epubLoaded && percentage != null}
       <div
         class="hidden md:flex absolute bottom-0 left-0 right-0 items-center justify-center py-2 pointer-events-none"
       >

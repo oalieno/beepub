@@ -7,12 +7,12 @@
   let {
     bookId = "",
     title = "",
-    percentage = 0,
+    percentage = null,
     darkMode = false,
   }: {
     bookId?: string;
     title?: string;
-    percentage?: number;
+    percentage?: number | null;
     darkMode?: boolean;
   } = $props();
 </script>
@@ -45,12 +45,14 @@
         {title || m.common_loading()}
       </p>
     </div>
-    <span
-      class="text-xs shrink-0 {darkMode
-        ? 'text-gray-500'
-        : 'text-muted-foreground'}"
-    >
-      {percentage}%
-    </span>
+    {#if percentage != null}
+      <span
+        class="text-xs shrink-0 {darkMode
+          ? 'text-gray-500'
+          : 'text-muted-foreground'}"
+      >
+        {percentage}%
+      </span>
+    {/if}
   </div>
 </div>

@@ -123,9 +123,12 @@ export const booksApi = {
     data: {
       cfi: string;
       percentage: number;
+      current_page?: number;
       font_size?: number;
       section_index?: number;
       section_page?: number;
+      section_page_counts?: number[];
+      total_pages?: number;
       track_activity?: boolean;
     },
   ) => put(`/books/${bookId}/progress`, data),

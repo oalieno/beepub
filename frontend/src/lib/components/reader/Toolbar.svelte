@@ -22,7 +22,7 @@
     title = "",
     fontFamily = "serif",
     fontSize = 16,
-    percentage = 0,
+    percentage = null,
     darkMode = false,
     toc = [],
     isRtl = false,
@@ -46,7 +46,7 @@
     title?: string;
     fontFamily?: string;
     fontSize?: number;
-    percentage?: number;
+    percentage?: number | null;
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
@@ -151,13 +151,15 @@
     class="flex-1 basis-full sm:basis-auto min-w-0 order-last sm:order-none text-center sm:text-left"
   >
     <p class="text-sm font-medium truncate">{title}</p>
-    <p
-      class="hidden sm:flex text-xs {darkMode
-        ? 'text-gray-500'
-        : 'text-muted-foreground'} items-center gap-1.5"
-    >
-      {percentage}%
-    </p>
+    {#if percentage != null}
+      <p
+        class="hidden sm:flex text-xs {darkMode
+          ? 'text-gray-500'
+          : 'text-muted-foreground'} items-center gap-1.5"
+      >
+        {percentage}%
+      </p>
+    {/if}
   </div>
 
   <div class="ml-auto flex items-center gap-1">

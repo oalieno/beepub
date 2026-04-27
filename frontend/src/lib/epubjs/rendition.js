@@ -834,12 +834,12 @@ class Rendition {
     );
     let locationEnd = this.book.locations.locationFromCfi(end.mapping.end);
 
-    if (locationStart != null) {
+    if (locationStart != null && locationStart >= 0) {
       located.start.location = locationStart;
       located.start.percentage =
         this.book.locations.percentageFromLocation(locationStart);
     }
-    if (locationEnd != null) {
+    if (locationEnd != null && locationEnd >= 0) {
       located.end.location = locationEnd;
       located.end.percentage =
         this.book.locations.percentageFromLocation(locationEnd);

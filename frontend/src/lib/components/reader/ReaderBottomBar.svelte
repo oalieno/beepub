@@ -12,7 +12,7 @@
   import * as m from "$lib/paraglide/messages.js";
 
   let {
-    percentage = 0,
+    percentage = null,
     darkMode = false,
     isRtl = false,
     isImageBook = false,
@@ -26,7 +26,7 @@
     oncompanion,
     onsettings,
   }: {
-    percentage?: number;
+    percentage?: number | null;
     darkMode?: boolean;
     isRtl?: boolean;
     isImageBook?: boolean;
@@ -71,18 +71,22 @@
     >
       <ChevronLeft size={20} />
     </button>
-    <div
-      class="flex-1 h-1 rounded-full overflow-hidden {darkMode
-        ? 'bg-gray-800'
-        : 'bg-secondary'}"
-    >
+    {#if percentage != null}
       <div
-        class="h-full rounded-full transition-all duration-300 {darkMode
-          ? 'bg-gray-500'
-          : 'bg-primary'}"
-        style="width: {percentage}%;"
-      ></div>
-    </div>
+        class="flex-1 h-1 rounded-full overflow-hidden {darkMode
+          ? 'bg-gray-800'
+          : 'bg-secondary'}"
+      >
+        <div
+          class="h-full rounded-full transition-all duration-300 {darkMode
+            ? 'bg-gray-500'
+            : 'bg-primary'}"
+          style="width: {percentage}%;"
+        ></div>
+      </div>
+    {:else}
+      <div class="flex-1"></div>
+    {/if}
     <button
       class="p-1 rounded-md transition-colors {btnClass}"
       onclick={() => (isRtl ? onprev?.() : onnext?.())}

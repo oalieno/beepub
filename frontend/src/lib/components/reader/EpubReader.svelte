@@ -44,7 +44,7 @@
     darkMode?: boolean;
     isImageBook?: boolean;
     offline?: boolean;
-    onprogress?: (detail: { cfi: string; percentage: number }) => void;
+    onprogress?: (detail: { cfi: string; percentage: number | null }) => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
@@ -141,7 +141,15 @@
   let currentCfi = "";
   let currentSectionIndex = 0;
   let currentSectionPage = 0;
+  let currentPage = 0;
+  let totalPages = 0;
   let currentPercentage = 0;
+  let sectionPageCounts: number[] = [];
+  let lastLocation: any = null;
+  let locationsGenerated = false;
+  let generatingLocations = false;
+  let restoringProgress = false;
+  let waitingForCanonicalProgress = false;
 
   // TOC tracking
   let tocData: { label: string; href: string; subitems?: any[] }[] = [];
@@ -167,8 +175,165 @@
     prefetchSections(epubBook, currentSectionIndex);
   }
 
-  function emitProgress() {
-    onprogress?.({ cfi: currentCfi, percentage: currentPercentage });
+  function emitProgress(percentage: number | null = currentPercentage) {
+    onprogress?.({ cfi: currentCfi, percentage });
+  }
+
+  function clampPercentage(value: number): number {
+    return Math.min(100, Math.max(0, Math.round(value)));
+  }
+
+  function updateSectionPageCount(sectionIndex: number, pageCount: number) {
+    if (sectionIndex < 0 || pageCount < 1) return;
+    if (sectionPageCounts[sectionIndex] === pageCount) return;
+    const next = sectionPageCounts.slice();
+    next[sectionIndex] = pageCount;
+    sectionPageCounts = next;
+  }
+
+  function normalizeSectionPageCounts(value: unknown): number[] {
+    if (!Array.isArray(value)) return [];
+    return Array.from({ length: value.length }, (_, index) => {
+      const count = value[index];
+      return typeof count === "number" && Number.isFinite(count) && count > 0
+        ? Math.round(count)
+        : 0;
+    });
+  }
+
+  function calculatePageProgress(location: any): {
+    percentage: number;
+    currentPage: number;
+    totalPages: number;
+  } {
+    const totalSections = epubBook?.spine?.spineItems?.length ?? 1;
+    const sectionIndex = location?.start?.index ?? currentSectionIndex;
+    const page = Math.max(1, location?.start?.displayed?.page ?? 1);
+    const displayedTotal = Math.max(1, location?.start?.displayed?.total ?? 1);
+    updateSectionPageCount(sectionIndex, displayedTotal);
+
+    let knownTotal = 0;
+    let knownCount = 0;
+    for (const count of sectionPageCounts) {
+      if (count != null && count > 0) {
+        knownTotal += count;
+        knownCount += 1;
+      }
+    }
+
+    const estimatedUnknownPages =
+      knownCount > 0 ? Math.max(1, Math.round(knownTotal / knownCount)) : 1;
+    let pagesBefore = 0;
+    let estimatedTotalPages = 0;
+
+    for (let i = 0; i < totalSections; i++) {
+      const count = sectionPageCounts[i] ?? estimatedUnknownPages;
+      if (i < sectionIndex) pagesBefore += count;
+      estimatedTotalPages += count;
+    }
+
+    const pageWithinSection = Math.min(page, displayedTotal);
+    const absolutePage = pagesBefore + pageWithinSection;
+    const completedPages = pagesBefore + Math.max(0, pageWithinSection - 1);
+    const percentage = location?.atEnd
+      ? 100
+      : clampPercentage(
+          (completedPages / Math.max(1, estimatedTotalPages)) * 100,
+        );
+
+    return {
+      percentage,
+      currentPage: absolutePage,
+      totalPages: estimatedTotalPages,
+    };
+  }
+
+  function calculateProgress(location: any): {
+    percentage: number | null;
+    currentPage: number;
+    totalPages: number;
+  } {
+    const pageProgress = calculatePageProgress(location);
+
+    if (isImageBook) {
+      return location?.atEnd
+        ? { ...pageProgress, percentage: 100 }
+        : pageProgress;
+    }
+
+    if (location?.atEnd) {
+      return { ...pageProgress, percentage: 100 };
+    }
+
+    let locationPercentage =
+      typeof location?.start?.percentage === "number"
+        ? location.start.percentage
+        : null;
+
+    if (
+      locationPercentage == null &&
+      locationsGenerated &&
+      currentCfi &&
+      epubBook?.locations
+    ) {
+      const loc = epubBook.locations.locationFromCfi(currentCfi);
+      locationPercentage =
+        typeof loc === "number" && loc >= 0
+          ? epubBook.locations.percentageFromLocation(loc)
+          : null;
+    }
+
+    if (
+      typeof locationPercentage === "number" &&
+      Number.isFinite(locationPercentage) &&
+      locationPercentage >= 0 &&
+      locationPercentage <= 1
+    ) {
+      return {
+        ...pageProgress,
+        percentage: clampPercentage(locationPercentage * 100),
+      };
+    }
+
+    return { ...pageProgress, percentage: null };
+  }
+
+  async function generateLocations() {
+    if (generatingLocations || locationsGenerated || !epubBook?.locations) {
+      return;
+    }
+    generatingLocations = true;
+    try {
+      await epubBook.ready;
+      await epubBook.locations.generate(1600);
+      locationsGenerated = true;
+      if (lastLocation && currentCfi && !restoringProgress) {
+        const progress = calculateProgress(lastLocation);
+        currentPage = progress.currentPage;
+        totalPages = progress.totalPages;
+        waitingForCanonicalProgress = false;
+        if (progress.percentage != null) {
+          currentPercentage = progress.percentage;
+          emitProgress();
+          debouncedSave();
+        } else {
+          emitProgress(null);
+        }
+      }
+    } catch {
+      // Image-heavy or malformed EPUBs may not produce text locations.
+      waitingForCanonicalProgress = false;
+      if (isImageBook && lastLocation && currentCfi) {
+        const progress = calculatePageProgress(lastLocation);
+        currentPercentage = progress.percentage;
+        currentPage = progress.currentPage;
+        totalPages = progress.totalPages;
+        emitProgress();
+        debouncedSave();
+      }
+    } finally {
+      generatingLocations = false;
+    }
   }
 
   function doFindActiveTocHref(sectionIndex: number): string {
@@ -243,22 +408,28 @@
 
     // relocated handler: calculate percentage from section position
     rendition.on("relocated", (location: any) => {
+      lastLocation = location;
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
-      const displayedTotal = location.start.displayed?.total ?? 1;
-      const totalSections = epubBook?.spine?.spineItems?.length ?? 1;
-      currentPercentage = Math.min(
-        100,
-        Math.max(
-          0,
-          Math.round(
-            ((currentSectionIndex + currentSectionPage / displayedTotal) /
-              totalSections) *
-              100,
-          ),
-        ),
-      );
+      const progress = calculateProgress(location);
+      currentPage = progress.currentPage;
+      totalPages = progress.totalPages;
+
+      if (restoringProgress) {
+        return;
+      }
+
+      if (waitingForCanonicalProgress && !locationsGenerated) {
+        return;
+      }
+
+      if (progress.percentage == null) {
+        emitProgress(null);
+        return;
+      }
+
+      currentPercentage = progress.percentage;
       emitProgress();
       onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
       debouncedSave();
@@ -279,8 +450,11 @@
           JSON.stringify({
             cfi: currentCfi,
             percentage: currentPercentage,
+            currentPage,
+            totalPages,
             sectionIndex: currentSectionIndex,
             sectionPage: currentSectionPage,
+            sectionPageCounts: normalizeSectionPageCounts(sectionPageCounts),
             fontSize,
           }),
         );
@@ -664,8 +838,13 @@
           savedProgress = {
             cfi: p.cfi,
             percentage: p.percentage,
+            current_page: p.currentPage,
+            total_pages: p.totalPages,
             section_page: p.sectionPage,
             section_index: p.sectionIndex,
+            section_page_counts: normalizeSectionPageCounts(
+              p.sectionPageCounts,
+            ),
             font_size: p.fontSize,
           };
         }
@@ -675,10 +854,31 @@
     }
     try {
       if (savedProgress?.cfi) {
-        // Show saved percentage immediately while loading
-        if (savedProgress.percentage != null)
+        if (savedProgress.percentage != null) {
           currentPercentage = savedProgress.percentage;
-        emitProgress();
+        }
+        if (savedProgress.current_page != null)
+          currentPage = savedProgress.current_page;
+        if (savedProgress.total_pages != null)
+          totalPages = savedProgress.total_pages;
+        if (Array.isArray(savedProgress.section_page_counts))
+          sectionPageCounts = normalizeSectionPageCounts(
+            savedProgress.section_page_counts,
+          );
+        waitingForCanonicalProgress = !isImageBook;
+        emitProgress(isImageBook ? currentPercentage : null);
+
+        restoringProgress = true;
+        if (
+          savedProgress.section_page != null &&
+          savedProgress.font_size === fontSize &&
+          rendition.manager
+        ) {
+          rendition.manager._lastTargetPage = Math.max(
+            0,
+            savedProgress.section_page - 1,
+          );
+        }
 
         await rendition.display(savedProgress.cfi);
 
@@ -707,10 +907,16 @@
           }
           // else: afterResized will handle when scrollWidth/scrollHeight expands
         }
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        restoringProgress = false;
+        rendition.reportLocation?.();
       } else {
+        waitingForCanonicalProgress = !isImageBook;
+        emitProgress(null);
         await rendition.display();
       }
     } catch {
+      restoringProgress = false;
       await rendition.display();
     }
 
@@ -766,6 +972,8 @@
     );
     window.addEventListener("beforeunload", handleBeforeUnload);
 
+    generateLocations();
+
     // Fix layout offset when returning to the app (e.g. iOS task switcher)
     handleVisibility = () => {
       if (document.visibilityState === "visible" && rendition) {
@@ -794,9 +1002,12 @@
     const data = {
       cfi: currentCfi,
       percentage: currentPercentage,
+      current_page: currentPage,
       font_size: fontSize,
       section_index: currentSectionIndex,
       section_page: currentSectionPage,
+      section_page_counts: normalizeSectionPageCounts(sectionPageCounts),
+      total_pages: totalPages,
       track_activity: false,
     };
     fetch(`${apiBase()}/books/${bookId}/progress`, {
@@ -854,15 +1065,20 @@
 
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
+    if (waitingForCanonicalProgress && !locationsGenerated) return;
+    const payload = {
+      cfi: currentCfi,
+      percentage: currentPercentage,
+      current_page: currentPage,
+      font_size: fontSize,
+      section_index: currentSectionIndex,
+      section_page: currentSectionPage,
+      section_page_counts: normalizeSectionPageCounts(sectionPageCounts),
+      total_pages: totalPages,
+      track_activity: trackActivity,
+    };
     try {
-      await booksApi.updateProgress(bookId, {
-        cfi: currentCfi,
-        percentage: currentPercentage,
-        font_size: fontSize,
-        section_index: currentSectionIndex,
-        section_page: currentSectionPage,
-        track_activity: trackActivity,
-      });
+      await booksApi.updateProgress(bookId, payload);
     } catch {}
   }
 
@@ -958,10 +1174,16 @@
   }
 
   export function displayChapter(href: string) {
+    restoringProgress = false;
+    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
+    if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(href);
   }
 
   export function displayCfi(cfi: string) {
+    restoringProgress = false;
+    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
+    if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(cfi);
   }
 
