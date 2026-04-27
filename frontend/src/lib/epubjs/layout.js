@@ -204,10 +204,13 @@ class Layout {
       (section &&
         section.properties &&
         section.properties.includes("rendition:layout-pre-paginated"));
+    var isSinglePageVisual =
+      this.name !== "pre-paginated" && contents.isSinglePageVisual();
+    contents._beepubSinglePageVisual = isSinglePageVisual;
 
     if (this.name === "pre-paginated") {
       formating = contents.fit(this.columnWidth, this.height, section);
-    } else if (isPrePaginated) {
+    } else if (isPrePaginated || isSinglePageVisual) {
       // Per-item pre-paginated in a reflowable book: don't use fit() (which
       // scales based on viewport meta) or columns() (which causes expand loop).
       // Use a class + injected stylesheet so our styles survive theme overrides

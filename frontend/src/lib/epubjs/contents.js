@@ -151,11 +151,94 @@ class Contents {
     rect = range.getBoundingClientRect();
     width = rect.width;
 
+    if (rect.left < -this.offscreenMeasurementLimit(content)) {
+      width = this.textWidthWithoutOffscreenElements(content, range, width);
+    }
+
     if (border && border.width) {
       width += border.width;
     }
 
     return Math.round(width);
+  }
+
+  /**
+   * Get a measurement limit for detecting offscreen accessibility text.
+   * @param {element} content
+   * @returns {number}
+   */
+  offscreenMeasurementLimit(content) {
+    return (
+      this.window.innerWidth ||
+      this.documentElement.clientWidth ||
+      content.clientWidth ||
+      1024
+    );
+  }
+
+  /**
+   * Re-measure without absolutely positioned text hidden far offscreen.
+   * Standard Ebooks uses this pattern for accessible headings; including those
+   * boxes makes Range.getBoundingClientRect() report tens of pages too wide.
+   * @param {element} content
+   * @param {Range} range
+   * @param {number} fallbackWidth
+   * @returns {number}
+   */
+  textWidthWithoutOffscreenElements(content, range, fallbackWidth) {
+    var limit = this.offscreenMeasurementLimit(content);
+    var hidden = [];
+    var elements = content.querySelectorAll("*");
+
+    for (var i = 0; i < elements.length; i++) {
+      var element = elements[i];
+      var style = this.window.getComputedStyle(element);
+      var position = style.position;
+
+      if (position !== "absolute" && position !== "fixed") {
+        continue;
+      }
+
+      var left = parseFloat(style.left);
+      var right = parseFloat(style.right);
+      var textIndent = parseFloat(style.textIndent);
+      var isOffscreen =
+        (Number.isFinite(left) && left < -limit) ||
+        (Number.isFinite(right) && right < -limit) ||
+        (Number.isFinite(textIndent) && textIndent < -limit);
+
+      if (!isOffscreen) {
+        continue;
+      }
+
+      hidden.push({
+        element,
+        display: element.style.getPropertyValue("display"),
+        priority: element.style.getPropertyPriority("display"),
+      });
+      element.style.setProperty("display", "none", "important");
+    }
+
+    if (!hidden.length) {
+      return fallbackWidth;
+    }
+
+    try {
+      range.selectNodeContents(content);
+      return range.getBoundingClientRect().width;
+    } finally {
+      hidden.forEach((item) => {
+        if (item.display) {
+          item.element.style.setProperty(
+            "display",
+            item.display,
+            item.priority,
+          );
+        } else {
+          item.element.style.removeProperty("display");
+        }
+      });
+    }
   }
 
   /**
@@ -174,6 +257,48 @@ class Contents {
     height = rect.bottom;
 
     return Math.round(height);
+  }
+
+  /**
+   * Detect short visual frontmatter pages that should be laid out as one page.
+   * Some reflowable EPUBs, including Standard Ebooks title pages, do not mark
+   * these spine items as pre-paginated even though CSS columns can fragment the
+   * image into many blank pages.
+   */
+  isSinglePageVisual() {
+    var body = this.content || this.document.body;
+    if (!body) return false;
+
+    var first = body.firstElementChild || body;
+    var epubNamespace = "http://www.idpf.org/2007/ops";
+    var bodyType =
+      body.getAttribute("epub:type") ||
+      body.getAttributeNS(epubNamespace, "type") ||
+      "";
+    var firstType =
+      first.getAttribute("epub:type") ||
+      first.getAttributeNS(epubNamespace, "type") ||
+      "";
+    var firstClass =
+      typeof first.className === "string"
+        ? first.className
+        : first.getAttribute("class") || "";
+    var marker = [
+      bodyType,
+      firstType,
+      firstClass,
+    ].join(" ");
+
+    var isVisualFrontmatter =
+      /(^|\s)(cover|frontmatter|titlepage|halftitlepage)(\s|$)/i.test(
+        marker,
+      ) || /epub-type-contains-word-(cover|titlepage)/i.test(marker);
+    if (!isVisualFrontmatter) return false;
+
+    if (!body.querySelector("img, svg, image")) return false;
+
+    var text = (body.textContent || "").replace(/\s+/g, " ").trim();
+    return text.length <= 300;
   }
 
   /**

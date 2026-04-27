@@ -351,7 +351,8 @@ class IframeView {
       this.layout.name === "pre-paginated" ||
       (this.section &&
         this.section.properties &&
-        this.section.properties.includes("rendition:layout-pre-paginated"));
+        this.section.properties.includes("rendition:layout-pre-paginated")) ||
+      (this.contents && this.contents._beepubSinglePageVisual);
 
     if (isPrePaginated) {
       width = this.layout.columnWidth;
