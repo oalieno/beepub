@@ -75,7 +75,9 @@ class TestSeriesBookBrief:
 
 class TestSeriesProgress:
     def test_basic(self):
-        progress = SeriesProgress(total_in_library=5, max_series_index=6.0, read_count=3)
+        progress = SeriesProgress(
+            total_in_library=5, max_series_index=6.0, read_count=3
+        )
         assert progress.total_in_library == 5
         assert progress.max_series_index == 6.0
         assert progress.read_count == 3

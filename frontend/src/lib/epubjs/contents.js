@@ -283,16 +283,11 @@ class Contents {
       typeof first.className === "string"
         ? first.className
         : first.getAttribute("class") || "";
-    var marker = [
-      bodyType,
-      firstType,
-      firstClass,
-    ].join(" ");
+    var marker = [bodyType, firstType, firstClass].join(" ");
 
     var isVisualFrontmatter =
-      /(^|\s)(cover|frontmatter|titlepage|halftitlepage)(\s|$)/i.test(
-        marker,
-      ) || /epub-type-contains-word-(cover|titlepage)/i.test(marker);
+      /(^|\s)(cover|frontmatter|titlepage|halftitlepage)(\s|$)/i.test(marker) ||
+      /epub-type-contains-word-(cover|titlepage)/i.test(marker);
     if (!isVisualFrontmatter) return false;
 
     if (!body.querySelector("img, svg, image")) return false;
