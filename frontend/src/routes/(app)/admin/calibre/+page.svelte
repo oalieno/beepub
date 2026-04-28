@@ -26,6 +26,7 @@
     {},
   );
   let syncIntervalMinutes = $state(30);
+  let calibreBaseDir = $state("/calibre");
 
   let linkedLibraries = $derived(libraries.filter((l) => l.linked));
   let unlinkedLibraries = $derived(libraries.filter((l) => !l.linked));
@@ -54,6 +55,7 @@
       if (settings) {
         syncIntervalMinutes =
           parseInt(settings.calibre_auto_sync_interval_minutes) || 30;
+        calibreBaseDir = settings.calibre_base_dir || "/calibre";
       }
       for (const lib of libraries) {
         if (lib.linked && lib.library_id) {
@@ -263,7 +265,7 @@
       <HardDrive class="mx-auto text-muted-foreground/40 mb-3" size={48} />
       <p class="text-muted-foreground text-lg">{m.admin_calibre_empty()}</p>
       <p class="text-muted-foreground/70 text-sm mt-1">
-        {m.admin_calibre_empty_subtitle()}
+        {m.admin_calibre_empty_subtitle({ path: calibreBaseDir })}
       </p>
     </div>
   {:else}

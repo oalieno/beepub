@@ -20,6 +20,7 @@
   // Form state
   let registrationEnabled = $state(false);
   let timezone = $state("Asia/Taipei");
+  let calibreBaseDir = $state("/calibre");
 
   // Provider credentials (stored once)
   let geminiApiKey = $state("");
@@ -149,6 +150,7 @@
       settings = await adminApi.getSettings();
       registrationEnabled = settings.registration_enabled === "true";
       timezone = settings.timezone;
+      calibreBaseDir = settings.calibre_base_dir || "/calibre";
       geminiApiKey = settings.gemini_api_key || "";
       openaiApiKey = settings.openai_api_key || "";
       openaiBaseUrl = settings.openai_base_url || "";
@@ -207,6 +209,7 @@
       settings = await adminApi.updateSettings({
         registration_enabled: registrationEnabled ? "true" : "false",
         timezone,
+        calibre_base_dir: calibreBaseDir.trim() || "/calibre",
         gemini_api_key: geminiApiKey,
         openai_api_key: openaiApiKey,
         openai_base_url: openaiBaseUrl,
@@ -417,6 +420,29 @@
                 {/each}
               </Select.Content>
             </Select.Root>
+          </div>
+        </Card.Content>
+      </Card.Root>
+
+      <!-- Calibre -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>{m.admin_settings_calibre()}</Card.Title>
+          <Card.Description>{m.admin_settings_calibre_desc()}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <div class="max-w-sm space-y-1.5">
+            <Label for="calibre-base-dir"
+              >{m.admin_settings_calibre_path()}</Label
+            >
+            <Input
+              id="calibre-base-dir"
+              bind:value={calibreBaseDir}
+              placeholder="/calibre"
+            />
+            <p class="text-xs text-muted-foreground">
+              {m.admin_settings_calibre_path_help()}
+            </p>
           </div>
         </Card.Content>
       </Card.Root>

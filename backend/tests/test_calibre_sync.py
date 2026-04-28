@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.calibre import get_metadata_db_mtime
+from app.services.calibre import get_metadata_db_mtime, scan_calibre_libraries
 
 
 class TestGetMetadataDbMtime:
@@ -27,6 +27,31 @@ class TestGetMetadataDbMtime:
         """mtime returns None when metadata.db doesn't exist."""
         result = get_metadata_db_mtime(str(tmp_path / "nonexistent"))
         assert result is None
+
+
+class TestScanCalibreLibraries:
+    """Tests for Calibre library discovery."""
+
+    def test_scans_custom_base_dir(self, tmp_path):
+        root = tmp_path / "custom-calibre"
+        library = root / "Library A"
+        library.mkdir(parents=True)
+        (library / "metadata.db").write_text("not a real sqlite db")
+
+        result = scan_calibre_libraries(str(root))
+
+        assert result == [
+            {
+                "path": str(library),
+                "name": "Library A",
+                "book_count": None,
+            }
+        ]
+
+    def test_missing_base_dir_returns_empty_list(self, tmp_path):
+        result = scan_calibre_libraries(str(tmp_path / "missing"))
+
+        assert result == []
 
 
 def _make_library(**overrides):

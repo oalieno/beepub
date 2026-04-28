@@ -20,7 +20,6 @@ from app.tasks.text_extract import extract_book_text
 
 logger = logging.getLogger(__name__)
 
-CALIBRE_BASE_DIR = "/calibre"
 SYNC_KEY_PREFIX = "beepub:calibre:sync"
 
 
@@ -61,13 +60,13 @@ class SyncResult:
     errors: list[str] = field(default_factory=list)
 
 
-def scan_calibre_libraries() -> list[dict]:
-    """Scan /calibre/ for directories containing metadata.db."""
+def scan_calibre_libraries(base_dir: str = "/calibre") -> list[dict]:
+    """Scan a Calibre root directory for libraries containing metadata.db."""
     results = []
-    if not os.path.isdir(CALIBRE_BASE_DIR):
+    if not os.path.isdir(base_dir):
         return results
-    for entry in sorted(os.listdir(CALIBRE_BASE_DIR)):
-        lib_path = os.path.join(CALIBRE_BASE_DIR, entry)
+    for entry in sorted(os.listdir(base_dir)):
+        lib_path = os.path.join(base_dir, entry)
         db_path = os.path.join(lib_path, "metadata.db")
         if os.path.isdir(lib_path) and os.path.isfile(db_path):
             # Count EPUB books

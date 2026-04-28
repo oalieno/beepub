@@ -29,7 +29,7 @@ from app.services.calibre import (
     scan_calibre_libraries,
     sync_calibre_library,
 )
-from app.services.settings import get_all_settings, update_settings
+from app.services.settings import get_all_settings, get_setting, update_settings
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -245,7 +245,8 @@ async def list_calibre_libraries(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Scan for available Calibre libraries and show linked status."""
-    available = await asyncio.to_thread(scan_calibre_libraries)
+    calibre_base_dir = (await get_setting(db, "calibre_base_dir")).strip() or "/calibre"
+    available = await asyncio.to_thread(scan_calibre_libraries, calibre_base_dir)
 
     # Get already-linked libraries
     result = await db.execute(select(Library).where(Library.calibre_path.isnot(None)))
