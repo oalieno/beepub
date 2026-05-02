@@ -76,15 +76,21 @@ export function apiBase(): string {
 
 /**
  * Cover image URL. Web uses nginx fast path (/covers/), native uses API.
+ * Pass `version` (e.g. book.updated_at) to bust browser/CDN caches when
+ * the cover is replaced.
  */
-export function coverUrl(bookId: string): string {
+export function coverUrl(bookId: string, version?: string | number): string {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const native =
     typeof window !== "undefined" &&
     ((window as any).Capacitor?.isNativePlatform?.() ?? false);
-  return native
+  const base = native
     ? `${apiBase()}/books/${bookId}/cover`
     : `/covers/${bookId}.jpg`;
+  if (version === undefined || version === null) return base;
+  const v =
+    typeof version === "string" ? Date.parse(version) || version : version;
+  return `${base}?v=${encodeURIComponent(String(v))}`;
 }
 
 function isNativePlatform(): boolean {

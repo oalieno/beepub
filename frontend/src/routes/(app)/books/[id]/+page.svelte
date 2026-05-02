@@ -518,7 +518,7 @@
       >
         {#if book.cover_path}
           <img
-            use:authedSrc={coverUrl(book.id)}
+            use:authedSrc={coverUrl(book.id, book.updated_at)}
             alt="{book.display_title} cover"
             class="max-w-full h-auto rounded-sm book-shadow"
           />
@@ -942,7 +942,7 @@
               >
                 {#if simBook.cover_path}
                   <img
-                    use:authedSrc={coverUrl(simBook.id)}
+                    use:authedSrc={coverUrl(simBook.id, simBook.updated_at)}
                     alt={simBook.display_title ?? ""}
                     class="w-full h-full object-cover"
                     loading="lazy"
@@ -1403,7 +1403,7 @@
               >
                 {#if result.cover_path}
                   <img
-                    use:authedSrc={coverUrl(result.id)}
+                    use:authedSrc={coverUrl(result.id, result.updated_at)}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"

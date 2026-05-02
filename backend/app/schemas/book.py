@@ -59,6 +59,7 @@ class BookOut(BaseModel):
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID
     created_at: datetime
+    updated_at: datetime
     library_id: uuid.UUID | None = None
     library_names: list[str] = []
 

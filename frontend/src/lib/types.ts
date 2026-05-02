@@ -77,6 +77,7 @@ export interface BookOut {
   calibre_added_at: string | null;
   added_by: string;
   created_at: string;
+  updated_at: string;
   library_id: string | null;
   library_names: string[];
 }

@@ -14,6 +14,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -936,6 +937,7 @@ async def get_book_file(
 async def get_book_content(
     book_id: uuid.UUID,
     path: str,
+    request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -943,6 +945,20 @@ async def get_book_content(
     book = await _get_book_with_access(book_id, current_user, db)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
+
+    # ETag based on EPUB mtime + path. When Calibre rewrites the EPUB
+    # (cover/xhtml edits), mtime advances and the ETag changes, so the
+    # browser's cached copy is invalidated naturally.
+    epub_mtime = int(os.path.getmtime(book.file_path))
+    etag = f'"{epub_mtime:x}-{abs(hash(path)):x}"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "private, max-age=86400, must-revalidate",
+    }
+
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+
     try:
         with zipfile.ZipFile(book.file_path, "r") as zf:
             data = zf.read(path)
@@ -966,7 +982,7 @@ async def get_book_content(
     return Response(
         content=data,
         media_type=content_type,
-        headers={"Cache-Control": "private, max-age=86400, immutable"},
+        headers=headers,
     )
 
 

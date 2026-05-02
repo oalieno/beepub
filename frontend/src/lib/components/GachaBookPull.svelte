@@ -30,7 +30,7 @@
       const img = new Image();
       img.onload = () => resolve();
       img.onerror = () => resolve();
-      img.src = coverUrl(b.id);
+      img.src = coverUrl(b.id, b.updated_at);
     });
   }
 
@@ -170,7 +170,7 @@
               <div class="book-face book-front">
                 {#if book.cover_path}
                   <img
-                    use:authedSrc={coverUrl(book.id)}
+                    use:authedSrc={coverUrl(book.id, book.updated_at)}
                     alt={book.display_title ?? "Book cover"}
                     class="w-full h-full object-cover"
                   />
@@ -219,7 +219,7 @@
             <div class="relative w-full h-full">
               {#if book.cover_path}
                 <img
-                  use:authedSrc={coverUrl(book.id)}
+                  use:authedSrc={coverUrl(book.id, book.updated_at)}
                   alt={book.display_title ?? "Book cover"}
                   class="w-full h-full object-cover"
                 />
