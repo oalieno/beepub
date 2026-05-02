@@ -1089,6 +1089,10 @@
   function applyTheme() {
     if (!rendition) return;
     rendition.themes.default({
+      // Make padding count inside 100%/100vh so books that size content to
+      // viewport (e.g. comic SVGs with height: 99vh) don't overflow by 2rem.
+      html: { "box-sizing": "border-box" },
+      "body, *, *::before, *::after": { "box-sizing": "inherit" },
       body: {
         "font-family": fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS,
         "font-size": `${fontSize}px !important`,

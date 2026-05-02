@@ -269,6 +269,18 @@ class Contents {
     var body = this.content || this.document.body;
     if (!body) return false;
 
+    if (!body.querySelector("img, svg, image")) return false;
+
+    // Tight text-length gate: "single page visual" means the page is
+    // essentially one full-page image. A few characters of stray
+    // whitespace/punctuation is fine, but anything resembling real
+    // content (e.g. a light-novel titlepage with book title + author +
+    // small decorative logo image) should fall through to normal layout
+    // so the book's own typography is preserved.
+    var text = (body.textContent || "").replace(/\s+/g, " ").trim();
+    if (text.length > 5) return false;
+
+    // Case 1: explicit cover/frontmatter/titlepage marker.
     var first = body.firstElementChild || body;
     var epubNamespace = "http://www.idpf.org/2007/ops";
     var bodyType =
@@ -284,16 +296,27 @@ class Contents {
         ? first.className
         : first.getAttribute("class") || "";
     var marker = [bodyType, firstType, firstClass].join(" ");
-
     var isVisualFrontmatter =
       /(^|\s)(cover|frontmatter|titlepage|halftitlepage)(\s|$)/i.test(marker) ||
       /epub-type-contains-word-(cover|titlepage)/i.test(marker);
-    if (!isVisualFrontmatter) return false;
+    if (isVisualFrontmatter) return true;
 
-    if (!body.querySelector("img, svg, image")) return false;
-
-    var text = (body.textContent || "").replace(/\s+/g, " ").trim();
-    return text.length <= 300;
+    // Case 2: page declares a fixed viewport (manga / picture-book pages
+    // that authors ship without setting rendition:layout=pre-paginated at
+    // the package level). The viewport meta + image-only body + tiny text
+    // is the same shape as a fixed-layout page, so handle it the same way
+    // — otherwise CSS columns fragment the single image into blank pages.
+    var hasFixedViewport = false;
+    if (this.document) {
+      var vp = this.document.querySelector("meta[name='viewport']");
+      if (vp) {
+        var content = vp.getAttribute("content") || "";
+        hasFixedViewport =
+          /\bwidth\s*=\s*\d+/.test(content) &&
+          /\bheight\s*=\s*\d+/.test(content);
+      }
+    }
+    return hasFixedViewport;
   }
 
   /**
@@ -1360,6 +1383,52 @@ class Contents {
       // set margin since scale is weird
       var marginLeft = width - viewportWidth * scale;
       this.css("margin-left", marginLeft + "px");
+    }
+
+    // Center the page content vertically/horizontally inside the (1445×2048
+    // style) viewport box. Many fixed-layout EPUBs author their CSS as
+    // `svg { height: 99vh; width: 99vw }`. In epub.js fixed-layout, `vh`
+    // resolves against the iframe element's clientHeight (which equals the
+    // already-scaled visual size) — much smaller than the body box that
+    // fit() sets to viewportWidth × viewportHeight. The svg therefore
+    // collapses to a small box pinned to body's top-left, leaving large
+    // empty space below. Mirrors the per-item-pre-paginated path in
+    // layout.js so behaviour is consistent across mixed and fully fixed
+    // EPUBs.
+    if (this.addClass) this.addClass("beepub-pre-paginated");
+    if (this.addStylesheetCss) {
+      // Keep this stylesheet in sync with the per-item pre-paginated path
+      // in layout.js. See comments there for rationale.
+      this.addStylesheetCss(
+        "body.beepub-pre-paginated { " +
+          "display: flex !important; " +
+          "justify-content: center !important; " +
+          "align-items: center !important; " +
+          "overflow: hidden !important; " +
+          "} " +
+          "body.beepub-pre-paginated > *:not(:has(svg, img, image)):not(#beepub-illustration-overlay) { " +
+          "display: none !important; " +
+          "} " +
+          "body.beepub-pre-paginated > *:has(svg, img, image) { " +
+          "width: 100% !important; " +
+          "height: 100% !important; " +
+          "margin: 0 !important; " +
+          "padding: 0 !important; " +
+          "display: flex !important; " +
+          "justify-content: center !important; " +
+          "align-items: center !important; " +
+          "box-sizing: border-box !important; " +
+          "} " +
+          "body.beepub-pre-paginated svg, " +
+          "body.beepub-pre-paginated img { " +
+          "width: auto !important; " +
+          "height: auto !important; " +
+          "max-width: 100% !important; " +
+          "max-height: 100% !important; " +
+          "object-fit: contain !important; " +
+          "}",
+        "beepub-pre-paginated",
+      );
     }
   }
 

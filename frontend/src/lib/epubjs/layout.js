@@ -228,9 +228,39 @@ class Layout {
           "justify-content: center !important; " +
           "align-items: center !important; " +
           "box-sizing: border-box !important; " +
+          "overflow: hidden !important; " +
           "} " +
+          // Hide non-image siblings (e.g. <ploc>8</ploc> page-number
+          // markers). Once we have decided this page is "single page
+          // visual", text-only sidecar elements should not take up space
+          // in the flex layout and balloon to a giant centered chunk.
+          // Skip our own absolutely-positioned illustration overlay.
+          "body.beepub-pre-paginated > *:not(:has(svg, img, image)):not(#beepub-illustration-overlay) { " +
+          "display: none !important; " +
+          "} " +
+          // Body's direct children that contain media (e.g.
+          // <div class="main"><svg>...</svg></div>) fill the body content
+          // box and become flex containers themselves so the SVG image is
+          // centered in both axes.
+          "body.beepub-pre-paginated > *:has(svg, img, image) { " +
+          "width: 100% !important; " +
+          "height: 100% !important; " +
+          "margin: 0 !important; " +
+          "padding: 0 !important; " +
+          "display: flex !important; " +
+          "justify-content: center !important; " +
+          "align-items: center !important; " +
+          "box-sizing: border-box !important; " +
+          "} " +
+          // Override book CSS that sizes media via 99vh/99vw — vh in epub.js
+          // fixed-layout iframes resolves against the iframe's clientHeight
+          // (not the body content box), so vh-based sizing overshoots and
+          // overflows the body padding box. Force intrinsic sizing capped
+          // by the parent container.
           "body.beepub-pre-paginated svg, " +
           "body.beepub-pre-paginated img { " +
+          "width: auto !important; " +
+          "height: auto !important; " +
           "max-width: 100% !important; " +
           "max-height: 100% !important; " +
           "object-fit: contain !important; " +
