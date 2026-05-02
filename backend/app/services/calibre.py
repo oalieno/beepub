@@ -285,6 +285,7 @@ async def sync_calibre_library(
             existing_books = {b.calibre_id: b for b in existing_result.scalars().all()}
 
             new_book_ids: list[str] = []
+            re_extract_book_ids: list[str] = []
 
             for i, cal_book in enumerate(calibre_books):
                 try:
@@ -314,6 +315,59 @@ async def sync_calibre_library(
                         if book.epub_tags != cal_book.tags:
                             book.epub_tags = cal_book.tags
                             changed = True
+
+                        # Detect EPUB content edits in Calibre (xhtml/cover
+                        # changes inside the zip). When the file's mtime
+                        # advances past the stored value, wipe extracted text
+                        # chunks and re-dispatch extraction so search/AI
+                        # features see the new content.
+                        if os.path.exists(cal_book.epub_path):
+                            current_epub_mtime = datetime.fromtimestamp(
+                                os.path.getmtime(cal_book.epub_path), tz=UTC
+                            )
+                            if (
+                                book.epub_mtime is None
+                                or current_epub_mtime > book.epub_mtime
+                            ):
+                                if book.epub_mtime is not None:
+                                    # File changed since last sync — drop stale
+                                    # chunks and reset derived flags so the
+                                    # re-extract task runs cleanly.
+                                    from app.models.book_text import (
+                                        BookTextChunk,
+                                    )
+
+                                    await db.execute(
+                                        BookTextChunk.__table__.delete().where(
+                                            BookTextChunk.book_id == book.id
+                                        )
+                                    )
+                                    book.has_text = False
+                                    book.is_summarized = False
+                                    book.has_embedding = False
+                                    book.word_count = None
+                                    book.is_image_book = None
+                                    re_extract_book_ids.append(str(book.id))
+                                book.epub_mtime = current_epub_mtime
+                                changed = True
+
+                        # Re-sync cover if Calibre's cover is newer than ours,
+                        # or if we don't have one yet but Calibre does.
+                        if cal_book.cover_path and os.path.exists(cal_book.cover_path):
+                            dest = book.cover_path or get_cover_path(book.id)
+                            src_mtime = os.path.getmtime(cal_book.cover_path)
+                            dest_mtime = (
+                                os.path.getmtime(dest) if os.path.exists(dest) else 0
+                            )
+                            if src_mtime > dest_mtime:
+                                copied = await asyncio.to_thread(
+                                    _copy_cover, cal_book.cover_path, dest
+                                )
+                                if copied:
+                                    if book.cover_path != dest:
+                                        book.cover_path = dest
+                                    changed = True
+
                         if changed:
                             result.updated += 1
                         else:
@@ -354,6 +408,9 @@ async def sync_calibre_library(
                                 cover_dest = dest
 
                         calibre_added = _parse_calibre_timestamp(cal_book.added_at)
+                        epub_mtime = datetime.fromtimestamp(
+                            os.path.getmtime(cal_book.epub_path), tz=UTC
+                        )
 
                         book = Book(
                             id=book_id,
@@ -363,6 +420,7 @@ async def sync_calibre_library(
                             cover_path=cover_dest,
                             calibre_id=cal_book.calibre_id,
                             calibre_added_at=calibre_added,
+                            epub_mtime=epub_mtime,
                             added_by=admin_user_id,
                             **epub_meta,
                         )
@@ -425,6 +483,8 @@ async def sync_calibre_library(
 
         # Dispatch text extraction tasks AFTER commit
         for book_id in new_book_ids:
+            extract_book_text.delay(book_id)
+        for book_id in re_extract_book_ids:
             extract_book_text.delay(book_id)
 
         # Auto-start metadata backfill if new books were added

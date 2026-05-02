@@ -104,6 +104,11 @@ class Book(Base, TimestampMixin):
     calibre_added_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # mtime of the EPUB file at last sync — used to detect Calibre edits
+    # (cover/xhtml changes) so we can re-extract text and bust caches.
+    epub_mtime: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
 
