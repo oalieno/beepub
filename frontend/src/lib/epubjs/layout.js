@@ -223,7 +223,10 @@ class Layout {
       contents.addStylesheetCss(
         "body.beepub-pre-paginated { " +
           "margin: 0 !important; " +
-          "padding: 32px !important; " +
+          // Tight responsive padding — image-only pages don't need the
+          // text-reading 2rem gutter, and on phones 32px each side
+          // shrinks the image noticeably.
+          "padding: clamp(4px, 1.5vw, 16px) !important; " +
           "display: flex !important; " +
           "justify-content: center !important; " +
           "align-items: center !important; " +
