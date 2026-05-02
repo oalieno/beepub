@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import redis.asyncio as aioredis
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import settings
 from app.database import create_task_engine
@@ -364,8 +365,11 @@ async def sync_calibre_library(
                                     _copy_cover, cal_book.cover_path, dest
                                 )
                                 if copied:
-                                    if book.cover_path != dest:
-                                        book.cover_path = dest
+                                    book.cover_path = dest
+                                    # Force-dirty even when path is unchanged so
+                                    # updated_at advances and the ?v= cache-buster
+                                    # on the cover URL changes.
+                                    flag_modified(book, "cover_path")
                                     changed = True
 
                         if changed:
