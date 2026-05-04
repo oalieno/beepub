@@ -1379,24 +1379,11 @@ class Contents {
     );
 
     this.css("background-color", "transparent");
-
-    // Position the scaled body inside the container.
-    //   - page-spread-left: align to right edge (so it sits next to its
-    //     facing right page in spread mode).
-    //   - everything else (single, spread-center, spread-right): center
-    //     horizontally so the page doesn't stick to the left when its
-    //     scaled width is narrower than the container.
-    // Always vertically center on the axis with slack.
-    var slackX = width - viewportWidth * scale;
-    var slackY = height - viewportHeight * scale;
-    var marginLeft;
     if (section && section.properties.includes("page-spread-left")) {
-      marginLeft = slackX;
-    } else {
-      marginLeft = slackX / 2;
+      // set margin since scale is weird
+      var marginLeft = width - viewportWidth * scale;
+      this.css("margin-left", marginLeft + "px");
     }
-    if (marginLeft > 0) this.css("margin-left", marginLeft + "px");
-    if (slackY > 0) this.css("margin-top", slackY / 2 + "px");
 
     // Center the page content vertically/horizontally inside the (1445×2048
     // style) viewport box. Many fixed-layout EPUBs author their CSS as
@@ -1417,7 +1404,7 @@ class Contents {
           // Override the reader theme's 2rem body padding for image-only
           // pages — keep just enough breathing room while not eating
           // significant width on small screens.
-          "padding: clamp(8px, 2.5vw, 20px) !important; " +
+          "padding: clamp(4px, 1.5vw, 16px) !important; " +
           "display: flex !important; " +
           "justify-content: center !important; " +
           "align-items: center !important; " +
