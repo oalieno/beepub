@@ -1401,10 +1401,6 @@ class Contents {
       // in layout.js. See comments there for rationale.
       this.addStylesheetCss(
         "body.beepub-pre-paginated { " +
-          // Override the reader theme's 2rem body padding for image-only
-          // pages — keep just enough breathing room while not eating
-          // significant width on small screens.
-          "padding: clamp(4px, 1.5vw, 16px) !important; " +
           "display: flex !important; " +
           "justify-content: center !important; " +
           "align-items: center !important; " +
