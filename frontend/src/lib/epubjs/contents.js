@@ -1356,11 +1356,26 @@ class Contents {
     );
 
     this.css("background-color", "transparent");
+
+    // Mark the body so the reader theme can skip text-reading styles
+    // (2rem padding etc.) on fixed-layout pages.
+    if (this.addClass) this.addClass("beepub-pre-paginated");
+
+    // Position the scaled body inside the column. Upstream only handles
+    // page-spread-left (align to right edge so it pairs with a right
+    // page). For everything else — covers, page-spread-center, and
+    // page-spread-right when not actually paired (e.g. spread="none") —
+    // center horizontally so the page doesn't stick to the left when
+    // the column is wider than the scaled viewport. Always vertically
+    // center when there's slack.
+    var slackX = width - viewportWidth * scale;
+    var slackY = height - viewportHeight * scale;
     if (section && section.properties.includes("page-spread-left")) {
-      // set margin since scale is weird
-      var marginLeft = width - viewportWidth * scale;
-      this.css("margin-left", marginLeft + "px");
+      if (slackX > 0) this.css("margin-left", slackX + "px");
+    } else if (slackX > 0) {
+      this.css("margin-left", slackX / 2 + "px");
     }
+    if (slackY > 0) this.css("margin-top", slackY / 2 + "px");
   }
 
   /**

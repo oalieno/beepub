@@ -1097,6 +1097,12 @@
         "text-size-adjust": "100%",
         color: darkMode ? "#e5e7eb" : "#1a1a1a",
         background: darkMode ? "#111827" : "#ffffff",
+      },
+      // Reading gutter only on reflowable pages. Fixed-layout pages
+      // (marked beepub-pre-paginated by epub.js fit()) need the full
+      // viewport box for the scaled body, otherwise the 2rem padding
+      // overflows the column and clips the bottom/right.
+      "body:not(.beepub-pre-paginated)": {
         padding: "2rem !important",
       },
       "::selection": {
