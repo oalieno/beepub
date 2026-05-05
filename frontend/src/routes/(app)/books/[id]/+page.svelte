@@ -44,6 +44,7 @@
     Plus,
     X,
     Search,
+    Star,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -101,6 +102,7 @@
       metadata_count: number;
     }>
   >([]);
+  let primaryBookId = $state<string | null>(null);
   let seriesNeighbors = $state<SeriesNeighborsOut | null>(null);
   let loading = $state(true);
   let showEditModal = $state(false);
@@ -212,10 +214,12 @@
         booksApi
           .getEditions(bookId)
           .then((v) => {
-            editions = v;
+            editions = v.editions;
+            primaryBookId = v.primary_book_id;
           })
           .catch(() => {
             editions = [];
+            primaryBookId = null;
           }),
       ];
       if (isNative()) {
@@ -323,6 +327,7 @@
       await worksApi.removeBook(book.work_id, bookId);
       book.work_id = null;
       editions = [];
+      primaryBookId = null;
       showWorkRemoveConfirm = false;
       toastStore.success(m.work_book_removed());
     } catch (e) {
@@ -336,6 +341,7 @@
       await worksApi.deleteWork(book.work_id);
       book.work_id = null;
       editions = [];
+      primaryBookId = null;
       showWorkSplitConfirm = false;
       toastStore.success(m.work_split_success());
     } catch (e) {
@@ -354,7 +360,9 @@
         book.work_id = work.id;
         toastStore.success(m.work_created());
       }
-      editions = await booksApi.getEditions(bookId);
+      const data = await booksApi.getEditions(bookId);
+      editions = data.editions;
+      primaryBookId = data.primary_book_id;
       showWorkSearchModal = false;
       workSearchQuery = "";
       workSearchResults = [];
@@ -400,8 +408,24 @@
       editions = editions.filter((e) => e.id !== editionId);
       if (editions.length === 0) {
         book.work_id = null;
+        primaryBookId = null;
+      } else if (primaryBookId === editionId) {
+        // Backend auto-promotes newest remaining as primary; refetch.
+        const data = await booksApi.getEditions(bookId);
+        primaryBookId = data.primary_book_id;
       }
       toastStore.success(m.work_book_removed());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleSetPrimary(targetBookId: string) {
+    if (!book?.work_id) return;
+    try {
+      await worksApi.update(book.work_id, { primary_book_id: targetBookId });
+      primaryBookId = targetBookId;
+      toastStore.success(m.work_primary_set());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -731,6 +755,17 @@
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 {#if book.work_id}
+                  {#if primaryBookId === bookId}
+                    <DropdownMenu.Item disabled>
+                      <Star size={14} class="fill-amber-500 text-amber-500" />
+                      {m.work_is_primary()}
+                    </DropdownMenu.Item>
+                  {:else}
+                    <DropdownMenu.Item onclick={() => handleSetPrimary(bookId)}>
+                      <Star size={14} />
+                      {m.work_set_as_primary()}
+                    </DropdownMenu.Item>
+                  {/if}
                   <DropdownMenu.Item onclick={() => openWorkSearch("add")}>
                     <Plus size={14} />
                     {m.work_add_to_work()}
@@ -910,14 +945,35 @@
                   </p>
                 {/if}
               </a>
-              {#if isAdmin}
-                <button
-                  class="absolute top-1 right-1 p-1 bg-black/50 backdrop-blur-sm rounded-full text-white opacity-0 group-hover/edition:opacity-100 transition-opacity"
-                  title={m.work_remove_from_work()}
-                  onclick={() => handleRemoveEdition(edition.id)}
+              {#if edition.id === primaryBookId}
+                <div
+                  class="absolute top-1 left-1 p-1 bg-amber-500 rounded-full text-white shadow-md"
+                  title={m.work_primary_badge()}
                 >
-                  <X size={12} />
-                </button>
+                  <Star size={12} class="fill-white" />
+                </div>
+              {/if}
+              {#if isAdmin}
+                <div
+                  class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover/edition:opacity-100 transition-opacity"
+                >
+                  {#if edition.id !== primaryBookId}
+                    <button
+                      class="p-1 bg-black/50 backdrop-blur-sm rounded-full text-white"
+                      title={m.work_set_as_primary()}
+                      onclick={() => handleSetPrimary(edition.id)}
+                    >
+                      <Star size={12} />
+                    </button>
+                  {/if}
+                  <button
+                    class="p-1 bg-black/50 backdrop-blur-sm rounded-full text-white"
+                    title={m.work_remove_from_work()}
+                    onclick={() => handleRemoveEdition(edition.id)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               {/if}
             </div>
           {/each}

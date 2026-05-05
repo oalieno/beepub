@@ -743,6 +743,10 @@
   "work_book_removed": "已從作品中移除",
   "work_split_success": "作品已拆分",
   "work_created": "已連結為同一作品",
+  "work_set_as_primary": "設為主要版本",
+  "work_is_primary": "目前為主要版本",
+  "work_primary_badge": "主要版本",
+  "work_primary_set": "已設為主要版本",
 
   "duplicates_review_progress": "{current} / {total} 已審核",
   "duplicates_merge_all": "全部合併",

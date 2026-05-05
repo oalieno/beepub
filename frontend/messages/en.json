@@ -743,6 +743,10 @@
   "work_book_removed": "Book removed from Work",
   "work_split_success": "Work split successfully",
   "work_created": "Books linked into a Work",
+  "work_set_as_primary": "Set as primary edition",
+  "work_is_primary": "Current primary edition",
+  "work_primary_badge": "Primary edition",
+  "work_primary_set": "Set as primary edition",
 
   "duplicates_review_progress": "{current} / {total} reviewed",
   "duplicates_merge_all": "Merge All",

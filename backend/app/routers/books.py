@@ -846,10 +846,18 @@ async def get_book_editions(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Get other editions of the same Work. Returns empty list if book has no Work."""
+    """Get other editions of the same Work plus the Work's primary_book_id.
+
+    Returns {primary_book_id: null, editions: []} if the book has no Work.
+    """
     book = await _get_book_with_access(book_id, current_user, db)
     if not book.work_id:
-        return []
+        return {"primary_book_id": None, "editions": []}
+
+    from app.models.work import Work
+
+    work_result = await db.execute(select(Work).where(Work.id == book.work_id))
+    work = work_result.scalar_one_or_none()
 
     result = await db.execute(
         select(Book)
@@ -857,18 +865,21 @@ async def get_book_editions(
         .order_by(Book.created_at.desc())
     )
     siblings = result.scalars().all()
-    return [
-        {
-            "id": b.id,
-            "display_title": b.display_title,
-            "display_authors": b.display_authors,
-            "cover_path": b.cover_path,
-            "epub_isbn": b.epub_isbn,
-            "metadata_count": b.metadata_count,
-            "created_at": b.created_at,
-        }
-        for b in siblings
-    ]
+    return {
+        "primary_book_id": work.primary_book_id if work else None,
+        "editions": [
+            {
+                "id": b.id,
+                "display_title": b.display_title,
+                "display_authors": b.display_authors,
+                "cover_path": b.cover_path,
+                "epub_isbn": b.epub_isbn,
+                "metadata_count": b.metadata_count,
+                "created_at": b.created_at,
+            }
+            for b in siblings
+        ],
+    }
 
 
 @router.put("/{book_id}/metadata", response_model=BookOut)
