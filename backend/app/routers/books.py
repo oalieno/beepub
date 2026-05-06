@@ -19,8 +19,10 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import exists, func, literal_column, or_, select, text
+from sqlalchemy import and_, case, exists, func, literal_column, or_, select
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
@@ -343,152 +345,174 @@ async def list_my_books(
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    # Whitelist sort/order to prevent SQL injection (values go directly into query string)
-    sort = (
-        sort
-        if sort in {"last_read_at", "updated_at", "display_title"}
-        else "last_read_at"
+    from app.models.work import Work
+    from app.routers.libraries import accessible_libraries_condition
+
+    if sort not in {"last_read_at", "updated_at", "display_title"}:
+        sort = "last_read_at"
+    if order not in {"asc", "desc"}:
+        order = "desc"
+
+    # CTE 1 — accessible books: book IDs in libraries the user can see
+    accessible_q = (
+        select(LibraryBook.book_id.label("book_id"))
+        .join(Library, Library.id == LibraryBook.library_id)
+        .distinct()
     )
-    order = order if order in {"asc", "desc"} else "desc"
-    order_dir = order.upper()
+    cond = accessible_libraries_condition(current_user)
+    if cond is not True:
+        accessible_q = accessible_q.where(cond)
+    accessible = accessible_q.cte("accessible")
 
-    if sort == "last_read_at":
-        sort_expr = f"agg.latest_reading_progress->>'last_read_at' {order_dir} NULLS LAST, agg.display_book_id"
-    elif sort == "updated_at":
-        sort_expr = f"agg.latest_updated_at {order_dir} NULLS LAST, agg.display_book_id"
-    else:  # display_title — books b is joined in data query
-        sort_expr = f"COALESCE(b.title, b.epub_title) {order_dir} NULLS LAST, agg.display_book_id"
-
-    # Accessible-books CTE differs for admin (all libraries) vs regular users
-    is_admin = current_user.role == UserRole.admin
-    if is_admin:
-        accessible_cte = "accessible AS (SELECT DISTINCT book_id FROM library_books)"
-    else:
-        accessible_cte = """accessible AS (
-            SELECT DISTINCT lb.book_id
-            FROM library_books lb
-            JOIN libraries l ON l.id = lb.library_id
-            WHERE NOT EXISTS (
-                SELECT 1 FROM user_library_exclusions ule
-                WHERE ule.user_id = :user_id AND ule.library_id = l.id
-            )
-        )"""
-
-    extra_where = ""
-    if reading_status is not None:
-        extra_where += " AND agg.best_status = :reading_status"
-    if favorite is not None:
-        extra_where += " AND agg.any_favorite = :favorite"
-
-    # Core CTEs: map each interacted book → display book (primary edition of its Work,
-    # or itself if standalone), then aggregate best status + latest progress across
-    # all Work editions the user has touched.
-    #
-    # This fixes the case where a user read edition B1, then an admin merged B1+B2
-    # with B2 as primary: B2 now correctly appears with B1's interaction data.
-    core_ctes = """
-        ubi AS (
-            SELECT book_id, reading_status, is_favorite, reading_progress, updated_at
-            FROM user_book_interactions
-            WHERE user_id = :user_id
-              AND book_id IN (SELECT book_id FROM accessible)
-        ),
-        display_map AS (
-            SELECT DISTINCT
-                COALESCE(w.primary_book_id, b.id) AS display_book_id,
-                b.work_id
-            FROM ubi u
-            JOIN books b ON b.id = u.book_id
-            LEFT JOIN works w ON w.id = b.work_id AND w.primary_book_id IS NOT NULL
-            WHERE COALESCE(w.primary_book_id, b.id) IN (SELECT book_id FROM accessible)
-        ),
-        siblings AS (
-            SELECT dm.display_book_id, s.id AS sibling_id
-            FROM display_map dm
-            JOIN books s ON (
-                (dm.work_id IS NOT NULL AND s.work_id = dm.work_id)
-                OR (dm.work_id IS NULL AND s.id = dm.display_book_id)
-            )
-        ),
-        sib_ubi AS (
-            SELECT
-                s.display_book_id,
-                u.reading_status,
-                u.is_favorite,
-                u.reading_progress,
-                u.updated_at,
-                ROW_NUMBER() OVER (
-                    PARTITION BY s.display_book_id
-                    ORDER BY u.updated_at DESC NULLS LAST
-                ) AS rn
-            FROM siblings s
-            JOIN ubi u ON u.book_id = s.sibling_id
-        ),
-        best_status_fav AS (
-            SELECT
-                display_book_id,
-                (ARRAY['read','currently_reading','did_not_finish','want_to_read'])[
-                    LEAST(COALESCE(MIN(CASE reading_status
-                        WHEN 'read'              THEN 1
-                        WHEN 'currently_reading' THEN 2
-                        WHEN 'did_not_finish'    THEN 3
-                        WHEN 'want_to_read'      THEN 4
-                    END), 99), 4)
-                ] AS best_status,
-                BOOL_OR(is_favorite) AS any_favorite
-            FROM sib_ubi
-            GROUP BY display_book_id
-        ),
-        latest_progress AS (
-            SELECT display_book_id, reading_progress, updated_at
-            FROM sib_ubi
-            WHERE rn = 1
-        ),
-        agg AS (
-            SELECT
-                bsf.display_book_id,
-                bsf.best_status,
-                bsf.any_favorite,
-                lp.reading_progress AS latest_reading_progress,
-                lp.updated_at       AS latest_updated_at
-            FROM best_status_fav bsf
-            LEFT JOIN latest_progress lp ON lp.display_book_id = bsf.display_book_id
+    # CTE 2 — user's interactions on accessible books
+    ubi = (
+        select(
+            UserBookInteraction.book_id.label("book_id"),
+            UserBookInteraction.reading_status.label("reading_status"),
+            UserBookInteraction.is_favorite.label("is_favorite"),
+            UserBookInteraction.reading_progress.label("reading_progress"),
+            UserBookInteraction.updated_at.label("updated_at"),
         )
-    """
-
-    params: dict = {"user_id": str(current_user.id)}
-    if reading_status is not None:
-        params["reading_status"] = reading_status
-    if favorite is not None:
-        params["favorite"] = favorite
-
-    total_result = await db.execute(
-        text(
-            f"WITH {accessible_cte}, {core_ctes} SELECT COUNT(*) FROM agg WHERE 1=1{extra_where}"
-        ),
-        params,
+        .where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.book_id.in_(select(accessible.c.book_id)),
+        )
+        .cte("ubi")
     )
-    total = total_result.scalar() or 0
 
+    # CTE 3 — map each interacted book → its display book (Work primary or self).
+    # Filter on accessibility too, so a Work whose primary the user can't see is dropped.
+    # (Once Work is constrained to a single library, that filter becomes a no-op
+    # and can be removed.)
+    book_dm = aliased(Book)
+    display_book_id_expr = coalesce(Work.primary_book_id, book_dm.id)
+    display_map = (
+        select(
+            display_book_id_expr.label("display_book_id"),
+            book_dm.work_id.label("work_id"),
+        )
+        .select_from(ubi)
+        .join(book_dm, book_dm.id == ubi.c.book_id)
+        .outerjoin(
+            Work,
+            and_(Work.id == book_dm.work_id, Work.primary_book_id.isnot(None)),
+        )
+        .where(display_book_id_expr.in_(select(accessible.c.book_id)))
+        .distinct()
+        .cte("display_map")
+    )
+
+    # CTE 4 — expand each display book to all Work editions (or just self if standalone).
+    sib = aliased(Book)
+    siblings = (
+        select(
+            display_map.c.display_book_id.label("display_book_id"),
+            sib.id.label("sibling_id"),
+        )
+        .select_from(display_map)
+        .join(
+            sib,
+            or_(
+                and_(
+                    display_map.c.work_id.isnot(None),
+                    sib.work_id == display_map.c.work_id,
+                ),
+                and_(
+                    display_map.c.work_id.is_(None),
+                    sib.id == display_map.c.display_book_id,
+                ),
+            ),
+        )
+        .cte("siblings")
+    )
+
+    # CTE 5 — siblings ⨝ ubi: every interacted edition for each Work the user touched.
+    sib_ubi = (
+        select(
+            siblings.c.display_book_id.label("display_book_id"),
+            ubi.c.reading_status.label("reading_status"),
+            ubi.c.is_favorite.label("is_favorite"),
+            ubi.c.reading_progress.label("reading_progress"),
+            ubi.c.updated_at.label("updated_at"),
+        )
+        .select_from(siblings)
+        .join(ubi, ubi.c.book_id == siblings.c.sibling_id)
+        .cte("sib_ubi")
+    )
+
+    # CTE 6 — work-level aggregates. Status priority: read > currently_reading >
+    # did_not_finish > want_to_read. NULL reading_status (e.g., favorite-only
+    # interactions) is excluded by MIN, so best_status stays NULL — important so
+    # those rows don't get bucketed into want_to_read.
+    status_priority = case(
+        (sib_ubi.c.reading_status == "read", 1),
+        (sib_ubi.c.reading_status == "currently_reading", 2),
+        (sib_ubi.c.reading_status == "did_not_finish", 3),
+        (sib_ubi.c.reading_status == "want_to_read", 4),
+    )
+    status_array = array(
+        ["read", "currently_reading", "did_not_finish", "want_to_read"]
+    )
+    work_last_read_at = func.max(sib_ubi.c.reading_progress["last_read_at"].astext)
+    agg = (
+        select(
+            sib_ubi.c.display_book_id.label("display_book_id"),
+            status_array[func.min(status_priority)].label("best_status"),
+            func.bool_or(sib_ubi.c.is_favorite).label("any_favorite"),
+            func.max(sib_ubi.c.updated_at).label("work_last_updated_at"),
+            work_last_read_at.label("work_last_read_at"),
+        )
+        .group_by(sib_ubi.c.display_book_id)
+        .cte("agg")
+    )
+
+    # Final query — join the display book's own interaction (per-edition progress is
+    # NOT aggregated across siblings: percentage and CFI are tied to a specific EPUB).
+    own_ubi = aliased(UserBookInteraction)
+    base = (
+        select(
+            agg.c.display_book_id,
+            agg.c.best_status,
+            agg.c.any_favorite,
+            agg.c.work_last_read_at,
+            agg.c.work_last_updated_at,
+            own_ubi.reading_progress.label("own_progress"),
+        )
+        .select_from(agg)
+        .join(Book, Book.id == agg.c.display_book_id)
+        .outerjoin(
+            own_ubi,
+            and_(
+                own_ubi.book_id == agg.c.display_book_id,
+                own_ubi.user_id == current_user.id,
+            ),
+        )
+    )
+    if reading_status is not None:
+        base = base.where(agg.c.best_status == reading_status)
+    if favorite is not None:
+        base = base.where(agg.c.any_favorite == favorite)
+
+    total = (
+        await db.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar() or 0
     if total == 0:
         return PaginatedBooksWithInteraction(items=[], total=0)
 
-    data_result = await db.execute(
-        text(f"""
-            WITH {accessible_cte}, {core_ctes}
-            SELECT agg.display_book_id, agg.best_status, agg.any_favorite,
-                   agg.latest_reading_progress, agg.latest_updated_at
-            FROM agg
-            JOIN books b ON b.id = agg.display_book_id
-            WHERE 1=1{extra_where}
-            ORDER BY {sort_expr}
-            LIMIT :limit OFFSET :offset
-        """),
-        {**params, "limit": limit, "offset": offset},
-    )
-    rows = data_result.all()
+    if sort == "last_read_at":
+        sort_col = agg.c.work_last_read_at
+    elif sort == "updated_at":
+        sort_col = agg.c.work_last_updated_at
+    else:
+        sort_col = coalesce(Book.title, Book.epub_title)
 
-    book_ids_list = [row[0] for row in rows]
+    sort_expr = sort_col.desc() if order == "desc" else sort_col.asc()
+    base = base.order_by(sort_expr.nullslast(), agg.c.display_book_id)
+    base = base.limit(limit).offset(offset)
+
+    rows = (await db.execute(base)).all()
+
+    book_ids_list = [row.display_book_id for row in rows]
     books_result = await db.execute(select(Book).where(Book.id.in_(book_ids_list)))
     books_map = {b.id: b for b in books_result.scalars().all()}
 
@@ -498,23 +522,16 @@ async def list_my_books(
 
     items = []
     for row in rows:
-        (
-            display_book_id,
-            best_status,
-            any_favorite,
-            latest_reading_progress,
-            latest_updated_at,
-        ) = row
-        book = books_map.get(display_book_id)
+        book = books_map.get(row.display_book_id)
         if not book:
             continue
         item = BookWithInteractionOut.model_validate(book)
-        item.reading_status = best_status
-        item.is_favorite = any_favorite
-        progress = latest_reading_progress or {}
-        item.reading_percentage = progress.get("percentage")
-        item.last_read_at = progress.get("last_read_at")
-        item.edition_count = edition_counts.get(display_book_id)
+        item.reading_status = row.best_status
+        item.is_favorite = row.any_favorite
+        own_progress = row.own_progress or {}
+        item.reading_percentage = own_progress.get("percentage")
+        item.last_read_at = own_progress.get("last_read_at")
+        item.edition_count = edition_counts.get(row.display_book_id)
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)
