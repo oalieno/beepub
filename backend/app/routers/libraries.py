@@ -294,6 +294,19 @@ async def add_book_to_library(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Book already in library")
+    # 1:N invariant — a book lives in at most one library. Move = remove first.
+    other = await db.execute(
+        select(LibraryBook.library_id).where(LibraryBook.book_id == body.book_id)
+    )
+    other_lib_id = other.scalar_one_or_none()
+    if other_lib_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Book is already in library {other_lib_id}. "
+                "Remove it from that library first."
+            ),
+        )
     lb = LibraryBook(
         library_id=library_id, book_id=body.book_id, added_by=current_user.id
     )
@@ -317,6 +330,18 @@ async def remove_book_from_library(
     lb = result.scalar_one_or_none()
     if not lb:
         raise HTTPException(status_code=404, detail="Book not in library")
+    # If the book is part of a Work, removing it would leave that Work
+    # spanning libraries (or empty-library) — break the invariant.
+    from app.services.work_library import book_is_in_work
+
+    if await book_is_in_work(book_id, db):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Book is part of a Work. Dissolve the Work first, "
+                "or remove all its editions together."
+            ),
+        )
     await db.delete(lb)
     await db.commit()
 

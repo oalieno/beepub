@@ -77,6 +77,15 @@ async def create_work(
                 detail=f"Book '{book.display_title}' (id={book.id}) is already in a Work",
             )
 
+    # Invariant: a Work cannot span libraries. /books/me relies on this
+    # (primary edition must be accessible to any user who can access a sibling).
+    from app.services.work_library import assert_books_share_single_library
+
+    try:
+        await assert_books_share_single_library(body.book_ids, db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
+
     # Use the newest book as primary, derive canonical metadata
     primary = books[0]  # already sorted by created_at DESC
     work = Work(
@@ -273,6 +282,13 @@ async def add_book_to_work(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Book is already in a Work (work_id={book.work_id})",
         )
+
+    from app.services.work_library import assert_book_can_join_work
+
+    try:
+        await assert_book_can_join_work(book_id, work_id, db)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     book.work_id = work.id
     await db.commit()
