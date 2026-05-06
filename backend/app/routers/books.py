@@ -381,9 +381,10 @@ async def list_my_books(
     )
 
     # CTE 3 — map each interacted book → its display book (Work primary or self).
-    # Filter on accessibility too, so a Work whose primary the user can't see is dropped.
-    # (Once Work is constrained to a single library, that filter becomes a no-op
-    # and can be removed.)
+    # The Work single-library invariant (services/work_library.py + the
+    # uq_library_books_book_id constraint) guarantees the primary edition is
+    # accessible whenever any sibling is, so no extra accessibility filter
+    # is needed here — `ubi` is already accessibility-scoped.
     book_dm = aliased(Book)
     display_book_id_expr = coalesce(Work.primary_book_id, book_dm.id)
     display_map = (
@@ -397,7 +398,6 @@ async def list_my_books(
             Work,
             and_(Work.id == book_dm.work_id, Work.primary_book_id.isnot(None)),
         )
-        .where(display_book_id_expr.in_(select(accessible.c.book_id)))
         .distinct()
         .cte("display_map")
     )

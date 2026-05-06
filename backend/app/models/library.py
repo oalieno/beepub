@@ -2,7 +2,15 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -72,6 +80,9 @@ class UserLibraryExclusion(Base):
 
 class LibraryBook(Base):
     __tablename__ = "library_books"
+    # 1:N invariant — a book lives in exactly one library. Enforced at the
+    # service layer (work_library.py) and at the DB layer here.
+    __table_args__ = (UniqueConstraint("book_id", name="uq_library_books_book_id"),)
 
     library_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("libraries.id", ondelete="CASCADE"), primary_key=True
