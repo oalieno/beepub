@@ -61,7 +61,8 @@ async def get_similar_books(
                 COALESCE(authors, epub_authors, '{}') AS t_authors,
                 COALESCE(publisher, epub_publisher) AS t_publisher,
                 epub_language AS t_language,
-                COALESCE(tags, epub_tags, '{}') AS t_tags
+                COALESCE(tags, epub_tags, '{}') AS t_tags,
+                LOWER(NULLIF(BTRIM(COALESCE(series, epub_series)), '')) AS t_series_key
             FROM books WHERE id = :book_id
         ),
         accessible_libs AS (
@@ -188,14 +189,37 @@ async def get_similar_books(
                 WHERE b.id = a.book_id
             )
             GROUP BY a.book_id
+        ),
+        series_filtered AS (
+            SELECT
+                aggregated.book_id,
+                aggregated.total_score,
+                LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key
+            FROM aggregated
+            JOIN books b ON b.id = aggregated.book_id
+            CROSS JOIN target t
+            WHERE t.t_series_key IS NULL
+               OR LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) IS NULL
+               OR LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) != t.t_series_key
+        ),
+        series_ranked AS (
+            SELECT
+                series_filtered.book_id,
+                series_filtered.total_score,
+                ROW_NUMBER() OVER (
+                    PARTITION BY COALESCE(series_filtered.series_key, series_filtered.book_id::text)
+                    ORDER BY series_filtered.total_score DESC, series_filtered.book_id
+                ) AS series_rank
+            FROM series_filtered
         )
         SELECT
-            aggregated.book_id,
-            aggregated.total_score,
+            series_ranked.book_id,
+            series_ranked.total_score,
             semantic_candidates.cosine_sim
-        FROM aggregated
-        LEFT JOIN semantic_candidates ON aggregated.book_id = semantic_candidates.book_id
-        ORDER BY aggregated.total_score DESC
+        FROM series_ranked
+        LEFT JOIN semantic_candidates ON series_ranked.book_id = semantic_candidates.book_id
+        WHERE series_ranked.series_rank = 1
+        ORDER BY series_ranked.total_score DESC
         LIMIT :limit
     """)
 

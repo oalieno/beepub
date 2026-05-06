@@ -277,6 +277,32 @@ class TestGetSimilarBooksSemantic:
         params = mock_db.execute.call_args[0][1]
         assert params["semantic_weight"] == 0.0
 
+    @pytest.mark.asyncio
+    async def test_query_filters_and_deduplicates_series(self):
+        """Similar books excludes target-series siblings and keeps one book per series."""
+        from app.services.recommendations import get_similar_books
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        await get_similar_books(
+            mock_db,
+            uuid.uuid4(),
+            uuid.uuid4(),
+            is_admin=False,
+            semantic_weight=10.0,
+            semantic_limit=50,
+        )
+
+        sql = str(mock_db.execute.call_args[0][0])
+        assert "t_series_key" in sql
+        assert "series_filtered" in sql
+        assert "series_ranked" in sql
+        assert "series_ranked.series_rank = 1" in sql
+        assert "!= t.t_series_key" in sql
+
 
 # ---------------------------------------------------------------------------
 # 5. Attribution tracking in personalized recommendations
