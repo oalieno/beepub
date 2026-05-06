@@ -73,6 +73,7 @@ export interface BookOut {
   book_tags?: BookTag[];
   work_id: string | null;
   edition_count: number | null;
+  popularity_score: number;
   calibre_id: number | null;
   calibre_added_at: string | null;
   added_by: string;

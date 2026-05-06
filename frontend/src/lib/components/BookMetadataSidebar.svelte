@@ -33,6 +33,53 @@
     return Math.min((currentIdx / total) * 100, 100);
   }
 
+  type PopularityTier = {
+    label: string;
+    level: number;
+    text: string;
+    fill: string;
+  };
+
+  function popularityTier(
+    score: number | null | undefined,
+  ): PopularityTier | null {
+    if (score == null || score <= 0) return null;
+    if (score >= 80)
+      return {
+        label: m.popularity_tier_phenomenon(),
+        level: 5,
+        text: "text-rose-600 dark:text-rose-400",
+        fill: "bg-rose-500",
+      };
+    if (score >= 60)
+      return {
+        label: m.popularity_tier_popular(),
+        level: 4,
+        text: "text-amber-600 dark:text-amber-400",
+        fill: "bg-amber-500",
+      };
+    if (score >= 40)
+      return {
+        label: m.popularity_tier_known(),
+        level: 3,
+        text: "text-emerald-600 dark:text-emerald-400",
+        fill: "bg-emerald-500",
+      };
+    if (score >= 20)
+      return {
+        label: m.popularity_tier_niche(),
+        level: 2,
+        text: "text-sky-600 dark:text-sky-400",
+        fill: "bg-sky-500",
+      };
+    return {
+      label: m.popularity_tier_obscure(),
+      level: 1,
+      text: "text-slate-500 dark:text-slate-400",
+      fill: "bg-slate-400",
+    };
+  }
+
   const categoryStyles: Record<string, string> = {
     genre: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
     subgenre:
@@ -124,6 +171,29 @@
         <div class="flex flex-wrap gap-1.5">
           {#each book.library_names as name}
             <span class="text-foreground font-medium">{name}</span>
+          {/each}
+        </div>
+      </div>
+    {/if}
+    {#if popularityTier(book.popularity_score)}
+      {@const pop = popularityTier(book.popularity_score)!}
+      <div>
+        <span class="text-muted-foreground block text-xs mb-1"
+          >{m.metadata_label_popularity()}</span
+        >
+        <div class="flex items-baseline justify-between gap-2 mb-1.5">
+          <span class="font-medium {pop.text}">{pop.label}</span>
+          <span class="text-muted-foreground text-xs tabular-nums"
+            >{book.popularity_score}<span class="opacity-50"> / 100</span></span
+          >
+        </div>
+        <div class="flex items-center gap-1">
+          {#each [1, 2, 3, 4, 5] as step (step)}
+            <div
+              class="h-1.5 flex-1 rounded-full {step <= pop.level
+                ? pop.fill
+                : 'bg-secondary'}"
+            ></div>
           {/each}
         </div>
       </div>

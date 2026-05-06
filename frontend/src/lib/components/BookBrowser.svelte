@@ -15,6 +15,8 @@
     { value: "display_title:desc", label: m.browser_sort_title_desc() },
     { value: "series_index:asc", label: m.browser_sort_series_asc() },
     { value: "series_index:desc", label: m.browser_sort_series_desc() },
+    { value: "popularity_score:desc", label: m.browser_sort_popularity_desc() },
+    { value: "popularity_score:asc", label: m.browser_sort_popularity_asc() },
   ]);
 
   const PAGE_SIZE = 60;

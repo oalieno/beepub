@@ -81,6 +81,8 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
     Skips already-fetched sources. Writes empty markers for not-found books.
     Respects rate limit cooldown flags in Redis.
     """
+    import uuid as _uuid
+
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
         fetch_book_info,
@@ -90,6 +92,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
         upsert_external_metadata,
     )
     from app.services.metadata_sources.base import RateLimitError
+    from app.services.popularity import recompute_popularity
 
     redis_client = aioredis.from_url(app_config.redis_url)
 
@@ -155,6 +158,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
                     text("UPDATE books SET metadata_count = :count WHERE id = :id"),
                     {"count": count, "id": book_id},
                 )
+                await recompute_popularity(db, [_uuid.UUID(book_id)])
                 await db.commit()
 
             # Run deterministic tag mapping (no AI)
@@ -185,6 +189,8 @@ def fetch_book_metadata(self, book_id: str) -> None:
 
 async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
     """Fetch a single source using its stored source_url, then re-map tags."""
+    import uuid as _uuid
+
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
         init_metadata_sources,
@@ -192,6 +198,7 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
         upsert_external_metadata,
     )
     from app.services.metadata_sources.base import RateLimitError
+    from app.services.popularity import recompute_popularity
 
     async with create_task_engine() as (_engine, session_factory):
         sources = await init_metadata_sources(session_factory)
@@ -219,6 +226,8 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
                 await upsert_external_metadata(
                     db, book_id, source_name, pinned_url, fetch_result
                 )
+                await recompute_popularity(db, [_uuid.UUID(book_id)])
+                await db.commit()
                 logger.info(f"Fetched {source_name} for book {book_id} from URL")
             except RateLimitError:
                 logger.warning(f"Rate limited by {source_name}")

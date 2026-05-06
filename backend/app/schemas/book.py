@@ -55,6 +55,7 @@ class BookOut(BaseModel):
     book_tags: list[BookTagNested] = []
     work_id: uuid.UUID | None = None
     edition_count: int | None = None
+    popularity_score: int = 0
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
     added_by: uuid.UUID

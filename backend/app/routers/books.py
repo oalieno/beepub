@@ -519,7 +519,6 @@ async def list_my_books(
     from app.services.work_propagation import get_edition_count_map
 
     edition_counts = await get_edition_count_map(db, book_ids_list)
-
     items = []
     for row in rows:
         book = books_map.get(row.display_book_id)
@@ -661,7 +660,6 @@ async def search_books(
 
     book_ids_list = [row[0].id for row in rows]
     edition_counts = await get_edition_count_map(db, book_ids_list)
-
     items = []
     for book, library_name in rows:
         item = BookSearchResult.model_validate(book)
@@ -725,7 +723,6 @@ async def get_discover_recommendations(
 
     propagated = await get_work_propagated_interactions(db, book_ids, current_user.id)
     edition_counts = await get_edition_count_map(db, book_ids)
-
     items = []
     for bid in book_ids:
         book = books.get(bid)
@@ -880,6 +877,7 @@ async def list_all_books(
         "display_title": coalesce(Book.title, Book.epub_title),
         "added_at": coalesce(Book.calibre_added_at, Book.created_at),
         "series_index": coalesce(Book.series_index, Book.epub_series_index),
+        "popularity_score": Book.popularity_score,
     }
     if series and sort == "created_at":
         sort = "series_index"
@@ -1003,8 +1001,39 @@ async def update_book_metadata(
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
     data = body.model_dump()
+    series_will_change = (
+        "series" in body.model_fields_set and data["series"] != book.series
+    ) or (
+        "epub_series" in body.model_fields_set
+        and data["epub_series"] != book.epub_series
+    )
+    old_series_sibling_id: uuid.UUID | None = None
+    if series_will_change:
+        old_key = (book.series or book.epub_series or "").strip().lower() or None
+        if old_key:
+            sibling = await db.execute(
+                select(Book.id)
+                .where(
+                    Book.id != book.id,
+                    func.lower(func.btrim(func.coalesce(Book.series, Book.epub_series)))
+                    == old_key,
+                )
+                .limit(1)
+            )
+            old_series_sibling_id = sibling.scalar_one_or_none()
+
     for field in body.model_fields_set:
         setattr(book, field, data[field])
+    await db.flush()
+
+    if series_will_change:
+        from app.services.popularity import recompute_popularity
+
+        affected = [book.id] + (
+            [old_series_sibling_id] if old_series_sibling_id else []
+        )
+        await recompute_popularity(db, affected)
+
     await db.commit()
     await db.refresh(book)
     return book

@@ -94,6 +94,9 @@ class Book(Base, TimestampMixin):
     metadata_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )
+    popularity_score: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default="0", index=True
+    )
 
     # Work grouping (editions of the same logical work)
     work_id: Mapped[uuid.UUID | None] = mapped_column(

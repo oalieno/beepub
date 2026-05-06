@@ -101,6 +101,11 @@ async def create_work(
 
     # Set primary (post_update handles the circular FK)
     work.primary_book_id = primary.id
+    await db.flush()
+
+    from app.services.popularity import recompute_popularity
+
+    await recompute_popularity(db, [b.id for b in books])
     await db.commit()
 
     # Reload with books relationship
@@ -291,6 +296,11 @@ async def add_book_to_work(
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
 
     book.work_id = work.id
+    await db.flush()
+
+    from app.services.popularity import recompute_popularity
+
+    await recompute_popularity(db, [book.id])
     await db.commit()
 
     # Reload
@@ -342,4 +352,12 @@ async def remove_book_from_work(
             newest = max(remaining, key=lambda b: b.created_at)
             work.primary_book_id = newest.id
 
+    await db.flush()
+
+    from app.services.popularity import recompute_popularity
+
+    # Recompute both the now-unlinked book and any remaining sibling
+    # (passing one sibling fans out to the rest of the cluster)
+    affected = [target_book.id] + ([remaining[0].id] if remaining else [])
+    await recompute_popularity(db, affected)
     await db.commit()
