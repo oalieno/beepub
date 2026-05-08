@@ -11,6 +11,8 @@
     Pencil,
     Check,
     ArrowLeft,
+    TriangleAlert,
+    RotateCw,
   } from "@lucide/svelte";
   import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
@@ -56,7 +58,8 @@
   let loadingList = $state(true);
 
   // Chat state
-  let messages = $state<CompanionMessageOut[]>([]);
+  type ChatItem = CompanionMessageOut & { error?: string };
+  let messages = $state<ChatItem[]>([]);
   let inputText = $state("");
   let pendingSelectedText = $state<string | null>(null);
   let pendingCfi = $state<string | null>(null);
@@ -182,7 +185,6 @@
     const text = inputText.trim();
     if (!text || isStreaming) return;
 
-    const currentCfi = getCurrentCfi?.() || null;
     const selText = pendingSelectedText;
     const selCfi = pendingCfi;
 
@@ -190,12 +192,11 @@
     pendingSelectedText = null;
     pendingCfi = null;
 
-    // Reset textarea height
     if (inputEl) {
       inputEl.style.height = "auto";
     }
 
-    const userMsg: CompanionMessageOut = {
+    const userMsg: ChatItem = {
       id: crypto.randomUUID(),
       role: "user",
       content: text,
@@ -204,17 +205,38 @@
       created_at: new Date().toISOString(),
     };
     messages = [...messages, userMsg];
+
+    await submitMessage(userMsg);
+  }
+
+  async function retryMessage(failedMsg: ChatItem) {
+    if (isStreaming) return;
+    messages = messages.map((m) =>
+      m.id === failedMsg.id ? { ...m, error: undefined } : m,
+    );
+    const fresh = messages.find((m) => m.id === failedMsg.id);
+    if (fresh) await submitMessage(fresh);
+  }
+
+  async function submitMessage(userMsg: ChatItem) {
+    const currentCfi = getCurrentCfi?.() || null;
     isStreaming = true;
     streamingContent = "";
 
     await tick();
     scrollToBottom();
 
+    const setError = (errMsg: string) => {
+      messages = messages.map((m) =>
+        m.id === userMsg.id ? { ...m, error: errMsg } : m,
+      );
+    };
+
     try {
       const res = await booksApi.sendCompanionMessage(bookId, {
-        message: text,
-        selected_text: selText,
-        cfi_range: selCfi,
+        message: userMsg.content,
+        selected_text: userMsg.selected_text,
+        cfi_range: userMsg.cfi_range,
         current_cfi: currentCfi,
         conversation_id: activeConversationId,
       });
@@ -261,7 +283,7 @@
                     .then((c) => (conversations = c))
                     .catch(() => {});
                 }
-                const assistantMsg: CompanionMessageOut = {
+                const assistantMsg: ChatItem = {
                   id: data.message_id,
                   role: "assistant",
                   content: streamingContent,
@@ -272,7 +294,7 @@
                 messages = [...messages, assistantMsg];
                 streamingContent = "";
               } else if (data.message) {
-                toastStore.error(data.message);
+                setError(data.message);
               }
             } catch {
               // Not JSON, skip
@@ -281,12 +303,13 @@
         }
       }
     } catch (e) {
-      toastStore.error((e as Error).message);
-      messages = messages.filter((msg) => msg.id !== userMsg.id);
+      setError((e as Error).message || m.companion_send_failed());
     } finally {
       activeReader = null;
       isStreaming = false;
       streamingContent = "";
+      await tick();
+      scrollToBottom();
     }
   }
 
@@ -802,9 +825,34 @@
                   </p>
                 </div>
               {/if}
-              <p class="whitespace-pre-wrap">{msg.content}</p>
+              <p class="whitespace-pre-wrap break-words">{msg.content}</p>
             </div>
           </div>
+          {#if msg.error && msg.role === "user"}
+            <div class="flex justify-start">
+              <div
+                class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm border {darkMode
+                  ? 'bg-red-950/40 border-red-900/60 text-red-200'
+                  : 'bg-red-50 border-red-200 text-red-800'}"
+              >
+                <div class="flex items-start gap-2">
+                  <TriangleAlert size={16} class="flex-shrink-0 mt-0.5" />
+                  <p class="flex-1 min-w-0 break-words whitespace-pre-wrap">
+                    {msg.error}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  class="mt-2 inline-flex items-center gap-1.5 text-sm font-medium underline underline-offset-2 hover:opacity-80 disabled:opacity-50 disabled:no-underline"
+                  disabled={isStreaming}
+                  onclick={() => retryMessage(msg)}
+                >
+                  <RotateCw size={14} />
+                  {m.common_retry()}
+                </button>
+              </div>
+            </div>
+          {/if}
         {/each}
 
         {#if isStreaming && streamingContent}

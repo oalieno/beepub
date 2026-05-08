@@ -24,12 +24,12 @@
   {#each $toastStore as toast (toast.id)}
     {@const IconComponent = icons[toast.type]}
     <div
-      class="flex items-start gap-3 px-4 py-3 rounded-2xl border shadow-lg pointer-events-auto {colors[
+      class="flex items-start gap-3 px-4 py-3 rounded-2xl border shadow-lg pointer-events-auto w-full {colors[
         toast.type
       ]}"
     >
       <IconComponent size={18} class="flex-shrink-0 mt-0.5" />
-      <span class="text-sm flex-1">{toast.message}</span>
+      <span class="text-sm flex-1 min-w-0 break-words">{toast.message}</span>
       {#if toast.action}
         <button
           class="flex-shrink-0 text-sm font-semibold underline underline-offset-2 hover:opacity-80"
