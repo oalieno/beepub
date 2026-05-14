@@ -340,28 +340,38 @@ async def get_personalized_recommendations(
     )
     exclude_series = {row[0] for row in exclude_series_result.fetchall()}
 
-    # Get series info for all candidate books (for dedup)
+    # Get series + work info for all candidate books (for dedup)
     candidate_ids = [bid for bid in all_scores if bid not in exclude_ids]
     candidate_series: dict[uuid.UUID, str | None] = {}
+    candidate_work: dict[uuid.UUID, uuid.UUID | None] = {}
     if candidate_ids:
         series_result = await db.execute(
             text("""
-                SELECT id, COALESCE(series, epub_series) AS series_name
+                SELECT id, COALESCE(series, epub_series) AS series_name, work_id
                 FROM books
                 WHERE id = ANY(:ids)
             """),
             {"ids": [str(cid) for cid in candidate_ids]},
         )
         for row in series_result.fetchall():
-            candidate_series[uuid.UUID(str(row[0]))] = row[1]
+            bid_u = uuid.UUID(str(row[0]))
+            candidate_series[bid_u] = row[1]
+            candidate_work[bid_u] = uuid.UUID(str(row[2])) if row[2] else None
 
     filtered = []
     seen_series: set[str] = set()
-    # Sort by score first so we keep the highest-scoring book per series
+    seen_works: set[uuid.UUID] = set()
+    # Sort by score first so we keep the highest-scoring book per series/work
     sorted_candidates = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)
     for bid, (total, seed_id, _) in sorted_candidates:
         if bid in exclude_ids:
             continue
+        # Keep only one edition per Work
+        work_id = candidate_work.get(bid)
+        if work_id is not None:
+            if work_id in seen_works:
+                continue
+            seen_works.add(work_id)
         series_name = candidate_series.get(bid)
         # Skip if this book's series is in the excluded set
         if series_name and series_name in exclude_series:
@@ -396,8 +406,10 @@ async def get_books_by_tag_category(
     # Get top tags by book count in category
     tags_result = await db.execute(
         text("""
-            SELECT at.tag, COUNT(DISTINCT at.book_id) as book_count
+            SELECT at.tag,
+                   COUNT(DISTINCT COALESCE(b.work_id::text, b.id::text)) as book_count
             FROM book_tags at
+            JOIN books b ON b.id = at.book_id
             JOIN library_books lb ON lb.book_id = at.book_id
             JOIN libraries l ON l.id = lb.library_id
             WHERE at.category = :category
@@ -408,7 +420,7 @@ async def get_books_by_tag_category(
                   )
               )
             GROUP BY at.tag
-            HAVING COUNT(DISTINCT at.book_id) >= 2
+            HAVING COUNT(DISTINCT COALESCE(b.work_id::text, b.id::text)) >= 2
             ORDER BY book_count DESC
             LIMIT :max_tags
         """),
@@ -426,24 +438,38 @@ async def get_books_by_tag_category(
         tag_name = tag_row[0]
         book_count = tag_row[1]
 
-        # Get sample books for this tag
+        # Get sample books for this tag. Dedupe editions of the same Work
+        # by partitioning on COALESCE(work_id, id) — keep highest-confidence
+        # edition per Work (or the lone book if work_id is NULL).
         books_result = await db.execute(
             text("""
-                SELECT b.id
-                FROM books b
-                JOIN book_tags at ON at.book_id = b.id
-                JOIN library_books lb ON lb.book_id = b.id
-                JOIN libraries l ON l.id = lb.library_id
-                WHERE at.tag = :tag
-                  AND at.category = :category
-                  AND (
-                      :is_admin = true
-                      OR l.id NOT IN (
-                          SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
+                WITH per_book AS (
+                    SELECT b.id, b.work_id, MAX(at.confidence) AS conf
+                    FROM books b
+                    JOIN book_tags at ON at.book_id = b.id
+                    JOIN library_books lb ON lb.book_id = b.id
+                    JOIN libraries l ON l.id = lb.library_id
+                    WHERE at.tag = :tag
+                      AND at.category = :category
+                      AND (
+                          :is_admin = true
+                          OR l.id NOT IN (
+                              SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
+                          )
                       )
-                  )
-                GROUP BY b.id
-                ORDER BY MAX(at.confidence) DESC
+                    GROUP BY b.id, b.work_id
+                ),
+                ranked AS (
+                    SELECT id, conf,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(work_id::text, id::text)
+                            ORDER BY conf DESC, id
+                        ) AS rn
+                    FROM per_book
+                )
+                SELECT id FROM ranked
+                WHERE rn = 1
+                ORDER BY conf DESC
                 LIMIT :limit_per_tag
             """),
             {
