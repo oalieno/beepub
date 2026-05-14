@@ -58,6 +58,7 @@
   import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
   import BookMetadataEditModal from "$lib/components/BookMetadataEditModal.svelte";
   import BookNotesModal from "$lib/components/BookNotesModal.svelte";
+  import BackToTop from "$lib/components/BackToTop.svelte";
   import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -1028,6 +1029,11 @@
     {/if}
   {/if}
 </div>
+
+<!-- Mobile back-to-top (above sticky bottom bar) -->
+{#if book && !loading}
+  <BackToTop />
+{/if}
 
 <!-- Mobile Sticky Bottom Bar -->
 {#if book && !loading}
