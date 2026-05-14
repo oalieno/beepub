@@ -57,7 +57,7 @@
   import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
   import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
   import BookMetadataEditModal from "$lib/components/BookMetadataEditModal.svelte";
-  import BookNotesModal from "$lib/components/BookNotesModal.svelte";
+  import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import BackToTop from "$lib/components/BackToTop.svelte";
   import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -108,7 +108,13 @@
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
-  let showNotesModal = $state(false);
+  let notesStartEditing = $state(false);
+  let notesSectionEl = $state<HTMLDivElement | null>(null);
+
+  function scrollToNotes(startEditing = false) {
+    notesSectionEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (startEditing) notesStartEditing = true;
+  }
   let showReportModal = $state(false);
   let showMobileActions = $state(false);
   let showRemoveDownloadDialog = $state(false);
@@ -730,7 +736,7 @@
                 <ShelvingUnit size={14} />
                 {m.book_add_to_shelf()}
               </DropdownMenu.Item>
-              <DropdownMenu.Item onclick={() => (showNotesModal = true)}>
+              <DropdownMenu.Item onclick={() => scrollToNotes(true)}>
                 <NotebookPen
                   size={14}
                   class={interaction?.notes ? "text-primary" : ""}
@@ -835,27 +841,15 @@
     </div>
 
     <!-- Notes -->
-    {#if interaction?.notes}
-      <div class="border-t border-border my-8"></div>
-      <div>
-        <div class="flex items-center justify-between mb-3">
-          <h2 class="text-xl font-bold text-foreground">{m.book_notes()}</h2>
-          <button
-            class="text-sm text-muted-foreground hover:text-foreground transition-colors"
-            onclick={() => {
-              showNotesModal = true;
-            }}
-          >
-            {m.common_edit()}
-          </button>
-        </div>
-        <div
-          class="bg-card card-soft rounded-2xl p-4 prose-description text-muted-foreground leading-relaxed"
-        >
-          {@html sanitizeHtml(marked.parse(interaction.notes) as string)}
-        </div>
-      </div>
-    {/if}
+    <div class="border-t border-border my-8"></div>
+    <div bind:this={notesSectionEl}>
+      <BookNotesEditor
+        {bookId}
+        initialNotes={interaction?.notes ?? ""}
+        bind:startEditing={notesStartEditing}
+        onchange={handleNotesSaved}
+      />
+    </div>
 
     <!-- Highlights -->
     {#if bookHighlights.length > 0}
@@ -1176,8 +1170,8 @@
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
       onclick={() => {
-        showNotesModal = true;
         showMobileActions = false;
+        scrollToNotes(true);
       }}
     >
       <NotebookPen
@@ -1290,13 +1284,6 @@
     {book}
     bind:open={showEditModal}
     onupdate={(updated) => (book = updated)}
-  />
-
-  <BookNotesModal
-    {bookId}
-    initialNotes={interaction?.notes ?? ""}
-    bind:open={showNotesModal}
-    onsaved={handleNotesSaved}
   />
 
   <Modal
