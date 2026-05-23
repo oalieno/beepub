@@ -471,6 +471,45 @@
       const doc = contents.document;
       doc.addEventListener("wheel", handleWheel, { passive: false });
 
+      // Alias legacy Ming/Song bitmap-ish fonts (細明體, PMingLiU, Apple
+      // LiSung 等) to 源流明體 GenRyuMin TC. These legacy fonts render with
+      // bad aliasing on hi-dpi screens; @font-face re-routing the name
+      // leaves books that pick other fonts untouched. Font files are served
+      // from jsDelivr (ButTaiwan/genryu-font); browser HTTP cache means the
+      // ~15MB OTFs only download once per session across iframes.
+      if (!doc.getElementById("beepub-font-alias")) {
+        const style = doc.createElement("style");
+        style.id = "beepub-font-alias";
+        const cdn =
+          "https://cdn.jsdelivr.net/gh/ButTaiwan/genryu-font@master/otf/TC";
+        const weights: [number, string][] = [
+          [400, "R"],
+          [500, "M"],
+          [700, "B"],
+        ];
+        const aliases = [
+          "細明體",
+          "新細明體",
+          "PMingLiU",
+          "MingLiU",
+          "Apple LiSung Light",
+          "蘋果儷細宋",
+        ];
+        const faces = aliases.flatMap((name) =>
+          weights.map(
+            ([w, suffix]) => `@font-face {
+  font-family: "${name}";
+  font-weight: ${w};
+  font-style: normal;
+  src: url("${cdn}/GenRyuMin2TC-${suffix}.otf") format("opentype");
+  font-display: swap;
+}`,
+          ),
+        );
+        style.textContent = faces.join("\n");
+        doc.head.appendChild(style);
+      }
+
       // Image zoom: long-press (500ms) on both touch and mouse
 
       // Helper: extract image src from an event target
