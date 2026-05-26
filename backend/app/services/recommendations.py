@@ -16,6 +16,7 @@ async def get_similar_books(
     limit: int = 10,
     semantic_weight: float | None = None,
     semantic_limit: int | None = None,
+    total_books: int | None = None,
 ) -> list[dict]:
     """Return books similar to the given book, respecting user access.
 
@@ -41,9 +42,11 @@ async def get_similar_books(
     if semantic_limit is None:
         semantic_limit = 50
 
-    # Get total book count for IDF weighting
-    total_books_result = await db.execute(text("SELECT COUNT(*) FROM books"))
-    total_books = total_books_result.scalar() or 1
+    # Total book count for IDF weighting. Callers that fan out over many seeds
+    # should pass this in so it is not re-counted per seed.
+    if total_books is None:
+        total_books_result = await db.execute(text("SELECT COUNT(*) FROM books"))
+        total_books = total_books_result.scalar() or 1
 
     # Two-phase approach for large libraries:
     # 1. Gather candidates via indexed lookups (only books sharing a signal)
@@ -73,22 +76,21 @@ async def get_similar_books(
                    SELECT library_id FROM user_library_exclusions WHERE user_id = :user_id
                )
         ),
-        -- Phase 1: gather candidate book IDs via indexed lookups
-        -- Author overlap (uses GIN index on authors arrays)
+        -- Phase 1: gather STRONG candidates via indexed lookups. Author/tag
+        -- overlap is split into per-column `&&` so the GIN indexes on
+        -- authors/epub_authors/tags/epub_tags are usable (a COALESCE wrapper
+        -- would force a full table scan).
         author_candidates AS (
             SELECT b.id AS book_id, 5 AS score
             FROM books b, target t
             WHERE b.id != :book_id
-              AND COALESCE(b.authors, b.epub_authors, '{}')
-                  && t.t_authors
+              AND (b.authors && t.t_authors OR b.epub_authors && t.t_authors)
         ),
-        -- Tag overlap (uses GIN index on tags arrays)
         tag_candidates AS (
             SELECT b.id AS book_id, 3 AS score
             FROM books b, target t
             WHERE b.id != :book_id
-              AND COALESCE(b.tags, b.epub_tags, '{}')
-                  && t.t_tags
+              AND (b.tags && t.t_tags OR b.epub_tags && t.t_tags)
         ),
         -- Tag overlap with IDF weighting + category multipliers
         -- Rare tags (hard sci-fi) score much higher than common tags (literary fiction)
@@ -116,33 +118,8 @@ async def get_similar_books(
               AND b_tags.book_id != :book_id
             GROUP BY b_tags.book_id
         ),
-        -- Same publisher
-        publisher_candidates AS (
-            SELECT b.id AS book_id, 2 AS score
-            FROM books b, target t
-            WHERE b.id != :book_id
-              AND t.t_publisher IS NOT NULL
-              AND COALESCE(b.publisher, b.epub_publisher) = t.t_publisher
-        ),
-        -- Same language
-        language_candidates AS (
-            SELECT b.id AS book_id, 1 AS score
-            FROM books b, target t
-            WHERE b.id != :book_id
-              AND t.t_language IS NOT NULL
-              AND b.epub_language = t.t_language
-        ),
-        -- Library co-occurrence
-        lib_candidates AS (
-            SELECT lb2.book_id, COUNT(DISTINCT lb2.library_id) AS score
-            FROM library_books lb1
-            JOIN library_books lb2 ON lb1.library_id = lb2.library_id
-            WHERE lb1.book_id = :book_id
-              AND lb2.book_id != :book_id
-            GROUP BY lb2.book_id
-        ),
-        -- Semantic similarity (cosine distance on book-level summary embeddings)
-        -- Returns empty if the target book has no embedding (graceful degradation)
+        -- Semantic similarity (cosine distance on book-level summary embeddings,
+        -- backed by an HNSW index). Empty if the target has no embedding.
         semantic_candidates AS (
             SELECT bse2.book_id,
                    (1 - (bse1.embedding <=> bse2.embedding)) * :semantic_weight AS score,
@@ -155,6 +132,46 @@ async def get_similar_books(
                 LIMIT :semantic_limit
             ) bse2
             WHERE bse1.book_id = :book_id
+        ),
+        -- The candidate universe: books with at least one strong signal. Weak
+        -- signals below are only added as bonuses on top of these, never as
+        -- standalone candidates, so the working set stays in the hundreds
+        -- instead of scanning the whole catalogue.
+        strong_candidates AS (
+            SELECT book_id FROM author_candidates
+            UNION
+            SELECT book_id FROM tag_candidates
+            UNION
+            SELECT book_id FROM book_tag_candidates
+            UNION
+            SELECT book_id FROM semantic_candidates
+        ),
+        -- Same publisher (bonus on strong candidates)
+        publisher_candidates AS (
+            SELECT sc.book_id, 2 AS score
+            FROM strong_candidates sc
+            JOIN books b ON b.id = sc.book_id
+            CROSS JOIN target t
+            WHERE t.t_publisher IS NOT NULL
+              AND COALESCE(b.publisher, b.epub_publisher) = t.t_publisher
+        ),
+        -- Same language (bonus on strong candidates)
+        language_candidates AS (
+            SELECT sc.book_id, 1 AS score
+            FROM strong_candidates sc
+            JOIN books b ON b.id = sc.book_id
+            CROSS JOIN target t
+            WHERE t.t_language IS NOT NULL
+              AND b.epub_language = t.t_language
+        ),
+        -- Library co-occurrence (bonus on strong candidates)
+        lib_candidates AS (
+            SELECT sc.book_id, COUNT(DISTINCT lb2.library_id) AS score
+            FROM strong_candidates sc
+            JOIN library_books lb2 ON lb2.book_id = sc.book_id
+            JOIN library_books lb1
+              ON lb1.library_id = lb2.library_id AND lb1.book_id = :book_id
+            GROUP BY sc.book_id
         ),
         -- Phase 2: union all scores, filter to accessible, aggregate
         all_scores AS (
@@ -274,12 +291,46 @@ async def get_personalized_recommendations(
     if not seed_book_ids:
         return []
 
-    # Get similar books for each seed, aggregate scores
-    # Track (total_score, best_seed_id, best_seed_contribution) per candidate
+    # Resolve scoring inputs once instead of per seed (they are identical for
+    # every seed in this fan-out).
+    from app.services.settings import get_all_settings
+
+    app_settings = await get_all_settings(db)
+    semantic_weight = float(app_settings.get("similar_books_semantic_weight", "10.0"))
+    semantic_limit = int(app_settings.get("similar_books_semantic_limit", "50"))
+    total_books = (await db.execute(text("SELECT COUNT(*) FROM books"))).scalar() or 1
+
+    # Fetch similar books for every seed concurrently. Each seed query runs on
+    # its own session/connection so they execute in parallel instead of
+    # seed-by-seed (the previous sequential loop was the main latency cost).
+    import asyncio
+
+    from app.database import AsyncSessionLocal
+
+    seed_uuids = [uuid.UUID(str(s)) for s in seed_book_ids]
+    sem = asyncio.Semaphore(8)
+
+    async def _similar_for_seed(sid: uuid.UUID) -> list[dict]:
+        async with sem, AsyncSessionLocal() as seed_db:
+            return await get_similar_books(
+                seed_db,
+                sid,
+                user_id,
+                is_admin,
+                limit=20,
+                semantic_weight=semantic_weight,
+                semantic_limit=semantic_limit,
+                total_books=total_books,
+            )
+
+    similar_lists = await asyncio.gather(
+        *(_similar_for_seed(sid) for sid in seed_uuids)
+    )
+
+    # Aggregate scores in seed order so tie-breaking is identical to before.
+    # Track (total_score, best_seed_id, best_seed_contribution) per candidate.
     all_scores: dict[uuid.UUID, tuple[float, uuid.UUID, float]] = {}
-    for seed_id in seed_book_ids:
-        sid = uuid.UUID(str(seed_id))
-        similar = await get_similar_books(db, sid, user_id, is_admin, limit=20)
+    for sid, similar in zip(seed_uuids, similar_lists):
         for item in similar:
             bid = item["book_id"]
             score = item["score"]
