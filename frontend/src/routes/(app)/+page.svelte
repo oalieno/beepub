@@ -10,10 +10,10 @@
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
   import type {
-    BookOut,
     BookWithInteractionOut,
     LibraryOut,
     ReadingStats,
+    ReadingStatus,
   } from "$lib/types";
   import type { DownloadEntry } from "$lib/services/offline";
   import { BookOpen, Download, WifiOff } from "@lucide/svelte";
@@ -21,7 +21,9 @@
   import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
-  let recentBooks = $state<BookOut[]>([]);
+  let recentBooks = $state<BookWithInteractionOut[]>([]);
+  // Reading status comes inline with each book (see librariesApi.getBooks).
+  let recentInteractions = $state<Record<string, ReadingStatus | null>>({});
   let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
   let readingStats = $state<ReadingStats | null>(null);
@@ -67,7 +69,7 @@
       continueReadingBooks = currentlyReading.items;
 
       // Gather recent books from all libraries (only fetch top 12 each)
-      const allBooks: BookOut[] = [];
+      const allBooks: BookWithInteractionOut[] = [];
       await Promise.all(
         libraries.map(async (lib) => {
           try {
@@ -87,6 +89,9 @@
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
       recentBooks = allBooks.slice(0, 12);
+      recentInteractions = Object.fromEntries(
+        recentBooks.map((b) => [b.id, b.reading_status ?? null]),
+      );
       hasLoadedOnline = true;
     } catch {
       // API calls failed — offline state handled by isOnline store
@@ -308,7 +313,11 @@
           </p>
         </div>
       {:else}
-        <BookGrid books={recentBooks} enableInteractions />
+        <BookGrid
+          books={recentBooks}
+          enableInteractions
+          interactionMap={recentInteractions}
+        />
       {/if}
     </section>
 

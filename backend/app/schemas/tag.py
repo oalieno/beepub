@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.schemas.book import BookOut
+from app.schemas.book import BookOut, BookWithInteractionOut
 
 
 class BookTagOut(BaseModel):
@@ -34,4 +34,4 @@ class TagBrowseSection(BaseModel):
     label: str
     category: str
     book_count: int
-    books: list[BookOut]
+    books: list[BookWithInteractionOut]

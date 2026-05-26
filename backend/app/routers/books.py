@@ -41,7 +41,6 @@ from app.schemas.book import (
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
-    PaginatedBooks,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
     SeriesBookBrief,
@@ -49,9 +48,6 @@ from app.schemas.book import (
     SeriesProgress,
 )
 from app.schemas.reading import (
-    BatchInteractionItem,
-    BatchInteractionRequest,
-    BatchInteractionResponse,
     FavoriteUpdate,
     HighlightCreate,
     HighlightOut,
@@ -567,44 +563,6 @@ async def get_random_books(
     return books
 
 
-@router.post("/interactions/batch", response_model=BatchInteractionResponse)
-async def batch_get_interactions(
-    body: BatchInteractionRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    book_ids = body.book_ids[:200]
-    if not book_ids:
-        return BatchInteractionResponse(interactions={})
-
-    # Direct interactions
-    result = await db.execute(
-        select(UserBookInteraction.book_id, UserBookInteraction.reading_status).where(
-            UserBookInteraction.user_id == current_user.id,
-            UserBookInteraction.book_id.in_(book_ids),
-        )
-    )
-    interactions = {}
-    for book_id, rs in result.all():
-        interactions[str(book_id)] = BatchInteractionItem(reading_status=rs)
-
-    # Work-level propagation for books without direct interactions
-    from app.services.work_propagation import get_work_propagated_interactions
-
-    missing_ids = [bid for bid in book_ids if str(bid) not in interactions]
-    if missing_ids:
-        propagated = await get_work_propagated_interactions(
-            db, missing_ids, current_user.id
-        )
-        for bid, prop in propagated.items():
-            if prop["reading_status"] and str(bid) not in interactions:
-                interactions[str(bid)] = BatchInteractionItem(
-                    reading_status=prop["reading_status"]
-                )
-
-    return BatchInteractionResponse(interactions=interactions)
-
-
 @router.get("/search", response_model=PaginatedBookSearchResults)
 async def search_books(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -779,6 +737,20 @@ async def get_discover_browse(
     else:
         book_map = {}
 
+    from app.services.work_propagation import get_work_propagated_interactions
+
+    propagated = await get_work_propagated_interactions(
+        db, list(all_ids), current_user.id
+    )
+
+    def _to_item(b: Book) -> BookWithInteractionOut:
+        item = BookWithInteractionOut.model_validate(b)
+        prop = propagated.get(b.id)
+        if prop:
+            item.reading_status = prop["reading_status"]
+            item.is_favorite = prop["is_favorite"]
+        return item
+
     sections = []
     for section in sections_data:
         if not section["book_ids"]:
@@ -790,14 +762,14 @@ async def get_discover_browse(
                 label=TAG_LABELS.get(section["tag"], section["tag"]),
                 category=section["category"],
                 book_count=section["book_count"],
-                books=[BookOut.model_validate(b) for b in books],
+                books=[_to_item(b) for b in books],
             )
         )
 
     return sections
 
 
-@router.get("/all", response_model=PaginatedBooks)
+@router.get("/all", response_model=PaginatedBooksWithInteraction)
 async def list_all_books(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -903,18 +875,29 @@ async def list_all_books(
     result = await db.execute(base_query)
     books = result.scalars().all()
 
-    # Enrich with edition_count for Work books
-    from app.services.work_propagation import get_edition_count_map
+    # Enrich with edition_count + work-propagated reading status. The page is
+    # bounded by `limit` (<=200), so propagation runs only over the current page.
+    from app.services.work_propagation import (
+        get_edition_count_map,
+        get_work_propagated_interactions,
+    )
 
     book_ids_list = [b.id for b in books]
     edition_counts = await get_edition_count_map(db, book_ids_list)
+    propagated = await get_work_propagated_interactions(
+        db, book_ids_list, current_user.id
+    )
     items = []
     for b in books:
-        item = BookOut.model_validate(b)
+        item = BookWithInteractionOut.model_validate(b)
         item.edition_count = edition_counts.get(b.id)
+        prop = propagated.get(b.id)
+        if prop:
+            item.reading_status = prop["reading_status"]
+            item.is_favorite = prop["is_favorite"]
         items.append(item)
 
-    return PaginatedBooks(items=items, total=total)
+    return PaginatedBooksWithInteraction(items=items, total=total)
 
 
 @router.get("/{book_id}", response_model=BookOut)

@@ -109,15 +109,3 @@ class InteractionOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
-
-
-class BatchInteractionItem(BaseModel):
-    reading_status: str | None = None
-
-
-class BatchInteractionRequest(BaseModel):
-    book_ids: list[uuid.UUID]
-
-
-class BatchInteractionResponse(BaseModel):
-    interactions: dict[str, BatchInteractionItem]

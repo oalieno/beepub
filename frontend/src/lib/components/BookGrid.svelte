@@ -1,7 +1,5 @@
 <script lang="ts">
   import type { BookOut, ReadingStatus } from "$lib/types";
-  import { booksApi } from "$lib/api/books";
-  import { onMount } from "svelte";
   import BookCard from "./BookCard.svelte";
 
   let {
@@ -13,26 +11,15 @@
     books?: BookOut[];
     columns?: string;
     enableInteractions?: boolean;
+    // Reading status per book id, supplied inline by the page that owns the
+    // list. Callers that show interactions are expected to provide this.
     interactionMap?: Record<string, ReadingStatus | null>;
   } = $props();
 
+  // Fallback store for optimistic toggle updates when no external map is given.
   let internalMap = $state<Record<string, ReadingStatus | null>>({});
 
   let activeMap = $derived(externalMap ?? internalMap);
-
-  async function fetchInteractions(bookIds: string[]) {
-    if (bookIds.length === 0) return;
-    try {
-      const resp = await booksApi.getBatchInteractions(bookIds);
-      const newMap: Record<string, ReadingStatus | null> = {};
-      for (const [id, item] of Object.entries(resp.interactions)) {
-        newMap[id] = (item.reading_status as ReadingStatus) ?? null;
-      }
-      internalMap = newMap;
-    } catch {
-      // silently fail
-    }
-  }
 
   function handleStatusChange(bookId: string, status: ReadingStatus | null) {
     if (externalMap) {
@@ -41,19 +28,6 @@
       internalMap = { ...internalMap, [bookId]: status };
     }
   }
-
-  onMount(() => {
-    if (enableInteractions && !externalMap && books.length > 0) {
-      fetchInteractions(books.map((b) => b.id));
-    }
-  });
-
-  // Re-fetch when books change (e.g. pagination)
-  $effect(() => {
-    if (enableInteractions && !externalMap && books.length > 0) {
-      fetchInteractions(books.map((b) => b.id));
-    }
-  });
 </script>
 
 <div

@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { LibraryOut, PaginatedBooks } from "$lib/types";
+import type { LibraryOut, PaginatedBooksWithInteraction } from "$lib/types";
 
 export const librariesApi = {
   list: () => get("/libraries") as Promise<LibraryOut[]>,
@@ -39,7 +39,7 @@ export const librariesApi = {
     const qs = params.toString();
     return get(
       `/libraries/${id}/books${qs ? `?${qs}` : ""}`,
-    ) as Promise<PaginatedBooks>;
+    ) as Promise<PaginatedBooksWithInteraction>;
   },
 
   addBook: (id: string, bookId: string) =>

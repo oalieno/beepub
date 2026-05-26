@@ -13,7 +13,10 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
-from app.schemas.book import BookOut, PaginatedBooks
+from app.schemas.book import (
+    BookWithInteractionOut,
+    PaginatedBooksWithInteraction,
+)
 from app.schemas.library import (
     LibraryBookAdd,
     LibraryCreate,
@@ -167,7 +170,7 @@ async def delete_library(
     await db.commit()
 
 
-@router.get("/{library_id}/books", response_model=PaginatedBooks)
+@router.get("/{library_id}/books", response_model=PaginatedBooksWithInteraction)
 async def list_library_books(
     library_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -258,18 +261,29 @@ async def list_library_books(
     result = await db.execute(base_query)
     books = result.scalars().all()
 
-    # Enrich with edition_count for Work books
-    from app.services.work_propagation import get_edition_count_map
+    # Enrich with edition_count + work-propagated reading status. The page is
+    # bounded by `limit` (<=200), so propagation runs only over the current page.
+    from app.services.work_propagation import (
+        get_edition_count_map,
+        get_work_propagated_interactions,
+    )
 
     book_ids_list = [b.id for b in books]
     edition_counts = await get_edition_count_map(db, book_ids_list)
+    propagated = await get_work_propagated_interactions(
+        db, book_ids_list, current_user.id
+    )
     items = []
     for b in books:
-        item = BookOut.model_validate(b)
+        item = BookWithInteractionOut.model_validate(b)
         item.edition_count = edition_counts.get(b.id)
+        prop = propagated.get(b.id)
+        if prop:
+            item.reading_status = prop["reading_status"]
+            item.is_favorite = prop["is_favorite"]
         items.append(item)
 
-    return PaginatedBooks(items=items, total=total)
+    return PaginatedBooksWithInteraction(items=items, total=total)
 
 
 @router.post("/{library_id}/books", status_code=status.HTTP_201_CREATED)

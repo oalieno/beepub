@@ -10,7 +10,7 @@ from app.deps import get_current_user
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
-from app.schemas.book import BookOut
+from app.schemas.book import BookWithInteractionOut
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
     BookshelfCreate,
@@ -130,7 +130,7 @@ async def delete_bookshelf(
     await db.commit()
 
 
-@router.get("/{shelf_id}/books", response_model=list[BookOut])
+@router.get("/{shelf_id}/books", response_model=list[BookWithInteractionOut])
 async def list_shelf_books(
     shelf_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
@@ -143,7 +143,21 @@ async def list_shelf_books(
         .where(BookshelfBook.bookshelf_id == shelf_id)
         .order_by(BookshelfBook.sort_order.asc())
     )
-    return result.scalars().all()
+    books = result.scalars().all()
+
+    from app.services.work_propagation import get_work_propagated_interactions
+
+    book_ids = [b.id for b in books]
+    propagated = await get_work_propagated_interactions(db, book_ids, current_user.id)
+    items = []
+    for b in books:
+        item = BookWithInteractionOut.model_validate(b)
+        prop = propagated.get(b.id)
+        if prop:
+            item.reading_status = prop["reading_status"]
+            item.is_favorite = prop["is_favorite"]
+        items.append(item)
+    return items
 
 
 @router.post("/{shelf_id}/books", status_code=status.HTTP_201_CREATED)

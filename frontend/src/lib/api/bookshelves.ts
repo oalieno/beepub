@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { BookshelfOut, BookOut } from "$lib/types";
+import type { BookshelfOut, BookWithInteractionOut } from "$lib/types";
 
 export const bookshelvesApi = {
   list: () => get("/bookshelves") as Promise<BookshelfOut[]>,
@@ -15,7 +15,7 @@ export const bookshelvesApi = {
   delete: (id: string) => del(`/bookshelves/${id}`),
 
   getBooks: (id: string) =>
-    get(`/bookshelves/${id}/books`) as Promise<BookOut[]>,
+    get(`/bookshelves/${id}/books`) as Promise<BookWithInteractionOut[]>,
 
   addBook: (id: string, bookId: string) =>
     post(`/bookshelves/${id}/books`, { book_id: bookId }),

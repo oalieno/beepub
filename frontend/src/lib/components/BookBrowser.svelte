@@ -5,7 +5,11 @@
   import BookGrid from "$lib/components/BookGrid.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { localizedTagLabel } from "$lib/tags";
-  import type { BookOut, PaginatedBooks } from "$lib/types";
+  import type {
+    BookWithInteractionOut,
+    PaginatedBooksWithInteraction,
+    ReadingStatus,
+  } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
 
   const SORT_OPTIONS = $derived([
@@ -30,7 +34,7 @@
     order?: string;
     limit?: number;
     offset?: number;
-  }) => Promise<PaginatedBooks>;
+  }) => Promise<PaginatedBooksWithInteraction>;
 
   let {
     fetchBooks,
@@ -55,7 +59,7 @@
   } = $props();
 
   export interface BookBrowserState {
-    books: BookOut[];
+    books: BookWithInteractionOut[];
     totalBooks: number;
     searchQuery: string;
     filterAuthor: string;
@@ -82,7 +86,18 @@
         : initialSort,
   };
 
-  let books = $state<BookOut[]>(init.books);
+  function buildInteractionMap(items: BookWithInteractionOut[]) {
+    const map: Record<string, ReadingStatus | null> = {};
+    for (const b of items) map[b.id] = b.reading_status ?? null;
+    return map;
+  }
+
+  let books = $state<BookWithInteractionOut[]>(init.books);
+  // Reading status comes inline with each book; BookGrid consumes this map
+  // directly (externalMap), so it never fires a separate batch lookup.
+  let interactionMap = $state<Record<string, ReadingStatus | null>>(
+    buildInteractionMap(init.books),
+  );
   let totalBooks = $state(init.totalBooks);
   let hasMore = $derived(books.length < totalBooks);
   let loading = $state(!isRestoring);
@@ -134,6 +149,7 @@
         offset: 0,
       });
       books = result.items;
+      interactionMap = buildInteractionMap(result.items);
       totalBooks = result.total;
       notifyStateChange();
     } catch (e) {
@@ -158,6 +174,10 @@
         offset: books.length,
       });
       books = [...books, ...result.items];
+      interactionMap = {
+        ...interactionMap,
+        ...buildInteractionMap(result.items),
+      };
       totalBooks = result.total;
       notifyStateChange();
     } catch (e) {
@@ -399,7 +419,7 @@
       total: String(totalBooks),
     })}
   </p>
-  <BookGrid {books} enableInteractions />
+  <BookGrid {books} enableInteractions {interactionMap} />
   {#if hasMore}
     <div class="flex justify-center mt-8">
       <button

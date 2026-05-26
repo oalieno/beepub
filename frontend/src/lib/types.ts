@@ -140,7 +140,7 @@ export interface TagBrowseSection {
   label: string;
   category: string;
   book_count: number;
-  books: BookOut[];
+  books: BookWithInteractionOut[];
 }
 
 export interface PaginatedBooks {

@@ -31,11 +31,14 @@
     startEditing?: boolean;
   } = $props();
 
+  // Seeded once from the prop; thereafter notes is locally editable.
+  // svelte-ignore state_referenced_locally
   let notes = $state(initialNotes ?? "");
   let editing = $state(false);
   let tab = $state<"write" | "preview">("write");
   let saveState = $state<SaveState>("idle");
   let textareaEl = $state<HTMLTextAreaElement | null>(null);
+  // svelte-ignore state_referenced_locally
   let lastSaved = notes;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 

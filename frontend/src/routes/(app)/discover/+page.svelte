@@ -25,8 +25,18 @@
   let loadingRecs = $state(true);
   let loadingBrowse = $state(true);
 
-  // Track reading status for browse section books
+  // Reading status arrives inline with each book; these maps seed BookGrid /
+  // BookCard (externalMap) and hold optimistic updates from status toggles.
+  let recInteractions = $state<Record<string, ReadingStatus | null>>({});
   let browseInteractions = $state<Record<string, ReadingStatus | null>>({});
+
+  function statusMap(
+    books: { id: string; reading_status: ReadingStatus | null }[],
+  ): Record<string, ReadingStatus | null> {
+    return Object.fromEntries(
+      books.map((b) => [b.id, b.reading_status ?? null]),
+    );
+  }
 
   onMount(async () => {
     loadRecommendations();
@@ -37,6 +47,7 @@
     loadingRecs = true;
     try {
       recommendations = await booksApi.getRecommendations();
+      recInteractions = statusMap(recommendations);
     } catch (e) {
       toastStore.error("Failed to load recommendations");
     } finally {
@@ -48,22 +59,7 @@
     loadingBrowse = true;
     try {
       browseSections = await booksApi.getBrowseByCategory(activeCategory);
-      // Fetch interactions for all browse books
-      const allBookIds = browseSections.flatMap((s) =>
-        s.books.map((b) => b.id),
-      );
-      if (allBookIds.length > 0) {
-        try {
-          const resp = await booksApi.getBatchInteractions(allBookIds);
-          const newMap: Record<string, ReadingStatus | null> = {};
-          for (const [id, item] of Object.entries(resp.interactions)) {
-            newMap[id] = (item.reading_status as ReadingStatus) ?? null;
-          }
-          browseInteractions = newMap;
-        } catch {
-          // silently fail
-        }
-      }
+      browseInteractions = statusMap(browseSections.flatMap((s) => s.books));
     } catch (e) {
       toastStore.error("Failed to load browse sections");
     } finally {
@@ -120,7 +116,11 @@
         </p>
       </div>
     {:else}
-      <BookGrid books={recommendations} enableInteractions={true} />
+      <BookGrid
+        books={recommendations}
+        enableInteractions={true}
+        interactionMap={recInteractions}
+      />
     {/if}
   </section>
 

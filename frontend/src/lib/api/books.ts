@@ -10,7 +10,6 @@ import type {
   HighlightOut,
   IllustrationOut,
   InteractionOut,
-  PaginatedBooks,
   PaginatedBooksWithInteraction,
   ProgressOut,
   ReadingStats,
@@ -189,11 +188,6 @@ export const booksApi = {
   getEpubImages: (bookId: string) =>
     get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
 
-  getBatchInteractions: (bookIds: string[]) =>
-    post("/books/interactions/batch", { book_ids: bookIds }) as Promise<{
-      interactions: Record<string, { reading_status: string | null }>;
-    }>,
-
   search: (query: string, limit: number = 20) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
     return get(`/books/search?${params}`) as Promise<{
@@ -267,7 +261,9 @@ export const booksApi = {
     if (options?.limit != null) params.set("limit", String(options.limit));
     if (options?.offset != null) params.set("offset", String(options.offset));
     const qs = params.toString();
-    return get(`/books/all${qs ? `?${qs}` : ""}`) as Promise<PaginatedBooks>;
+    return get(
+      `/books/all${qs ? `?${qs}` : ""}`,
+    ) as Promise<PaginatedBooksWithInteraction>;
   },
 
   // Companion

@@ -9,12 +9,18 @@
   import { BookOpen } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import type { BookshelfOut, BookOut } from "$lib/types";
+  import type {
+    BookshelfOut,
+    BookWithInteractionOut,
+    ReadingStatus,
+  } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
 
   let shelf = $state<BookshelfOut | null>(null);
-  let books = $state<BookOut[]>([]);
+  let books = $state<BookWithInteractionOut[]>([]);
+  // Reading status comes inline with each book (see bookshelvesApi.getBooks).
+  let interactions = $state<Record<string, ReadingStatus | null>>({});
   let loading = $state(true);
   let pendingRemoveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -31,6 +37,9 @@
       ]);
       shelf = s;
       books = b;
+      interactions = Object.fromEntries(
+        b.map((x) => [x.id, x.reading_status ?? null]),
+      );
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -105,7 +114,7 @@
         </p>
       </div>
     {:else}
-      <BookGrid {books} enableInteractions />
+      <BookGrid {books} enableInteractions interactionMap={interactions} />
     {/if}
   {/if}
 </div>
