@@ -777,6 +777,7 @@ async def list_all_books(
     author: str | None = Query(None),
     tag: str | None = Query(None),
     series: str | None = Query(None),
+    has_rating: bool = Query(False),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
@@ -839,6 +840,15 @@ async def list_all_books(
                 Book.epub_series == series,
             )
         )
+    if has_rating:
+        base_query = base_query.where(
+            Book.id.in_(
+                select(UserBookInteraction.book_id).where(
+                    UserBookInteraction.user_id == current_user.id,
+                    UserBookInteraction.rating.is_not(None),
+                )
+            )
+        )
 
     # Count total
     count_query = select(func.count()).select_from(base_query.subquery())
@@ -887,10 +897,20 @@ async def list_all_books(
     propagated = await get_work_propagated_interactions(
         db, book_ids_list, current_user.id
     )
+    # Direct (non-propagated) user ratings for this page of books.
+    ratings_result = await db.execute(
+        select(UserBookInteraction.book_id, UserBookInteraction.rating).where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.book_id.in_(book_ids_list),
+            UserBookInteraction.rating.is_not(None),
+        )
+    )
+    ratings_map = {row[0]: row[1] for row in ratings_result.all()}
     items = []
     for b in books:
         item = BookWithInteractionOut.model_validate(b)
         item.edition_count = edition_counts.get(b.id)
+        item.user_rating = ratings_map.get(b.id)
         prop = propagated.get(b.id)
         if prop:
             item.reading_status = prop["reading_status"]
@@ -1549,8 +1569,10 @@ async def update_rating(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    if body.rating is not None and not (1 <= body.rating <= 5):
-        raise HTTPException(status_code=400, detail="Rating must be 1-5")
+    if body.rating is not None and not (
+        0.5 <= body.rating <= 5 and (body.rating * 2).is_integer()
+    ):
+        raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.rating = body.rating
     await db.commit()

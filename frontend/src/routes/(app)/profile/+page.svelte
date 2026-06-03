@@ -11,6 +11,7 @@
     Library,
     ShelvingUnit,
     Highlighter,
+    Trophy,
     Settings,
     Download,
     Dices,
@@ -128,6 +129,12 @@
       href: "/highlights",
       label: m.nav_highlights(),
       icon: Highlighter,
+      requiresOnline: true,
+    },
+    {
+      href: "/ratings",
+      label: m.nav_ratings(),
+      icon: Trophy,
       requiresOnline: true,
     },
     {

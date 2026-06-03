@@ -42,7 +42,7 @@ const ERROR_MAP: Record<string, () => string> = {
   "Only EPUB files are supported": () => m.error_epub_only(),
   "OpenAI base URL not configured": () => m.error_openai_not_configured(),
   "Path not found in EPUB": () => m.error_path_not_in_epub(),
-  "Rating must be 1-5": () => m.error_rating_range(),
+  "Rating must be 0.5-5 in 0.5 steps": () => m.error_rating_range(),
   "Registration is currently closed": () => m.error_registration_closed(),
   "Report not found": () => m.error_report_not_found(),
   "Semantic search is not configured": () => m.error_search_not_configured(),

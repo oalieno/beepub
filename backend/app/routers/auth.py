@@ -18,7 +18,7 @@ from app.schemas.auth import (
     RegisterRequest,
     UpdateUsernameRequest,
 )
-from app.schemas.user import UserOut
+from app.schemas.user import TierThemeUpdate, UserOut
 from app.services.auth import (
     create_access_token,
     create_refresh_token,
@@ -240,4 +240,29 @@ async def change_password(
 
 @router.get("/me", response_model=UserOut)
 async def me(current_user: Annotated[User, Depends(get_current_user)]):
+    return current_user
+
+
+@router.put("/tier-theme", response_model=UserOut)
+async def update_tier_theme(
+    body: TierThemeUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Set or reset (null) the user's tier-list theme."""
+    if body.tier_theme is not None:
+        if not body.tier_theme:
+            raise HTTPException(
+                status_code=422, detail="Tier theme must have at least one band"
+            )
+        for band in body.tier_theme:
+            if not (0.5 <= band.min <= 5):
+                raise HTTPException(
+                    status_code=422, detail="Tier band min must be between 0.5 and 5"
+                )
+        current_user.tier_theme = [b.model_dump() for b in body.tier_theme]
+    else:
+        current_user.tier_theme = None
+    await db.commit()
+    await db.refresh(current_user)
     return current_user

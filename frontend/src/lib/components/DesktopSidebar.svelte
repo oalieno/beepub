@@ -13,6 +13,7 @@
     BookCopy,
     ShelvingUnit,
     Highlighter,
+    Trophy,
     Compass,
     Search as SearchIcon,
     Dices,
@@ -69,6 +70,13 @@
       label: m.nav_highlights(),
       icon: Highlighter,
       active: page.url.pathname.startsWith("/highlights"),
+      requiresOnline: true,
+    },
+    {
+      href: "/ratings",
+      label: m.nav_ratings(),
+      icon: Trophy,
+      active: page.url.pathname.startsWith("/ratings"),
       requiresOnline: true,
     },
     {

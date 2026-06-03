@@ -77,6 +77,7 @@ class PaginatedBooks(BaseModel):
 class BookWithInteractionOut(BookOut):
     reading_status: str | None = None
     is_favorite: bool = False
+    user_rating: float | None = None
     reading_percentage: float | None = None
     last_read_at: str | None = None
     seed_book_id: uuid.UUID | None = None

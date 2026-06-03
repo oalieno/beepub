@@ -246,6 +246,7 @@ export const booksApi = {
     author?: string;
     tag?: string;
     series?: string;
+    has_rating?: boolean;
     sort?: string;
     order?: string;
     limit?: number;
@@ -256,6 +257,7 @@ export const booksApi = {
     if (options?.author) params.set("author", options.author);
     if (options?.tag) params.set("tag", options.tag);
     if (options?.series) params.set("series", options.series);
+    if (options?.has_rating) params.set("has_rating", "true");
     if (options?.sort) params.set("sort", options.sort);
     if (options?.order) params.set("order", options.order);
     if (options?.limit != null) params.set("limit", String(options.limit));

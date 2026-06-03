@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 
 class RatingUpdate(BaseModel):
-    rating: int | None = None  # 1-5 or null
+    rating: float | None = None  # 0.5-5 in 0.5 steps, or null
 
 
 class FavoriteUpdate(BaseModel):
@@ -99,7 +99,7 @@ class ReadingGoalUpdate(BaseModel):
 
 
 class InteractionOut(BaseModel):
-    rating: int | None
+    rating: float | None
     is_favorite: bool
     reading_progress: dict | None
     reading_status: str | None

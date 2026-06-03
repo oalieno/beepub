@@ -3,6 +3,12 @@ export enum UserRole {
   Admin = "admin",
 }
 
+export interface TierBand {
+  min: number; // inclusive lower bound (0.5-5)
+  label: string;
+  color: string;
+}
+
 export interface UserOut {
   id: string; // UUID
   username: string;
@@ -10,6 +16,7 @@ export interface UserOut {
   is_active: boolean;
   can_download: boolean;
   created_at: string;
+  tier_theme: TierBand[] | null; // null = use default preset
 }
 
 export interface UserLibraryAccess {
@@ -151,6 +158,7 @@ export interface PaginatedBooks {
 export interface BookWithInteractionOut extends BookOut {
   reading_status: ReadingStatus | null;
   is_favorite: boolean;
+  user_rating: number | null;
   reading_percentage: number | null;
   last_read_at: string | null;
   seed_book_id?: string | null;

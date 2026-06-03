@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Integer, String
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -37,6 +37,9 @@ class User(Base, TimestampMixin):
     daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )
+    # Per-user tier-list theme: ordered list of {min, label, color}.
+    # null = use the default preset (resolved client-side).
+    tier_theme: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Relationships
     library_exclusions: Mapped[list["UserLibraryExclusion"]] = relationship(

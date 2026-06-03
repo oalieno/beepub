@@ -8,7 +8,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
-    SmallInteger,
+    Numeric,
     String,
     Text,
     func,
@@ -39,7 +39,9 @@ class UserBookInteraction(Base):
     book_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("books.id", ondelete="CASCADE"), primary_key=True
     )
-    rating: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    rating: Mapped[float | None] = mapped_column(
+        Numeric(2, 1, asdecimal=False), nullable=True
+    )
     is_favorite: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     reading_progress: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     reading_status: Mapped[str | None] = mapped_column(String(20), nullable=True)

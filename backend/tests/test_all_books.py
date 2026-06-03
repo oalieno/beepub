@@ -170,6 +170,22 @@ class TestListAllBooksEndpoint:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
+    async def test_accepts_has_rating_param(self, regular_user):
+        db = _mock_db_returning([], 0)
+
+        app.dependency_overrides[get_current_user] = lambda: regular_user
+        app.dependency_overrides[get_db] = lambda: db
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/books/all?has_rating=true")
+            assert resp.status_code == 200
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
     async def test_accepts_sort_params(self, admin_user):
         db = _mock_db_returning([], 0)
 

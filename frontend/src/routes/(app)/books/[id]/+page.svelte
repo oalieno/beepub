@@ -286,7 +286,7 @@
     }
   }
 
-  async function handleRating(rating: number) {
+  async function handleRating(rating: number | null) {
     if (!book) return;
     try {
       await booksApi.updateRating(bookId, rating);
