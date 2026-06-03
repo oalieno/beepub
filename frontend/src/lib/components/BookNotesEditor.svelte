@@ -24,12 +24,19 @@
     initialNotes = "",
     onchange,
     startEditing = $bindable(false),
+    title,
+    saveFn,
   }: {
     bookId: string;
     initialNotes?: string | null;
     onchange?: (notes: string | null) => void;
     startEditing?: boolean;
+    // Optional overrides so the same editor can drive series-level notes.
+    title?: string;
+    saveFn?: (notes: string | null) => Promise<void>;
   } = $props();
+
+  let heading = $derived(title ?? m.notes_title());
 
   // Seeded once from the prop; thereafter notes is locally editable.
   // svelte-ignore state_referenced_locally
@@ -83,7 +90,11 @@
     saveState = "saving";
     try {
       const value = snapshot.trim() ? snapshot : null;
-      await booksApi.updateNotes(bookId, value);
+      if (saveFn) {
+        await saveFn(value);
+      } else {
+        await booksApi.updateNotes(bookId, value);
+      }
       lastSaved = snapshot;
       saveState = "saved";
       onchange?.(value);
@@ -167,7 +178,7 @@
   <div class="flex items-center justify-between mb-3">
     <h2 class="text-xl font-bold text-foreground flex items-center gap-2">
       <NotebookPen size={18} />
-      {m.notes_title()}
+      {heading}
     </h2>
     {#if editing}
       <div class="flex items-center gap-3">

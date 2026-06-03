@@ -1,5 +1,9 @@
 import { get, post, put, del } from "./client";
-import type { LibraryOut, PaginatedBooksWithInteraction } from "$lib/types";
+import type {
+  LibraryOut,
+  PaginatedBooksWithInteraction,
+  PaginatedSeries,
+} from "$lib/types";
 
 export const librariesApi = {
   list: () => get("/libraries") as Promise<LibraryOut[]>,
@@ -40,6 +44,20 @@ export const librariesApi = {
     return get(
       `/libraries/${id}/books${qs ? `?${qs}` : ""}`,
     ) as Promise<PaginatedBooksWithInteraction>;
+  },
+
+  getSeries: (
+    id: string,
+    options?: { search?: string; limit?: number; offset?: number },
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.search) params.set("search", options.search);
+    if (options?.limit != null) params.set("limit", String(options.limit));
+    if (options?.offset != null) params.set("offset", String(options.offset));
+    const qs = params.toString();
+    return get(
+      `/libraries/${id}/series${qs ? `?${qs}` : ""}`,
+    ) as Promise<PaginatedSeries>;
   },
 
   addBook: (id: string, bookId: string) =>

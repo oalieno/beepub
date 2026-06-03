@@ -22,6 +22,7 @@ from app.routers import (
     jobs,
     libraries,
     search,
+    series,
     tags,
     works,
 )
@@ -93,6 +94,7 @@ app.include_router(companion.router)
 app.include_router(search.router)
 app.include_router(jobs.router)
 app.include_router(works.router)
+app.include_router(series.router)
 
 
 @app.get("/api/health")

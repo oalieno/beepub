@@ -8,6 +8,7 @@
   import { toastStore } from "$lib/stores/toast";
   import BookBrowser from "$lib/components/BookBrowser.svelte";
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
+  import LibraryViewToggle from "$lib/components/LibraryViewToggle.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import type { LibraryOut, BookOut } from "$lib/types";
   import { UserRole } from "$lib/types";
@@ -174,6 +175,9 @@
         {#if library.description}
           <p class="text-muted-foreground mt-1">{library.description}</p>
         {/if}
+        <div class="mt-3">
+          <LibraryViewToggle libraryId={library.id} active="books" />
+        </div>
       </div>
       {#if canUpload}
         <button

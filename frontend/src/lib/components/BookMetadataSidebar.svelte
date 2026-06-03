@@ -102,12 +102,12 @@
           >{m.metadata_label_series()}</span
         >
         <div>
-          <button
+          <a
+            href="/series?name={encodeURIComponent(book.display_series)}"
             class="text-foreground font-medium hover:text-primary hover:underline transition-colors text-left"
-            onclick={() => onfilter("series", book.display_series!)}
           >
             {book.display_series}
-          </button>
+          </a>
           {#if currentIdx != null}
             <span class="text-muted-foreground text-xs block mt-0.5">
               {#if total}{m.metadata_series_vol_of({

@@ -90,6 +90,22 @@ export interface BookOut {
   library_names: string[];
 }
 
+export interface SeriesOut {
+  series_key: string;
+  series_name: string;
+  book_count: number;
+  read_count: number;
+  rating: number | null;
+  effective_rating: number | null;
+  notes: string | null;
+  cover_book: BookOut | null;
+}
+
+export interface PaginatedSeries {
+  items: SeriesOut[];
+  total: number;
+}
+
 export interface WorkBookBrief {
   id: string;
   display_title: string | null;

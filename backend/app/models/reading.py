@@ -60,6 +60,35 @@ class UserBookInteraction(Base):
     book: Mapped["Book"] = relationship("Book", back_populates="interactions")
 
 
+class UserSeriesInteraction(Base):
+    """Per-user rating/notes for a whole series.
+
+    Series have no entity table — they are identified by the normalised series
+    name (lower(btrim(coalesce(series, epub_series)))), the same key used for
+    popularity/recommendation grouping. This row hangs metadata off that key
+    without touching the book-level series text fields.
+    """
+
+    __tablename__ = "user_series_interactions"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    series_key: Mapped[str] = mapped_column(String(500), primary_key=True)
+    # Display name (original casing) captured when the row was created.
+    series_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    rating: Mapped[float | None] = mapped_column(
+        Numeric(2, 1, asdecimal=False), nullable=True
+    )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class ReadingActivity(Base):
     __tablename__ = "reading_activity"
 

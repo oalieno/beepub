@@ -7,7 +7,11 @@ from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.illustration import Illustration
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.llm_usage import LLMUsageLog
-from app.models.reading import Highlight, UserBookInteraction
+from app.models.reading import (
+    Highlight,
+    UserBookInteraction,
+    UserSeriesInteraction,
+)
 from app.models.settings import AppSetting
 from app.models.tag import BookTag, TagCategory, TagSource
 from app.models.user import User, UserRole
@@ -25,6 +29,7 @@ __all__ = [
     "Bookshelf",
     "BookshelfBook",
     "UserBookInteraction",
+    "UserSeriesInteraction",
     "Highlight",
     "Illustration",
     "AppSetting",

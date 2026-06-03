@@ -24,6 +24,8 @@ from app.schemas.library import (
     LibraryOut,
     LibraryUpdate,
 )
+from app.schemas.series import PaginatedSeries
+from app.services.series import build_series_out, list_series
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -284,6 +286,28 @@ async def list_library_books(
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)
+
+
+@router.get("/{library_id}/series", response_model=PaginatedSeries)
+async def list_library_series(
+    library_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    search: str | None = Query(None),
+    limit: int = Query(60, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    await _get_accessible_library(library_id, current_user, db)
+    rows, total = await list_series(
+        db,
+        current_user,
+        library_id=library_id,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    items = await build_series_out(db, rows)
+    return PaginatedSeries(items=items, total=total)
 
 
 @router.post("/{library_id}/books", status_code=status.HTTP_201_CREATED)

@@ -600,7 +600,9 @@
             value={interaction?.rating ?? null}
             onchange={handleRating}
           />
-          <span class="text-sm text-muted-foreground">Your rating</span>
+          <span class="text-sm text-muted-foreground"
+            >{m.series_rating_your()}</span
+          >
         </div>
 
         <ExternalRatings {bookId} bind:externalMeta {isAdmin} />
