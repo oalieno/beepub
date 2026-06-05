@@ -309,6 +309,30 @@ class TestGetSimilarBooksSemantic:
 # ---------------------------------------------------------------------------
 
 
+def _routed_execute(seed_result, read_result):
+    """A db.execute stub that routes by SQL content rather than call order, so
+    these tests don't break when get_personalized_recommendations adds or
+    reorders internal queries (settings, book count, dedup lookups)."""
+
+    async def execute(query, params=None):
+        sql = str(query)
+        if "app_settings" in sql:
+            m = MagicMock()
+            m.scalars.return_value.all.return_value = []
+            return m
+        if "COUNT(*) FROM books" in sql:
+            m = MagicMock()
+            m.scalar.return_value = 1
+            return m
+        if "user_book_interactions" in sql:
+            # The seed query is the one capped at 10; the other is the
+            # read/interacted exclusion query.
+            return seed_result if "LIMIT 10" in sql else read_result
+        return MagicMock(fetchall=MagicMock(return_value=[]))
+
+    return execute
+
+
 class TestAttributionTracking:
     @pytest.mark.asyncio
     async def test_tracks_best_seed(self):
@@ -330,22 +354,20 @@ class TestAttributionTracking:
         mock_read_result = MagicMock()
         mock_read_result.fetchall.return_value = []
 
-        call_count = 0
-
-        async def mock_execute(query, params=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return mock_seed_result
-            elif call_count == 2:
-                return mock_read_result
-            return MagicMock(fetchall=MagicMock(return_value=[]))
-
         mock_db = AsyncMock()
-        mock_db.execute = mock_execute
+        mock_db.execute = _routed_execute(mock_seed_result, mock_read_result)
 
         # Mock get_similar_books to return controlled data
-        async def mock_similar(db, book_id, user_id, is_admin, limit=20):
+        async def mock_similar(
+            db,
+            book_id,
+            user_id,
+            is_admin,
+            limit=20,
+            semantic_weight=None,
+            semantic_limit=None,
+            total_books=None,
+        ):
             if book_id == seed_a:
                 return [{"book_id": candidate, "score": 5.0, "cosine_similarity": None}]
             elif book_id == seed_b:
@@ -383,21 +405,19 @@ class TestAttributionTracking:
         mock_read_result = MagicMock()
         mock_read_result.fetchall.return_value = [(str(read_book),)]
 
-        call_count = 0
-
-        async def mock_execute(query, params=None):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 1:
-                return mock_seed_result
-            elif call_count == 2:
-                return mock_read_result
-            return MagicMock(fetchall=MagicMock(return_value=[]))
-
         mock_db = AsyncMock()
-        mock_db.execute = mock_execute
+        mock_db.execute = _routed_execute(mock_seed_result, mock_read_result)
 
-        async def mock_similar(db, book_id, user_id, is_admin, limit=20):
+        async def mock_similar(
+            db,
+            book_id,
+            user_id,
+            is_admin,
+            limit=20,
+            semantic_weight=None,
+            semantic_limit=None,
+            total_books=None,
+        ):
             return [
                 {"book_id": seed, "score": 10.0, "cosine_similarity": None},
                 {"book_id": read_book, "score": 8.0, "cosine_similarity": None},
