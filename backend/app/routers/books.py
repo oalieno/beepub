@@ -62,6 +62,7 @@ from app.schemas.reading import (
     ReadingStatsOut,
     ReadingStatusUpdate,
 )
+from app.schemas.series import PaginatedFeed
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.settings import get_setting
 from app.services.storage import (
@@ -918,6 +919,37 @@ async def list_all_books(
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)
+
+
+@router.get("/feed", response_model=PaginatedFeed)
+async def list_all_books_feed(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    search: str | None = Query(None),
+    author: str | None = Query(None),
+    tag: str | None = Query(None),
+    sort: str = Query("added_at"),
+    order: str = Query("desc"),
+    limit: int = Query(60, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    """Collapsed view across all accessible libraries: series grouped, lone
+    books individual. The "All books" tab in the merged library page."""
+    from app.services.series import list_library_feed
+
+    items, total = await list_library_feed(
+        db,
+        current_user,
+        library_id=None,
+        search=search,
+        author=author,
+        tag=tag,
+        sort=sort,
+        order=order,
+        limit=limit,
+        offset=offset,
+    )
+    return PaginatedFeed(items=items, total=total)
 
 
 @router.get("/{book_id}", response_model=BookOut)

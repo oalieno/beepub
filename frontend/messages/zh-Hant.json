@@ -1,7 +1,6 @@
 {
   "nav_home": "首頁",
   "nav_my_books": "我的書籍",
-  "nav_all_books": "所有書籍",
   "nav_libraries": "書庫",
   "nav_library": "書庫",
   "nav_shelves": "書架",
@@ -138,15 +137,10 @@
   "series_count": "{count} 個系列",
   "series_book_count": "{count} 集",
   "series_empty": "你的書庫裡沒有系列。",
-  "series_search_placeholder": "搜尋系列...",
   "series_view_volumes": "查看所有單行本",
   "series_volumes": "單行本",
-  "library_tab_books": "書本",
-  "library_tab_series": "系列",
 
-  "allbooks_page_title": "所有書籍 - BeePub",
   "allbooks_heading": "所有書籍",
-  "allbooks_subtitle": "瀏覽所有書庫中的書籍。",
 
   "highlights_page_title": "畫線 - BeePub",
   "highlights_removed": "已移除畫線",
@@ -574,6 +568,7 @@
   "browser_sort_popularity_asc": "知名度低到高",
   "browser_search_placeholder": "搜尋標題、作者或主題...",
   "browser_filters": "篩選",
+  "browser_collapse_series": "收合系列",
   "browser_filter_author": "作者：{author}",
   "browser_filter_series": "系列：{series}",
   "browser_filter_tag": "標籤：{tag}",

@@ -1,31 +1,48 @@
 <script lang="ts">
-  import { Search, X, ArrowUpDown, SlidersHorizontal } from "@lucide/svelte";
+  import {
+    Search,
+    X,
+    ArrowUpDown,
+    SlidersHorizontal,
+    Layers,
+  } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as m from "$lib/paraglide/messages.js";
   import BookGrid from "$lib/components/BookGrid.svelte";
+  import BookCard from "$lib/components/BookCard.svelte";
+  import SeriesCard from "$lib/components/SeriesCard.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { localizedTagLabel } from "$lib/tags";
   import type {
     BookWithInteractionOut,
+    LibraryFeedItem,
     PaginatedBooksWithInteraction,
+    PaginatedFeed,
     ReadingStatus,
   } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
 
-  const SORT_OPTIONS = $derived([
-    { value: "added_at:desc", label: m.browser_sort_newest() },
-    { value: "added_at:asc", label: m.browser_sort_oldest() },
-    { value: "display_title:asc", label: m.browser_sort_title_asc() },
-    { value: "display_title:desc", label: m.browser_sort_title_desc() },
-    { value: "series_index:asc", label: m.browser_sort_series_asc() },
-    { value: "series_index:desc", label: m.browser_sort_series_desc() },
-    { value: "popularity_score:desc", label: m.browser_sort_popularity_desc() },
-    { value: "popularity_score:asc", label: m.browser_sort_popularity_asc() },
-  ]);
+  // series_index sort is meaningless once series collapse into one card, so it
+  // is dropped from the menu while collapsed.
+  const SORT_OPTIONS = $derived(
+    [
+      { value: "added_at:desc", label: m.browser_sort_newest() },
+      { value: "added_at:asc", label: m.browser_sort_oldest() },
+      { value: "display_title:asc", label: m.browser_sort_title_asc() },
+      { value: "display_title:desc", label: m.browser_sort_title_desc() },
+      { value: "series_index:asc", label: m.browser_sort_series_asc() },
+      { value: "series_index:desc", label: m.browser_sort_series_desc() },
+      {
+        value: "popularity_score:desc",
+        label: m.browser_sort_popularity_desc(),
+      },
+      { value: "popularity_score:asc", label: m.browser_sort_popularity_asc() },
+    ].filter((o) => !(collapse && o.value.startsWith("series_index"))),
+  );
 
   const PAGE_SIZE = 60;
 
-  type FetchBooksFn = (params: {
+  interface FetchParams {
     search?: string;
     author?: string;
     tag?: string;
@@ -34,25 +51,36 @@
     order?: string;
     limit?: number;
     offset?: number;
-  }) => Promise<PaginatedBooksWithInteraction>;
+  }
+
+  type FetchBooksFn = (
+    params: FetchParams,
+  ) => Promise<PaginatedBooksWithInteraction>;
+  type FetchFeedFn = (params: FetchParams) => Promise<PaginatedFeed>;
 
   let {
     fetchBooks,
+    fetchFeed,
+    collapsible = false,
     initialSearch = "",
     initialTag = "",
     initialAuthor = "",
     initialSeries = "",
     initialSort = "added_at:desc",
+    initialCollapse = false,
     emptyMessage = "",
     restoreData,
     onStateChange,
   }: {
     fetchBooks: FetchBooksFn;
+    fetchFeed?: FetchFeedFn;
+    collapsible?: boolean;
     initialSearch?: string;
     initialTag?: string;
     initialAuthor?: string;
     initialSeries?: string;
     initialSort?: string;
+    initialCollapse?: boolean;
     emptyMessage?: string;
     restoreData?: BookBrowserState | null;
     onStateChange?: (state: BookBrowserState) => void;
@@ -60,12 +88,14 @@
 
   export interface BookBrowserState {
     books: BookWithInteractionOut[];
+    feedItems: LibraryFeedItem[];
     totalBooks: number;
     searchQuery: string;
     filterAuthor: string;
     filterTag: string;
     filterSeries: string;
     sortValue: string;
+    collapse: boolean;
   }
 
   // Compute all initial values once from restoreData or initial* props.
@@ -75,6 +105,7 @@
   // svelte-ignore state_referenced_locally
   const init: BookBrowserState = restoreData ?? {
     books: [],
+    feedItems: [],
     totalBooks: 0,
     searchQuery: initialSearch,
     filterAuthor: initialAuthor,
@@ -84,6 +115,7 @@
       initialSeries && initialSort === "added_at:desc"
         ? "series_index:asc"
         : initialSort,
+    collapse: collapsible && initialCollapse,
   };
 
   function buildInteractionMap(items: BookWithInteractionOut[]) {
@@ -92,14 +124,27 @@
     return map;
   }
 
+  function buildFeedInteractionMap(items: LibraryFeedItem[]) {
+    const map: Record<string, ReadingStatus | null> = {};
+    for (const it of items)
+      if (it.type === "book" && it.book)
+        map[it.book.id] = it.book.reading_status ?? null;
+    return map;
+  }
+
   let books = $state<BookWithInteractionOut[]>(init.books);
+  let feedItems = $state<LibraryFeedItem[]>(init.feedItems);
   // Reading status comes inline with each book; BookGrid consumes this map
   // directly (externalMap), so it never fires a separate batch lookup.
   let interactionMap = $state<Record<string, ReadingStatus | null>>(
-    buildInteractionMap(init.books),
+    init.collapse
+      ? buildFeedInteractionMap(init.feedItems)
+      : buildInteractionMap(init.books),
   );
   let totalBooks = $state(init.totalBooks);
-  let hasMore = $derived(books.length < totalBooks);
+  let collapse = $state(init.collapse);
+  let shownCount = $derived(collapse ? feedItems.length : books.length);
+  let hasMore = $derived(shownCount < totalBooks);
   let loading = $state(!isRestoring);
   let loadingMore = $state(false);
   let searchQuery = $state(init.searchQuery);
@@ -126,31 +171,44 @@
   function notifyStateChange() {
     onStateChange?.({
       books,
+      feedItems,
       totalBooks,
       searchQuery,
       filterAuthor,
       filterTag,
       filterSeries,
       sortValue,
+      collapse,
     });
+  }
+
+  function queryParams(offset: number): FetchParams {
+    return {
+      search: searchQuery || undefined,
+      author: filterAuthor || undefined,
+      tag: filterTag || undefined,
+      series: filterSeries || undefined,
+      sort: sortBy,
+      order: sortOrder,
+      limit: PAGE_SIZE,
+      offset,
+    };
   }
 
   async function loadData() {
     loading = true;
     try {
-      const result = await fetchBooks({
-        search: searchQuery || undefined,
-        author: filterAuthor || undefined,
-        tag: filterTag || undefined,
-        series: filterSeries || undefined,
-        sort: sortBy,
-        order: sortOrder,
-        limit: PAGE_SIZE,
-        offset: 0,
-      });
-      books = result.items;
-      interactionMap = buildInteractionMap(result.items);
-      totalBooks = result.total;
+      if (collapse && fetchFeed) {
+        const result = await fetchFeed(queryParams(0));
+        feedItems = result.items;
+        interactionMap = buildFeedInteractionMap(result.items);
+        totalBooks = result.total;
+      } else {
+        const result = await fetchBooks(queryParams(0));
+        books = result.items;
+        interactionMap = buildInteractionMap(result.items);
+        totalBooks = result.total;
+      }
       notifyStateChange();
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -163,28 +221,38 @@
     if (loadingMore || !hasMore) return;
     loadingMore = true;
     try {
-      const result = await fetchBooks({
-        search: searchQuery || undefined,
-        author: filterAuthor || undefined,
-        tag: filterTag || undefined,
-        series: filterSeries || undefined,
-        sort: sortBy,
-        order: sortOrder,
-        limit: PAGE_SIZE,
-        offset: books.length,
-      });
-      books = [...books, ...result.items];
-      interactionMap = {
-        ...interactionMap,
-        ...buildInteractionMap(result.items),
-      };
-      totalBooks = result.total;
+      if (collapse && fetchFeed) {
+        const result = await fetchFeed(queryParams(feedItems.length));
+        feedItems = [...feedItems, ...result.items];
+        interactionMap = {
+          ...interactionMap,
+          ...buildFeedInteractionMap(result.items),
+        };
+        totalBooks = result.total;
+      } else {
+        const result = await fetchBooks(queryParams(books.length));
+        books = [...books, ...result.items];
+        interactionMap = {
+          ...interactionMap,
+          ...buildInteractionMap(result.items),
+        };
+        totalBooks = result.total;
+      }
       notifyStateChange();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
       loadingMore = false;
     }
+  }
+
+  function toggleCollapse() {
+    collapse = !collapse;
+    // series_index ordering has no meaning collapsed; fall back to newest.
+    if (collapse && sortValue.startsWith("series_index")) {
+      sortValue = "added_at:desc";
+    }
+    handleImmediateChange();
   }
 
   function handleSearchInput() {
@@ -225,12 +293,14 @@
   export function getState(): BookBrowserState {
     return {
       books,
+      feedItems,
       totalBooks,
       searchQuery,
       filterAuthor,
       filterTag,
       filterSeries,
       sortValue,
+      collapse,
     };
   }
 
@@ -303,6 +373,19 @@
       <SlidersHorizontal size={12} />
       {m.browser_filters()}
     </button>
+
+    {#if collapsible}
+      <button
+        class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full font-medium transition-colors {collapse
+          ? 'bg-primary/15 text-primary'
+          : 'bg-secondary text-muted-foreground hover:bg-secondary/80'}"
+        onclick={toggleCollapse}
+        aria-pressed={collapse}
+      >
+        <Layers size={12} />
+        {m.browser_collapse_series()}
+      </button>
+    {/if}
 
     {#if filterAuthor}
       <button
@@ -404,7 +487,7 @@
       </div>
     {/each}
   </div>
-{:else if books.length === 0}
+{:else if shownCount === 0}
   <div
     class="border-2 border-dashed border-border rounded-2xl p-12 text-center"
   >
@@ -415,11 +498,31 @@
 {:else}
   <p class="text-muted-foreground text-sm mb-4">
     {m.browser_showing({
-      count: String(books.length),
+      count: String(shownCount),
       total: String(totalBooks),
     })}
   </p>
-  <BookGrid {books} enableInteractions {interactionMap} />
+  {#if collapse}
+    <!-- One grid, mixing whole-series cards and standalone book cards -->
+    <div
+      class="grid gap-4 items-start book-grid"
+      style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"
+    >
+      {#each feedItems as item (item.type === "series" ? `s:${item.series.series_key}` : `b:${item.book.id}`)}
+        {#if item.type === "series"}
+          <SeriesCard series={item.series} />
+        {:else}
+          <BookCard
+            book={item.book}
+            readingStatus={interactionMap[item.book.id] ?? null}
+            onStatusChange={(id, status) => (interactionMap[id] = status)}
+          />
+        {/if}
+      {/each}
+    </div>
+  {:else}
+    <BookGrid {books} enableInteractions {interactionMap} />
+  {/if}
   {#if hasMore}
     <div class="flex justify-center mt-8">
       <button

@@ -10,7 +10,6 @@
     Home,
     BookOpen,
     Library,
-    BookCopy,
     ShelvingUnit,
     Highlighter,
     Trophy,
@@ -45,17 +44,12 @@
       requiresOnline: true,
     },
     {
-      href: "/all-books",
-      label: m.nav_all_books(),
-      icon: BookCopy,
-      active: page.url.pathname.startsWith("/all-books"),
-      requiresOnline: true,
-    },
-    {
       href: "/libraries",
       label: m.nav_libraries(),
       icon: Library,
-      active: page.url.pathname.startsWith("/libraries"),
+      active:
+        page.url.pathname.startsWith("/libraries") ||
+        page.url.pathname.startsWith("/all-books"),
       requiresOnline: true,
     },
     {

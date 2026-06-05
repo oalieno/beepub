@@ -1,7 +1,6 @@
 {
   "nav_home": "Home",
   "nav_my_books": "My Books",
-  "nav_all_books": "All Books",
   "nav_libraries": "Libraries",
   "nav_library": "Library",
   "nav_shelves": "Shelves",
@@ -138,15 +137,10 @@
   "series_count": "{count} series",
   "series_book_count": "{count} volumes",
   "series_empty": "No series found in your library.",
-  "series_search_placeholder": "Search series...",
   "series_view_volumes": "View all volumes",
   "series_volumes": "Volumes",
-  "library_tab_books": "Books",
-  "library_tab_series": "Series",
 
-  "allbooks_page_title": "All Books - BeePub",
   "allbooks_heading": "All Books",
-  "allbooks_subtitle": "Browse all books across your libraries.",
 
   "highlights_page_title": "Highlights - BeePub",
   "highlights_removed": "Highlight removed",
@@ -574,6 +568,7 @@
   "browser_sort_popularity_asc": "Least popular",
   "browser_search_placeholder": "Search by title, author, or topic...",
   "browser_filters": "Filters",
+  "browser_collapse_series": "Collapse series",
   "browser_filter_author": "Author: {author}",
   "browser_filter_series": "Series: {series}",
   "browser_filter_tag": "Tag: {tag}",

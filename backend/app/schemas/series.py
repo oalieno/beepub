@@ -1,6 +1,8 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
-from app.schemas.book import BookOut
+from app.schemas.book import BookOut, BookWithInteractionOut
 
 
 class SeriesOut(BaseModel):
@@ -16,6 +18,19 @@ class SeriesOut(BaseModel):
 
 class PaginatedSeries(BaseModel):
     items: list[SeriesOut]
+    total: int
+
+
+class LibraryFeedItem(BaseModel):
+    """One unit in the collapsed library view: a whole series or a lone book."""
+
+    type: Literal["series", "book"]
+    series: SeriesOut | None = None
+    book: BookWithInteractionOut | None = None
+
+
+class PaginatedFeed(BaseModel):
+    items: list[LibraryFeedItem]
     total: int
 
 

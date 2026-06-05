@@ -160,6 +160,67 @@ class TestSeriesEndpoints:
         assert resp.status_code in (401, 403, 307)
 
     @pytest.mark.asyncio
+    async def test_library_feed_empty(self):
+        """Scoped collapsed feed returns the paginated-feed envelope."""
+        admin = User(
+            id=uuid.uuid4(),
+            username="admin",
+            password_hash="hashed",
+            role=UserRole.admin,
+            is_active=True,
+            can_download=False,
+        )
+
+        def _admin_db() -> AsyncMock:
+            session = AsyncMock()
+
+            async def fake_execute(stmt, params=None):
+                result = MagicMock()
+                result.scalar_one_or_none.return_value = object()  # library exists
+                result.mappings.return_value = []  # no feed units
+                return result
+
+            session.execute = fake_execute
+            return session
+
+        app.dependency_overrides[get_current_user] = lambda: admin
+        app.dependency_overrides[get_db] = lambda: _admin_db()
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    f"/api/libraries/{uuid.uuid4()}/feed?search=foo&limit=20"
+                )
+            assert resp.status_code == 200
+            assert resp.json() == {"items": [], "total": 0}
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_all_books_feed_empty(self, user):
+        """Cross-library collapsed feed (the All books tab)."""
+        _override(user)
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/books/feed?author=Asimov&limit=20")
+            assert resp.status_code == 200
+            assert resp.json() == {"items": [], "total": 0}
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_feed_requires_authentication(self):
+        app.dependency_overrides.clear()
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/api/books/feed")
+        assert resp.status_code in (401, 403, 307)
+
+    @pytest.mark.asyncio
     async def test_library_series_paginated(self):
         # Admin user: _get_accessible_library returns after the first lookup.
         admin = User(

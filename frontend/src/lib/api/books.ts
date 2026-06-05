@@ -1,4 +1,5 @@
 import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
+import { feedQuery, type FeedParams } from "./libraries";
 import type {
   BookOut,
   BookReport,
@@ -11,6 +12,7 @@ import type {
   IllustrationOut,
   InteractionOut,
   PaginatedBooksWithInteraction,
+  PaginatedFeed,
   ProgressOut,
   ReadingStats,
   ReadingStatus,
@@ -267,6 +269,10 @@ export const booksApi = {
       `/books/all${qs ? `?${qs}` : ""}`,
     ) as Promise<PaginatedBooksWithInteraction>;
   },
+
+  // Collapsed feed across all accessible libraries (the All books tab).
+  getFeed: (options?: FeedParams) =>
+    get(`/books/feed${feedQuery(options)}`) as Promise<PaginatedFeed>,
 
   // Companion
   listCompanionConversations: (bookId: string) =>

@@ -106,6 +106,16 @@ export interface PaginatedSeries {
   total: number;
 }
 
+// One unit in the collapsed library view: a whole series or a lone book.
+export type LibraryFeedItem =
+  | { type: "series"; series: SeriesOut; book?: null }
+  | { type: "book"; book: BookWithInteractionOut; series?: null };
+
+export interface PaginatedFeed {
+  items: LibraryFeedItem[];
+  total: number;
+}
+
 export interface WorkBookBrief {
   id: string;
   display_title: string | null;
