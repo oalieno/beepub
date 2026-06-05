@@ -14,22 +14,21 @@
     onSelect: (lib: string) => void;
   } = $props();
 
+  // Matches the reading-status tabs on /my-books: flat pills, active filled.
   function segClass(active: boolean) {
     return active
-      ? "bg-primary/15 text-primary"
-      : "text-muted-foreground hover:text-foreground";
+      ? "bg-primary text-primary-foreground"
+      : "text-muted-foreground hover:text-foreground hover:bg-muted";
   }
 </script>
 
-<div
-  class="inline-flex max-w-full items-center overflow-x-auto rounded-md bg-muted p-1"
->
+<div class="flex gap-1 overflow-x-auto pb-1">
   <!-- All books pseudo-library -->
   <button
     type="button"
     onclick={() => onSelect("all")}
     aria-pressed={selected === "all"}
-    class="shrink-0 whitespace-nowrap rounded-sm px-4 py-1.5 text-sm font-medium transition-colors {segClass(
+    class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors {segClass(
       selected === 'all',
     )}"
   >
@@ -37,7 +36,7 @@
   </button>
 
   {#if libraries.length > 0}
-    <span class="mx-1 h-5 w-px shrink-0 bg-border"></span>
+    <span class="mx-1 h-6 w-px shrink-0 self-center bg-border"></span>
   {/if}
 
   {#each libraries as lib (lib.id)}
@@ -46,7 +45,7 @@
       type="button"
       onclick={() => onSelect(lib.id)}
       aria-pressed={active}
-      class="shrink-0 whitespace-nowrap rounded-sm px-4 py-1.5 text-sm font-medium transition-colors {segClass(
+      class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors {segClass(
         active,
       )}"
     >

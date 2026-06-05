@@ -204,9 +204,9 @@
   {#if listLoading}
     <!-- Selector -->
     <div class="mb-6">
-      <div class="inline-flex gap-1 rounded-md bg-muted p-1">
+      <div class="flex gap-1">
         {#each Array(4) as _}
-          <div class="h-8 w-24 animate-pulse rounded-sm bg-foreground/10"></div>
+          <div class="h-9 w-24 animate-pulse rounded-lg bg-foreground/10"></div>
         {/each}
       </div>
     </div>
