@@ -16,7 +16,6 @@ export interface UserOut {
   is_active: boolean;
   can_download: boolean;
   created_at: string;
-  tier_theme: TierBand[] | null; // null = use default preset
 }
 
 export interface UserLibraryAccess {
@@ -96,7 +95,6 @@ export interface SeriesOut {
   book_count: number;
   read_count: number;
   rating: number | null;
-  effective_rating: number | null;
   notes: string | null;
   cover_book: BookOut | null;
 }

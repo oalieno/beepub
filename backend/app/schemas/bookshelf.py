@@ -33,5 +33,9 @@ class BookshelfBookAdd(BaseModel):
     book_id: uuid.UUID
 
 
+class BookshelfSeriesAdd(BaseModel):
+    series_name: str
+
+
 class BookshelfReorder(BaseModel):
     book_ids: list[uuid.UUID]

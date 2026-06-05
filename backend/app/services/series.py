@@ -1,9 +1,9 @@
 """Series aggregation — series have no entity table, they are grouped by the
 normalised series name (the same key popularity/recommendations use).
 
-A per-user `user_series_interactions` row hangs rating/notes off that key. The
-"effective" rating falls back to the best-rated volume so a user's existing
-"rate volume 1" habit surfaces at the series level without a backfill.
+A per-user `user_series_interactions` row hangs rating/notes off that key. A
+series rating is independent of its volumes' ratings: rating a single volume
+never changes the series rating, and vice versa.
 """
 
 from __future__ import annotations
@@ -42,8 +42,8 @@ async def list_series(
     - key: a single series_key (the series-detail page).
     - keys: a set of series_keys (the collapsed feed hydrates its page this way).
     - search: case-insensitive series-name filter.
-    - rated_only: only series with an effective rating (explicit or a rated
-      volume) — used by the tier page across all accessible libraries.
+    - rated_only: only series the user rated explicitly — used by the tier
+      page across all accessible libraries.
     - limit/offset: page the result; omit limit to return everything.
     """
     params: dict = {"uid": str(user.id)}
@@ -79,7 +79,7 @@ async def list_series(
         filters.append("joined.series_name ILIKE :search")
         params["search"] = f"%{search}%"
     if rated_only:
-        filters.append("joined.effective IS NOT NULL")
+        filters.append("joined.series_rating IS NOT NULL")
     where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
     page_clause = ""
@@ -98,7 +98,6 @@ async def list_series(
                     coalesce(b.series, b.epub_series) AS series_name,
                     coalesce(b.series_index, b.epub_series_index) AS idx,
                     b.created_at AS created_at,
-                    ubi.rating AS vol_rating,
                     ubi.reading_status AS reading_status
                 FROM books b
                 JOIN accessible a ON a.book_id = b.id
@@ -112,7 +111,6 @@ async def list_series(
                     max(series_name) AS series_name,
                     count(*) AS book_count,
                     count(*) FILTER (WHERE reading_status = 'read') AS read_count,
-                    max(vol_rating) AS max_vol_rating,
                     (array_agg(book_id ORDER BY idx ASC NULLS LAST, created_at ASC))[1]
                         AS cover_book_id
                 FROM series_books
@@ -126,8 +124,7 @@ async def list_series(
                     agg.read_count,
                     agg.cover_book_id,
                     usi.rating AS series_rating,
-                    usi.notes AS series_notes,
-                    coalesce(usi.rating, agg.max_vol_rating) AS effective
+                    usi.notes AS series_notes
                 FROM agg
                 LEFT JOIN user_series_interactions usi
                     ON usi.user_id = :uid AND usi.series_key = agg.series_key
@@ -146,7 +143,6 @@ async def list_series(
     for r in result.mappings():
         total = r["total_count"]
         explicit = r["series_rating"]
-        eff = r["effective"]
         rows.append(
             {
                 "series_key": r["series_key"],
@@ -155,7 +151,6 @@ async def list_series(
                 "read_count": r["read_count"],
                 "cover_book_id": r["cover_book_id"],
                 "rating": float(explicit) if explicit is not None else None,
-                "effective_rating": float(eff) if eff is not None else None,
                 "notes": r["series_notes"],
             }
         )
@@ -185,7 +180,6 @@ async def build_series_out(db: AsyncSession, rows: list[dict]) -> list:
             book_count=r["book_count"],
             read_count=r["read_count"],
             rating=r["rating"],
-            effective_rating=r["effective_rating"],
             notes=r["notes"],
             cover_book=covers.get(r["cover_book_id"]),
         )

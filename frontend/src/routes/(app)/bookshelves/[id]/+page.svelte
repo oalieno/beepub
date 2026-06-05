@@ -3,42 +3,85 @@
   import { page } from "$app/state";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
-  import BookGrid from "$lib/components/BookGrid.svelte";
+  import BookCard from "$lib/components/BookCard.svelte";
+  import SeriesCard from "$lib/components/SeriesCard.svelte";
+  import TierList from "$lib/components/TierList.svelte";
+  import type { TierEntry } from "$lib/components/TierList.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import { Skeleton } from "$lib/components/ui/skeleton";
-  import { BookOpen } from "@lucide/svelte";
+  import * as Select from "$lib/components/ui/select";
+  import { BookOpen, LayoutGrid, Layers, X } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
+  import {
+    TIER_PRESETS,
+    DEFAULT_PRESET_KEY,
+    bandsForKey,
+    loadShelfThemeKey,
+    saveShelfThemeKey,
+  } from "$lib/tiers";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import type {
     BookshelfOut,
-    BookWithInteractionOut,
+    LibraryFeedItem,
     ReadingStatus,
   } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
 
   let shelf = $state<BookshelfOut | null>(null);
-  let books = $state<BookWithInteractionOut[]>([]);
-  // Reading status comes inline with each book (see bookshelvesApi.getBooks).
+  let items = $state<LibraryFeedItem[]>([]);
+  // Reading status per book id, supplied inline by each book item.
   let interactions = $state<Record<string, ReadingStatus | null>>({});
   let loading = $state(true);
+
+  let viewMode = $state<"grid" | "tier">("grid");
+  // Tier theme is a client-only preference (per shelf, in localStorage).
+  let themeKey = $state(DEFAULT_PRESET_KEY);
+
   let pendingRemoveTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // Placed units for the tier list: each item by its rating (null = unrated).
+  let entries = $derived<TierEntry[]>(
+    items.map((it) => ({
+      rating: it.type === "series" ? it.series.rating : it.book.user_rating,
+      item: it,
+    })),
+  );
+
+  let activeBands = $derived(bandsForKey(themeKey));
+  let selectedName = $derived(
+    TIER_PRESETS.find((p) => p.key === themeKey)?.name ?? "",
+  );
+  // The 夯到拉 preset is only offered when the UI is in Chinese.
+  let visiblePresets = $derived(
+    TIER_PRESETS.filter((p) => !p.chineseOnly || getLocale().startsWith("zh")),
+  );
+
+  function itemKey(it: LibraryFeedItem) {
+    return it.type === "series"
+      ? `s:${it.series.series_key}`
+      : `b:${it.book.id}`;
+  }
+
   onMount(async () => {
+    themeKey = loadShelfThemeKey(shelfId);
     await loadData();
   });
 
   async function loadData() {
     loading = true;
     try {
-      const [s, b] = await Promise.all([
+      const [s, list] = await Promise.all([
         bookshelvesApi.get(shelfId),
-        bookshelvesApi.getBooks(shelfId),
+        bookshelvesApi.getItems(shelfId),
       ]);
       shelf = s;
-      books = b;
+      items = list;
       interactions = Object.fromEntries(
-        b.map((x) => [x.id, x.reading_status ?? null]),
+        list
+          .filter((x) => x.type === "book")
+          .map((x) => [x.book!.id, x.book!.reading_status ?? null]),
       );
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -47,32 +90,54 @@
     }
   }
 
-  function removeBook(bookId: string) {
-    const removedBook = books.find((b) => b.id === bookId);
-    if (!removedBook) return;
+  function setTheme(key: string) {
+    themeKey = key;
+    saveShelfThemeKey(shelfId, key);
+  }
 
-    books = books.filter((b) => b.id !== bookId);
+  function handleStatusChange(bookId: string, status: ReadingStatus | null) {
+    interactions[bookId] = status;
+  }
 
+  function removeItem(target: LibraryFeedItem) {
+    const index = items.findIndex((x) => itemKey(x) === itemKey(target));
+    if (index === -1) return;
+    const removed = items[index];
+
+    items = items.filter((_, i) => i !== index);
     if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
 
-    toastStore.info(m.bookshelf_removed(), {
-      action: {
-        label: m.common_undo(),
-        onclick: () => {
-          if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
-          pendingRemoveTimer = null;
-          books = [...books, removedBook];
+    const restore = () => {
+      items = [...items.slice(0, index), removed, ...items.slice(index)];
+    };
+
+    toastStore.info(
+      removed.type === "series"
+        ? m.bookshelf_series_removed()
+        : m.bookshelf_removed(),
+      {
+        action: {
+          label: m.common_undo(),
+          onclick: () => {
+            if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
+            pendingRemoveTimer = null;
+            restore();
+          },
         },
+        duration: 5000,
       },
-      duration: 5000,
-    });
+    );
 
     pendingRemoveTimer = setTimeout(async () => {
       try {
-        await bookshelvesApi.removeBook(shelfId, bookId);
+        if (removed.type === "series") {
+          await bookshelvesApi.removeSeries(shelfId, removed.series.series_key);
+        } else {
+          await bookshelvesApi.removeBook(shelfId, removed.book.id);
+        }
       } catch (e) {
         toastStore.error((e as Error).message);
-        books = [...books, removedBook];
+        restore();
       }
       pendingRemoveTimer = null;
     }, 5000);
@@ -91,7 +156,7 @@
     </div>
     <BookGridSkeleton count={12} />
   {:else if shelf}
-    <div class="mb-8">
+    <div class="mb-6">
       <div class="mb-1">
         <BackButton href="/bookshelves" label={m.nav_shelves()} />
       </div>
@@ -101,7 +166,7 @@
       {/if}
     </div>
 
-    {#if books.length === 0}
+    {#if items.length === 0}
       <div class="flex flex-col items-center justify-center py-24 text-center">
         <div class="mb-4 p-3 bg-primary/10 rounded-xl">
           <BookOpen class="text-primary/50" size={28} />
@@ -114,7 +179,86 @@
         </p>
       </div>
     {:else}
-      <BookGrid {books} enableInteractions interactionMap={interactions} />
+      <!-- Toolbar: Grid | Tier toggle + (tier) theme picker -->
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div class="inline-flex items-center gap-1 rounded-md bg-muted p-1">
+          <button
+            type="button"
+            onclick={() => (viewMode = "grid")}
+            aria-pressed={viewMode === "grid"}
+            class="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors {viewMode ===
+            'grid'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'}"
+          >
+            <LayoutGrid size={15} />
+            {m.bookshelf_view_grid()}
+          </button>
+          <button
+            type="button"
+            onclick={() => (viewMode = "tier")}
+            aria-pressed={viewMode === "tier"}
+            class="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-sm font-medium transition-colors {viewMode ===
+            'tier'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'}"
+          >
+            <Layers size={15} />
+            {m.bookshelf_view_tier()}
+          </button>
+        </div>
+
+        {#if viewMode === "tier"}
+          <Select.Root
+            type="single"
+            value={themeKey}
+            onValueChange={(v) => v && setTheme(v)}
+          >
+            <Select.Trigger
+              class="w-[150px] bg-background"
+              aria-label={m.tier_theme_label()}
+            >
+              {selectedName}
+            </Select.Trigger>
+            <Select.Content align="end">
+              {#each visiblePresets as preset}
+                <Select.Item value={preset.key}>{preset.name}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+        {/if}
+      </div>
+
+      {#if viewMode === "tier"}
+        <TierList {entries} bands={activeBands} />
+      {:else}
+        <div
+          class="grid gap-4 items-start"
+          style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"
+        >
+          {#each items as it (itemKey(it))}
+            <div class="group/item relative">
+              <button
+                type="button"
+                onclick={() => removeItem(it)}
+                aria-label={m.common_undo()}
+                class="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/item:opacity-100"
+              >
+                <X size={14} />
+              </button>
+              {#if it.type === "series"}
+                <SeriesCard series={it.series} showRating={false} />
+              {:else}
+                <BookCard
+                  book={it.book}
+                  readingStatus={interactions[it.book.id] ?? null}
+                  onStatusChange={handleStatusChange}
+                />
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>

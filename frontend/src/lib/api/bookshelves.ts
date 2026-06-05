@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { BookshelfOut, BookWithInteractionOut } from "$lib/types";
+import type { BookshelfOut, LibraryFeedItem } from "$lib/types";
 
 export const bookshelvesApi = {
   list: () => get("/bookshelves") as Promise<BookshelfOut[]>,
@@ -14,14 +14,21 @@ export const bookshelvesApi = {
 
   delete: (id: string) => del(`/bookshelves/${id}`),
 
-  getBooks: (id: string) =>
-    get(`/bookshelves/${id}/books`) as Promise<BookWithInteractionOut[]>,
+  // Shelf contents in sort order — books and whole series, mixed.
+  getItems: (id: string) =>
+    get(`/bookshelves/${id}/items`) as Promise<LibraryFeedItem[]>,
 
   addBook: (id: string, bookId: string) =>
     post(`/bookshelves/${id}/books`, { book_id: bookId }),
 
   removeBook: (id: string, bookId: string) =>
     del(`/bookshelves/${id}/books/${bookId}`),
+
+  addSeries: (id: string, seriesName: string) =>
+    post(`/bookshelves/${id}/series`, { series_name: seriesName }),
+
+  removeSeries: (id: string, seriesKey: string) =>
+    del(`/bookshelves/${id}/series?key=${encodeURIComponent(seriesKey)}`),
 
   reorder: (id: string, bookIds: string[]) =>
     put(`/bookshelves/${id}/books/reorder`, { book_ids: bookIds }),

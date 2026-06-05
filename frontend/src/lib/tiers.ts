@@ -10,18 +10,19 @@ export interface TierPreset {
   chineseOnly?: boolean; // only offered when the UI locale is Chinese
 }
 
-// Hot (top) -> cold (bottom) colour ramp, 10 stops.
+// Hot (top) -> cold (bottom) colour ramp, 10 stops. Desaturated and leaning
+// warm/beige so the rail tints a tier without screaming for attention.
 const RAMP = [
-  "#ff4757",
-  "#ff6348",
-  "#ff7f50",
-  "#ff9f43",
-  "#ffa502",
-  "#f6c343",
-  "#c5d92e",
-  "#7bed9f",
-  "#70a1ff",
-  "#a4b0be",
+  "#c07d70",
+  "#c68a6e",
+  "#cb9871",
+  "#cfa877",
+  "#ccb47c",
+  "#c3bd86",
+  "#aebb92",
+  "#97b4a2",
+  "#93acb4",
+  "#a8a8a8",
 ];
 
 // Build bands from [min, label] pairs (highest-first), spreading colours
@@ -116,4 +117,38 @@ export function tierFor(rating: number, bands: TierBand[]): TierBand | null {
     if (rating >= band.min) return band;
   }
   return null;
+}
+
+// The bands for a preset key (falling back to the default preset).
+export function bandsForKey(key: string): TierBand[] {
+  return (
+    TIER_PRESETS.find((p) => p.key === key) ??
+    TIER_PRESETS.find((p) => p.key === DEFAULT_PRESET_KEY) ??
+    TIER_PRESETS[0]
+  ).bands;
+}
+
+// The tier theme is a client-only preference, kept per bookshelf in
+// localStorage (a { shelfId: presetKey } map) — never persisted server-side.
+const THEME_STORE_KEY = "tier-theme-by-shelf";
+
+export function loadShelfThemeKey(shelfId: string): string {
+  if (typeof localStorage === "undefined") return DEFAULT_PRESET_KEY;
+  try {
+    const map = JSON.parse(localStorage.getItem(THEME_STORE_KEY) || "{}");
+    return map[shelfId] ?? DEFAULT_PRESET_KEY;
+  } catch {
+    return DEFAULT_PRESET_KEY;
+  }
+}
+
+export function saveShelfThemeKey(shelfId: string, key: string): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    const map = JSON.parse(localStorage.getItem(THEME_STORE_KEY) || "{}");
+    map[shelfId] = key;
+    localStorage.setItem(THEME_STORE_KEY, JSON.stringify(map));
+  } catch {
+    // ignore quota / serialization errors — theme is non-critical
+  }
 }

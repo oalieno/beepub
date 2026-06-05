@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,14 +10,21 @@ from app.deps import get_current_user
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
-from app.schemas.book import BookWithInteractionOut
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
     BookshelfCreate,
     BookshelfListOut,
     BookshelfOut,
     BookshelfReorder,
+    BookshelfSeriesAdd,
     BookshelfUpdate,
+)
+from app.schemas.series import LibraryFeedItem
+from app.services.series import (
+    _hydrate_feed_books,
+    build_series_out,
+    list_series,
+    normalize_series_name,
 )
 
 router = APIRouter(prefix="/api/bookshelves", tags=["bookshelves"])
@@ -48,29 +55,68 @@ async def list_bookshelves(
     )
     counts = dict(count_result.all())
 
-    # Batch query: top 4 book IDs with covers per shelf
-    ranked = (
-        select(
-            BookshelfBook.bookshelf_id,
-            BookshelfBook.book_id,
-            func.row_number()
-            .over(
-                partition_by=BookshelfBook.bookshelf_id,
-                order_by=BookshelfBook.sort_order.asc(),
+    # Preview covers (up to 4 per shelf, in sort order) — a member can be a
+    # book (its own cover) or a series (a representative volume's cover).
+    membership = (
+        await db.execute(
+            select(
+                BookshelfBook.bookshelf_id,
+                BookshelfBook.book_id,
+                BookshelfBook.series_key,
             )
-            .label("rn"),
+            .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
+            .order_by(BookshelfBook.bookshelf_id, BookshelfBook.sort_order.asc())
         )
-        .join(Book, Book.id == BookshelfBook.book_id)
-        .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
-        .where(Book.cover_path.isnot(None))
-        .subquery()
-    )
-    preview_result = await db.execute(
-        select(ranked.c.bookshelf_id, ranked.c.book_id).where(ranked.c.rn <= 4)
-    )
+    ).all()
+
+    member_book_ids = [r.book_id for r in membership if r.book_id is not None]
+    books_with_cover: set = set()
+    if member_book_ids:
+        rows = await db.execute(
+            select(Book.id).where(
+                Book.id.in_(member_book_ids), Book.cover_path.isnot(None)
+            )
+        )
+        books_with_cover = {bid for (bid,) in rows.all()}
+
+    # First volume with a cover, per series key.
+    series_keys = list({r.series_key for r in membership if r.series_key is not None})
+    series_cover: dict[str, uuid.UUID] = {}
+    if series_keys:
+        rows = await db.execute(
+            text("""
+                SELECT series_key, cover_book_id FROM (
+                    SELECT
+                        lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
+                        b.id AS cover_book_id,
+                        row_number() OVER (
+                            PARTITION BY
+                                lower(btrim(coalesce(b.series, b.epub_series)))
+                            ORDER BY coalesce(b.series_index, b.epub_series_index)
+                                ASC NULLS LAST, b.created_at ASC
+                        ) AS rn
+                    FROM books b
+                    WHERE b.cover_path IS NOT NULL
+                      AND lower(btrim(coalesce(b.series, b.epub_series)))
+                          = ANY(:keys)
+                ) t WHERE rn = 1
+            """),
+            {"keys": series_keys},
+        )
+        series_cover = {row.series_key: row.cover_book_id for row in rows}
+
     previews: dict[str, list] = {}
-    for shelf_id, book_id in preview_result.all():
-        previews.setdefault(shelf_id, []).append(book_id)
+    for r in membership:
+        lst = previews.setdefault(r.bookshelf_id, [])
+        if len(lst) >= 4:
+            continue
+        if r.book_id is not None:
+            if r.book_id in books_with_cover:
+                lst.append(r.book_id)
+        else:
+            cover = series_cover.get(r.series_key)
+            if cover is not None:
+                lst.append(cover)
 
     return [
         BookshelfListOut(
@@ -130,33 +176,42 @@ async def delete_bookshelf(
     await db.commit()
 
 
-@router.get("/{shelf_id}/books", response_model=list[BookWithInteractionOut])
-async def list_shelf_books(
+@router.get("/{shelf_id}/items", response_model=list[LibraryFeedItem])
+async def list_shelf_items(
     shelf_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    """Shelf contents in sort order: each row is a book or a whole series,
+    hydrated with the same rating/interaction data the feed endpoints use."""
     await _get_owned_shelf(shelf_id, current_user, db)
     result = await db.execute(
-        select(Book)
-        .join(BookshelfBook, BookshelfBook.book_id == Book.id)
+        select(BookshelfBook)
         .where(BookshelfBook.bookshelf_id == shelf_id)
         .order_by(BookshelfBook.sort_order.asc())
     )
-    books = result.scalars().all()
+    rows = result.scalars().all()
 
-    from app.services.work_propagation import get_work_propagated_interactions
+    book_ids = [r.book_id for r in rows if r.book_id is not None]
+    series_keys = [r.series_key for r in rows if r.series_key is not None]
 
-    book_ids = [b.id for b in books]
-    propagated = await get_work_propagated_interactions(db, book_ids, current_user.id)
-    items = []
-    for b in books:
-        item = BookWithInteractionOut.model_validate(b)
-        prop = propagated.get(b.id)
-        if prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        items.append(item)
+    book_by_id = await _hydrate_feed_books(db, current_user, book_ids)
+    series_by_key: dict = {}
+    if series_keys:
+        srows, _ = await list_series(db, current_user, keys=series_keys)
+        for s in await build_series_out(db, srows):
+            series_by_key[s.series_key] = s
+
+    items: list[LibraryFeedItem] = []
+    for r in rows:
+        if r.book_id is not None:
+            book = book_by_id.get(r.book_id)
+            if book is not None:
+                items.append(LibraryFeedItem(type="book", book=book))
+        else:
+            series = series_by_key.get(r.series_key)
+            if series is not None:
+                items.append(LibraryFeedItem(type="series", series=series))
     return items
 
 
@@ -209,6 +264,58 @@ async def remove_book_from_shelf(
     bb = result.scalar_one_or_none()
     if not bb:
         raise HTTPException(status_code=404, detail="Book not in shelf")
+    await db.delete(bb)
+    await db.commit()
+
+
+@router.post("/{shelf_id}/series", status_code=status.HTTP_201_CREATED)
+async def add_series_to_shelf(
+    shelf_id: uuid.UUID,
+    body: BookshelfSeriesAdd,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _get_owned_shelf(shelf_id, current_user, db)
+    key = normalize_series_name(body.series_name)
+    if not key:
+        raise HTTPException(status_code=422, detail="Invalid series name")
+    existing = await db.execute(
+        select(BookshelfBook).where(
+            BookshelfBook.bookshelf_id == shelf_id,
+            BookshelfBook.series_key == key,
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Series already in shelf")
+    result = await db.execute(
+        select(BookshelfBook)
+        .where(BookshelfBook.bookshelf_id == shelf_id)
+        .order_by(BookshelfBook.sort_order.desc())
+    )
+    last = result.scalars().first()
+    sort_order = (last.sort_order + 1) if last else 0
+    db.add(BookshelfBook(bookshelf_id=shelf_id, series_key=key, sort_order=sort_order))
+    await db.commit()
+    return {"status": "added"}
+
+
+@router.delete("/{shelf_id}/series", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_series_from_shelf(
+    shelf_id: uuid.UUID,
+    key: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _get_owned_shelf(shelf_id, current_user, db)
+    result = await db.execute(
+        select(BookshelfBook).where(
+            BookshelfBook.bookshelf_id == shelf_id,
+            BookshelfBook.series_key == key,
+        )
+    )
+    bb = result.scalar_one_or_none()
+    if not bb:
+        raise HTTPException(status_code=404, detail="Series not in shelf")
     await db.delete(bb)
     await db.commit()
 

@@ -2,6 +2,7 @@
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { seriesApi } from "$lib/api/series";
+  import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
@@ -9,9 +10,14 @@
   import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import BackButton from "$lib/components/BackButton.svelte";
+  import Modal from "$lib/components/Modal.svelte";
   import { BookDetailSkeleton } from "$lib/components/skeletons";
-  import { BookOpen } from "@lucide/svelte";
-  import type { BookWithInteractionOut, SeriesOut } from "$lib/types";
+  import { BookOpen, ListPlus } from "@lucide/svelte";
+  import type {
+    BookshelfOut,
+    BookWithInteractionOut,
+    SeriesOut,
+  } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
   let name = $derived(page.url.searchParams.get("name") ?? "");
@@ -20,17 +26,22 @@
   let loading = $state(true);
   let loadSeq = 0;
 
+  let bookshelves = $state<BookshelfOut[]>([]);
+  let showAddToShelf = $state(false);
+
   async function load(seriesName: string) {
     const seq = ++loadSeq;
     loading = true;
     try {
-      const [detail, vols] = await Promise.all([
+      const [detail, vols, shelves] = await Promise.all([
         seriesApi.get(seriesName),
         booksApi.getAll({ series: seriesName, limit: 200 }),
+        bookshelvesApi.list().catch(() => [] as BookshelfOut[]),
       ]);
       if (seq !== loadSeq) return;
       series = detail;
       volumes = vols.items;
+      bookshelves = shelves;
     } catch (e) {
       if (seq === loadSeq) {
         series = null;
@@ -38,6 +49,17 @@
       }
     } finally {
       if (seq === loadSeq) loading = false;
+    }
+  }
+
+  async function addToShelf(shelfId: string) {
+    if (!series) return;
+    try {
+      await bookshelvesApi.addSeries(shelfId, series.series_name);
+      toastStore.success(m.bookshelf_added());
+      showAddToShelf = false;
+    } catch (e) {
+      toastStore.error((e as Error).message);
     }
   }
 
@@ -50,7 +72,7 @@
     if (!series) return;
     try {
       await seriesApi.updateRating(series.series_name, rating);
-      series = { ...series, rating, effective_rating: rating };
+      series = { ...series, rating };
       toastStore.success(m.book_rating_updated());
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -119,10 +141,21 @@
 
         <!-- Series rating -->
         <div class="mt-5 flex items-center gap-3">
-          <StarRating value={series.effective_rating} onchange={handleRating} />
+          <StarRating value={series.rating} onchange={handleRating} />
           <span class="text-sm text-muted-foreground"
             >{m.series_rating_label()}</span
           >
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-5">
+          <button
+            class="inline-flex items-center gap-2 rounded-xl bg-secondary/60 hover:bg-secondary px-4 py-2 text-sm font-medium text-foreground transition-colors"
+            onclick={() => (showAddToShelf = true)}
+          >
+            <ListPlus size={16} />
+            {m.book_add_to_shelf()}
+          </button>
         </div>
       </div>
     </div>
@@ -147,3 +180,33 @@
     {/if}
   {/if}
 </div>
+
+<Modal
+  title={m.book_add_to_bookshelf()}
+  open={showAddToShelf}
+  onclose={() => (showAddToShelf = false)}
+>
+  <div class="space-y-2">
+    {#if bookshelves.length === 0}
+      <p class="text-muted-foreground text-sm">
+        {m.book_no_bookshelves()}<a href="/bookshelves" class="text-primary"
+          >{m.book_create_bookshelf()}</a
+        >.
+      </p>
+    {:else}
+      {#each bookshelves as shelf}
+        <button
+          class="w-full text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary hover:shadow-sm transition-all"
+          onclick={() => addToShelf(shelf.id)}
+        >
+          <p class="font-medium text-foreground">{shelf.name}</p>
+          {#if shelf.description}
+            <p class="text-muted-foreground text-xs mt-0.5">
+              {shelf.description}
+            </p>
+          {/if}
+        </button>
+      {/each}
+    {/if}
+  </div>
+</Modal>

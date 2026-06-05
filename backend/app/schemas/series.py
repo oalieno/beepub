@@ -10,8 +10,7 @@ class SeriesOut(BaseModel):
     series_name: str
     book_count: int
     read_count: int
-    rating: float | None = None  # explicit series rating
-    effective_rating: float | None = None  # explicit, else best volume rating
+    rating: float | None = None  # the user's explicit series rating
     notes: str | None = None
     cover_book: BookOut | None = None
 

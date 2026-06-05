@@ -76,9 +76,9 @@
     <p class="text-muted-foreground text-xs mt-0.5">
       {m.series_book_count({ count: String(series.book_count) })}
     </p>
-    {#if showRating && series.effective_rating != null}
+    {#if showRating && series.rating != null}
       <div class="mt-1">
-        <StarRating value={series.effective_rating} size={16} readonly />
+        <StarRating value={series.rating} size={16} readonly />
       </div>
     {/if}
   </div>

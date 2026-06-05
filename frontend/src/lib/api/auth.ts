@@ -1,5 +1,5 @@
 import { get, post, put } from "./client";
-import type { LoginResponse, TierBand, UserOut } from "$lib/types";
+import type { LoginResponse, UserOut } from "$lib/types";
 
 export const authApi = {
   register: (body: { username: string; password: string }) =>
@@ -28,8 +28,4 @@ export const authApi = {
 
   updateUsername: (newUsername: string) =>
     put("/auth/username", { new_username: newUsername }) as Promise<UserOut>,
-
-  // null tier_theme resets to the default preset
-  updateTierTheme: (tierTheme: TierBand[] | null) =>
-    put("/auth/tier-theme", { tier_theme: tierTheme }) as Promise<UserOut>,
 };

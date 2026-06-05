@@ -2,7 +2,17 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -34,14 +44,41 @@ class Bookshelf(Base, TimestampMixin):
 
 
 class BookshelfBook(Base):
-    __tablename__ = "bookshelf_books"
+    """A shelf membership row points at *either* a book or a whole series
+    (by normalised series key) — exactly one is set."""
 
+    __tablename__ = "bookshelf_books"
+    __table_args__ = (
+        CheckConstraint(
+            "(book_id IS NOT NULL) <> (series_key IS NOT NULL)",
+            name="ck_bookshelf_books_one_target",
+        ),
+        Index(
+            "uq_bookshelf_books_book",
+            "bookshelf_id",
+            "book_id",
+            unique=True,
+            postgresql_where=text("book_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_bookshelf_books_series",
+            "bookshelf_id",
+            "series_key",
+            unique=True,
+            postgresql_where=text("series_key IS NOT NULL"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
     bookshelf_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("bookshelves.id", ondelete="CASCADE"), primary_key=True
+        ForeignKey("bookshelves.id", ondelete="CASCADE"), nullable=False
     )
-    book_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("books.id", ondelete="CASCADE"), primary_key=True
+    book_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("books.id", ondelete="CASCADE"), nullable=True
     )
+    series_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
