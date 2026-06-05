@@ -86,7 +86,6 @@
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
   let isImageBook = $state(false);
-  let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
   let aiStatus = $state<AiStatus>({
     companion: false,
     tag: false,
@@ -501,37 +500,19 @@
           reader?.displayCfi(hl.cfi_range);
           activeSidebar = null;
         }}
-        ondelete={(hl) => {
+        ondelete={async (hl) => {
+          if (!confirm(m.highlights_delete_confirm())) return;
+          const prev = highlights;
+          // Optimistically remove, then delete immediately (no delayed undo).
           highlights = highlights.filter((h) => h.id !== hl.id);
           reader?.removeHighlightAnnotation(hl.cfi_range);
-
-          if (pendingHighlightDeleteTimer)
-            clearTimeout(pendingHighlightDeleteTimer);
-
-          toastStore.info("Highlight removed", {
-            action: {
-              label: "Undo",
-              onclick: () => {
-                if (pendingHighlightDeleteTimer)
-                  clearTimeout(pendingHighlightDeleteTimer);
-                pendingHighlightDeleteTimer = null;
-                highlights = [...highlights, hl];
-                reader?.addHighlightAnnotation(hl.cfi_range, hl.color);
-              },
-            },
-            duration: 5000,
-          });
-
-          pendingHighlightDeleteTimer = setTimeout(async () => {
-            try {
-              await booksApi.deleteHighlight(bookId, hl.id);
-            } catch (e) {
-              toastStore.error((e as Error).message);
-              highlights = [...highlights, hl];
-              reader?.addHighlightAnnotation(hl.cfi_range, hl.color);
-            }
-            pendingHighlightDeleteTimer = null;
-          }, 5000);
+          try {
+            await booksApi.deleteHighlight(bookId, hl.id);
+          } catch (e) {
+            toastStore.error((e as Error).message);
+            highlights = prev;
+            reader?.addHighlightAnnotation(hl.cfi_range, hl.color);
+          }
         }}
         onshare={handleShareHighlight}
         onillustrationselect={handleSelectIllustration}

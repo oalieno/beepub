@@ -3,12 +3,23 @@
   import { goto } from "$app/navigation";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
-  import HighlightList from "$lib/components/HighlightList.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import type { HighlightOut } from "$lib/types";
-  import { Highlighter } from "@lucide/svelte";
+  import { Highlighter, Share2, Trash2 } from "@lucide/svelte";
   import { HighlightListSkeleton } from "$lib/components/skeletons";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
+
+  function formatDate(iso: string): string {
+    try {
+      return new Date(iso).toLocaleDateString(getLocale(), {
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return "";
+    }
+  }
 
   let highlights = $state<HighlightOut[]>([]);
   let bookData = $state<Record<string, { title: string; authors: string[] }>>(
@@ -19,9 +30,6 @@
   // Share modal state
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
-
-  // Undo delete state
-  let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Derived: book titles for HighlightList
   let bookTitles = $derived(() => {
@@ -70,33 +78,18 @@
     }
   });
 
-  function handleDelete(hl: HighlightOut) {
-    // Optimistically remove from UI
+  async function handleDelete(hl: HighlightOut) {
+    if (!confirm(m.highlights_delete_confirm())) return;
+    const prev = highlights;
+    // Optimistically remove, then delete immediately (no delayed undo).
     highlights = highlights.filter((h) => h.id !== hl.id);
-
-    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
-
-    toastStore.info(m.highlights_removed(), {
-      action: {
-        label: m.highlights_undo(),
-        onclick: () => {
-          if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
-          pendingDeleteTimer = null;
-          highlights = [...highlights, hl];
-        },
-      },
-      duration: 5000,
-    });
-
-    pendingDeleteTimer = setTimeout(async () => {
-      try {
-        await booksApi.deleteHighlight(hl.book_id, hl.id);
-      } catch (e) {
-        toastStore.error((e as Error).message);
-        highlights = [...highlights, hl];
-      }
-      pendingDeleteTimer = null;
-    }, 5000);
+    try {
+      await booksApi.deleteHighlight(hl.book_id, hl.id);
+      toastStore.success(m.highlights_removed());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+      highlights = prev;
+    }
   }
 
   function handleShare(hl: HighlightOut) {
@@ -126,22 +119,78 @@
     </div>
   {:else}
     {#each Object.entries(groupedHighlights()) as [bookId, bookHighlights] (bookId)}
-      <div class="mb-6">
+      <section class="mb-8 last:mb-0">
+        <!-- Book header -->
         <a
           href="/books/{bookId}"
-          class="text-sm font-semibold text-foreground hover:text-primary transition-colors mb-2 block"
+          class="group flex items-baseline gap-2 border-b border-border/60 pb-2 mb-4"
         >
-          {bookTitles()[bookId] ?? m.common_untitled()}
+          <h2
+            class="text-base font-semibold text-foreground group-hover:text-primary transition-colors"
+          >
+            {bookTitles()[bookId] ?? m.common_untitled()}
+          </h2>
+          <span class="shrink-0 text-xs text-muted-foreground">
+            {m.highlights_entry_count({
+              count: String(bookHighlights.length),
+            })}
+          </span>
         </a>
-        <div class="bg-card card-soft rounded-2xl p-3">
-          <HighlightList
-            highlights={bookHighlights}
-            onselect={(hl) => goto(`/books/${hl.book_id}/read`)}
-            ondelete={handleDelete}
-            onshare={handleShare}
-          />
+
+        <!-- Highlights -->
+        <div class="flex flex-col gap-5">
+          {#each bookHighlights as hl (hl.id)}
+            <div
+              class="group/hl relative cursor-pointer border-l-2 border-border pl-4 transition-colors hover:border-primary/50"
+              role="button"
+              tabindex="0"
+              onclick={() => goto(`/books/${hl.book_id}/read`)}
+              onkeydown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  goto(`/books/${hl.book_id}/read`);
+                }
+              }}
+            >
+              <p class="text-foreground leading-relaxed pr-16">{hl.text}</p>
+              {#if hl.note}
+                <p class="mt-1.5 text-sm italic text-muted-foreground pr-16">
+                  {hl.note}
+                </p>
+              {/if}
+              <p class="mt-1.5 text-xs text-muted-foreground/70">
+                {formatDate(hl.created_at)}
+              </p>
+
+              <!-- Actions: always shown on touch, hover-revealed on desktop -->
+              <div
+                class="absolute right-0 top-0 flex items-center gap-1 opacity-100 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover/hl:opacity-100"
+              >
+                <button
+                  class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  title={m.highlight_action_share()}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    handleShare(hl);
+                  }}
+                >
+                  <Share2 size={16} />
+                </button>
+                <button
+                  class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                  title={m.highlight_action_delete()}
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    handleDelete(hl);
+                  }}
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            </div>
+          {/each}
         </div>
-      </div>
+      </section>
     {/each}
   {/if}
 </div>

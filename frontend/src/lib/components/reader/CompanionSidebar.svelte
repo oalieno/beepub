@@ -84,10 +84,6 @@
   let touchStartY = 0;
   let isSwiping = false;
 
-  // Pending delete (for undo)
-  let pendingDeleteId = $state<string | null>(null);
-  let pendingDeleteTimer: ReturnType<typeof setTimeout> | null = null;
-
   // Cleanup tracking
   let destroyed = false;
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,7 +125,6 @@
     destroyed = true;
     if (closeTimer) clearTimeout(closeTimer);
     if (focusTimer) clearTimeout(focusTimer);
-    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
     activeReader?.cancel().catch(() => {});
   });
 
@@ -313,42 +308,22 @@
     }
   }
 
-  function deleteConversation(convId: string) {
-    // Optimistically hide from UI
-    pendingDeleteId = convId;
-
-    // Clear any existing timer
-    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
-
-    toastStore.info(m.companion_deleted(), {
-      action: {
-        label: m.common_undo(),
-        onclick: () => {
-          if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
-          pendingDeleteId = null;
-          pendingDeleteTimer = null;
-        },
-      },
-      duration: 5000,
-    });
-
-    pendingDeleteTimer = setTimeout(async () => {
-      try {
-        await booksApi.deleteCompanionConversation(bookId, convId);
-        conversations = conversations.filter((c) => c.id !== convId);
-        if (activeConversationId === convId) {
-          activeConversationId = null;
-          messages = [];
-          if (conversations.filter((c) => c.id !== convId).length > 0) {
-            showSessionList = true;
-          }
+  async function deleteConversation(convId: string) {
+    if (!confirm(m.companion_delete_confirm())) return;
+    try {
+      await booksApi.deleteCompanionConversation(bookId, convId);
+      conversations = conversations.filter((c) => c.id !== convId);
+      if (activeConversationId === convId) {
+        activeConversationId = null;
+        messages = [];
+        if (conversations.length > 0) {
+          showSessionList = true;
         }
-      } catch (e) {
-        toastStore.error((e as Error).message);
       }
-      pendingDeleteId = null;
-      pendingDeleteTimer = null;
-    }, 5000);
+      toastStore.success(m.companion_deleted());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
   }
 
   function startRename(conv: CompanionConversationSummary) {
@@ -437,9 +412,7 @@
     conversations.find((c) => c.id === activeConversationId)?.title || null,
   );
 
-  let visibleConversations = $derived(
-    conversations.filter((c) => c.id !== pendingDeleteId),
-  );
+  let visibleConversations = $derived(conversations);
 </script>
 
 <!-- Backdrop -->

@@ -39,8 +39,6 @@
   // Tier theme is a client-only preference (per shelf, in localStorage).
   let themeKey = $state(DEFAULT_PRESET_KEY);
 
-  let pendingRemoveTimer: ReturnType<typeof setTimeout> | null = null;
-
   // Placed units for the tier list: each item by its rating (null = unrated).
   let entries = $derived<TierEntry[]>(
     items.map((it) => ({
@@ -99,48 +97,30 @@
     interactions[bookId] = status;
   }
 
-  function removeItem(target: LibraryFeedItem) {
+  async function removeItem(target: LibraryFeedItem) {
+    if (!confirm(m.bookshelf_remove_confirm())) return;
     const index = items.findIndex((x) => itemKey(x) === itemKey(target));
     if (index === -1) return;
     const removed = items[index];
+    const prev = items;
 
+    // Optimistically remove, then delete immediately (no delayed undo).
     items = items.filter((_, i) => i !== index);
-    if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
-
-    const restore = () => {
-      items = [...items.slice(0, index), removed, ...items.slice(index)];
-    };
-
-    toastStore.info(
-      removed.type === "series"
-        ? m.bookshelf_series_removed()
-        : m.bookshelf_removed(),
-      {
-        action: {
-          label: m.common_undo(),
-          onclick: () => {
-            if (pendingRemoveTimer) clearTimeout(pendingRemoveTimer);
-            pendingRemoveTimer = null;
-            restore();
-          },
-        },
-        duration: 5000,
-      },
-    );
-
-    pendingRemoveTimer = setTimeout(async () => {
-      try {
-        if (removed.type === "series") {
-          await bookshelvesApi.removeSeries(shelfId, removed.series.series_key);
-        } else {
-          await bookshelvesApi.removeBook(shelfId, removed.book.id);
-        }
-      } catch (e) {
-        toastStore.error((e as Error).message);
-        restore();
+    try {
+      if (removed.type === "series") {
+        await bookshelvesApi.removeSeries(shelfId, removed.series.series_key);
+      } else {
+        await bookshelvesApi.removeBook(shelfId, removed.book.id);
       }
-      pendingRemoveTimer = null;
-    }, 5000);
+      toastStore.success(
+        removed.type === "series"
+          ? m.bookshelf_series_removed()
+          : m.bookshelf_removed(),
+      );
+    } catch (e) {
+      toastStore.error((e as Error).message);
+      items = prev;
+    }
   }
 </script>
 
@@ -241,7 +221,7 @@
               <button
                 type="button"
                 onclick={() => removeItem(it)}
-                aria-label={m.common_undo()}
+                aria-label={m.bookshelf_remove()}
                 class="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/item:opacity-100"
               >
                 <X size={14} />

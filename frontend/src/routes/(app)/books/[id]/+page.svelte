@@ -149,9 +149,6 @@
     }
   }
 
-  // Undo delete state
-  let pendingHighlightDeleteTimer: ReturnType<typeof setTimeout> | null = null;
-
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   // Track if user arrived via internal navigation (vs direct link / external)
@@ -864,34 +861,18 @@
           <HighlightList
             highlights={bookHighlights}
             onselect={(hl) => goto(`/books/${bookId}/read`)}
-            ondelete={(hl) => {
+            ondelete={async (hl) => {
+              if (!confirm(m.highlights_delete_confirm())) return;
+              const prev = bookHighlights;
+              // Optimistic remove, then delete immediately (no delayed undo).
               bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
-
-              if (pendingHighlightDeleteTimer)
-                clearTimeout(pendingHighlightDeleteTimer);
-
-              toastStore.info(m.book_highlight_removed(), {
-                action: {
-                  label: m.common_undo(),
-                  onclick: () => {
-                    if (pendingHighlightDeleteTimer)
-                      clearTimeout(pendingHighlightDeleteTimer);
-                    pendingHighlightDeleteTimer = null;
-                    bookHighlights = [...bookHighlights, hl];
-                  },
-                },
-                duration: 5000,
-              });
-
-              pendingHighlightDeleteTimer = setTimeout(async () => {
-                try {
-                  await booksApi.deleteHighlight(bookId, hl.id);
-                } catch (e) {
-                  toastStore.error((e as Error).message);
-                  bookHighlights = [...bookHighlights, hl];
-                }
-                pendingHighlightDeleteTimer = null;
-              }, 5000);
+              try {
+                await booksApi.deleteHighlight(bookId, hl.id);
+                toastStore.success(m.book_highlight_removed());
+              } catch (e) {
+                toastStore.error((e as Error).message);
+                bookHighlights = prev;
+              }
             }}
           />
         </div>
