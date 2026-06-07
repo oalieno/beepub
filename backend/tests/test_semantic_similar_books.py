@@ -301,7 +301,10 @@ class TestGetSimilarBooksSemantic:
         assert "series_filtered" in sql
         assert "series_ranked" in sql
         assert "series_ranked.series_rank = 1" in sql
-        assert "!= t.t_series_key" in sql
+        # Same-series exclusion is now library-scoped: the candidate is dropped
+        # only if it shares both the series name AND a library with the target.
+        assert "= t.t_series_key" in sql
+        assert "FROM library_books la" in sql
 
 
 # ---------------------------------------------------------------------------

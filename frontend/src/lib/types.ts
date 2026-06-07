@@ -92,6 +92,8 @@ export interface BookOut {
 export interface SeriesOut {
   series_key: string;
   series_name: string;
+  library_id: string;
+  library_name: string | null;
   book_count: number;
   read_count: number;
   rating: number | null;

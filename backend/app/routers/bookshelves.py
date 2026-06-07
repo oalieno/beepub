@@ -10,6 +10,7 @@ from app.deps import get_current_user
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
+from app.routers.libraries import _get_accessible_library
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
     BookshelfCreate,
@@ -63,6 +64,7 @@ async def list_bookshelves(
                 BookshelfBook.bookshelf_id,
                 BookshelfBook.book_id,
                 BookshelfBook.series_key,
+                BookshelfBook.library_id,
             )
             .where(BookshelfBook.bookshelf_id.in_(shelf_ids))
             .order_by(BookshelfBook.bookshelf_id, BookshelfBook.sort_order.asc())
@@ -79,31 +81,45 @@ async def list_bookshelves(
         )
         books_with_cover = {bid for (bid,) in rows.all()}
 
-    # First volume with a cover, per series key.
-    series_keys = list({r.series_key for r in membership if r.series_key is not None})
-    series_cover: dict[str, uuid.UUID] = {}
-    if series_keys:
+    # First volume with a cover, per (library, series key) — series identity is
+    # scoped per library.
+    series_pairs = list(
+        {(r.library_id, r.series_key) for r in membership if r.series_key is not None}
+    )
+    series_cover: dict[tuple[uuid.UUID, str], uuid.UUID] = {}
+    if series_pairs:
         rows = await db.execute(
             text("""
-                SELECT series_key, cover_book_id FROM (
+                SELECT library_id, series_key, cover_book_id FROM (
                     SELECT
+                        lb.library_id AS library_id,
                         lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
                         b.id AS cover_book_id,
                         row_number() OVER (
-                            PARTITION BY
+                            PARTITION BY lb.library_id,
                                 lower(btrim(coalesce(b.series, b.epub_series)))
                             ORDER BY coalesce(b.series_index, b.epub_series_index)
                                 ASC NULLS LAST, b.created_at ASC
                         ) AS rn
                     FROM books b
+                    JOIN library_books lb ON lb.book_id = b.id
                     WHERE b.cover_path IS NOT NULL
-                      AND lower(btrim(coalesce(b.series, b.epub_series)))
-                          = ANY(:keys)
+                      AND (lb.library_id::text,
+                           lower(btrim(coalesce(b.series, b.epub_series))))
+                          IN (SELECT lid, k
+                              FROM unnest(CAST(:lib_ids AS text[]),
+                                          CAST(:keys AS text[]))
+                              AS t(lid, k))
                 ) t WHERE rn = 1
             """),
-            {"keys": series_keys},
+            {
+                "lib_ids": [str(lid) for lid, _ in series_pairs],
+                "keys": [k for _, k in series_pairs],
+            },
         )
-        series_cover = {row.series_key: row.cover_book_id for row in rows}
+        series_cover = {
+            (row.library_id, row.series_key): row.cover_book_id for row in rows
+        }
 
     previews: dict[str, list] = {}
     for r in membership:
@@ -114,7 +130,7 @@ async def list_bookshelves(
             if r.book_id in books_with_cover:
                 lst.append(r.book_id)
         else:
-            cover = series_cover.get(r.series_key)
+            cover = series_cover.get((r.library_id, r.series_key))
             if cover is not None:
                 lst.append(cover)
 
@@ -193,14 +209,16 @@ async def list_shelf_items(
     rows = result.scalars().all()
 
     book_ids = [r.book_id for r in rows if r.book_id is not None]
-    series_keys = [r.series_key for r in rows if r.series_key is not None]
+    series_pairs = [
+        (r.library_id, r.series_key) for r in rows if r.series_key is not None
+    ]
 
     book_by_id = await _hydrate_feed_books(db, current_user, book_ids)
     series_by_key: dict = {}
-    if series_keys:
-        srows, _ = await list_series(db, current_user, keys=series_keys)
+    if series_pairs:
+        srows, _ = await list_series(db, current_user, pairs=series_pairs)
         for s in await build_series_out(db, srows):
-            series_by_key[s.series_key] = s
+            series_by_key[(s.library_id, s.series_key)] = s
 
     items: list[LibraryFeedItem] = []
     for r in rows:
@@ -209,7 +227,7 @@ async def list_shelf_items(
             if book is not None:
                 items.append(LibraryFeedItem(type="book", book=book))
         else:
-            series = series_by_key.get(r.series_key)
+            series = series_by_key.get((r.library_id, r.series_key))
             if series is not None:
                 items.append(LibraryFeedItem(type="series", series=series))
     return items
@@ -279,9 +297,11 @@ async def add_series_to_shelf(
     key = normalize_series_name(body.series_name)
     if not key:
         raise HTTPException(status_code=422, detail="Invalid series name")
+    await _get_accessible_library(body.library_id, current_user, db)
     existing = await db.execute(
         select(BookshelfBook).where(
             BookshelfBook.bookshelf_id == shelf_id,
+            BookshelfBook.library_id == body.library_id,
             BookshelfBook.series_key == key,
         )
     )
@@ -294,7 +314,14 @@ async def add_series_to_shelf(
     )
     last = result.scalars().first()
     sort_order = (last.sort_order + 1) if last else 0
-    db.add(BookshelfBook(bookshelf_id=shelf_id, series_key=key, sort_order=sort_order))
+    db.add(
+        BookshelfBook(
+            bookshelf_id=shelf_id,
+            series_key=key,
+            library_id=body.library_id,
+            sort_order=sort_order,
+        )
+    )
     await db.commit()
     return {"status": "added"}
 
@@ -303,6 +330,7 @@ async def add_series_to_shelf(
 async def remove_series_from_shelf(
     shelf_id: uuid.UUID,
     key: str,
+    library: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -310,6 +338,7 @@ async def remove_series_from_shelf(
     result = await db.execute(
         select(BookshelfBook).where(
             BookshelfBook.bookshelf_id == shelf_id,
+            BookshelfBook.library_id == library,
             BookshelfBook.series_key == key,
         )
     )

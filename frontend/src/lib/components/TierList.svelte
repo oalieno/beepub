@@ -54,7 +54,7 @@
 
   function key(e: TierEntry) {
     return e.item.type === "series"
-      ? `s:${e.item.series.series_key}`
+      ? `s:${e.item.series.library_id}:${e.item.series.series_key}`
       : `b:${e.item.book.id}`;
   }
 </script>

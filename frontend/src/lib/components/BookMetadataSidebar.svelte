@@ -102,12 +102,20 @@
           >{m.metadata_label_series()}</span
         >
         <div>
-          <a
-            href="/series?name={encodeURIComponent(book.display_series)}"
-            class="text-foreground font-medium hover:text-primary hover:underline transition-colors text-left"
-          >
-            {book.display_series}
-          </a>
+          {#if book.library_id}
+            <a
+              href="/series?name={encodeURIComponent(
+                book.display_series,
+              )}&library={book.library_id}"
+              class="text-foreground font-medium hover:text-primary hover:underline transition-colors text-left"
+            >
+              {book.display_series}
+            </a>
+          {:else}
+            <span class="text-foreground font-medium"
+              >{book.display_series}</span
+            >
+          {/if}
           {#if currentIdx != null}
             <span class="text-muted-foreground text-xs block mt-0.5">
               {#if total}{m.metadata_series_vol_of({

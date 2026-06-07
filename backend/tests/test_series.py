@@ -41,14 +41,60 @@ def _mock_db() -> AsyncMock:
     return session
 
 
+def _lib_db() -> AsyncMock:
+    """DB mock where the library lookup succeeds and the series row is new.
+
+    Rating/notes now resolve the (library, series) pair, so the handler calls
+    _get_accessible_library before _get_or_create_series.
+    """
+    session = AsyncMock()
+    calls = {"n": 0}
+
+    async def fake_execute(stmt, params=None):
+        result = MagicMock()
+        result.mappings.return_value = []
+        result.scalar.return_value = None
+        # First execute is the library lookup (must exist); later lookups are
+        # the (admin → no exclusion check) get-or-create, treated as a new row.
+        calls["n"] += 1
+        result.scalar_one_or_none.return_value = object() if calls["n"] == 1 else None
+        return result
+
+    session.execute = fake_execute
+    session.add = MagicMock()
+    session.commit = AsyncMock()
+    session.flush = AsyncMock()
+    return session
+
+
 @pytest.fixture
 def user():
     return _make_user()
 
 
+@pytest.fixture
+def admin():
+    return User(
+        id=uuid.uuid4(),
+        username="admin",
+        password_hash="hashed",
+        role=UserRole.admin,
+        is_active=True,
+        can_download=False,
+    )
+
+
+LIB_ID = str(uuid.uuid4())
+
+
 def _override(user):
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[get_db] = lambda: _mock_db()
+
+
+def _override_lib(user):
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[get_db] = lambda: _lib_db()
 
 
 class TestNormalizeSeriesName:
@@ -76,30 +122,38 @@ class TestSeriesEndpoints:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_set_rating_valid(self, user):
-        _override(user)
+    async def test_set_rating_valid(self, admin):
+        _override_lib(admin)
         try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 resp = await client.put(
                     "/api/series/rating",
-                    json={"series_name": "Foundation", "rating": 4.5},
+                    json={
+                        "series_name": "Foundation",
+                        "library_id": LIB_ID,
+                        "rating": 4.5,
+                    },
                 )
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_set_rating_null_clears(self, user):
-        _override(user)
+    async def test_set_rating_null_clears(self, admin):
+        _override_lib(admin)
         try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 resp = await client.put(
                     "/api/series/rating",
-                    json={"series_name": "Foundation", "rating": None},
+                    json={
+                        "series_name": "Foundation",
+                        "library_id": LIB_ID,
+                        "rating": None,
+                    },
                 )
             assert resp.status_code == 200
         finally:
@@ -114,7 +168,11 @@ class TestSeriesEndpoints:
             ) as client:
                 resp = await client.put(
                     "/api/series/rating",
-                    json={"series_name": "Foundation", "rating": 4.3},
+                    json={
+                        "series_name": "Foundation",
+                        "library_id": LIB_ID,
+                        "rating": 4.3,
+                    },
                 )
             assert resp.status_code == 400
         finally:
@@ -129,22 +187,30 @@ class TestSeriesEndpoints:
             ) as client:
                 resp = await client.put(
                     "/api/series/rating",
-                    json={"series_name": "   ", "rating": 4},
+                    json={
+                        "series_name": "   ",
+                        "library_id": LIB_ID,
+                        "rating": 4,
+                    },
                 )
             assert resp.status_code == 400
         finally:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
-    async def test_set_notes(self, user):
-        _override(user)
+    async def test_set_notes(self, admin):
+        _override_lib(admin)
         try:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 resp = await client.put(
                     "/api/series/notes",
-                    json={"series_name": "Foundation", "notes": "great"},
+                    json={
+                        "series_name": "Foundation",
+                        "library_id": LIB_ID,
+                        "notes": "great",
+                    },
                 )
             assert resp.status_code == 200
         finally:

@@ -35,6 +35,7 @@ class BookshelfBookAdd(BaseModel):
 
 class BookshelfSeriesAdd(BaseModel):
     series_name: str
+    library_id: uuid.UUID
 
 
 class BookshelfReorder(BaseModel):

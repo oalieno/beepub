@@ -207,24 +207,41 @@ async def get_similar_books(
             )
             GROUP BY a.book_id
         ),
+        -- Series identity is scoped per library: a candidate is "same series"
+        -- as the target only if it shares both the normalised name AND a library
+        -- (a manga adaptation in another library is a different series).
         series_filtered AS (
             SELECT
                 aggregated.book_id,
                 aggregated.total_score,
-                LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key
+                LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key,
+                (
+                    SELECT MIN(lb.library_id::text)
+                    FROM library_books lb WHERE lb.book_id = aggregated.book_id
+                ) AS lib_key
             FROM aggregated
             JOIN books b ON b.id = aggregated.book_id
             CROSS JOIN target t
-            WHERE t.t_series_key IS NULL
-               OR LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) IS NULL
-               OR LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) != t.t_series_key
+            WHERE NOT (
+                t.t_series_key IS NOT NULL
+                AND LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) = t.t_series_key
+                AND EXISTS (
+                    SELECT 1 FROM library_books la
+                    JOIN library_books lt ON lt.library_id = la.library_id
+                    WHERE la.book_id = aggregated.book_id AND lt.book_id = :book_id
+                )
+            )
         ),
         series_ranked AS (
             SELECT
                 series_filtered.book_id,
                 series_filtered.total_score,
                 ROW_NUMBER() OVER (
-                    PARTITION BY COALESCE(series_filtered.series_key, series_filtered.book_id::text)
+                    PARTITION BY COALESCE(
+                        CASE WHEN series_filtered.series_key IS NOT NULL
+                             THEN COALESCE(series_filtered.lib_key, '') || ':'
+                                  || series_filtered.series_key END,
+                        series_filtered.book_id::text)
                     ORDER BY series_filtered.total_score DESC, series_filtered.book_id
                 ) AS series_rank
             FROM series_filtered
@@ -379,38 +396,50 @@ async def get_personalized_recommendations(
         }
         exclude_ids = exclude_ids | work_siblings
 
-    # Get series names for excluded books to also exclude same-series books
+    # Get series names for excluded books to also exclude same-series books.
+    # Series identity is scoped per library, so the key is (library_id, name).
     exclude_series_result = await db.execute(
         text("""
-            SELECT DISTINCT COALESCE(series, epub_series)
-            FROM books
-            WHERE id = ANY(:exclude_ids)
-              AND COALESCE(series, epub_series) IS NOT NULL
+            SELECT DISTINCT lb.library_id, COALESCE(b.series, b.epub_series)
+            FROM books b
+            JOIN library_books lb ON lb.book_id = b.id
+            WHERE b.id = ANY(:exclude_ids)
+              AND COALESCE(b.series, b.epub_series) IS NOT NULL
         """),
         {"exclude_ids": [str(eid) for eid in exclude_ids]},
     )
-    exclude_series = {row[0] for row in exclude_series_result.fetchall()}
+    exclude_series = {(str(row[0]), row[1]) for row in exclude_series_result.fetchall()}
 
-    # Get series + work info for all candidate books (for dedup)
+    # Get series + work info for all candidate books (for dedup). The candidate's
+    # library (min, single-library in practice) scopes its series key.
     candidate_ids = [bid for bid in all_scores if bid not in exclude_ids]
-    candidate_series: dict[uuid.UUID, str | None] = {}
+    candidate_series: dict[uuid.UUID, tuple[str, str] | None] = {}
     candidate_work: dict[uuid.UUID, uuid.UUID | None] = {}
     if candidate_ids:
         series_result = await db.execute(
             text("""
-                SELECT id, COALESCE(series, epub_series) AS series_name, work_id
-                FROM books
-                WHERE id = ANY(:ids)
+                SELECT
+                    b.id,
+                    COALESCE(b.series, b.epub_series) AS series_name,
+                    b.work_id,
+                    (
+                        SELECT MIN(lb.library_id::text)
+                        FROM library_books lb WHERE lb.book_id = b.id
+                    ) AS library_id
+                FROM books b
+                WHERE b.id = ANY(:ids)
             """),
             {"ids": [str(cid) for cid in candidate_ids]},
         )
         for row in series_result.fetchall():
             bid_u = uuid.UUID(str(row[0]))
-            candidate_series[bid_u] = row[1]
+            candidate_series[bid_u] = (
+                (str(row[3]), row[1]) if row[1] and row[3] else None
+            )
             candidate_work[bid_u] = uuid.UUID(str(row[2])) if row[2] else None
 
     filtered = []
-    seen_series: set[str] = set()
+    seen_series: set[tuple[str, str]] = set()
     seen_works: set[uuid.UUID] = set()
     # Sort by score first so we keep the highest-scoring book per series/work
     sorted_candidates = sorted(all_scores.items(), key=lambda x: x[1][0], reverse=True)

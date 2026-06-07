@@ -30,7 +30,7 @@ async def list_series(
     *,
     library_id: uuid.UUID | None = None,
     key: str | None = None,
-    keys: list[str] | None = None,
+    pairs: list[tuple[uuid.UUID, str]] | None = None,
     search: str | None = None,
     rated_only: bool = False,
     limit: int | None = None,
@@ -38,9 +38,14 @@ async def list_series(
 ) -> tuple[list[dict], int]:
     """Aggregate series with the user's rating/notes. Returns (rows, total).
 
-    - library_id: restrict to one library (access must be checked by caller).
-    - key: a single series_key (the series-detail page).
-    - keys: a set of series_keys (the collapsed feed hydrates its page this way).
+    Series identity is ``(library_id, series_key)``: the same normalised name in
+    two libraries (e.g. a light novel and its manga adaptation) is two series.
+
+    - library_id: restrict to one library (access must be checked by caller);
+      combine with ``key`` to fetch a single series (the detail page).
+    - key: a single series_key — pair it with ``library_id`` for the detail page.
+    - pairs: a set of ``(library_id, series_key)`` tuples (the collapsed feed and
+      bookshelves hydrate their page this way).
     - search: case-insensitive series-name filter.
     - rated_only: only series the user rated explicitly — used by the tier
       page across all accessible libraries.
@@ -50,14 +55,15 @@ async def list_series(
 
     if library_id is not None:
         accessible = (
-            "SELECT lb.book_id FROM library_books lb WHERE lb.library_id = :lib"
+            "SELECT lb.book_id, lb.library_id"
+            " FROM library_books lb WHERE lb.library_id = :lib"
         )
         params["lib"] = str(library_id)
     elif user.role == UserRole.admin:
-        accessible = "SELECT lb.book_id FROM library_books lb"
+        accessible = "SELECT lb.book_id, lb.library_id FROM library_books lb"
     else:
         accessible = """
-            SELECT lb.book_id
+            SELECT lb.book_id, lb.library_id
             FROM library_books lb
             JOIN libraries l ON l.id = lb.library_id
             WHERE NOT EXISTS (
@@ -70,11 +76,16 @@ async def list_series(
     if key:
         filters.append("joined.series_key = :key")
         params["key"] = key
-    if keys is not None:
-        # Empty set → no rows (avoids a malformed `= ANY('{}')` matching nothing
-        # ambiguously); callers should skip the query when there are no keys.
-        filters.append("joined.series_key = ANY(:keys)")
-        params["keys"] = keys
+    if pairs is not None:
+        # Empty set → no rows; callers should skip the query when there are none.
+        filters.append(
+            "(joined.library_id::text, joined.series_key) IN"
+            " (SELECT lid, k FROM"
+            " unnest(CAST(:lib_ids AS text[]), CAST(:pair_keys AS text[]))"
+            " AS t(lid, k))"
+        )
+        params["lib_ids"] = [str(lid) for lid, _ in pairs]
+        params["pair_keys"] = [k for _, k in pairs]
     if search:
         filters.append("joined.series_name ILIKE :search")
         params["search"] = f"%{search}%"
@@ -94,6 +105,7 @@ async def list_series(
             series_books AS (
                 SELECT
                     b.id AS book_id,
+                    a.library_id AS library_id,
                     lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
                     coalesce(b.series, b.epub_series) AS series_name,
                     coalesce(b.series_index, b.epub_series_index) AS idx,
@@ -107,6 +119,7 @@ async def list_series(
             ),
             agg AS (
                 SELECT
+                    library_id,
                     series_key,
                     max(series_name) AS series_name,
                     count(*) AS book_count,
@@ -114,10 +127,12 @@ async def list_series(
                     (array_agg(book_id ORDER BY idx ASC NULLS LAST, created_at ASC))[1]
                         AS cover_book_id
                 FROM series_books
-                GROUP BY series_key
+                GROUP BY library_id, series_key
             ),
             joined AS (
                 SELECT
+                    agg.library_id,
+                    l.name AS library_name,
                     agg.series_key,
                     agg.series_name,
                     agg.book_count,
@@ -126,13 +141,16 @@ async def list_series(
                     usi.rating AS series_rating,
                     usi.notes AS series_notes
                 FROM agg
+                JOIN libraries l ON l.id = agg.library_id
                 LEFT JOIN user_series_interactions usi
-                    ON usi.user_id = :uid AND usi.series_key = agg.series_key
+                    ON usi.user_id = :uid
+                    AND usi.library_id = agg.library_id
+                    AND usi.series_key = agg.series_key
             )
             SELECT joined.*, count(*) OVER () AS total_count
             FROM joined
             {where}
-            ORDER BY joined.series_name
+            ORDER BY joined.series_name, joined.library_name
             {page_clause}
         """),
         params,
@@ -147,6 +165,8 @@ async def list_series(
             {
                 "series_key": r["series_key"],
                 "series_name": r["series_name"],
+                "library_id": r["library_id"],
+                "library_name": r["library_name"],
                 "book_count": r["book_count"],
                 "read_count": r["read_count"],
                 "cover_book_id": r["cover_book_id"],
@@ -177,6 +197,8 @@ async def build_series_out(db: AsyncSession, rows: list[dict]) -> list:
         SeriesOut(
             series_key=r["series_key"],
             series_name=r["series_name"],
+            library_id=r["library_id"],
+            library_name=r.get("library_name"),
             book_count=r["book_count"],
             read_count=r["read_count"],
             rating=r["rating"],
@@ -223,14 +245,15 @@ async def list_library_feed(
 
     if library_id is not None:
         accessible = (
-            "SELECT lb.book_id FROM library_books lb WHERE lb.library_id = :lib"
+            "SELECT lb.book_id, lb.library_id"
+            " FROM library_books lb WHERE lb.library_id = :lib"
         )
         params["lib"] = str(library_id)
     elif user.role == UserRole.admin:
-        accessible = "SELECT lb.book_id FROM library_books lb"
+        accessible = "SELECT lb.book_id, lb.library_id FROM library_books lb"
     else:
         accessible = """
-            SELECT lb.book_id
+            SELECT lb.book_id, lb.library_id
             FROM library_books lb
             JOIN libraries l ON l.id = lb.library_id
             WHERE NOT EXISTS (
@@ -276,6 +299,7 @@ async def list_library_feed(
             eligible AS (
                 SELECT
                     b.id AS book_id,
+                    a.library_id AS library_id,
                     lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
                     coalesce(b.title, b.epub_title) AS display_title,
                     coalesce(b.calibre_added_at, b.created_at) AS added_at,
@@ -287,6 +311,7 @@ async def list_library_feed(
             units AS (
                 SELECT
                     'series' AS kind,
+                    library_id,
                     series_key,
                     NULL::uuid AS book_id,
                     max(display_title) AS ord_title,
@@ -294,10 +319,11 @@ async def list_library_feed(
                     max(popularity_score) AS ord_pop
                 FROM eligible
                 WHERE series_key IS NOT NULL
-                GROUP BY series_key
+                GROUP BY library_id, series_key
                 UNION ALL
                 SELECT
                     'book' AS kind,
+                    NULL::uuid AS library_id,
                     NULL::text AS series_key,
                     book_id,
                     display_title AS ord_title,
@@ -306,7 +332,8 @@ async def list_library_feed(
                 FROM eligible
                 WHERE series_key IS NULL
             )
-            SELECT kind, series_key, book_id, count(*) OVER () AS total_count
+            SELECT kind, library_id, series_key, book_id,
+                   count(*) OVER () AS total_count
             FROM units
             ORDER BY {ord_col} {direction} NULLS LAST,
                      ord_title ASC, kind, series_key, book_id
@@ -318,12 +345,14 @@ async def list_library_feed(
     page = list(result.mappings())
     total = page[0]["total_count"] if page else 0
 
-    series_keys = [r["series_key"] for r in page if r["kind"] == "series"]
+    series_pairs = [
+        (r["library_id"], r["series_key"]) for r in page if r["kind"] == "series"
+    ]
     series_by_key: dict = {}
-    if series_keys:
-        rows, _ = await list_series(db, user, library_id=library_id, keys=series_keys)
+    if series_pairs:
+        rows, _ = await list_series(db, user, library_id=library_id, pairs=series_pairs)
         out = await build_series_out(db, rows)
-        series_by_key = {s.series_key: s for s in out}
+        series_by_key = {(s.library_id, s.series_key): s for s in out}
 
     book_ids = [r["book_id"] for r in page if r["kind"] == "book"]
     book_by_id = await _hydrate_feed_books(db, user, book_ids)
@@ -331,7 +360,7 @@ async def list_library_feed(
     items: list[dict] = []
     for r in page:
         if r["kind"] == "series":
-            series = series_by_key.get(r["series_key"])
+            series = series_by_key.get((r["library_id"], r["series_key"]))
             if series is not None:
                 items.append({"type": "series", "series": series})
         else:

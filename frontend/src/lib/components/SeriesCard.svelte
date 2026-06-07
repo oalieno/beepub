@@ -18,7 +18,9 @@
   let cover = $derived(series.cover_book);
 
   function openDetail() {
-    goto(`/series?name=${encodeURIComponent(series.series_name)}`);
+    goto(
+      `/series?name=${encodeURIComponent(series.series_name)}&library=${series.library_id}`,
+    );
   }
 </script>
 

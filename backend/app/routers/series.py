@@ -9,6 +9,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.reading import UserSeriesInteraction
 from app.models.user import User
+from app.routers.libraries import _get_accessible_library
 from app.schemas.series import SeriesNotesUpdate, SeriesOut, SeriesRatingUpdate
 from app.services.series import (
     build_series_out,
@@ -20,18 +21,26 @@ router = APIRouter(prefix="/api/series", tags=["series"])
 
 
 async def _get_or_create_series(
-    user_id: uuid.UUID, series_key: str, series_name: str, db: AsyncSession
+    user_id: uuid.UUID,
+    library_id: uuid.UUID,
+    series_key: str,
+    series_name: str,
+    db: AsyncSession,
 ) -> UserSeriesInteraction:
     result = await db.execute(
         select(UserSeriesInteraction).where(
             UserSeriesInteraction.user_id == user_id,
+            UserSeriesInteraction.library_id == library_id,
             UserSeriesInteraction.series_key == series_key,
         )
     )
     row = result.scalar_one_or_none()
     if not row:
         row = UserSeriesInteraction(
-            user_id=user_id, series_key=series_key, series_name=series_name
+            user_id=user_id,
+            library_id=library_id,
+            series_key=series_key,
+            series_name=series_name,
         )
         db.add(row)
         await db.flush()
@@ -66,10 +75,21 @@ async def get_series_detail(
     name: str,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    library: uuid.UUID | None = None,
 ):
-    """One series by name (the series-detail page)."""
+    """One series by name (the series-detail page).
+
+    Series identity is (library_id, series_key), so the same name in another
+    library is a different series. ``library`` pins which one; when omitted (an
+    old or shared link with just ?name=), the first matching accessible series is
+    returned so the page still resolves.
+    """
     key = _resolve_key(name)
-    rows, _ = await list_series(db, current_user, key=key)
+    if library is not None:
+        await _get_accessible_library(library, current_user, db)
+        rows, _ = await list_series(db, current_user, library_id=library, key=key)
+    else:
+        rows, _ = await list_series(db, current_user, key=key)
     if not rows:
         raise HTTPException(status_code=404, detail="Series not found")
     out = await build_series_out(db, rows)
@@ -87,8 +107,9 @@ async def update_series_rating(
     ):
         raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
     key = _resolve_key(body.series_name)
+    await _get_accessible_library(body.library_id, current_user, db)
     row = await _get_or_create_series(
-        current_user.id, key, body.series_name.strip(), db
+        current_user.id, body.library_id, key, body.series_name.strip(), db
     )
     row.rating = body.rating
     await db.commit()
@@ -102,8 +123,9 @@ async def update_series_notes(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     key = _resolve_key(body.series_name)
+    await _get_accessible_library(body.library_id, current_user, db)
     row = await _get_or_create_series(
-        current_user.id, key, body.series_name.strip(), db
+        current_user.id, body.library_id, key, body.series_name.strip(), db
     )
     row.notes = body.notes
     await db.commit()

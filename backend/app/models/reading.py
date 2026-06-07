@@ -64,15 +64,21 @@ class UserSeriesInteraction(Base):
     """Per-user rating/notes for a whole series.
 
     Series have no entity table — they are identified by the normalised series
-    name (lower(btrim(coalesce(series, epub_series)))), the same key used for
-    popularity/recommendation grouping. This row hangs metadata off that key
-    without touching the book-level series text fields.
+    name (lower(btrim(coalesce(series, epub_series)))) scoped to a library, the
+    same key used for popularity/recommendation grouping. This row hangs metadata
+    off that (library_id, series_key) pair without touching the book-level series
+    text fields.
     """
 
     __tablename__ = "user_series_interactions"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    # Series identity is scoped per library: the same normalised name in two
+    # libraries (e.g. a light novel and its manga adaptation) is two series.
+    library_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("libraries.id", ondelete="CASCADE"), primary_key=True
     )
     series_key: Mapped[str] = mapped_column(String(500), primary_key=True)
     # Display name (original casing) captured when the row was created.

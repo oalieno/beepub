@@ -778,13 +778,19 @@ async def list_all_books(
     author: str | None = Query(None),
     tag: str | None = Query(None),
     series: str | None = Query(None),
+    library: uuid.UUID | None = Query(None),
     has_rating: bool = Query(False),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    """List all books across accessible libraries."""
+    """List all books across accessible libraries.
+
+    ``library`` scopes the result to one library — used with ``series`` so the
+    series-detail page only shows that library's volumes (series identity is
+    ``(library_id, series_key)``).
+    """
     from sqlalchemy import String as SAString
     from sqlalchemy import cast
     from sqlalchemy.sql.functions import coalesce
@@ -839,6 +845,12 @@ async def list_all_books(
             or_(
                 Book.series == series,
                 Book.epub_series == series,
+            )
+        )
+    if library:
+        base_query = base_query.where(
+            Book.id.in_(
+                select(LibraryBook.book_id).where(LibraryBook.library_id == library)
             )
         )
     if has_rating:
@@ -1303,14 +1315,26 @@ async def get_series_neighbors(
             .scalar_subquery()
         )
 
-    # Subquery: book IDs accessible to this user
-    accessible_book_ids = (
-        select(LibraryBook.book_id)
-        .where(LibraryBook.library_id.in_(accessible_libs))
+    # Series identity is scoped per library, so neighbors stay within the
+    # current book's own library set (e.g. a light novel and its manga
+    # adaptation share a name but are different series).
+    scoped_libs = (
+        select(LibraryBook.library_id)
+        .where(
+            LibraryBook.book_id == book_id,
+            LibraryBook.library_id.in_(accessible_libs),
+        )
         .scalar_subquery()
     )
 
-    # Base: books in same series within accessible libraries (excluding current)
+    # Subquery: book IDs in the same library set as the current book
+    accessible_book_ids = (
+        select(LibraryBook.book_id)
+        .where(LibraryBook.library_id.in_(scoped_libs))
+        .scalar_subquery()
+    )
+
+    # Base: books in same series within the current book's libraries (excluding current)
     base = select(Book).where(
         series_col == series_name,
         index_col.isnot(None),
@@ -1383,7 +1407,7 @@ async def get_series_neighbors(
         .where(
             series_col == series_name,
             index_col.isnot(None),
-            LibraryBook.library_id.in_(accessible_libs),
+            LibraryBook.library_id.in_(scoped_libs),
         )
     )
     total_in_library, max_series_index, read_count = progress_result.one()

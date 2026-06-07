@@ -25,11 +25,15 @@ CORROBORATION_BOOST = 0.08
 
 _RECOMPUTE_SQL = text("""
     WITH input_keys AS (
+        -- One row per (input book, library) so the series cluster only spans a
+        -- shared library: series identity is scoped per library.
         SELECT
             b.id,
             b.work_id,
-            LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key
+            LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key,
+            lb.library_id
         FROM books b
+        LEFT JOIN library_books lb ON lb.book_id = b.id
         WHERE b.id = ANY(:book_ids)
     ),
     cluster AS (
@@ -44,6 +48,10 @@ _RECOMPUTE_SQL = text("""
             OR (
                 ik.series_key IS NOT NULL
                 AND LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) = ik.series_key
+                AND EXISTS (
+                    SELECT 1 FROM library_books lbb
+                    WHERE lbb.book_id = b.id AND lbb.library_id = ik.library_id
+                )
             )
     ),
     per_source AS (
@@ -92,7 +100,14 @@ _RECOMPUTE_SQL = text("""
         LEFT JOIN cluster c2 ON
             c2.id = c1.id
             OR (c1.work_id IS NOT NULL AND c2.work_id = c1.work_id)
-            OR (c1.series_key IS NOT NULL AND c2.series_key = c1.series_key)
+            OR (
+                c1.series_key IS NOT NULL AND c2.series_key = c1.series_key
+                AND EXISTS (
+                    SELECT 1 FROM library_books l1
+                    JOIN library_books l2 ON l1.library_id = l2.library_id
+                    WHERE l1.book_id = c1.id AND l2.book_id = c2.id
+                )
+            )
         LEFT JOIN own_score os ON os.book_id = c2.id
         GROUP BY c1.id
     )

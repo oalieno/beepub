@@ -49,8 +49,12 @@ class BookshelfBook(Base):
 
     __tablename__ = "bookshelf_books"
     __table_args__ = (
+        # A book row has book_id and no series; a series row has series_key +
+        # library_id (series identity is scoped per library) and no book.
         CheckConstraint(
-            "(book_id IS NOT NULL) <> (series_key IS NOT NULL)",
+            "(book_id IS NOT NULL AND series_key IS NULL AND library_id IS NULL)"
+            " <> (series_key IS NOT NULL AND library_id IS NOT NULL"
+            " AND book_id IS NULL)",
             name="ck_bookshelf_books_one_target",
         ),
         Index(
@@ -63,6 +67,7 @@ class BookshelfBook(Base):
         Index(
             "uq_bookshelf_books_series",
             "bookshelf_id",
+            "library_id",
             "series_key",
             unique=True,
             postgresql_where=text("series_key IS NOT NULL"),
@@ -79,6 +84,10 @@ class BookshelfBook(Base):
         ForeignKey("books.id", ondelete="CASCADE"), nullable=True
     )
     series_key: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Set only for series rows — series identity is (library_id, series_key).
+    library_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("libraries.id", ondelete="CASCADE"), nullable=True
+    )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

@@ -1,3 +1,4 @@
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel
@@ -8,6 +9,8 @@ from app.schemas.book import BookOut, BookWithInteractionOut
 class SeriesOut(BaseModel):
     series_key: str
     series_name: str
+    library_id: uuid.UUID  # series identity is (library_id, series_key)
+    library_name: str | None = None
     book_count: int
     read_count: int
     rating: float | None = None  # the user's explicit series rating
@@ -35,9 +38,11 @@ class PaginatedFeed(BaseModel):
 
 class SeriesRatingUpdate(BaseModel):
     series_name: str
+    library_id: uuid.UUID
     rating: float | None = None  # 0.5-5 in 0.5 steps, or null
 
 
 class SeriesNotesUpdate(BaseModel):
     series_name: str
+    library_id: uuid.UUID
     notes: str | None = None  # markdown

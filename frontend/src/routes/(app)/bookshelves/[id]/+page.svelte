@@ -58,7 +58,7 @@
 
   function itemKey(it: LibraryFeedItem) {
     return it.type === "series"
-      ? `s:${it.series.series_key}`
+      ? `s:${it.series.library_id}:${it.series.series_key}`
       : `b:${it.book.id}`;
   }
 
@@ -108,7 +108,11 @@
     items = items.filter((_, i) => i !== index);
     try {
       if (removed.type === "series") {
-        await bookshelvesApi.removeSeries(shelfId, removed.series.series_key);
+        await bookshelvesApi.removeSeries(
+          shelfId,
+          removed.series.series_key,
+          removed.series.library_id,
+        );
       } else {
         await bookshelvesApi.removeBook(shelfId, removed.book.id);
       }

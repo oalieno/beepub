@@ -21,6 +21,7 @@
   import * as m from "$lib/paraglide/messages.js";
 
   let name = $derived(page.url.searchParams.get("name") ?? "");
+  let library = $derived(page.url.searchParams.get("library") ?? "");
   let series = $state<SeriesOut | null>(null);
   let volumes = $state<BookWithInteractionOut[]>([]);
   let loading = $state(true);
@@ -29,19 +30,31 @@
   let bookshelves = $state<BookshelfOut[]>([]);
   let showAddToShelf = $state(false);
 
-  async function load(seriesName: string) {
+  async function load(seriesName: string, libraryId: string) {
     const seq = ++loadSeq;
     loading = true;
     try {
-      const [detail, vols, shelves] = await Promise.all([
-        seriesApi.get(seriesName),
-        booksApi.getAll({ series: seriesName, limit: 200 }),
+      // Resolve the series first. With a library in the URL this is the normal
+      // path; without one (an old/shared ?name= link) the backend returns the
+      // first matching series and we scope the volumes to its library.
+      const detail = await seriesApi.get(seriesName, libraryId || undefined);
+      const lib = detail.library_id;
+      const [vols, shelves] = await Promise.all([
+        booksApi.getAll({ series: seriesName, library: lib, limit: 200 }),
         bookshelvesApi.list().catch(() => [] as BookshelfOut[]),
       ]);
       if (seq !== loadSeq) return;
       series = detail;
       volumes = vols.items;
       bookshelves = shelves;
+      // Canonicalise a library-less link so bookmarks/shares carry the library.
+      if (!libraryId && typeof history !== "undefined") {
+        history.replaceState(
+          history.state,
+          "",
+          `/series?name=${encodeURIComponent(seriesName)}&library=${lib}`,
+        );
+      }
     } catch (e) {
       if (seq === loadSeq) {
         series = null;
@@ -55,7 +68,11 @@
   async function addToShelf(shelfId: string) {
     if (!series) return;
     try {
-      await bookshelvesApi.addSeries(shelfId, series.series_name);
+      await bookshelvesApi.addSeries(
+        shelfId,
+        series.series_name,
+        series.library_id,
+      );
       toastStore.success(m.bookshelf_added());
       showAddToShelf = false;
     } catch (e) {
@@ -64,14 +81,18 @@
   }
 
   $effect(() => {
-    if (name) load(name);
+    if (name) load(name, library);
     else loading = false;
   });
 
   async function handleRating(rating: number | null) {
     if (!series) return;
     try {
-      await seriesApi.updateRating(series.series_name, rating);
+      await seriesApi.updateRating(
+        series.series_name,
+        series.library_id,
+        rating,
+      );
       series = { ...series, rating };
       toastStore.success(m.book_rating_updated());
     } catch (e) {
@@ -80,7 +101,8 @@
   }
 
   async function saveNotes(notes: string | null) {
-    if (series) await seriesApi.updateNotes(series.series_name, notes);
+    if (series)
+      await seriesApi.updateNotes(series.series_name, series.library_id, notes);
   }
 
   function handleNotesSaved(notes: string | null) {

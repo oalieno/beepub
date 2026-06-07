@@ -24,11 +24,16 @@ export const bookshelvesApi = {
   removeBook: (id: string, bookId: string) =>
     del(`/bookshelves/${id}/books/${bookId}`),
 
-  addSeries: (id: string, seriesName: string) =>
-    post(`/bookshelves/${id}/series`, { series_name: seriesName }),
+  addSeries: (id: string, seriesName: string, libraryId: string) =>
+    post(`/bookshelves/${id}/series`, {
+      series_name: seriesName,
+      library_id: libraryId,
+    }),
 
-  removeSeries: (id: string, seriesKey: string) =>
-    del(`/bookshelves/${id}/series?key=${encodeURIComponent(seriesKey)}`),
+  removeSeries: (id: string, seriesKey: string, libraryId: string) =>
+    del(
+      `/bookshelves/${id}/series?key=${encodeURIComponent(seriesKey)}&library=${libraryId}`,
+    ),
 
   reorder: (id: string, bookIds: string[]) =>
     put(`/bookshelves/${id}/books/reorder`, { book_ids: bookIds }),
