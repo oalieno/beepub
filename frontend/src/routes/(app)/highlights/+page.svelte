@@ -141,7 +141,7 @@
         <div class="flex flex-col gap-5">
           {#each bookHighlights as hl (hl.id)}
             <div
-              class="group/hl relative cursor-pointer border-l-2 border-border pl-4 transition-colors hover:border-primary/50"
+              class="group/hl relative cursor-pointer rounded-r-lg bg-card border-l-2 border-border p-4 transition-colors hover:border-primary/50"
               role="button"
               tabindex="0"
               onclick={() => goto(`/books/${hl.book_id}/read`)}
@@ -164,7 +164,7 @@
 
               <!-- Actions: always shown on touch, hover-revealed on desktop -->
               <div
-                class="absolute right-0 top-0 flex items-center gap-1 opacity-100 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover/hl:opacity-100"
+                class="absolute right-2 top-2 flex items-center gap-1 opacity-100 transition-opacity focus-within:opacity-100 sm:opacity-0 sm:group-hover/hl:opacity-100"
               >
                 <button
                   class="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
