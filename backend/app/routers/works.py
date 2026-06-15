@@ -69,13 +69,41 @@ async def create_work(
             detail=f"Books not found: {', '.join(missing)}",
         )
 
-    # Check if any book is already in a Work
-    for book in books:
-        if book.work_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Book '{book.display_title}' (id={book.id}) is already in a Work",
-            )
+    from app.services.popularity import recompute_popularity
+
+    # If some books already belong to a Work, add the rest to that Work instead
+    # of failing. Linking C to A — where A is already grouped with B — should
+    # add C to A's existing Work rather than create a new one.
+    existing_work_ids = {b.work_id for b in books if b.work_id is not None}
+    if len(existing_work_ids) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="These books belong to different Works; remove one from its "
+            "Work before merging them together.",
+        )
+    if existing_work_ids:
+        from app.services.work_library import assert_book_can_join_work
+
+        target_work_id = next(iter(existing_work_ids))
+        joining = [b for b in books if b.work_id is None]
+        for book in joining:
+            try:
+                await assert_book_can_join_work(book.id, target_work_id, db)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT, detail=str(e)
+                ) from e
+            book.work_id = target_work_id
+        if joining:
+            await db.flush()
+            await recompute_popularity(db, [b.id for b in joining])
+            await db.commit()
+        result = await db.execute(
+            select(Work)
+            .where(Work.id == target_work_id)
+            .options(selectinload(Work.books))
+        )
+        return _work_to_out(result.scalar_one())
 
     # Invariant: a Work cannot span libraries. /books/me relies on this
     # (primary edition must be accessible to any user who can access a sibling).
@@ -102,8 +130,6 @@ async def create_work(
     # Set primary (post_update handles the circular FK)
     work.primary_book_id = primary.id
     await db.flush()
-
-    from app.services.popularity import recompute_popularity
 
     await recompute_popularity(db, [b.id for b in books])
     await db.commit()
