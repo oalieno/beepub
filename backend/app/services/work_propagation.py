@@ -66,17 +66,17 @@ async def get_work_propagated_interactions(
             )
             SELECT
                 requested_book_id,
-                -- Best reading status (by priority)
+                -- Best reading status (by priority). NULL reading_status (e.g.
+                -- favorite-only interactions) is ignored by MIN, leaving the
+                -- index NULL so best_status stays NULL -- important so those rows
+                -- don't get bucketed into want_to_read.
                 (ARRAY['read','currently_reading','did_not_finish','want_to_read'])[
-                    LEAST(
-                        COALESCE(MIN(CASE reading_status
-                            WHEN 'read' THEN 1
-                            WHEN 'currently_reading' THEN 2
-                            WHEN 'did_not_finish' THEN 3
-                            WHEN 'want_to_read' THEN 4
-                        END), 99),
-                        4
-                    )
+                    MIN(CASE reading_status
+                        WHEN 'read' THEN 1
+                        WHEN 'currently_reading' THEN 2
+                        WHEN 'did_not_finish' THEN 3
+                        WHEN 'want_to_read' THEN 4
+                    END)
                 ] AS best_status,
                 -- is_favorite: true if ANY sibling is favorited
                 COALESCE(BOOL_OR(is_favorite), false) AS any_favorite
@@ -89,7 +89,7 @@ async def get_work_propagated_interactions(
     propagated = {}
     for row in result.all():
         propagated[row[0]] = {
-            "reading_status": row[1] if row[1] != 99 else None,
+            "reading_status": row[1],
             "is_favorite": row[2],
         }
     return propagated
