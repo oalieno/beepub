@@ -572,7 +572,7 @@ async def search_books(
     limit: int = Query(20, ge=1, le=100),
 ):
     from sqlalchemy import String as SAString
-    from sqlalchemy import cast
+    from sqlalchemy import case, cast
 
     from app.routers.libraries import accessible_libraries_condition
 
@@ -584,9 +584,10 @@ async def search_books(
         accessible_libs = accessible_libs.where(cond)
     accessible_lib_ids = accessible_libs.subquery()
 
-    # Main query: search books in accessible libraries
+    # Main query: search books in accessible libraries. A book can live in
+    # several libraries, so collapse to one row per book (min library name).
     base_query = (
-        select(Book, Library.name.label("library_name"))
+        select(Book, func.min(Library.name).label("library_name"))
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .join(Library, Library.id == LibraryBook.library_id)
         .where(
@@ -601,17 +602,30 @@ async def search_books(
                 Book.epub_isbn.ilike(pattern),
             ),
         )
-        .distinct(Book.id)
-        .order_by(Book.id, Library.name)
+        .group_by(Book.id)
     )
 
-    # Count
+    # Count (one row per distinct book)
     count_sub = base_query.with_only_columns(Book.id).subquery()
     total = (
         await db.execute(select(func.count()).select_from(count_sub))
     ).scalar() or 0
 
-    result = await db.execute(base_query.limit(limit))
+    # Rank by relevance so a short query like "小王子" surfaces the closest
+    # titles first instead of an arbitrary UUID-ordered slice: exact title
+    # match, then title prefix, then any substring; ties broken by shorter
+    # (and then alphabetical) title.
+    title_col = func.coalesce(Book.title, Book.epub_title)
+    relevance = case(
+        (func.lower(title_col) == q.lower(), 0),
+        (title_col.ilike(f"{q}%"), 1),
+        else_=2,
+    )
+    ranked_query = base_query.order_by(
+        relevance, func.length(title_col), title_col, Book.id
+    )
+
+    result = await db.execute(ranked_query.limit(limit))
     rows = result.all()
 
     # Enrich with edition_count
