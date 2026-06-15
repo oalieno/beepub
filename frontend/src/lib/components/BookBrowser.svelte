@@ -5,6 +5,7 @@
     ArrowUpDown,
     SlidersHorizontal,
     Layers,
+    BookX,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as m from "$lib/paraglide/messages.js";
@@ -257,6 +258,10 @@
 
   function handleSearchInput() {
     clearTimeout(searchTimer);
+    // Show the loading state right away. Otherwise, during the debounce
+    // window (and a slow request), `loading` stays false while the old/empty
+    // results render — briefly flashing "no books found" before the fetch.
+    loading = true;
     searchTimer = setTimeout(() => {
       loadData();
       notifyStateChange();
@@ -488,10 +493,13 @@
     {/each}
   </div>
 {:else if shownCount === 0}
-  <div
-    class="border-2 border-dashed border-border rounded-2xl p-12 text-center"
-  >
-    <p class="text-muted-foreground text-lg">
+  <div class="flex flex-col items-center justify-center text-center py-20">
+    <div
+      class="flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-5"
+    >
+      <BookX size={24} strokeWidth={1.5} class="text-muted-foreground" />
+    </div>
+    <p class="text-foreground text-lg font-medium">
       {emptyMessage || m.browser_no_books()}
     </p>
   </div>
