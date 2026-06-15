@@ -19,8 +19,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import and_, case, exists, func, literal_column, or_, select
-from sqlalchemy.dialects.postgresql import array
+from sqlalchemy import and_, exists, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import coalesce
@@ -437,24 +436,17 @@ async def list_my_books(
         .cte("sib_ubi")
     )
 
-    # CTE 6 — work-level aggregates. Status priority: read > currently_reading >
-    # did_not_finish > want_to_read. NULL reading_status (e.g., favorite-only
-    # interactions) is excluded by MIN, so best_status stays NULL — important so
-    # those rows don't get bucketed into want_to_read.
-    status_priority = case(
-        (sib_ubi.c.reading_status == "read", 1),
-        (sib_ubi.c.reading_status == "currently_reading", 2),
-        (sib_ubi.c.reading_status == "did_not_finish", 3),
-        (sib_ubi.c.reading_status == "want_to_read", 4),
-    )
-    status_array = array(
-        ["read", "currently_reading", "did_not_finish", "want_to_read"]
-    )
+    from app.services.work_propagation import best_reading_status_expr
+
+    # CTE 6 — work-level aggregates. best_reading_status_expr keeps the same
+    # priority logic as the work-propagation lookup so the two can't drift apart;
+    # NULL reading_status (e.g. favorite-only interactions) stays NULL rather than
+    # being bucketed into want_to_read.
     work_last_read_at = func.max(sib_ubi.c.reading_progress["last_read_at"].astext)
     agg = (
         select(
             sib_ubi.c.display_book_id.label("display_book_id"),
-            status_array[func.min(status_priority)].label("best_status"),
+            best_reading_status_expr(sib_ubi.c.reading_status).label("best_status"),
             func.bool_or(sib_ubi.c.is_favorite).label("any_favorite"),
             func.max(sib_ubi.c.updated_at).label("work_last_updated_at"),
             work_last_read_at.label("work_last_read_at"),

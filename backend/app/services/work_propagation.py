@@ -10,16 +10,41 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import text
+from sqlalchemy import and_, case, func, or_, select, text
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
-# Higher number = higher priority
-STATUS_PRIORITY = {
-    "read": 4,
-    "currently_reading": 3,
-    "did_not_finish": 2,
-    "want_to_read": 1,
-}
+from app.models.book import Book
+from app.models.reading import UserBookInteraction
+
+# Reading-status priority, highest first. A status's rank is its position in this
+# list (1-based); the lower the rank, the higher the priority.
+READING_STATUS_PRIORITY = [
+    "read",
+    "currently_reading",
+    "did_not_finish",
+    "want_to_read",
+]
+
+
+def best_reading_status_expr(reading_status_col):
+    """SQLAlchemy aggregate expression for the highest-priority reading_status
+    across the grouped rows.
+
+    NULL statuses are ignored by MIN, so when no row in the group carries an
+    actual reading_status the result is NULL -- it must never fall back to
+    want_to_read (a favorite-only or progress-only interaction has a row but no
+    status). Use under a GROUP BY. Shared by the book-list detail query and the
+    work-propagation lookup so the two can't drift apart.
+    """
+    priority = case(
+        *[
+            (reading_status_col == status, rank)
+            for rank, status in enumerate(READING_STATUS_PRIORITY, start=1)
+        ]
+    )
+    return array(READING_STATUS_PRIORITY)[func.min(priority)]
 
 
 async def get_work_propagated_interactions(
@@ -36,61 +61,54 @@ async def get_work_propagated_interactions(
     if not book_ids:
         return {}
 
-    # Single query: for each requested book, find the best interaction
-    # across all editions in its Work (or just itself if no Work).
-    result = await db.execute(
-        text("""
-            WITH requested_books AS (
-                SELECT id, work_id FROM books WHERE id = ANY(:book_ids)
+    # For each requested book, gather every interacted edition in its Work (or
+    # just itself if standalone) and reduce to the best status / any favorite.
+    requested = (
+        select(Book.id.label("requested_book_id"), Book.work_id.label("work_id"))
+        .where(Book.id.in_(book_ids))
+        .cte("requested_books")
+    )
+    sibling = aliased(Book)
+    query = (
+        select(
+            requested.c.requested_book_id,
+            best_reading_status_expr(UserBookInteraction.reading_status).label(
+                "best_status"
             ),
-            work_siblings AS (
-                -- For books in a Work: all sibling book IDs (including self)
-                -- For books not in a Work: just the book itself
-                SELECT rb.id AS requested_book_id, sibling.id AS sibling_book_id
-                FROM requested_books rb
-                JOIN books sibling ON (
-                    CASE
-                        WHEN rb.work_id IS NOT NULL THEN sibling.work_id = rb.work_id
-                        ELSE sibling.id = rb.id
-                    END
-                )
+            func.coalesce(func.bool_or(UserBookInteraction.is_favorite), False).label(
+                "any_favorite"
             ),
-            sibling_interactions AS (
-                SELECT
-                    ws.requested_book_id,
-                    ubi.reading_status,
-                    ubi.is_favorite
-                FROM work_siblings ws
-                JOIN user_book_interactions ubi ON ubi.book_id = ws.sibling_book_id
-                WHERE ubi.user_id = :user_id
-            )
-            SELECT
-                requested_book_id,
-                -- Best reading status (by priority). NULL reading_status (e.g.
-                -- favorite-only interactions) is ignored by MIN, leaving the
-                -- index NULL so best_status stays NULL -- important so those rows
-                -- don't get bucketed into want_to_read.
-                (ARRAY['read','currently_reading','did_not_finish','want_to_read'])[
-                    MIN(CASE reading_status
-                        WHEN 'read' THEN 1
-                        WHEN 'currently_reading' THEN 2
-                        WHEN 'did_not_finish' THEN 3
-                        WHEN 'want_to_read' THEN 4
-                    END)
-                ] AS best_status,
-                -- is_favorite: true if ANY sibling is favorited
-                COALESCE(BOOL_OR(is_favorite), false) AS any_favorite
-            FROM sibling_interactions
-            GROUP BY requested_book_id
-        """),
-        {"book_ids": [str(bid) for bid in book_ids], "user_id": str(user_id)},
+        )
+        .select_from(requested)
+        .join(
+            sibling,
+            or_(
+                and_(
+                    requested.c.work_id.isnot(None),
+                    sibling.work_id == requested.c.work_id,
+                ),
+                and_(
+                    requested.c.work_id.is_(None),
+                    sibling.id == requested.c.requested_book_id,
+                ),
+            ),
+        )
+        .join(
+            UserBookInteraction,
+            and_(
+                UserBookInteraction.book_id == sibling.id,
+                UserBookInteraction.user_id == user_id,
+            ),
+        )
+        .group_by(requested.c.requested_book_id)
     )
 
+    result = await db.execute(query)
     propagated = {}
-    for row in result.all():
-        propagated[row[0]] = {
-            "reading_status": row[1],
-            "is_favorite": row[2],
+    for requested_book_id, best_status, any_favorite in result.all():
+        propagated[requested_book_id] = {
+            "reading_status": best_status,
+            "is_favorite": any_favorite,
         }
     return propagated
 
