@@ -1128,6 +1128,15 @@
   function applyTheme() {
     if (!rendition) return;
     rendition.themes.default({
+      // Set the size on the root too, not just body: a book whose own CSS
+      // targets `p { font-size: 1rem }` would otherwise win over the value
+      // `p` inherits from body (a direct match beats inheritance, even with
+      // !important on body). Sizing the root makes `rem` resolve to the
+      // user's size, so rem-based book rules scale with the setting while
+      // the book's relative hierarchy (em/%/headings) is preserved.
+      html: {
+        "font-size": `${fontSize}px !important`,
+      },
       body: {
         "font-family": fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS,
         "font-size": `${fontSize}px !important`,
@@ -1139,10 +1148,12 @@
       },
       // Reading gutter only on reflowable pages. Fixed-layout pages
       // (marked beepub-pre-paginated by epub.js fit()) need the full
-      // viewport box for the scaled body, otherwise the 2rem padding
-      // overflows the column and clips the bottom/right.
+      // viewport box for the scaled body, otherwise the padding overflows
+      // the column and clips the bottom/right. Pinned in px so it stays
+      // constant now that the root font-size (and thus rem) tracks the
+      // user's setting.
       "body:not(.beepub-pre-paginated)": {
-        padding: "2rem !important",
+        padding: "32px !important",
       },
       "::selection": {
         background: darkMode

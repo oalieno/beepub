@@ -1415,9 +1415,26 @@ class Contents {
       this.documentElement.style[WRITING_MODE] = mode;
     }
 
-    return (
-      this.window.getComputedStyle(this.documentElement)[WRITING_MODE] || ""
-    );
+    let htmlMode =
+      this.window.getComputedStyle(this.documentElement)[WRITING_MODE] || "";
+
+    // Some EPUBs set vertical-rl on body via CSS (not on html). The
+    // documentElement then computes to horizontal-tb, which would make axis
+    // detection (iframe.js) treat a vertical book as horizontal and collapse
+    // its pages — one page-turn skips the whole chapter. Fall back to the
+    // body's writing-mode so the content's true axis is used. (columns() has
+    // a narrower workaround for the same case; this fixes it at the source.)
+    if (htmlMode.indexOf("vertical") !== 0) {
+      let body = this.content || (this.document && this.document.body);
+      if (body) {
+        let bodyMode = this.window.getComputedStyle(body)[WRITING_MODE] || "";
+        if (bodyMode.indexOf("vertical") === 0) {
+          return bodyMode;
+        }
+      }
+    }
+
+    return htmlMode;
   }
 
   /**
