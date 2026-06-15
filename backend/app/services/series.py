@@ -231,7 +231,9 @@ async def list_library_feed(
     offset: int = 0,
 ) -> tuple[list[dict], int]:
     """The collapsed library view: a single ordered, paginated feed where each
-    series collapses to one unit and series-less books stay individual.
+    series collapses to one unit, series-less books that share a work (different
+    editions/versions of the same book) collapse to one unit represented by the
+    work's primary edition, and everything else stays individual.
 
     Returns ``(items, total)`` where each item is one of:
       - ``{"type": "series", "series": SeriesOut}``
@@ -301,11 +303,14 @@ async def list_library_feed(
                     b.id AS book_id,
                     a.library_id AS library_id,
                     lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
+                    b.work_id AS work_id,
+                    (w.primary_book_id = b.id) AS is_primary,
                     coalesce(b.title, b.epub_title) AS display_title,
                     coalesce(b.calibre_added_at, b.created_at) AS added_at,
                     b.popularity_score AS popularity_score
                 FROM books b
                 JOIN accessible a ON a.book_id = b.id
+                LEFT JOIN works w ON w.id = b.work_id
                 {where}
             ),
             units AS (
@@ -325,12 +330,25 @@ async def list_library_feed(
                     'book' AS kind,
                     NULL::uuid AS library_id,
                     NULL::text AS series_key,
+                    (array_agg(book_id ORDER BY is_primary DESC, book_id))[1]
+                        AS book_id,
+                    max(display_title) AS ord_title,
+                    max(added_at) AS ord_added,
+                    max(popularity_score) AS ord_pop
+                FROM eligible
+                WHERE series_key IS NULL AND work_id IS NOT NULL
+                GROUP BY library_id, work_id
+                UNION ALL
+                SELECT
+                    'book' AS kind,
+                    NULL::uuid AS library_id,
+                    NULL::text AS series_key,
                     book_id,
                     display_title AS ord_title,
                     added_at AS ord_added,
                     popularity_score AS ord_pop
                 FROM eligible
-                WHERE series_key IS NULL
+                WHERE series_key IS NULL AND work_id IS NULL
             )
             SELECT kind, library_id, series_key, book_id,
                    count(*) OVER () AS total_count
