@@ -126,8 +126,10 @@
   let workSearchMode = $state<"add" | "create">("add");
   let workSearchQuery = $state("");
   let workSearchResults = $state<BookOut[]>([]);
+  let workSearchTotal = $state(0);
   let workSearching = $state(false);
   let workSearchTimeout: ReturnType<typeof setTimeout> | null = null;
+  const WORK_SEARCH_LIMIT = 20;
   let savingStatus = $state(false);
 
   // Offline download state (native only)
@@ -379,19 +381,22 @@
     if (workSearchTimeout) clearTimeout(workSearchTimeout);
     if (query.length < 2) {
       workSearchResults = [];
+      workSearchTotal = 0;
       workSearching = false;
       return;
     }
     workSearching = true;
     workSearchTimeout = setTimeout(async () => {
       try {
-        const res = await booksApi.search(query, 10);
+        const res = await booksApi.search(query, WORK_SEARCH_LIMIT);
         const editionIds = new Set(editions.map((e) => e.id));
         workSearchResults = res.items.filter(
           (b) => b.id !== bookId && !editionIds.has(b.id),
         );
+        workSearchTotal = res.total;
       } catch {
         workSearchResults = [];
+        workSearchTotal = 0;
       } finally {
         workSearching = false;
       }
@@ -400,9 +405,11 @@
 
   function openWorkSearch(mode: "add" | "create") {
     workSearchMode = mode;
-    workSearchQuery = "";
+    workSearchQuery = book?.display_title ?? book?.title ?? "";
     workSearchResults = [];
+    workSearchTotal = 0;
     showWorkSearchModal = true;
+    if (workSearchQuery) handleWorkSearch(workSearchQuery);
   }
 
   async function handleRemoveEdition(editionId: string) {
@@ -619,7 +626,9 @@
             class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
           >
             <BookOpen size={16} />
-            {m.book_start_reading()}
+            {interaction?.reading_status === "currently_reading"
+              ? m.book_continue_reading()
+              : m.book_start_reading()}
           </button>
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status ===
@@ -1024,7 +1033,9 @@
         class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
       >
         <BookOpen size={16} />
-        {m.book_start_reading()}
+        {interaction?.reading_status === "currently_reading"
+          ? m.book_continue_reading()
+          : m.book_start_reading()}
       </button>
       <button
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status ===
@@ -1371,6 +1382,7 @@
       showWorkSearchModal = false;
       workSearchQuery = "";
       workSearchResults = [];
+      workSearchTotal = 0;
     }}
     onkeydown={(e) => e.key === "Escape" && (showWorkSearchModal = false)}
   >
@@ -1403,6 +1415,7 @@
             onclick={() => {
               workSearchQuery = "";
               workSearchResults = [];
+              workSearchTotal = 0;
             }}
           >
             <X size={16} />
@@ -1415,7 +1428,7 @@
       </div>
 
       <!-- Results -->
-      <div class="max-h-[60vh] overflow-y-auto">
+      <div class="min-h-[240px] max-h-[60vh] overflow-y-auto">
         {#if workSearching}
           <div class="px-4 py-8 text-center text-muted-foreground text-sm">
             {m.work_searching()}
@@ -1454,6 +1467,13 @@
               </div>
             </button>
           {/each}
+          {#if workSearchTotal > WORK_SEARCH_LIMIT}
+            <p
+              class="px-4 py-3 text-center text-xs text-muted-foreground border-t border-border/50"
+            >
+              {m.work_search_more_results({ count: workSearchTotal })}
+            </p>
+          {/if}
         {/if}
       </div>
     </div>
