@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -10,6 +11,7 @@ from app.deps import get_current_user
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
+from app.routers.books import _get_book_with_access
 from app.routers.libraries import _get_accessible_library
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
@@ -241,6 +243,10 @@ async def add_book_to_shelf(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_owned_shelf(shelf_id, current_user, db)
+    # The book must exist and be accessible to this user — otherwise a
+    # nonexistent id 500s on the FK, and excluded users could pin books
+    # from libraries they can't see.
+    await _get_book_with_access(body.book_id, current_user, db)
     existing = await db.execute(
         select(BookshelfBook).where(
             BookshelfBook.bookshelf_id == shelf_id,
@@ -261,7 +267,12 @@ async def add_book_to_shelf(
         bookshelf_id=shelf_id, book_id=body.book_id, sort_order=sort_order
     )
     db.add(bb)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent double-add racing past the existence check above.
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Book already in shelf")
     return {"status": "added"}
 
 

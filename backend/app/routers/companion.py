@@ -15,9 +15,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal, get_db
 from app.deps import get_current_user
-from app.models.book import Book
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.user import User
+from app.routers.books import _get_book_with_access
 from app.schemas.companion import (
     CompanionConversationOut,
     CompanionConversationSummary,
@@ -108,13 +108,10 @@ async def send_companion_message(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> StreamingResponse:
     """Send a message to the AI reading companion and stream the response."""
-    # Verify book exists
-    result = await db.execute(select(Book).where(Book.id == book_id))
-    book = result.scalar_one_or_none()
-    if book is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Book not found"
-        )
+    # Verify book exists and the user's library access allows it — without
+    # this, a user excluded from a library could still chat about (and thus
+    # read content from) its books.
+    book = await _get_book_with_access(book_id, current_user, db)
 
     # Get or create conversation
     conversation = await get_or_create_conversation(
