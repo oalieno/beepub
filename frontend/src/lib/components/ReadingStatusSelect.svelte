@@ -59,7 +59,7 @@
     disabled={saving}
   >
     <Select.Trigger
-      class="w-full md:w-auto !h-10 rounded-full bg-white md:text-sm text-base justify-center md:justify-start {interaction?.reading_status ===
+      class="w-full md:w-auto !h-10 rounded-full bg-card md:text-sm text-base justify-center md:justify-start {interaction?.reading_status ===
       'read'
         ? 'text-green-600 border-green-600/30'
         : ''}"

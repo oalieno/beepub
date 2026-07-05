@@ -42,7 +42,7 @@
 {#if highlights.length === 0}
   <p
     class="text-sm {darkMode
-      ? 'text-gray-500'
+      ? 'text-ink-500'
       : 'text-muted-foreground'} py-4 text-center"
   >
     {m.highlight_empty()}
@@ -52,7 +52,7 @@
     {#each highlights as hl (hl.id)}
       <div
         class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start cursor-pointer {darkMode
-          ? 'hover:bg-gray-800'
+          ? 'hover:bg-ink-800'
           : 'hover:bg-accent'}"
         role="button"
         tabindex="0"
@@ -68,7 +68,7 @@
           {#if showBookTitle && bookTitles[hl.book_id]}
             <p
               class="text-xs font-medium mb-0.5 {darkMode
-                ? 'text-gray-400'
+                ? 'text-ink-400'
                 : 'text-muted-foreground'}"
             >
               {bookTitles[hl.book_id]}
@@ -76,7 +76,7 @@
           {/if}
           <p
             class="text-sm leading-snug {darkMode
-              ? 'text-gray-200'
+              ? 'text-ink-200'
               : 'text-foreground'}"
           >
             {truncate(hl.text)}
@@ -84,7 +84,7 @@
           {#if hl.note}
             <p
               class="text-xs mt-1 italic {darkMode
-                ? 'text-gray-500'
+                ? 'text-ink-500'
                 : 'text-muted-foreground'}"
             >
               {truncate(hl.note, 80)}
@@ -92,7 +92,7 @@
           {/if}
           <p
             class="text-[10px] mt-1 {darkMode
-              ? 'text-gray-600'
+              ? 'text-ink-600'
               : 'text-muted-foreground/60'}"
           >
             {formatDate(hl.created_at)}
@@ -102,7 +102,7 @@
           {#if onshare}
             <button
               class="p-2 rounded-md transition-all cursor-pointer {darkMode
-                ? 'text-gray-500 hover:text-gray-300 hover:bg-gray-800 active:bg-gray-700'
+                ? 'text-ink-500 hover:text-ink-300 hover:bg-ink-800 active:bg-ink-700'
                 : 'text-muted-foreground hover:text-foreground hover:bg-accent active:bg-accent/80'}"
               title={m.highlight_action_share()}
               onclick={(e) => {
@@ -116,7 +116,7 @@
           {#if ondelete}
             <button
               class="p-2 rounded-md transition-all cursor-pointer {darkMode
-                ? 'text-gray-500 hover:text-red-400 hover:bg-gray-800 active:bg-red-900/30'
+                ? 'text-ink-500 hover:text-red-400 hover:bg-ink-800 active:bg-red-900/30'
                 : 'text-muted-foreground hover:text-destructive hover:bg-accent active:bg-destructive/10'}"
               title={m.highlight_action_delete()}
               onclick={(e) => {
