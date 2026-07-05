@@ -678,7 +678,8 @@
       <SearchSidebar
         {darkMode}
         onselect={(cfi) => {
-          reader?.displayCfi(cfi);
+          reader?.displaySearchResult(cfi);
+          activeSidebar = null;
         }}
         onclose={() => (activeSidebar = null)}
         onsearch={(query, onResults, signal) =>

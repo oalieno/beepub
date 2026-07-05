@@ -1,3 +1,7 @@
+<script lang="ts" module>
+  type TocItem = { label: string; href: string; subitems?: TocItem[] };
+</script>
+
 <script lang="ts">
   import { X } from "@lucide/svelte";
   import { tick } from "svelte";
@@ -10,7 +14,7 @@
     onchapter,
     onclose,
   }: {
-    toc?: { label: string; href: string; subitems?: any[] }[];
+    toc?: TocItem[];
     darkMode?: boolean;
     currentHref?: string;
     onchapter?: (href: string) => void;
@@ -34,6 +38,38 @@
     }
   });
 </script>
+
+{#snippet tocLevel(items: TocItem[], depth: number)}
+  {#each items as item}
+    {@const active = isActive(item.href)}
+    <button
+      class="w-full text-left pr-3 rounded-lg transition-colors {depth === 0
+        ? 'py-2 text-sm'
+        : 'py-1.5 text-xs'} {active
+        ? darkMode
+          ? 'bg-ink-800 text-white font-medium'
+          : 'bg-accent text-foreground font-medium'
+        : darkMode
+          ? depth === 0
+            ? 'hover:bg-ink-800 text-ink-300'
+            : 'hover:bg-ink-800 text-ink-400'
+          : depth === 0
+            ? 'hover:bg-accent text-foreground'
+            : 'hover:bg-accent text-muted-foreground'}"
+      style="padding-left: {12 + depth * 16}px"
+      data-toc-active={active ? "" : undefined}
+      onclick={() => {
+        onchapter?.(item.href);
+        onclose?.();
+      }}
+    >
+      {item.label}
+    </button>
+    {#if item.subitems?.length}
+      {@render tocLevel(item.subitems, depth + 1)}
+    {/if}
+  {/each}
+{/snippet}
 
 <!-- Backdrop -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -87,46 +123,7 @@
       </p>
     {:else}
       <div class="flex flex-col gap-0.5">
-        {#each toc as item}
-          {@const active = isActive(item.href)}
-          <button
-            class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {active
-              ? darkMode
-                ? 'bg-ink-800 text-white font-medium'
-                : 'bg-accent text-foreground font-medium'
-              : darkMode
-                ? 'hover:bg-ink-800 text-ink-300'
-                : 'hover:bg-accent text-foreground'}"
-            data-toc-active={active ? "" : undefined}
-            onclick={() => {
-              onchapter?.(item.href);
-              onclose?.();
-            }}
-          >
-            {item.label}
-          </button>
-          {#if item.subitems}
-            {#each item.subitems as sub}
-              {@const subActive = isActive(sub.href)}
-              <button
-                class="w-full text-left pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors {subActive
-                  ? darkMode
-                    ? 'bg-ink-800 text-white font-medium'
-                    : 'bg-accent text-foreground font-medium'
-                  : darkMode
-                    ? 'hover:bg-ink-800 text-ink-400'
-                    : 'hover:bg-accent text-muted-foreground'}"
-                data-toc-active={subActive ? "" : undefined}
-                onclick={() => {
-                  onchapter?.(sub.href);
-                  onclose?.();
-                }}
-              >
-                {sub.label}
-              </button>
-            {/each}
-          {/if}
-        {/each}
+        {@render tocLevel(toc, 0)}
       </div>
     {/if}
   </div>

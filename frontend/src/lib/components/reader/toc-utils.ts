@@ -10,10 +10,38 @@ export function getSpineIndexForHref(epubBook: any, tocHref: string): number {
   return item?.index ?? -1;
 }
 
+/** Depth-first flatten of a TOC tree, any nesting depth. */
+function flattenToc(tocData: TocEntry[]): TocEntry[] {
+  const flat: TocEntry[] = [];
+  const walk = (items: TocEntry[]) => {
+    for (const item of items) {
+      flat.push(item);
+      if (item.subitems?.length) walk(item.subitems);
+    }
+  };
+  walk(tocData);
+  return flat;
+}
+
+/**
+ * Find the TOC label for a spine section href, searching all nesting depths.
+ * Returns null when no entry points into that file.
+ */
+export function findTocLabelForHref(
+  tocData: TocEntry[],
+  sectionHref: string,
+): string | null {
+  const base = sectionHref.split("#")[0];
+  for (const entry of flattenToc(tocData)) {
+    if (entry.href.split("#")[0] === base) return entry.label;
+  }
+  return null;
+}
+
 /**
  * Find the active TOC href for a given spine section index.
- * Flattens the TOC, sorts by spine position, and picks the last entry
- * whose spine index <= the current section. For same-file entries with
+ * Flattens the TOC (all depths), sorts by spine position, and picks the last
+ * entry whose spine index <= the current section. For same-file entries with
  * fragment anchors, refines by checking element positions in the DOM.
  */
 export function findActiveTocHref(
@@ -25,15 +53,9 @@ export function findActiveTocHref(
   if (!epubBook || tocData.length === 0) return "";
 
   const flat: { href: string; spineIndex: number }[] = [];
-  for (const item of tocData) {
+  for (const item of flattenToc(tocData)) {
     const si = getSpineIndexForHref(epubBook, item.href);
     if (si !== -1) flat.push({ href: item.href, spineIndex: si });
-    if (item.subitems) {
-      for (const sub of item.subitems) {
-        const ssi = getSpineIndexForHref(epubBook, sub.href);
-        if (ssi !== -1) flat.push({ href: sub.href, spineIndex: ssi });
-      }
-    }
   }
 
   flat.sort((a, b) => a.spineIndex - b.spineIndex);

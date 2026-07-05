@@ -16,7 +16,7 @@
   import { setupIOSTouchSelection } from "./ios-touch-selection";
   import { updateIllustrationOverlays } from "./illustration-overlays";
   import { prefetchSections } from "./image-prefetch";
-  import { findActiveTocHref } from "./toc-utils";
+  import { findActiveTocHref, findTocLabelForHref } from "./toc-utils";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -1077,6 +1077,7 @@
   onDestroy(() => {
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    if (flashTimer) clearTimeout(flashTimer);
     saveProgress(false);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     document.removeEventListener("keyup", handleKeyboard);
@@ -1304,6 +1305,40 @@
     return currentCfi;
   }
 
+  let flashCfi: string | null = null;
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Jump to a search result and briefly highlight the matched range so the
+   * reader can spot the hit on the page.
+   */
+  export async function displaySearchResult(cfi: string) {
+    restoringProgress = false;
+    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
+    if (waitingForCanonicalProgress) emitProgress(null);
+
+    clearFlashHighlight();
+    await rendition?.display(cfi);
+
+    flashCfi = cfi;
+    rendition?.annotations.highlight(cfi, {}, () => {}, "search-flash", {
+      fill: HIGHLIGHT_COLORS.orange,
+      "fill-opacity": "0.6",
+    });
+    flashTimer = setTimeout(clearFlashHighlight, 3000);
+  }
+
+  function clearFlashHighlight() {
+    if (flashTimer) {
+      clearTimeout(flashTimer);
+      flashTimer = null;
+    }
+    if (flashCfi) {
+      rendition?.annotations.remove(flashCfi, "highlight");
+      flashCfi = null;
+    }
+  }
+
   export function addHighlightAnnotation(
     cfiRange: string,
     color: string = "yellow",
@@ -1346,13 +1381,9 @@
         await section.load(epubBook.load.bind(epubBook));
         const matches = section.find(query);
         if (matches.length > 0) {
-          // Find section label from TOC
+          // Find section label from TOC (any nesting depth)
           const label =
-            tocData.find((t) => {
-              const tocHref = t.href.split("#")[0];
-              const sectionHref = section.href.split("#")[0];
-              return tocHref === sectionHref;
-            })?.label || `Section ${i + 1}`;
+            findTocLabelForHref(tocData, section.href) || `Section ${i + 1}`;
 
           for (const match of matches) {
             allResults.push({
