@@ -20,6 +20,7 @@ from app.routers import (
     companion,
     highlights,
     illustrations,
+    interactions,
     jobs,
     libraries,
     search,
@@ -93,6 +94,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(libraries.router)
 app.include_router(books.router)
+app.include_router(interactions.router)
 app.include_router(bookshelves.router)
 app.include_router(admin.router)
 app.include_router(admin.ai_router)

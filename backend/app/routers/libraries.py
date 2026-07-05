@@ -30,6 +30,22 @@ from app.services.series import build_series_out, list_library_feed, list_series
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
 
+def accessible_book_ids_select(user: User):
+    """SELECT of book ids in libraries the user can access.
+
+    The single source of truth for "which books can this user see" —
+    every list/search endpoint should build on this instead of
+    re-implementing the exclusion filter.
+    """
+    stmt = select(LibraryBook.book_id).join(
+        Library, Library.id == LibraryBook.library_id
+    )
+    cond = accessible_libraries_condition(user)
+    if cond is not True:
+        stmt = stmt.where(cond)
+    return stmt
+
+
 def accessible_libraries_condition(user: User):
     if user.role == UserRole.admin:
         return True  # no filter

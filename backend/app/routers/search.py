@@ -13,7 +13,6 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.book_embedding import BookEmbeddingChunk
-from app.models.library import Library, LibraryBook
 from app.models.user import User
 from app.services.embedding import EMBEDDING_PROMPT_QUERY, embed_text
 from app.services.settings import get_all_settings
@@ -28,15 +27,9 @@ router = APIRouter(prefix="/api/search", tags=["search"])
 
 def _accessible_book_ids_subquery(user: User):
     """Build a subquery of book IDs the user is allowed to access."""
-    from app.routers.libraries import accessible_libraries_condition
+    from app.routers.libraries import accessible_book_ids_select
 
-    stmt = select(LibraryBook.book_id).join(
-        Library, Library.id == LibraryBook.library_id
-    )
-    cond = accessible_libraries_condition(user)
-    if cond is not True:
-        stmt = stmt.where(cond)
-    return stmt.subquery()
+    return accessible_book_ids_select(user).subquery()
 
 
 # ---------------------------------------------------------------------------
