@@ -709,6 +709,7 @@
               </button>
             {:else}
               <button
+                aria-label={m.book_download_epub()}
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
                 onclick={handleDownload}
                 title={m.book_download_offline()}
@@ -1143,6 +1144,7 @@
         </a>
       {/if}
       <button
+        aria-label={m.book_more_actions()}
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"
         onclick={() => (showMobileActions = true)}
       >
@@ -1429,6 +1431,7 @@
         />
         {#if workSearchQuery}
           <button
+            aria-label={m.common_clear()}
             class="text-muted-foreground hover:text-foreground"
             onclick={() => {
               workSearchQuery = "";

@@ -105,6 +105,7 @@
           class="rounded-xl h-11 pr-10"
         />
         <button
+          aria-label={m.common_toggle_password()}
           type="button"
           onclick={() => (showPassword = !showPassword)}
           class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
@@ -230,6 +231,7 @@
                     class="rounded-xl h-11 pr-10"
                   />
                   <button
+                    aria-label={m.common_toggle_password()}
                     type="button"
                     onclick={() => (showPassword = !showPassword)}
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"

@@ -176,6 +176,7 @@
               </p>
               <div class="flex items-center justify-center gap-4">
                 <button
+                  aria-label={m.streak_decrease_goal()}
                   class="size-8 rounded-full bg-secondary hover:bg-secondary/70 text-secondary-foreground flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30"
                   onclick={() => stepGoal(-1)}
                   disabled={saving || pendingMinutes <= 1}
@@ -188,6 +189,7 @@
                   {formatGoalDisplay(pendingMinutes)}
                 </span>
                 <button
+                  aria-label={m.streak_increase_goal()}
                   class="size-8 rounded-full bg-secondary hover:bg-secondary/70 text-secondary-foreground flex items-center justify-center transition-colors cursor-pointer disabled:opacity-30"
                   onclick={() => stepGoal(1)}
                   disabled={saving || pendingMinutes >= 480}

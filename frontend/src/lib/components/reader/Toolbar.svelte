@@ -190,12 +190,14 @@
   <div class="flex items-center gap-1">
     <button
       class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+      aria-label={isRtl ? m.reader_next_page() : m.reader_prev_page()}
       onclick={() => (isRtl ? onnext?.() : onprev?.())}
     >
       <ChevronLeft size={20} />
     </button>
     <button
       class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+      aria-label={isRtl ? m.reader_prev_page() : m.reader_next_page()}
       onclick={() => (isRtl ? onprev?.() : onnext?.())}
     >
       <ChevronRight size={20} />

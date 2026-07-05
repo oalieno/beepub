@@ -104,6 +104,7 @@
       {m.reader_toc()}
     </p>
     <button
+      aria-label={m.common_close()}
       class="p-1 rounded-md transition-colors {darkMode
         ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"

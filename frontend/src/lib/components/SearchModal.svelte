@@ -10,6 +10,7 @@
   } from "$lib/api/search";
   import type { BookOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
+  import * as Dialog from "$lib/components/ui/dialog";
   import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
@@ -181,9 +182,8 @@
       }
     } else if (e.key === "Enter" && selectedIndex < 0) {
       handleSearchSubmit();
-    } else if (e.key === "Escape") {
-      open = false;
     }
+    // Escape is handled by the dialog primitive.
   }
 
   $effect(() => {
@@ -199,20 +199,14 @@
   });
 </script>
 
-{#if open}
-  <!-- Backdrop -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
-    onclick={() => (open = false)}
+<Dialog.Root bind:open>
+  <Dialog.Content
+    class="top-[12vh] translate-y-0 max-w-xl sm:max-w-xl bg-card rounded-2xl p-0 gap-0 block border-border/50 overflow-hidden"
+    showCloseButton={false}
     onkeydown={handleKeydown}
   >
-    <!-- Modal -->
-    <div
-      role="presentation"
-      class="max-w-xl mt-[12vh] mx-4 sm:mx-auto bg-card rounded-2xl shadow-2xl border border-border/50 overflow-hidden"
-      onclick={(e) => e.stopPropagation()}
-    >
+    <Dialog.Title class="sr-only">{m.nav_search()}</Dialog.Title>
+    <div>
       <!-- Tab toggle -->
       <div
         class="flex border-b border-border/50"
@@ -264,7 +258,6 @@
           bind:this={inputEl}
           bind:value={query}
           oninput={handleInput}
-          onkeydown={handleKeydown}
           placeholder={activeTab === "books"
             ? m.search_placeholder_books()
             : activeTab === "content"
@@ -275,6 +268,7 @@
         {#if query}
           <button
             class="text-muted-foreground hover:text-foreground"
+            aria-label={m.common_clear()}
             onclick={() => {
               query = "";
               books = createSearchState();
@@ -298,6 +292,8 @@
         {#if query.trim()}
           <div
             class="max-h-[60vh] overflow-y-auto"
+            role="tabpanel"
+            tabindex="0"
             onmouseleave={() => (selectedIndex = -1)}
           >
             {#if books.loading && books.results.length === 0}
@@ -556,5 +552,5 @@
         {/if}
       {/if}
     </div>
-  </div>
-{/if}
+  </Dialog.Content>
+</Dialog.Root>

@@ -405,6 +405,7 @@
               class="pr-10"
             />
             <button
+              aria-label={m.common_toggle_password()}
               type="button"
               class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
               onclick={() => (showCurrentPw = !showCurrentPw)}
@@ -430,6 +431,7 @@
               class="pr-10"
             />
             <button
+              aria-label={m.common_toggle_password()}
               type="button"
               class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
               onclick={() => (showNewPw = !showNewPw)}

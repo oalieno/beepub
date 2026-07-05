@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   let {
     src,
@@ -189,6 +190,7 @@
 
   <!-- Close button -->
   <button
+    aria-label={m.common_close()}
     class="absolute top-4 right-4 z-10 p-2 rounded-full bg-black/50 text-white/80 hover:text-white transition-colors"
     onclick={() => onclose?.()}
   >

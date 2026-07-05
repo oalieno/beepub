@@ -56,6 +56,7 @@
   >
     <!-- Close button -->
     <button
+      aria-label={m.common_close()}
       class="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-colors {darkMode
         ? 'bg-ink-800/80 text-ink-400 hover:text-ink-200'
         : 'bg-white/80 text-muted-foreground hover:text-foreground'}"

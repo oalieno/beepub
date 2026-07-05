@@ -128,6 +128,7 @@
 
   <div class="w-px h-4 bg-border"></div>
   <button
+    aria-label={m.common_close()}
     class="text-muted-foreground hover:text-foreground transition-colors p-0.5"
     onclick={() => onclose?.()}
   >

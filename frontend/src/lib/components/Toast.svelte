@@ -1,5 +1,6 @@
 <script lang="ts">
   import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import { CircleCheck, CircleX, Info, TriangleAlert, X } from "@lucide/svelte";
   import type { ToastType } from "$lib/stores/toast";
 
@@ -42,6 +43,7 @@
         </button>
       {/if}
       <button
+        aria-label={m.common_close()}
         class="flex-shrink-0 opacity-70 hover:opacity-100"
         onclick={() => toastStore.remove(toast.id)}
       >
