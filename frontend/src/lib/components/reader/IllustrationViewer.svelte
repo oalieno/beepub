@@ -49,7 +49,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
-      ? 'bg-gray-900'
+      ? 'bg-ink-900'
       : 'bg-card'}"
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => e.stopPropagation()}
@@ -57,7 +57,7 @@
     <!-- Close button -->
     <button
       class="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-colors {darkMode
-        ? 'bg-gray-800/80 text-gray-400 hover:text-gray-200'
+        ? 'bg-ink-800/80 text-ink-400 hover:text-ink-200'
         : 'bg-white/80 text-muted-foreground hover:text-foreground'}"
       onclick={() => onclose?.()}
     >
@@ -89,7 +89,7 @@
         <div class="flex-1"></div>
         <button
           class="flex items-center gap-1 text-xs transition-colors {darkMode
-            ? 'text-gray-500 hover:text-gray-300'
+            ? 'text-ink-500 hover:text-ink-300'
             : 'text-muted-foreground hover:text-foreground'}"
           onclick={() => (showText = !showText)}
         >
@@ -106,7 +106,7 @@
       {#if showText}
         <p
           class="text-sm leading-relaxed {darkMode
-            ? 'text-gray-300'
+            ? 'text-ink-300'
             : 'text-foreground'}"
         >
           {illustration.text}
@@ -114,7 +114,7 @@
         {#if illustration.custom_prompt}
           <p
             class="text-xs italic {darkMode
-              ? 'text-gray-500'
+              ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
             Prompt: {illustration.custom_prompt}

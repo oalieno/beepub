@@ -1,27 +1,37 @@
 <script lang="ts">
-  import { Minus, Plus, Sun, Moon } from "@lucide/svelte";
+  import { Minus, Plus, Sun, Moon, CircleHelp } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
     open = $bindable(false),
     fontFamily = "serif",
     fontSize = 16,
+    lineHeight = 1.8,
+    pageMargin = 32,
     darkMode = false,
     isImageBook = false,
     onfontToggle,
     onfontIncrease,
     onfontDecrease,
     onthemeToggle,
+    onlineHeightChange,
+    onmarginChange,
+    onhelp,
   }: {
     open?: boolean;
     fontFamily?: string;
     fontSize?: number;
+    lineHeight?: number;
+    pageMargin?: number;
     darkMode?: boolean;
     isImageBook?: boolean;
     onfontToggle?: () => void;
     onfontIncrease?: () => void;
     onfontDecrease?: () => void;
     onthemeToggle?: () => void;
+    onlineHeightChange?: (value: number) => void;
+    onmarginChange?: (value: number) => void;
+    onhelp?: () => void;
   } = $props();
 
   function close() {
@@ -33,31 +43,41 @@
   }
 
   const labelClass = $derived(
-    darkMode ? "text-gray-400" : "text-muted-foreground",
+    darkMode ? "text-ink-400" : "text-muted-foreground",
   );
-  const textClass = $derived(darkMode ? "text-gray-200" : "text-foreground");
+  const textClass = $derived(darkMode ? "text-ink-200" : "text-foreground");
   const btnClass = $derived(
     darkMode
-      ? "border-gray-700 text-gray-300 hover:bg-gray-800"
+      ? "border-ink-700 text-ink-300 hover:bg-ink-800"
       : "border-border text-foreground hover:bg-secondary",
   );
   const activeBtnClass = $derived(
     darkMode
-      ? "bg-gray-700 text-gray-100 border-gray-600"
+      ? "bg-ink-700 text-ink-100 border-ink-600"
       : "bg-foreground text-background border-foreground",
   );
   const inactiveBtnClass = $derived(
     darkMode
-      ? "border-gray-700 text-gray-400 hover:bg-gray-800"
+      ? "border-ink-700 text-ink-400 hover:bg-ink-800"
       : "border-border text-muted-foreground hover:bg-secondary",
   );
+  const lineHeightOptions = [
+    { value: 1.5, label: m.reader_line_compact },
+    { value: 1.8, label: m.reader_line_normal },
+    { value: 2.2, label: m.reader_line_relaxed },
+  ];
+  const marginOptions = [
+    { value: 16, label: m.reader_margin_narrow },
+    { value: 32, label: m.reader_margin_normal },
+    { value: 56, label: m.reader_margin_wide },
+  ];
 </script>
 
 <svelte:window onkeydown={open ? handleKeydown : undefined} />
 
 {#if open}
   <div
-    class="fixed inset-0 z-50 md:hidden"
+    class="fixed inset-0 z-50"
     role="dialog"
     aria-modal="true"
     aria-label={m.reader_settings_title()}
@@ -69,21 +89,21 @@
     ></button>
 
     <div
-      class="absolute bottom-0 left-0 right-0 rounded-t-2xl shadow-2xl animate-slide-up {darkMode
-        ? 'bg-gray-900'
+      class="absolute bottom-0 left-0 right-0 rounded-t-2xl shadow-2xl animate-slide-up md:bottom-8 md:left-1/2 md:right-auto md:w-[400px] md:-translate-x-1/2 md:rounded-2xl {darkMode
+        ? 'bg-ink-900'
         : 'bg-card'}"
       style="padding-bottom: env(safe-area-inset-bottom, 0px);"
     >
       <!-- Drag handle -->
-      <div class="flex justify-center pt-3 pb-2">
+      <div class="flex justify-center pt-3 pb-2 md:hidden">
         <div
           class="w-9 h-1 rounded-full {darkMode
-            ? 'bg-gray-700'
+            ? 'bg-ink-700'
             : 'bg-muted-foreground/20'}"
         ></div>
       </div>
 
-      <div class="px-6 pb-6 space-y-5">
+      <div class="px-6 pb-6 md:pt-6 space-y-5">
         {#if !isImageBook}
           <!-- Font size -->
           <div class="flex items-center justify-between">
@@ -135,6 +155,41 @@
               </button>
             </div>
           </div>
+          <!-- Line spacing -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm {labelClass}">{m.reader_line_height()}</span>
+            <div class="flex gap-1">
+              {#each lineHeightOptions as option}
+                <button
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {lineHeight ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onlineHeightChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+
+          <!-- Margins -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm {labelClass}">{m.reader_margin()}</span>
+            <div class="flex gap-1">
+              {#each marginOptions as option}
+                <button
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageMargin ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onmarginChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
         {/if}
 
         <!-- Theme -->
@@ -165,6 +220,18 @@
             </button>
           </div>
         </div>
+
+        <!-- Gesture help -->
+        <button
+          class="flex items-center gap-2 text-sm {labelClass}"
+          onclick={() => {
+            close();
+            onhelp?.();
+          }}
+        >
+          <CircleHelp size={16} />
+          {m.reader_gesture_help()}
+        </button>
       </div>
     </div>
   </div>

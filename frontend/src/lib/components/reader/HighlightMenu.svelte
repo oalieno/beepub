@@ -7,6 +7,7 @@
     Share2,
     Highlighter,
     MessageCircle,
+    NotebookPen,
   } from "@lucide/svelte";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
@@ -15,6 +16,7 @@
     hasExisting = false,
     offline = false,
     onhighlight,
+    onnote,
     onremove,
     onillustrate,
     oncompanion,
@@ -25,6 +27,7 @@
     hasExisting?: boolean;
     offline?: boolean;
     onhighlight?: () => void;
+    onnote?: () => void;
     onremove?: () => void;
     onillustrate?: () => void;
     oncompanion?: () => void;
@@ -54,6 +57,15 @@
     onclick={() => oncopy?.()}
   >
     <Copy size={14} />
+  </button>
+
+  <div class="w-px h-4 bg-border"></div>
+  <button
+    class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
+    title={m.highlight_action_note()}
+    onclick={() => onnote?.()}
+  >
+    <NotebookPen size={14} />
   </button>
 
   {#if hasExisting}

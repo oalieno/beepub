@@ -9,6 +9,7 @@
     Settings,
   } from "@lucide/svelte";
   import { toastStore } from "$lib/stores/toast";
+  import ProgressScrubber from "./ProgressScrubber.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
@@ -18,6 +19,8 @@
     isImageBook = false,
     highlightCount = 0,
     offline = false,
+    canSeek = false,
+    onseek,
     onprev,
     onnext,
     ontoc,
@@ -32,6 +35,8 @@
     isImageBook?: boolean;
     highlightCount?: number;
     offline?: boolean;
+    canSeek?: boolean;
+    onseek?: (percentage: number) => void;
     onprev?: () => void;
     onnext?: () => void;
     ontoc?: () => void;
@@ -43,20 +48,20 @@
 
   const btnClass = $derived(
     darkMode
-      ? "text-gray-400 hover:bg-gray-800 hover:text-gray-200"
+      ? "text-ink-400 hover:bg-ink-800 hover:text-ink-200"
       : "text-muted-foreground hover:bg-secondary hover:text-foreground",
   );
 
   const actionBtnClass = $derived(
     darkMode
-      ? "text-gray-400 hover:text-gray-200"
+      ? "text-ink-400 hover:text-ink-200"
       : "text-muted-foreground hover:text-foreground",
   );
 </script>
 
 <div
   class="md:hidden fixed bottom-0 left-0 right-0 z-30 {darkMode
-    ? 'bg-gray-900 border-t border-gray-800'
+    ? 'bg-ink-900 border-t border-ink-800'
     : 'bg-background border-t border-border/50'}"
   style="padding-bottom: max(0.5rem, env(safe-area-inset-bottom, 0px));"
   role="toolbar"
@@ -71,15 +76,25 @@
     >
       <ChevronLeft size={20} />
     </button>
-    {#if percentage != null}
+    {#if percentage != null && canSeek}
+      <div class="flex-1">
+        <ProgressScrubber
+          {percentage}
+          {darkMode}
+          {isRtl}
+          ariaLabel={m.reader_progress()}
+          {onseek}
+        />
+      </div>
+    {:else if percentage != null}
       <div
         class="flex-1 h-1 rounded-full overflow-hidden {darkMode
-          ? 'bg-gray-800'
+          ? 'bg-ink-800'
           : 'bg-secondary'}"
       >
         <div
           class="h-full rounded-full transition-all duration-300 {darkMode
-            ? 'bg-gray-500'
+            ? 'bg-ink-500'
             : 'bg-primary'}"
           style="width: {percentage}%;"
         ></div>

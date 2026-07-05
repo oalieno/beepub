@@ -59,8 +59,8 @@
 >
   <div
     class="footnote-content rounded-lg shadow-2xl p-8 leading-relaxed {darkMode
-      ? 'bg-gray-800 text-gray-200 border-2 border-gray-500'
-      : 'bg-white text-gray-900 border-2 border-black'}"
+      ? 'bg-ink-800 text-ink-200 border-2 border-ink-500'
+      : 'bg-white text-ink-900 border-2 border-black'}"
     style="width: 50%; height: 50%; overflow-y: auto; font-size: {fontSize}px;{isRtl
       ? ' writing-mode: vertical-rl; max-height: none; overflow-x: auto; overflow-y: hidden;'
       : ''}"

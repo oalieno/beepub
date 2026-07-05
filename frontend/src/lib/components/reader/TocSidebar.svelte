@@ -48,7 +48,7 @@
 <!-- Sidebar (left) -->
 <div
   class="fixed left-0 top-0 bottom-0 z-50 w-80 max-w-[85vw] shadow-2xl flex flex-col {darkMode
-    ? 'bg-gray-900 border-r border-gray-800'
+    ? 'bg-ink-900 border-r border-ink-800'
     : 'bg-card border-r border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
@@ -57,19 +57,19 @@
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
-      ? 'border-gray-800'
+      ? 'border-ink-800'
       : 'border-border'}"
   >
     <p
       class="text-sm font-semibold {darkMode
-        ? 'text-gray-200'
+        ? 'text-ink-200'
         : 'text-foreground'}"
     >
       {m.reader_toc()}
     </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
-        ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+        ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
       onclick={() => onclose?.()}
     >
@@ -80,7 +80,7 @@
     {#if toc.length === 0}
       <p
         class="text-sm {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'} py-4 text-center"
       >
         {m.reader_toc_empty()}
@@ -92,10 +92,10 @@
           <button
             class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {active
               ? darkMode
-                ? 'bg-gray-800 text-white font-medium'
+                ? 'bg-ink-800 text-white font-medium'
                 : 'bg-accent text-foreground font-medium'
               : darkMode
-                ? 'hover:bg-gray-800 text-gray-300'
+                ? 'hover:bg-ink-800 text-ink-300'
                 : 'hover:bg-accent text-foreground'}"
             data-toc-active={active ? "" : undefined}
             onclick={() => {
@@ -111,10 +111,10 @@
               <button
                 class="w-full text-left pl-7 pr-3 py-1.5 rounded-lg text-xs transition-colors {subActive
                   ? darkMode
-                    ? 'bg-gray-800 text-white font-medium'
+                    ? 'bg-ink-800 text-white font-medium'
                     : 'bg-accent text-foreground font-medium'
                   : darkMode
-                    ? 'hover:bg-gray-800 text-gray-400'
+                    ? 'hover:bg-ink-800 text-ink-400'
                     : 'hover:bg-accent text-muted-foreground'}"
                 data-toc-active={subActive ? "" : undefined}
                 onclick={() => {

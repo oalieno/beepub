@@ -3,9 +3,14 @@
   import { booksApi } from "$lib/api/books";
   import { apiBase, getAuthHeader } from "$lib/api/client";
   import { isNative } from "$lib/platform";
+  import {
+    getCachedLocations,
+    setCachedLocations,
+  } from "$lib/services/locationsCache";
   import { toastStore } from "$lib/stores/toast";
   import { isBookDownloaded, readLocalBook } from "$lib/services/offline";
   import HighlightMenu from "./HighlightMenu.svelte";
+  import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
   import ImageViewer from "./ImageViewer.svelte";
   import FootnotePopup from "./FootnotePopup.svelte";
   import { setupIOSTouchSelection } from "./ios-touch-selection";
@@ -17,8 +22,11 @@
 
   let {
     bookId,
+    initialCfi = null,
     fontFamily = "serif",
     fontSize = 16,
+    lineHeight = 1.8,
+    pageMargin = 32,
     darkMode = false,
     isImageBook = false,
     offline = false,
@@ -33,14 +41,19 @@
     onshare,
     onhrefchange,
     onready,
+    onerror,
+    onlocationsready,
     oncompanion,
     ontap,
     onatend,
     onbookend,
   }: {
     bookId: string;
+    initialCfi?: string | null;
     fontFamily?: string;
     fontSize?: number;
+    lineHeight?: number;
+    pageMargin?: number;
     darkMode?: boolean;
     isImageBook?: boolean;
     offline?: boolean;
@@ -55,6 +68,8 @@
     onshare?: (highlight: HighlightOut) => void;
     onhrefchange?: (href: string) => void;
     onready?: () => void;
+    onerror?: (error: Error) => void;
+    onlocationsready?: () => void;
     oncompanion?: (detail: { cfiRange: string; text: string }) => void;
     ontap?: () => void;
     onatend?: () => void;
@@ -305,8 +320,22 @@
     generatingLocations = true;
     try {
       await epubBook.ready;
-      await epubBook.locations.generate(1600);
+
+      // Generating locations parses every spine section (slow for large
+      // books), but the result only depends on the book file — cache it.
+      const LOCATION_BREAK = 1600;
+      const fingerprint = `${epubBook.packaging?.uniqueIdentifier ?? ""}:${
+        epubBook.spine?.spineItems?.length ?? 0
+      }:${LOCATION_BREAK}`;
+      const cached = await getCachedLocations(bookId);
+      if (cached && cached.fingerprint === fingerprint) {
+        epubBook.locations.load(cached.locations);
+      } else {
+        await epubBook.locations.generate(LOCATION_BREAK);
+        setCachedLocations(bookId, fingerprint, epubBook.locations.save());
+      }
       locationsGenerated = true;
+      onlocationsready?.();
       if (lastLocation && currentCfi && !restoringProgress) {
         const progress = calculateProgress(lastLocation);
         currentPage = progress.currentPage;
@@ -340,7 +369,16 @@
     return findActiveTocHref(epubBook, rendition, tocData, sectionIndex);
   }
 
-  onMount(async () => {
+  onMount(() => {
+    // Surface any failure in the load pipeline (corrupt file, 404/500 on
+    // content, render error) instead of leaving the loading spinner forever.
+    loadBook().catch((err) => {
+      console.error("Failed to load EPUB:", err);
+      onerror?.(err instanceof Error ? err : new Error(String(err)));
+    });
+  });
+
+  async function loadBook() {
     const Epub = (await import("$lib/epubjs/epub.js")).default;
 
     // Check for offline copy first (native only)
@@ -892,7 +930,17 @@
       }
     }
     try {
-      if (savedProgress?.cfi) {
+      if (initialCfi) {
+        // Explicit jump target (e.g. a highlight clicked on the detail
+        // page) takes precedence over saved progress.
+        waitingForCanonicalProgress = !isImageBook;
+        emitProgress(null);
+        restoringProgress = true;
+        await rendition.display(initialCfi);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        restoringProgress = false;
+        rendition.reportLocation?.();
+      } else if (savedProgress?.cfi) {
         if (savedProgress.percentage != null) {
           currentPercentage = savedProgress.percentage;
         }
@@ -987,21 +1035,23 @@
     applyAllIllustrations();
 
     // Get book title & TOC
-    epubBook.loaded.metadata.then(
-      (meta: { title?: string; direction?: string }) => {
+    epubBook.loaded.metadata
+      .then((meta: { title?: string; direction?: string }) => {
         if (meta.title) ontitle?.(meta.title);
         if (meta.direction === "rtl") {
           isRtl = true;
           ondirection?.(true);
         }
-      },
-    );
-    epubBook.loaded.navigation.then(
-      (nav: { toc: { label: string; href: string; subitems?: any[] }[] }) => {
-        tocData = nav.toc;
-        ontoc?.(nav.toc);
-      },
-    );
+      })
+      .catch(() => {});
+    epubBook.loaded.navigation
+      .then(
+        (nav: { toc: { label: string; href: string; subitems?: any[] }[] }) => {
+          tocData = nav.toc;
+          ontoc?.(nav.toc);
+        },
+      )
+      .catch(() => {});
 
     // Save progress every 30s as backup (without tracking reading activity)
     const PROGRESS_SAVE_INTERVAL_MS = 30000;
@@ -1022,7 +1072,7 @@
     document.addEventListener("visibilitychange", handleVisibility);
 
     onready?.();
-  });
+  }
 
   onDestroy(() => {
     if (progressTimer) clearInterval(progressTimer);
@@ -1140,11 +1190,11 @@
       body: {
         "font-family": fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS,
         "font-size": `${fontSize}px !important`,
-        "line-height": "1.8",
+        "line-height": `${lineHeight}`,
         "-webkit-text-size-adjust": "100%",
         "text-size-adjust": "100%",
-        color: darkMode ? "#e5e7eb" : "#1a1a1a",
-        background: darkMode ? "#111827" : "#ffffff",
+        color: darkMode ? "#ece5da" : "#1a1a1a",
+        background: darkMode ? "#171310" : "#ffffff",
       },
       // Reading gutter only on reflowable pages. Fixed-layout pages
       // (marked beepub-pre-paginated by epub.js fit()) need the full
@@ -1153,7 +1203,7 @@
       // constant now that the root font-size (and thus rem) tracks the
       // user's setting.
       "body:not(.beepub-pre-paginated)": {
-        padding: "32px !important",
+        padding: `${pageMargin}px !important`,
       },
       "::selection": {
         background: darkMode
@@ -1234,6 +1284,13 @@
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(href);
+  }
+
+  export async function displayPercentage(pct: number) {
+    if (!locationsGenerated || !epubBook?.locations || !rendition) return;
+    const fraction = Math.min(100, Math.max(0, pct)) / 100;
+    const cfi = epubBook.locations.cfiFromPercentage(fraction);
+    if (cfi) await rendition.display(cfi);
   }
 
   export function displayCfi(cfi: string) {
@@ -1328,15 +1385,17 @@
   $effect(() => {
     fontFamily;
     fontSize;
+    lineHeight;
+    pageMargin;
     darkMode;
     if (rendition) {
       applyTheme();
     }
   });
 
-  async function handleHighlight() {
+  async function handleHighlight(): Promise<HighlightOut | null> {
     dismissMenu();
-    if (!selectedCfi || !selectedText) return;
+    if (!selectedCfi || !selectedText) return null;
 
     try {
       const created = await booksApi.createHighlight(bookId, {
@@ -1352,6 +1411,39 @@
       });
       onhighlightschange?.(highlights);
       toastStore.success(m.highlight_saved());
+      return created;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+      return null;
+    }
+  }
+
+  // Note editing
+  let noteEditorHighlight = $state<HighlightOut | null>(null);
+
+  async function handleNote() {
+    if (existingHighlight) {
+      dismissMenu();
+      noteEditorHighlight = existingHighlight;
+      return;
+    }
+    // New selection: create the highlight first, then attach the note.
+    const created = await handleHighlight();
+    if (created) noteEditorHighlight = created;
+  }
+
+  async function handleNoteSave(note: string) {
+    const target = noteEditorHighlight;
+    if (!target) return;
+    try {
+      // Empty string clears the note (backend excludes only None).
+      const updated = await booksApi.updateHighlight(bookId, target.id, {
+        note,
+      });
+      highlights = highlights.map((h) => (h.id === updated.id ? updated : h));
+      onhighlightschange?.(highlights);
+      toastStore.success(m.highlight_note_saved());
+      noteEditorHighlight = null;
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -1403,15 +1495,13 @@
 
 <div
   class="relative w-full h-full overflow-hidden touch-manipulation {darkMode
-    ? 'bg-gray-900'
+    ? 'bg-ink-900'
     : 'bg-white'}"
   style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
 >
   <div
     bind:this={container}
-    class="w-full h-full overflow-hidden {darkMode
-      ? 'bg-gray-900'
-      : 'bg-white'}"
+    class="w-full h-full overflow-hidden {darkMode ? 'bg-ink-900' : 'bg-white'}"
   ></div>
 
   <button
@@ -1437,6 +1527,7 @@
         hasExisting={!!existingHighlight}
         {offline}
         onhighlight={handleHighlight}
+        onnote={handleNote}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
         oncompanion={handleCompanion}
@@ -1445,6 +1536,16 @@
         onclose={dismissMenu}
       />
     </div>
+  {/if}
+
+  {#if noteEditorHighlight}
+    <HighlightNoteEditor
+      note={noteEditorHighlight.note ?? ""}
+      text={noteEditorHighlight.text}
+      {darkMode}
+      onsave={handleNoteSave}
+      onclose={() => (noteEditorHighlight = null)}
+    />
   {/if}
 
   {#if zoomImageSrc}

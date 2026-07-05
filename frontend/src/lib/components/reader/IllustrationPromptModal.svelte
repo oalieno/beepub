@@ -137,7 +137,7 @@
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
-      ? 'bg-gray-900 border border-gray-700'
+      ? 'bg-ink-900 border border-ink-700'
       : 'bg-card border border-border'}"
     onclick={(e) => e.stopPropagation()}
     onkeydown={(e) => e.stopPropagation()}
@@ -145,7 +145,7 @@
     <!-- Header -->
     <div
       class="flex items-center justify-between px-5 py-4 border-b {darkMode
-        ? 'border-gray-800'
+        ? 'border-ink-800'
         : 'border-border'}"
     >
       <div class="flex items-center gap-2">
@@ -155,7 +155,7 @@
         />
         <h2
           class="text-sm font-semibold {darkMode
-            ? 'text-gray-200'
+            ? 'text-ink-200'
             : 'text-foreground'}"
         >
           {m.illustration_title()}
@@ -163,7 +163,7 @@
       </div>
       <button
         class="p-1 rounded-md transition-colors {darkMode
-          ? 'text-gray-400 hover:bg-gray-800'
+          ? 'text-ink-400 hover:bg-ink-800'
           : 'text-muted-foreground hover:bg-accent'}"
         onclick={() => onclose?.()}
       >
@@ -178,18 +178,18 @@
       >
         <div
           class="w-12 h-12 rounded-full flex items-center justify-center {darkMode
-            ? 'bg-gray-800'
+            ? 'bg-ink-800'
             : 'bg-muted'}"
         >
           <Sparkles
             size={24}
-            class={darkMode ? "text-gray-500" : "text-muted-foreground/50"}
+            class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
           />
         </div>
         <div class="space-y-2">
           <p
             class="text-sm font-medium {darkMode
-              ? 'text-gray-300'
+              ? 'text-ink-300'
               : 'text-foreground'}"
           >
             {m.illustration_not_configured()}
@@ -197,7 +197,7 @@
           {#if isAdmin}
             <p
               class="text-xs {darkMode
-                ? 'text-gray-500'
+                ? 'text-ink-500'
                 : 'text-muted-foreground'}"
             >
               {m.companion_admin_setup()}
@@ -214,7 +214,7 @@
           {:else}
             <p
               class="text-xs {darkMode
-                ? 'text-gray-500'
+                ? 'text-ink-500'
                 : 'text-muted-foreground'}"
             >
               {m.companion_user_msg()}
@@ -225,17 +225,17 @@
     {:else}
       <div class="px-5 py-4 space-y-4">
         <!-- Selected text preview -->
-        <div class="rounded-lg p-3 {darkMode ? 'bg-gray-800' : 'bg-muted'}">
+        <div class="rounded-lg p-3 {darkMode ? 'bg-ink-800' : 'bg-muted'}">
           <p
             class="text-[10px] uppercase tracking-wider mb-1 {darkMode
-              ? 'text-gray-500'
+              ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
             {m.illustration_selected_text()}
           </p>
           <p
             class="text-sm leading-relaxed {darkMode
-              ? 'text-gray-300'
+              ? 'text-ink-300'
               : 'text-foreground'} line-clamp-4"
           >
             {text}
@@ -246,7 +246,7 @@
         <div>
           <p
             class="text-xs font-medium mb-2 {darkMode
-              ? 'text-gray-400'
+              ? 'text-ink-400'
               : 'text-muted-foreground'}"
           >
             {m.illustration_choose_style()}
@@ -260,7 +260,7 @@
                     ? 'border-purple-500 bg-purple-500/10 text-purple-300'
                     : 'border-purple-500 bg-purple-50 text-purple-700'
                   : darkMode
-                    ? 'border-gray-700 hover:border-gray-600 text-gray-300'
+                    ? 'border-ink-700 hover:border-ink-600 text-ink-300'
                     : 'border-border hover:border-foreground/20 text-foreground'}"
                 onclick={() => selectStyle(style.key)}
               >
@@ -281,7 +281,7 @@
                 ? 'text-purple-400'
                 : 'text-purple-600'
               : darkMode
-                ? 'text-gray-500 hover:text-gray-400'
+                ? 'text-ink-500 hover:text-ink-400'
                 : 'text-muted-foreground hover:text-foreground'}"
             onclick={toggleRefs}
           >
@@ -303,14 +303,14 @@
           {#if showRefs}
             <div
               class="space-y-3 rounded-lg border p-3 {darkMode
-                ? 'border-gray-700 bg-gray-800/50'
+                ? 'border-ink-700 bg-ink-800/50'
                 : 'border-border bg-muted/50'}"
             >
               <!-- Book images -->
               <div>
                 <p
                   class="text-[10px] uppercase tracking-wider mb-2 {darkMode
-                    ? 'text-gray-500'
+                    ? 'text-ink-500'
                     : 'text-muted-foreground'}"
                 >
                   {m.illustration_book_images()}
@@ -318,7 +318,7 @@
                 {#if loadingEpubImages}
                   <div
                     class="flex items-center gap-2 py-4 justify-center {darkMode
-                      ? 'text-gray-500'
+                      ? 'text-ink-500'
                       : 'text-muted-foreground'}"
                   >
                     <LoaderCircle size={14} class="animate-spin" />
@@ -327,7 +327,7 @@
                 {:else if epubImages.length === 0}
                   <p
                     class="text-xs py-2 {darkMode
-                      ? 'text-gray-600'
+                      ? 'text-ink-600'
                       : 'text-muted-foreground'}"
                   >
                     {m.illustration_no_book_images()}
@@ -341,10 +341,10 @@
                           ? 'border-purple-500 ring-2 ring-purple-500/30'
                           : selectedRefs.length >= MAX_REFS
                             ? darkMode
-                              ? 'border-gray-700 opacity-40 cursor-not-allowed'
+                              ? 'border-ink-700 opacity-40 cursor-not-allowed'
                               : 'border-border opacity-40 cursor-not-allowed'
                             : darkMode
-                              ? 'border-gray-700 hover:border-gray-500'
+                              ? 'border-ink-700 hover:border-ink-500'
                               : 'border-border hover:border-foreground/30'}"
                         onclick={() =>
                           toggleRef({ source: "epub", path: img.path })}
@@ -377,7 +377,7 @@
                 <div>
                   <p
                     class="text-[10px] uppercase tracking-wider mb-2 {darkMode
-                      ? 'text-gray-500'
+                      ? 'text-ink-500'
                       : 'text-muted-foreground'}"
                   >
                     {m.illustration_generated()}
@@ -390,10 +390,10 @@
                           ? 'border-purple-500 ring-2 ring-purple-500/30'
                           : selectedRefs.length >= MAX_REFS
                             ? darkMode
-                              ? 'border-gray-700 opacity-40 cursor-not-allowed'
+                              ? 'border-ink-700 opacity-40 cursor-not-allowed'
                               : 'border-border opacity-40 cursor-not-allowed'
                             : darkMode
-                              ? 'border-gray-700 hover:border-gray-500'
+                              ? 'border-ink-700 hover:border-ink-500'
                               : 'border-border hover:border-foreground/30'}"
                         onclick={() =>
                           toggleRef({
@@ -438,7 +438,7 @@
                 ? 'text-purple-400'
                 : 'text-purple-600'
               : darkMode
-                ? 'text-gray-500 hover:text-gray-400'
+                ? 'text-ink-500 hover:text-ink-400'
                 : 'text-muted-foreground hover:text-foreground'}"
             onclick={toggleCustom}
           >
@@ -452,7 +452,7 @@
               placeholder={m.illustration_custom_placeholder()}
               rows={3}
               class="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 {darkMode
-                ? 'bg-gray-800 border-gray-700 text-gray-200 placeholder-gray-600'
+                ? 'bg-ink-800 border-ink-700 text-ink-200 placeholder-ink-600'
                 : 'bg-background border-border text-foreground placeholder-muted-foreground'}"
             ></textarea>
           {/if}
@@ -462,12 +462,12 @@
       <!-- Footer -->
       <div
         class="px-5 py-4 border-t flex justify-end gap-2 {darkMode
-          ? 'border-gray-800'
+          ? 'border-ink-800'
           : 'border-border'}"
       >
         <button
           class="px-4 py-2 text-sm rounded-lg transition-colors {darkMode
-            ? 'text-gray-400 hover:bg-gray-800'
+            ? 'text-ink-400 hover:bg-ink-800'
             : 'text-muted-foreground hover:bg-accent'}"
           onclick={() => onclose?.()}
         >
@@ -477,7 +477,7 @@
           class="px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 {canGenerate
             ? 'bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:opacity-90 shadow-md'
             : darkMode
-              ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+              ? 'bg-ink-800 text-ink-600 cursor-not-allowed'
               : 'bg-muted text-muted-foreground cursor-not-allowed'}"
           disabled={!canGenerate}
           onclick={handleGenerate}

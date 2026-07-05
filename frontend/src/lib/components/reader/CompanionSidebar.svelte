@@ -17,6 +17,7 @@
   import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import type {
     AiStatus,
     CompanionConversationSummary,
@@ -309,7 +310,13 @@
   }
 
   async function deleteConversation(convId: string) {
-    if (!confirm(m.companion_delete_confirm())) return;
+    if (
+      !(await confirmDialog({
+        title: m.companion_delete_confirm(),
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await booksApi.deleteCompanionConversation(bookId, convId);
       conversations = conversations.filter((c) => c.id !== convId);
@@ -434,7 +441,7 @@
     shadow-2xl transition-transform duration-200 ease-out
     {visible ? 'translate-x-0' : 'translate-x-full'}
     {darkMode
-    ? 'bg-gray-900 sm:border-l sm:border-gray-800'
+    ? 'bg-ink-900 sm:border-l sm:border-ink-800'
     : 'bg-card sm:border-l sm:border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
@@ -444,7 +451,7 @@
   <!-- Header -->
   <div
     class="flex items-center justify-between px-3 sm:px-4 py-3 border-b {darkMode
-      ? 'border-gray-800'
+      ? 'border-ink-800'
       : 'border-border'}"
   >
     <!-- Left: back/close on mobile, title on desktop -->
@@ -453,7 +460,7 @@
         <!-- Session list: back to chat -->
         <button
           class="p-2 -ml-1 rounded-lg transition-colors {darkMode
-            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
           aria-label={m.companion_back_to_chat()}
           onclick={() => (showSessionList = false)}
@@ -462,7 +469,7 @@
         </button>
         <p
           class="text-base font-semibold truncate {darkMode
-            ? 'text-gray-200'
+            ? 'text-ink-200'
             : 'text-foreground'}"
         >
           {m.companion_conversations()}
@@ -471,7 +478,7 @@
         <!-- Chat view -->
         <button
           class="p-2 -ml-1 rounded-lg sm:hidden transition-colors {darkMode
-            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
           aria-label={m.common_close()}
           onclick={() => close()}
@@ -480,7 +487,7 @@
         </button>
         <p
           class="text-base font-semibold truncate {darkMode
-            ? 'text-gray-200'
+            ? 'text-ink-200'
             : 'text-foreground'}"
         >
           {#if activeTitle}
@@ -498,7 +505,7 @@
         <!-- Session list: new conversation -->
         <button
           class="p-2 rounded-lg transition-colors {darkMode
-            ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+            ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
           aria-label={m.companion_new_conv()}
           onclick={startNewConversation}
@@ -510,7 +517,7 @@
         <div class="flex items-center gap-0.5">
           <button
             class="p-2 rounded-lg transition-colors {darkMode
-              ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
             aria-label={m.companion_new_conv()}
             onclick={startNewConversation}
@@ -519,7 +526,7 @@
           </button>
           <button
             class="p-2 rounded-lg transition-colors {darkMode
-              ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+              ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
             aria-label={m.companion_past_conv()}
             onclick={() => (showSessionList = true)}
@@ -532,7 +539,7 @@
       <!-- Close button (desktop only, mobile uses back arrow) -->
       <button
         class="hidden sm:flex p-2 rounded-lg transition-colors {darkMode
-          ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+          ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
         aria-label={m.common_close()}
         onclick={() => close()}
@@ -549,18 +556,18 @@
     >
       <div
         class="w-12 h-12 rounded-full flex items-center justify-center {darkMode
-          ? 'bg-gray-800'
+          ? 'bg-ink-800'
           : 'bg-muted'}"
       >
         <MessageCircle
           size={24}
-          class={darkMode ? "text-gray-500" : "text-muted-foreground/50"}
+          class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
         />
       </div>
       <div class="space-y-2">
         <p
           class="text-base font-medium {darkMode
-            ? 'text-gray-300'
+            ? 'text-ink-300'
             : 'text-foreground'}"
         >
           {m.companion_not_configured()}
@@ -568,7 +575,7 @@
         {#if isAdmin}
           <p
             class="text-sm {darkMode
-              ? 'text-gray-500'
+              ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
             {m.companion_admin_setup()}
@@ -585,7 +592,7 @@
         {:else}
           <p
             class="text-sm {darkMode
-              ? 'text-gray-500'
+              ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
             {m.companion_user_msg()}
@@ -595,7 +602,7 @@
     </div>
   {:else if loadingList}
     <div class="flex-1 flex justify-center items-center py-8">
-      <Spinner size="md" class={darkMode ? "border-gray-400" : ""} />
+      <Spinner size="md" class={darkMode ? "border-ink-400" : ""} />
     </div>
   {:else if showSessionList}
     <!-- Session list -->
@@ -606,14 +613,14 @@
         >
           <p
             class="text-base {darkMode
-              ? 'text-gray-400'
+              ? 'text-ink-400'
               : 'text-muted-foreground'}"
           >
             {m.companion_no_conversations()}
           </p>
           <button
             class="inline-flex items-center gap-1.5 px-4 py-2.5 text-base rounded-lg transition-colors {darkMode
-              ? 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              ? 'bg-ink-800 text-ink-300 hover:bg-ink-700'
               : 'bg-muted text-foreground hover:bg-accent'}"
             onclick={startNewConversation}
           >
@@ -641,7 +648,7 @@
               <!-- Conversation item -->
               <div
                 class="relative flex items-center gap-1 transition-colors {darkMode
-                  ? 'bg-gray-900 hover:bg-gray-800'
+                  ? 'bg-ink-900 hover:bg-ink-800'
                   : 'bg-card hover:bg-accent'}"
                 style={swipingId === conv.id
                   ? `transform: translateX(${swipeX}px)`
@@ -652,7 +659,7 @@
                     <input
                       bind:value={renameValue}
                       class="flex-1 text-base px-2 py-1 rounded outline-none {darkMode
-                        ? 'bg-gray-700 text-gray-200'
+                        ? 'bg-ink-700 text-ink-200'
                         : 'bg-muted text-foreground'}"
                       onkeydown={(e) => {
                         if (e.key === "Enter") confirmRename();
@@ -661,7 +668,7 @@
                     />
                     <button
                       class="p-2 rounded-lg {darkMode
-                        ? 'text-gray-400 hover:text-gray-200'
+                        ? 'text-ink-400 hover:text-ink-200'
                         : 'text-muted-foreground hover:text-foreground'}"
                       aria-label={m.companion_confirm_rename()}
                       onclick={confirmRename}
@@ -676,14 +683,14 @@
                   >
                     <p
                       class="text-base truncate {darkMode
-                        ? 'text-gray-200'
+                        ? 'text-ink-200'
                         : 'text-foreground'}"
                     >
                       {conversationLabel(conv)}
                     </p>
                     <p
                       class="text-xs mt-0.5 {darkMode
-                        ? 'text-gray-500'
+                        ? 'text-ink-500'
                         : 'text-muted-foreground'}"
                     >
                       {new Date(conv.updated_at).toLocaleDateString()}
@@ -693,7 +700,7 @@
                   <div class="flex items-center gap-0.5 pr-2">
                     <button
                       class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
-                        ? 'text-gray-400 hover:bg-gray-700'
+                        ? 'text-ink-400 hover:bg-ink-700'
                         : 'text-muted-foreground hover:bg-muted'}"
                       aria-label={m.companion_rename()}
                       onclick={() => startRename(conv)}
@@ -702,7 +709,7 @@
                     </button>
                     <button
                       class="p-2 rounded-lg opacity-60 hover:opacity-100 transition-opacity {darkMode
-                        ? 'text-gray-400 hover:text-red-400 hover:bg-gray-700'
+                        ? 'text-ink-400 hover:text-red-400 hover:bg-ink-700'
                         : 'text-muted-foreground hover:text-red-500 hover:bg-muted'}"
                       aria-label={m.companion_delete()}
                       onclick={() => deleteConversation(conv.id)}
@@ -726,7 +733,7 @@
     >
       {#if loading}
         <div class="flex justify-center py-8">
-          <Spinner size="md" class={darkMode ? "border-gray-400" : ""} />
+          <Spinner size="md" class={darkMode ? "border-ink-400" : ""} />
         </div>
       {:else if messages.length === 0 && !isStreaming}
         <!-- Empty state with suggested prompts -->
@@ -735,17 +742,17 @@
         >
           <div
             class="w-14 h-14 rounded-full flex items-center justify-center {darkMode
-              ? 'bg-gray-800'
+              ? 'bg-ink-800'
               : 'bg-muted'}"
           >
             <MessageCircle
               size={28}
-              class={darkMode ? "text-gray-500" : "text-muted-foreground/40"}
+              class={darkMode ? "text-ink-500" : "text-muted-foreground/40"}
             />
           </div>
           <p
             class="text-base {darkMode
-              ? 'text-gray-400'
+              ? 'text-ink-400'
               : 'text-muted-foreground'}"
           >
             {m.companion_empty_prompt()}
@@ -754,7 +761,7 @@
             {#each suggestedPrompts as prompt}
               <button
                 class="text-left px-4 py-3 rounded-xl border text-sm transition-colors {darkMode
-                  ? 'border-gray-700 text-gray-300 hover:bg-gray-800 hover:border-gray-600'
+                  ? 'border-ink-700 text-ink-300 hover:bg-ink-800 hover:border-ink-600'
                   : 'border-border text-foreground hover:bg-accent hover:border-ring'}"
                 onclick={() => {
                   inputText = prompt;
@@ -778,7 +785,7 @@
                   ? 'bg-blue-600 text-white'
                   : 'bg-primary text-primary-foreground'
                 : darkMode
-                  ? 'bg-gray-800 text-gray-200'
+                  ? 'bg-ink-800 text-ink-200'
                   : 'bg-muted text-foreground'}"
             >
               {#if msg.selected_text}
@@ -789,7 +796,7 @@
                       ? 'border-blue-500/40'
                       : 'border-primary-foreground/20'
                     : darkMode
-                      ? 'border-gray-700'
+                      ? 'border-ink-700'
                       : 'border-border'}"
                 >
                   <Quote size={14} class="mt-0.5 shrink-0 opacity-60" />
@@ -832,7 +839,7 @@
           <div class="flex justify-start">
             <div
               class="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-base leading-relaxed {darkMode
-                ? 'bg-gray-800 text-gray-200'
+                ? 'bg-ink-800 text-ink-200'
                 : 'bg-muted text-foreground'}"
             >
               <p class="whitespace-pre-wrap">{streamingContent}</p>
@@ -844,25 +851,25 @@
           <div class="flex justify-start">
             <div
               class="rounded-2xl px-3.5 py-2.5 {darkMode
-                ? 'bg-gray-800'
+                ? 'bg-ink-800'
                 : 'bg-muted'}"
             >
               <div class="flex gap-1">
                 <span
                   class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                    ? 'bg-gray-500'
+                    ? 'bg-ink-500'
                     : 'bg-muted-foreground/40'}"
                   style="animation-delay: 0ms"
                 ></span>
                 <span
                   class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                    ? 'bg-gray-500'
+                    ? 'bg-ink-500'
                     : 'bg-muted-foreground/40'}"
                   style="animation-delay: 150ms"
                 ></span>
                 <span
                   class="w-1.5 h-1.5 rounded-full animate-bounce {darkMode
-                    ? 'bg-gray-500'
+                    ? 'bg-ink-500'
                     : 'bg-muted-foreground/40'}"
                   style="animation-delay: 300ms"
                 ></span>
@@ -880,13 +887,13 @@
     >
       <div
         class="rounded-2xl border transition-colors {darkMode
-          ? 'border-gray-700 bg-gray-800/50 focus-within:border-gray-600'
+          ? 'border-ink-700 bg-ink-800/50 focus-within:border-ink-600'
           : 'border-border bg-muted/50 focus-within:border-ring'}"
       >
         {#if pendingSelectedText}
           <div
             class="flex items-start gap-2 mx-3 mt-2.5 px-2.5 py-2 rounded-lg text-sm {darkMode
-              ? 'bg-gray-700/60 text-gray-300'
+              ? 'bg-ink-700/60 text-ink-300'
               : 'bg-background text-muted-foreground'}"
           >
             <Quote size={14} class="mt-0.5 shrink-0 opacity-60" />
@@ -906,7 +913,7 @@
           placeholder={m.companion_input_placeholder()}
           rows={1}
           class="w-full resize-none bg-transparent px-3.5 py-2.5 text-base outline-none overflow-hidden {darkMode
-            ? 'text-gray-200 placeholder:text-gray-500'
+            ? 'text-ink-200 placeholder:text-ink-500'
             : 'text-foreground placeholder:text-muted-foreground'}"
           style="max-height: 120px; overflow-y: {inputText.split('\n').length >
           4
@@ -925,7 +932,7 @@
             class="w-9 h-9 flex items-center justify-center rounded-full transition-colors {isStreaming ||
             !inputText.trim()
               ? darkMode
-                ? 'text-gray-600 bg-gray-700'
+                ? 'text-ink-600 bg-ink-700'
                 : 'text-muted-foreground/30 bg-muted'
               : darkMode
                 ? 'text-white bg-blue-600 hover:bg-blue-500'

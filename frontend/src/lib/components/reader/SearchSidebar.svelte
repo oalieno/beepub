@@ -124,7 +124,7 @@
 <!-- Sidebar (left) -->
 <div
   class="fixed left-0 top-0 bottom-0 z-50 w-80 max-w-[85vw] shadow-2xl flex flex-col {darkMode
-    ? 'bg-gray-900 border-r border-gray-800'
+    ? 'bg-ink-900 border-r border-ink-800'
     : 'bg-card border-r border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
@@ -133,19 +133,19 @@
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
-      ? 'border-gray-800'
+      ? 'border-ink-800'
       : 'border-border'}"
   >
     <p
       class="text-sm font-semibold {darkMode
-        ? 'text-gray-200'
+        ? 'text-ink-200'
         : 'text-foreground'}"
     >
       {m.reader_search_in_book()}
     </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
-        ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+        ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
       onclick={() => onclose?.()}
     >
@@ -155,13 +155,13 @@
 
   <!-- Search input -->
   <div
-    class="px-3 py-2 border-b {darkMode ? 'border-gray-800' : 'border-border'}"
+    class="px-3 py-2 border-b {darkMode ? 'border-ink-800' : 'border-border'}"
   >
     <div class="relative">
       <Search
         size={14}
         class="absolute left-2.5 top-1/2 -translate-y-1/2 {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'}"
       />
       <input
@@ -172,7 +172,7 @@
         type="text"
         placeholder={m.reader_search_placeholder()}
         class="w-full pl-8 pr-3 py-1.5 text-base rounded-md outline-none {darkMode
-          ? 'bg-gray-800 text-gray-200 placeholder-gray-500 border border-gray-700 focus:border-gray-600'
+          ? 'bg-ink-800 text-ink-200 placeholder-ink-500 border border-ink-700 focus:border-ink-600'
           : 'bg-muted text-foreground placeholder-muted-foreground border border-border focus:border-ring'}"
       />
     </div>
@@ -185,11 +185,11 @@
         <LoaderCircle
           size={16}
           class="animate-spin {darkMode
-            ? 'text-gray-400'
+            ? 'text-ink-400'
             : 'text-muted-foreground'}"
         />
         <span
-          class="text-sm {darkMode ? 'text-gray-400' : 'text-muted-foreground'}"
+          class="text-sm {darkMode ? 'text-ink-400' : 'text-muted-foreground'}"
         >
           {m.reader_search_searching({ count: String(results.length) })}
         </span>
@@ -197,7 +197,7 @@
     {:else if searched && results.length === 0}
       <p
         class="text-sm py-8 text-center {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'}"
       >
         {m.reader_search_no_results()}
@@ -206,7 +206,7 @@
       <div class="p-2">
         <p
           class="text-xs px-2 py-1 {darkMode
-            ? 'text-gray-500'
+            ? 'text-ink-500'
             : 'text-muted-foreground'}"
         >
           {m.reader_search_results({ count: String(results.length) })}
@@ -215,7 +215,7 @@
           {#each results as result}
             <button
               class="w-full text-left px-3 py-2 rounded-lg text-sm transition-colors {darkMode
-                ? 'hover:bg-gray-800 text-gray-300'
+                ? 'hover:bg-ink-800 text-ink-300'
                 : 'hover:bg-accent text-foreground'}"
               onclick={() => {
                 onselect?.(result.cfi);
@@ -223,7 +223,7 @@
             >
               <p
                 class="text-xs font-medium mb-0.5 {darkMode
-                  ? 'text-gray-400'
+                  ? 'text-ink-400'
                   : 'text-muted-foreground'}"
               >
                 {result.sectionLabel}
@@ -238,7 +238,7 @@
     {:else}
       <p
         class="text-sm py-8 text-center {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'}"
       >
         {m.reader_search_empty_prompt()}

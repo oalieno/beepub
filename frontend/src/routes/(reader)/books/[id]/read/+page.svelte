@@ -15,6 +15,7 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import { isOnline } from "$lib/services/network";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
@@ -22,6 +23,9 @@
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
+  import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
+  import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
+  import { BookX } from "@lucide/svelte";
   import { UserRole } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
   import type {
@@ -34,6 +38,8 @@
   } from "$lib/types";
 
   let bookId = $derived(page.params.id as string);
+  // Jump target passed from the book detail page (highlight click)
+  let initialCfi = $derived(page.url.searchParams.get("cfi"));
 
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);
@@ -41,17 +47,52 @@
   let destroyed = false;
   const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
   let autoReadTriggered = false;
+  // Set when the user undoes an auto-"read" mark: they've said no, so don't
+  // auto-mark again for the rest of this reading session.
+  let autoReadSuppressed = false;
 
   let title = $state("");
   let hasDbTitle = false;
   let fontFamily = $state("serif");
   let fontSize = $state(16);
-  let darkMode = $state(false);
+  let lineHeight = $state(1.8);
+  let pageMargin = $state(32);
+  // Initialize synchronously (fall back to the app theme) so dark-mode
+  // readers don't get a white flash before onMount runs.
+  function getInitialDark(): boolean {
+    if (!browser) return false;
+    try {
+      const saved = localStorage.getItem("reader-dark");
+      if (saved !== null) return saved === "1";
+    } catch {
+      // Private browsing — fall through
+    }
+    return document.documentElement.classList.contains("dark");
+  }
+  let darkMode = $state(getInitialDark());
   let percentage = $state<number | null>(null);
   let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
   let currentHref = $state("");
   let reader: EpubReader = $state(null as any);
   let ready = $state(false);
+  let loadError = $state(false);
+  let readerKey = $state(0);
+  // Watchdog: if the EPUB hasn't rendered within this window, treat it as a
+  // failed load so the user isn't stuck on an infinite spinner.
+  const EPUB_LOAD_TIMEOUT_MS = 30_000;
+  $effect(() => {
+    void readerKey;
+    if (!ready || epubLoaded || loadError) return;
+    const timer = setTimeout(() => {
+      loadError = true;
+    }, EPUB_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  });
+  function retryLoad() {
+    loadError = false;
+    epubLoaded = false;
+    readerKey += 1;
+  }
   let isRtl = $state(false);
   let highlights = $state<HighlightOut[]>([]);
   let illustrations = $state<IllustrationOut[]>([]);
@@ -61,6 +102,27 @@
 
   let showMobileBottomBar = $state(false);
   let showSettings = $state(false);
+
+  // One-time gesture coach mark on first book open
+  let showGestureHint = $state(false);
+  $effect(() => {
+    if (!epubLoaded) return;
+    try {
+      if (!localStorage.getItem("reader-gestures-seen")) {
+        showGestureHint = true;
+      }
+    } catch {
+      // Private browsing — skip the hint
+    }
+  });
+  function dismissGestureHint() {
+    showGestureHint = false;
+    try {
+      localStorage.setItem("reader-gestures-seen", "1");
+    } catch {
+      /* ignore */
+    }
+  }
 
   function toggleSidebar(name: Sidebar) {
     activeSidebar = activeSidebar === name ? null : name;
@@ -93,6 +155,7 @@
     embedding: false,
   });
   let epubLoaded = $state(false);
+  let canScrub = $state(false);
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
 
@@ -104,10 +167,12 @@
 
     const savedFont = localStorage.getItem("reader-font");
     const savedSize = localStorage.getItem("reader-size");
-    const savedTheme = localStorage.getItem("reader-dark");
+    const savedLineHeight = localStorage.getItem("reader-lineheight");
+    const savedMargin = localStorage.getItem("reader-margin");
     if (savedFont) fontFamily = savedFont;
     if (savedSize) fontSize = parseInt(savedSize);
-    if (savedTheme) darkMode = savedTheme === "1";
+    if (savedLineHeight) lineHeight = parseFloat(savedLineHeight);
+    if (savedMargin) pageMargin = parseInt(savedMargin);
     ready = true;
 
     // Fetch AI feature status
@@ -154,6 +219,8 @@
       interaction.reading_status === "want_to_read"
     ) {
       readingTimer = setTimeout(async () => {
+        const prevStatus = interaction?.reading_status ?? null;
+        const prevStartedAt = interaction?.started_at ?? null;
         const today = new Date().toISOString().slice(0, 10);
         try {
           await booksApi.updateReadingStatus(bookId, {
@@ -164,10 +231,43 @@
             interaction.reading_status = "currently_reading";
             interaction.started_at = today;
           }
+          toastStore.info(m.reader_auto_marked_reading(), {
+            duration: 6000,
+            action: {
+              label: m.common_undo(),
+              onclick: () =>
+                revertStatus(
+                  prevStatus,
+                  prevStartedAt,
+                  interaction?.finished_at ?? null,
+                ),
+            },
+          });
         } catch {
           /* ignore */
         }
       }, READING_DEBOUNCE_MS);
+    }
+  }
+
+  async function revertStatus(
+    status: InteractionOut["reading_status"],
+    startedAt: string | null,
+    finishedAt: string | null,
+  ) {
+    try {
+      await booksApi.updateReadingStatus(bookId, {
+        reading_status: status,
+        started_at: startedAt,
+        finished_at: finishedAt,
+      });
+      if (interaction) {
+        interaction.reading_status = status;
+        interaction.started_at = startedAt;
+        interaction.finished_at = finishedAt;
+      }
+    } catch (e) {
+      toastStore.error((e as Error).message);
     }
   }
 
@@ -178,6 +278,9 @@
       interaction.reading_status === "did_not_finish"
     )
       return;
+    const prevStatus = interaction.reading_status;
+    const prevStartedAt = interaction.started_at ?? null;
+    const prevFinishedAt = interaction.finished_at ?? null;
     const today = new Date().toISOString().slice(0, 10);
     try {
       await booksApi.updateReadingStatus(bookId, {
@@ -187,16 +290,32 @@
       });
       interaction.reading_status = "read";
       interaction.finished_at = today;
+      toastStore.info(m.reader_auto_marked_read(), {
+        duration: 6000,
+        action: {
+          label: m.common_undo(),
+          onclick: () => {
+            autoReadSuppressed = true;
+            revertStatus(prevStatus, prevStartedAt, prevFinishedAt);
+          },
+        },
+      });
     } catch {
       /* ignore */
     }
   }
 
+  let reachedEnd = $state(false);
+
+  // Auto-mark as read when the estimated progress hits 99% (covers books
+  // that end with a colophon/back matter the reader never turns to) OR the
+  // actual last page is reached (covers books whose estimate stalls below
+  // 99%). False positives are recoverable via the undo toast.
   $effect(() => {
     if (
-      percentage != null &&
-      percentage >= 99 &&
+      ((percentage != null && percentage >= 99) || reachedEnd) &&
       !autoReadTriggered &&
+      !autoReadSuppressed &&
       interaction
     ) {
       autoReadTriggered = true;
@@ -259,6 +378,16 @@
     }
   }
 
+  function handleLineHeightChange(value: number) {
+    lineHeight = value;
+    localStorage.setItem("reader-lineheight", String(value));
+  }
+
+  function handleMarginChange(value: number) {
+    pageMargin = value;
+    localStorage.setItem("reader-margin", String(value));
+  }
+
   function handleThemeToggle() {
     darkMode = !darkMode;
     localStorage.setItem("reader-dark", darkMode ? "1" : "0");
@@ -293,7 +422,7 @@
       });
       illustrations = [...illustrations, ill];
       reader?.addIllustrationAnnotation(ill);
-      toastStore.success("Generating illustration...");
+      toastStore.success(m.illustration_generating());
       pollIllustration(ill.id);
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -310,7 +439,7 @@
         if (ill.status === "completed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           reader?.addIllustrationAnnotation(ill);
-          toastStore.success("Illustration ready!");
+          toastStore.success(m.illustration_ready());
           return;
         }
         if (ill.status === "failed") {
@@ -331,7 +460,7 @@
         return;
       }
     }
-    toastStore.error("Generation timed out");
+    toastStore.error(m.illustration_timeout());
   }
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
@@ -339,7 +468,7 @@
       await booksApi.deleteIllustration(bookId, ill.id);
       illustrations = illustrations.filter((x) => x.id !== ill.id);
       reader?.removeIllustrationAnnotation(ill.cfi_range);
-      toastStore.success("Illustration deleted");
+      toastStore.success(m.illustration_deleted());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -369,7 +498,7 @@
 
 <div
   class="flex flex-col h-[100dvh] min-h-0 {darkMode
-    ? 'bg-gray-900'
+    ? 'bg-ink-900'
     : 'bg-background'}"
 >
   <!-- Desktop toolbar -->
@@ -377,8 +506,6 @@
     <Toolbar
       {bookId}
       {title}
-      {fontFamily}
-      {fontSize}
       {percentage}
       {darkMode}
       {toc}
@@ -389,9 +516,6 @@
       offline={!$isOnline}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
-      onfontToggle={handleFontToggle}
-      onfontIncrease={handleFontIncrease}
-      onfontDecrease={handleFontDecrease}
       onthemeToggle={handleThemeToggle}
       onchapter={(href) => reader?.displayChapter(href)}
       onhighlights={() => toggleSidebar("highlights")}
@@ -402,6 +526,8 @@
       }}
       onsearch={() => toggleSidebar("search")}
       ontoc_toggle={() => toggleSidebar("toc")}
+      onsettings={() => (showSettings = true)}
+      onhelp={() => (showGestureHint = true)}
     />
   </div>
 
@@ -409,59 +535,129 @@
   <ReaderTopBar {bookId} {title} {percentage} {darkMode} />
 
   <div class="flex-1 min-h-0 overflow-hidden relative">
-    {#if ready}
-      <EpubReader
-        bind:this={reader}
-        {bookId}
-        {fontFamily}
-        {fontSize}
-        {darkMode}
-        {isImageBook}
-        offline={!$isOnline}
-        ontitle={(t) => {
-          if (!hasDbTitle) title = t;
-        }}
-        onprogress={(p) => {
-          percentage = p.percentage;
-        }}
-        ontoc={(t) => (toc = t)}
-        onhrefchange={(href) => (currentHref = href)}
-        ondirection={(rtl) => (isRtl = rtl)}
-        onhighlightschange={(h) => (highlights = h)}
-        onillustrate={handleIllustrate}
-        onillustrationschange={(ills) => (illustrations = ills)}
-        onillustrationclick={(ill) => (viewingIllustration = ill)}
-        onshare={handleShareHighlight}
-        oncompanion={handleCompanion}
-        ontap={handleReaderTap}
-        onready={() => (epubLoaded = true)}
-        onatend={prefetchSeriesNeighbors}
-        onbookend={handleBookEnd}
-      />
+    {#if ready && !loadError}
+      {#key readerKey}
+        <EpubReader
+          bind:this={reader}
+          {bookId}
+          {initialCfi}
+          {fontFamily}
+          {fontSize}
+          {lineHeight}
+          {pageMargin}
+          {darkMode}
+          {isImageBook}
+          offline={!$isOnline}
+          ontitle={(t) => {
+            if (!hasDbTitle) title = t;
+          }}
+          onprogress={(p) => {
+            percentage = p.percentage;
+          }}
+          ontoc={(t) => (toc = t)}
+          onhrefchange={(href) => (currentHref = href)}
+          ondirection={(rtl) => (isRtl = rtl)}
+          onhighlightschange={(h) => (highlights = h)}
+          onillustrate={handleIllustrate}
+          onillustrationschange={(ills) => (illustrations = ills)}
+          onillustrationclick={(ill) => (viewingIllustration = ill)}
+          onshare={handleShareHighlight}
+          oncompanion={handleCompanion}
+          ontap={handleReaderTap}
+          onready={() => (epubLoaded = true)}
+          onerror={() => (loadError = true)}
+          onlocationsready={() => (canScrub = true)}
+          onatend={() => {
+            reachedEnd = true;
+            prefetchSeriesNeighbors();
+          }}
+          onbookend={handleBookEnd}
+        />
+      {/key}
     {/if}
 
-    {#if !epubLoaded}
+    {#if loadError}
+      <div
+        class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 px-8 text-center {darkMode
+          ? 'bg-ink-900'
+          : 'bg-background'}"
+      >
+        <BookX
+          size={48}
+          class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
+        />
+        <div class="space-y-1">
+          <p
+            class="text-base font-medium {darkMode
+              ? 'text-ink-200'
+              : 'text-foreground'}"
+          >
+            {m.reader_load_error_title()}
+          </p>
+          <p
+            class="text-sm {darkMode
+              ? 'text-ink-400'
+              : 'text-muted-foreground'}"
+          >
+            {m.reader_load_error_desc()}
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
+              ? 'bg-ink-100 text-ink-900 hover:bg-white'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'}"
+            onclick={retryLoad}
+          >
+            {m.common_retry()}
+          </button>
+          <a
+            href="/books/{bookId}"
+            class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
+              ? 'text-ink-300 hover:bg-ink-800'
+              : 'text-muted-foreground hover:bg-secondary'}"
+          >
+            {m.reader_back_to_detail()}
+          </a>
+        </div>
+      </div>
+    {:else if !epubLoaded}
       <div
         class="absolute inset-0 z-10 flex items-center justify-center {darkMode
-          ? 'bg-gray-900'
+          ? 'bg-ink-900'
           : 'bg-white'}"
       >
-        <Spinner size="lg" class={darkMode ? "border-gray-400" : ""} />
+        <Spinner size="lg" class={darkMode ? "border-ink-400" : ""} />
       </div>
     {/if}
 
-    <!-- Bottom percentage indicator (desktop only, mobile has it in top bar) -->
+    {#if showGestureHint}
+      <GestureHintOverlay {darkMode} {isRtl} onclose={dismissGestureHint} />
+    {/if}
+
+    <!-- Bottom progress (desktop only, mobile has it in the bottom bar) -->
     {#if epubLoaded && percentage != null}
       <div
-        class="hidden md:flex absolute bottom-0 left-0 right-0 items-center justify-center py-2 pointer-events-none"
+        class="hidden md:flex absolute bottom-0 left-0 right-0 z-20 flex-col items-center gap-1 px-8 pb-1.5 pointer-events-none"
       >
         <span
           class="text-xs px-3 py-1 rounded-full {darkMode
-            ? 'bg-gray-800/80 text-gray-400'
+            ? 'bg-ink-800/80 text-ink-400'
             : 'bg-black/5 text-muted-foreground'}"
         >
           {percentage}%
         </span>
+        {#if canScrub}
+          <div class="w-full max-w-xl pointer-events-auto">
+            <ProgressScrubber
+              {percentage}
+              {darkMode}
+              {isRtl}
+              ariaLabel={m.reader_progress()}
+              onseek={(p) => reader?.displayPercentage(p)}
+            />
+          </div>
+        {/if}
       </div>
     {/if}
 
@@ -501,7 +697,13 @@
           activeSidebar = null;
         }}
         ondelete={async (hl) => {
-          if (!confirm(m.highlights_delete_confirm())) return;
+          if (
+            !(await confirmDialog({
+              title: m.highlights_delete_confirm(),
+              destructive: true,
+            }))
+          )
+            return;
           const prev = highlights;
           // Optimistically remove, then delete immediately (no delayed undo).
           highlights = highlights.filter((h) => h.id !== hl.id);
@@ -539,6 +741,8 @@
   {#if showMobileBottomBar}
     <ReaderBottomBar
       {percentage}
+      canSeek={canScrub}
+      onseek={(p) => reader?.displayPercentage(p)}
       {darkMode}
       {isRtl}
       {isImageBook}
@@ -566,12 +770,17 @@
     bind:open={showSettings}
     {fontFamily}
     {fontSize}
+    {lineHeight}
+    {pageMargin}
     {darkMode}
     {isImageBook}
     onfontToggle={handleFontToggle}
     onfontIncrease={handleFontIncrease}
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}
+    onlineHeightChange={handleLineHeightChange}
+    onmarginChange={handleMarginChange}
+    onhelp={() => (showGestureHint = true)}
   />
 
   {#if showIllustrationModal}
@@ -624,16 +833,16 @@
       <!-- svelte-ignore a11y_click_events_have_key_events -->
       <div
         class="mx-3 sm:mx-4 w-full max-w-[85vw] sm:max-w-sm md:max-w-md overflow-hidden rounded-2xl shadow-2xl {darkMode
-          ? 'bg-gray-800 text-gray-100'
-          : 'bg-white text-gray-900'}"
+          ? 'bg-ink-800 text-ink-100'
+          : 'bg-white text-ink-900'}"
         onclick={(e) => e.stopPropagation()}
       >
         {#if seriesNeighbors.next}
           <!-- Cover as hero banner -->
           <div
             class="relative flex items-center justify-center py-10 {darkMode
-              ? 'bg-gray-900/60'
-              : 'bg-gray-50'}"
+              ? 'bg-ink-900/60'
+              : 'bg-ink-50'}"
           >
             {#if seriesNeighbors.next.cover_path}
               <img
@@ -644,8 +853,8 @@
             {:else}
               <div
                 class="h-52 sm:h-64 md:h-96 w-48 rounded-md shadow-xl flex items-center justify-center {darkMode
-                  ? 'bg-gray-700 text-gray-400'
-                  : 'bg-gray-200 text-muted-foreground'}"
+                  ? 'bg-ink-700 text-ink-400'
+                  : 'bg-ink-200 text-muted-foreground'}"
               >
                 {m.reader_no_cover()}
               </div>
@@ -656,7 +865,7 @@
           <div class="px-6 py-6">
             <p
               class="text-center text-xs font-medium uppercase tracking-widest {darkMode
-                ? 'text-gray-500'
+                ? 'text-ink-500'
                 : 'text-muted-foreground'}"
             >
               {m.reader_series_up_next({
@@ -669,7 +878,7 @@
             {#if seriesNeighbors.next.series_index != null}
               <p
                 class="mt-1 text-center text-sm {darkMode
-                  ? 'text-gray-400'
+                  ? 'text-ink-400'
                   : 'text-muted-foreground'}"
               >
                 {m.reader_series_book_of({
@@ -681,8 +890,8 @@
             <div class="mt-6 flex gap-3">
               <button
                 class="flex-1 rounded-lg px-4 py-3 font-medium transition-colors {darkMode
-                  ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
+                  ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                  : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
                 onclick={() => (showSeriesOverlay = false)}
               >
                 {m.common_close()}
@@ -704,7 +913,7 @@
               <p class="text-2xl font-semibold">{m.reader_series_complete()}</p>
               <p
                 class="mt-2 {darkMode
-                  ? 'text-gray-400'
+                  ? 'text-ink-400'
                   : 'text-muted-foreground'}"
               >
                 {m.reader_series_complete_msg({
@@ -715,8 +924,8 @@
             </div>
             <button
               class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
-                ? 'bg-gray-700 hover:bg-gray-600 text-gray-300'
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}"
+                ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
               onclick={() => (showSeriesOverlay = false)}
             >
               {m.common_close()}

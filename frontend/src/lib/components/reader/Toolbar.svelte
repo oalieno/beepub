@@ -3,10 +3,10 @@
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
-    Minus,
-    Plus,
     Sun,
     Moon,
+    CircleHelp,
+    Settings,
     List,
     Search,
     Highlighter,
@@ -20,8 +20,6 @@
   let {
     bookId = "",
     title = "",
-    fontFamily = "serif",
-    fontSize = 16,
     percentage = null,
     darkMode = false,
     toc = [],
@@ -32,11 +30,10 @@
     offline = false,
     onprev,
     onnext,
-    onfontToggle,
-    onfontIncrease,
-    onfontDecrease,
     onthemeToggle,
     onchapter,
+    onsettings,
+    onhelp,
     onhighlights,
     oncompanion,
     onsearch,
@@ -44,8 +41,6 @@
   }: {
     bookId?: string;
     title?: string;
-    fontFamily?: string;
-    fontSize?: number;
     percentage?: number | null;
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
@@ -56,10 +51,9 @@
     offline?: boolean;
     onprev?: () => void;
     onnext?: () => void;
-    onfontToggle?: () => void;
-    onfontIncrease?: () => void;
-    onfontDecrease?: () => void;
     onthemeToggle?: () => void;
+    onsettings?: () => void;
+    onhelp?: () => void;
     onchapter?: (href: string) => void;
     onhighlights?: () => void;
     oncompanion?: () => void;
@@ -69,14 +63,14 @@
 
   function btnClass(dark: boolean) {
     return dark
-      ? "hover:bg-gray-800 text-gray-400 hover:text-gray-200"
+      ? "hover:bg-ink-800 text-ink-400 hover:text-ink-200"
       : "hover:bg-accent text-muted-foreground hover:text-foreground";
   }
 </script>
 
 <div
   class="min-h-14 border-b flex flex-wrap items-center px-2 sm:px-4 gap-1 sm:gap-3 py-2 z-10 relative touch-manipulation select-none {darkMode
-    ? 'bg-gray-900 border-gray-800 text-gray-200'
+    ? 'bg-ink-900 border-ink-800 text-ink-200'
     : 'bg-background border-border text-foreground'}"
   style="padding-top: calc(env(safe-area-inset-top, 0px) + 0.5rem);"
 >
@@ -120,7 +114,7 @@
       {#if highlightCount > 0}
         <span
           class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode
-            ? 'bg-amber-500 text-gray-900'
+            ? 'bg-amber-500 text-ink-900'
             : 'bg-primary text-primary-foreground'}"
         >
           {highlightCount > 99 ? "99" : highlightCount}
@@ -154,7 +148,7 @@
     {#if percentage != null}
       <p
         class="hidden sm:flex text-xs {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'} items-center gap-1.5"
       >
         {percentage}%
@@ -163,54 +157,6 @@
   </div>
 
   <div class="ml-auto flex items-center gap-1">
-    {#if !isImageBook}
-      <button
-        class="hidden sm:inline-flex px-2.5 py-1.5 text-xs font-medium rounded-lg transition-colors {btnClass(
-          darkMode,
-        )}"
-        title={m.reader_font_toggle()}
-        onclick={() => onfontToggle?.()}
-      >
-        {fontFamily === "serif" ? m.reader_font_serif() : m.reader_font_sans()}
-      </button>
-
-      <div
-        class="hidden sm:block w-px h-5 {darkMode
-          ? 'bg-gray-700'
-          : 'bg-border'}"
-      ></div>
-
-      <button
-        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
-          darkMode,
-        )}"
-        onclick={() => onfontDecrease?.()}
-        disabled={fontSize <= 10}
-      >
-        <Minus size={14} />
-      </button>
-      <span
-        class="hidden sm:inline text-[11px] w-8 text-center {darkMode
-          ? 'text-gray-500'
-          : 'text-muted-foreground'}">{fontSize}px</span
-      >
-      <button
-        class="inline-flex p-1.5 rounded-md transition-colors {btnClass(
-          darkMode,
-        )}"
-        onclick={() => onfontIncrease?.()}
-        disabled={fontSize >= 32}
-      >
-        <Plus size={14} />
-      </button>
-
-      <div
-        class="hidden sm:block w-px h-5 {darkMode
-          ? 'bg-gray-700'
-          : 'bg-border'}"
-      ></div>
-    {/if}
-
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
       title={m.reader_theme_toggle()}
@@ -221,6 +167,22 @@
       {:else}
         <Moon size={16} />
       {/if}
+    </button>
+
+    <button
+      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      title={m.reader_settings_title()}
+      onclick={() => onsettings?.()}
+    >
+      <Settings size={16} />
+    </button>
+
+    <button
+      class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
+      title={m.reader_gesture_help()}
+      onclick={() => onhelp?.()}
+    >
+      <CircleHelp size={16} />
     </button>
   </div>
 

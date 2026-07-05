@@ -76,7 +76,7 @@
 <!-- Sidebar -->
 <div
   class="fixed right-0 top-0 bottom-0 z-50 w-80 max-w-[85vw] shadow-2xl flex flex-col {darkMode
-    ? 'bg-gray-900 border-l border-gray-800'
+    ? 'bg-ink-900 border-l border-ink-800'
     : 'bg-card border-l border-border'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
   role="dialog"
@@ -85,26 +85,26 @@
 >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
-      ? 'border-gray-800'
+      ? 'border-ink-800'
       : 'border-border'}"
   >
     <p
       class="text-sm font-semibold {darkMode
-        ? 'text-gray-200'
+        ? 'text-ink-200'
         : 'text-foreground'}"
     >
       {m.reader_illustration_tab()}
       {#if illustrations.length > 0}
         <span
           class="ml-1.5 text-xs font-normal {darkMode
-            ? 'text-gray-500'
+            ? 'text-ink-500'
             : 'text-muted-foreground'}">{illustrations.length}</span
         >
       {/if}
     </p>
     <button
       class="p-1 rounded-md transition-colors {darkMode
-        ? 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+        ? 'text-ink-400 hover:bg-ink-800 hover:text-ink-200'
         : 'text-muted-foreground hover:bg-accent hover:text-foreground'}"
       onclick={() => onclose?.()}
     >
@@ -115,7 +115,7 @@
     {#if illustrations.length === 0}
       <p
         class="text-sm {darkMode
-          ? 'text-gray-500'
+          ? 'text-ink-500'
           : 'text-muted-foreground'} py-4 text-center"
       >
         {m.reader_no_illustrations()}
@@ -127,7 +127,7 @@
             class="w-full text-left px-3 py-2.5 rounded-lg transition-colors group {ill.status ===
             'completed'
               ? 'cursor-pointer'
-              : ''} {darkMode ? 'hover:bg-gray-800' : 'hover:bg-accent'}"
+              : ''} {darkMode ? 'hover:bg-ink-800' : 'hover:bg-accent'}"
             role="button"
             tabindex="0"
             onclick={() => {
@@ -142,7 +142,7 @@
               <!-- Thumbnail or status indicator -->
               <div
                 class="w-12 h-12 rounded-md flex-shrink-0 overflow-hidden {darkMode
-                  ? 'bg-gray-800'
+                  ? 'bg-ink-800'
                   : 'bg-muted'} flex items-center justify-center"
               >
                 {#if ill.status === "completed"}
@@ -167,7 +167,7 @@
                   <LoaderCircle
                     size={16}
                     class="animate-spin {darkMode
-                      ? 'text-gray-600'
+                      ? 'text-ink-600'
                       : 'text-muted-foreground'}"
                   />
                 {/if}
@@ -188,7 +188,7 @@
                             ? 'bg-red-500/10 text-red-400'
                             : 'bg-red-50 text-red-600'
                           : darkMode
-                            ? 'bg-gray-800 text-gray-500'
+                            ? 'bg-ink-800 text-ink-500'
                             : 'bg-muted text-muted-foreground'}"
                   >
                     {getStyleLabel(ill)}
@@ -207,7 +207,7 @@
                 </div>
                 <p
                   class="text-xs leading-snug {darkMode
-                    ? 'text-gray-300'
+                    ? 'text-ink-300'
                     : 'text-foreground'}"
                 >
                   {truncate(ill.text)}
@@ -219,7 +219,7 @@
                 {/if}
                 <p
                   class="text-[10px] mt-1 {darkMode
-                    ? 'text-gray-600'
+                    ? 'text-ink-600'
                     : 'text-muted-foreground/60'}"
                 >
                   {formatDate(ill.created_at)}
@@ -228,8 +228,8 @@
 
               {#if ondelete}
                 <button
-                  class="self-center opacity-0 group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode
-                    ? 'text-gray-500 hover:text-red-400'
+                  class="self-center opacity-70 can-hover:opacity-0 can-hover:group-hover:opacity-100 p-1 rounded transition-all flex-shrink-0 {darkMode
+                    ? 'text-ink-500 hover:text-red-400'
                     : 'text-muted-foreground hover:text-destructive'}"
                   title={m.reader_delete_illustration()}
                   onclick={(e) => {
