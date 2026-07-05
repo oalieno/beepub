@@ -47,7 +47,11 @@
   );
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let isCalibre = $derived(!!selectedLibrary?.calibre_path);
-  let canUpload = $derived(isAdmin && !!selectedLibrary && !isCalibre);
+  let canUpload = $derived(
+    (isAdmin || !!$authStore.user?.can_upload) &&
+      !!selectedLibrary &&
+      !isCalibre,
+  );
 
   let bookBrowser = $state<BookBrowser>();
   let restoreData = $state<BookBrowserState | null>(null);

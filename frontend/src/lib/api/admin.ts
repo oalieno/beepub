@@ -19,8 +19,10 @@ export const adminApi = {
 
   deleteUser: (userId: string) => del(`/admin/users/${userId}`),
 
-  updatePermissions: (userId: string, data: { can_download: boolean }) =>
-    put(`/admin/users/${userId}/permissions`, data) as Promise<UserOut>,
+  updatePermissions: (
+    userId: string,
+    data: { can_download?: boolean; can_upload?: boolean },
+  ) => put(`/admin/users/${userId}/permissions`, data) as Promise<UserOut>,
 
   getLibraryAccess: (userId: string) =>
     get(`/admin/users/${userId}/library-access`) as Promise<

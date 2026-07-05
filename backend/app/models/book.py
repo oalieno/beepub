@@ -113,7 +113,10 @@ class Book(Base, TimestampMixin):
         DateTime(timezone=True), nullable=True
     )
 
-    added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    # Audit column only — nulled when the uploading user is deleted.
+    added_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Relationships
     work: Mapped[Work | None] = relationship(

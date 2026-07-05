@@ -20,7 +20,7 @@ class LibraryOut(BaseModel):
     description: str | None
     cover_image: str | None
     calibre_path: str | None = None
-    created_by: uuid.UUID
+    created_by: uuid.UUID | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -99,23 +99,51 @@ async def _user_can_access_book(
     return result.scalar_one_or_none() is not None
 
 
-@router.post("", response_model=BookOut, status_code=status.HTTP_201_CREATED)
-async def upload_book(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    file: UploadFile = File(...),
-    library_id: str | None = Form(None),
-):
-    if not file.filename or not file.filename.lower().endswith(".epub"):
-        raise HTTPException(status_code=400, detail="Only EPUB files are supported")
+def _require_upload_permission(user: User) -> None:
+    if user.role != UserRole.admin and not user.can_upload:
+        raise HTTPException(status_code=403, detail="Upload permission required")
 
+
+async def _validate_upload_library(
+    library_id: str | None, user: User, db: AsyncSession
+) -> uuid.UUID | None:
+    """Parse and authorize the target library BEFORE any file hits disk."""
+    from app.routers.libraries import _get_accessible_library
+
+    if not library_id:
+        return None
+    try:
+        lib_id = uuid.UUID(library_id)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid library id")
+    library = await _get_accessible_library(lib_id, user, db)
+    if library.calibre_path:
+        raise HTTPException(
+            status_code=403, detail="Cannot upload to a Calibre library"
+        )
+    return lib_id
+
+
+async def _ingest_epub(
+    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
+) -> Book:
+    """Save one EPUB to disk and stage its Book row (no commit).
+
+    Cleans up the on-disk files if parsing fails, so a corrupt upload
+    doesn't leave orphans behind.
+    """
     book_id = uuid.uuid4()
-    file_path = get_book_path(book_id, file.filename)
+    file_path = get_book_path(book_id, file.filename or "book.epub")
     cover_path = get_cover_path(book_id)
 
     file_size = await save_upload_file(file, file_path)
-    metadata = parse_epub_metadata(file_path)
-    cover_ok = extract_cover(file_path, cover_path)
+    try:
+        metadata = parse_epub_metadata(file_path)
+        cover_ok = extract_cover(file_path, cover_path)
+    except Exception:
+        delete_file(file_path)
+        delete_file(cover_path)
+        raise HTTPException(status_code=400, detail="Invalid EPUB file")
 
     book = Book(
         id=book_id,
@@ -123,29 +151,35 @@ async def upload_book(
         file_size=file_size,
         format="epub",
         cover_path=cover_path if cover_ok else None,
-        added_by=current_user.id,
+        added_by=user.id,
         **metadata,
     )
     db.add(book)
     await db.flush()
+    if lib_id:
+        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
+    return book
 
-    if library_id:
-        lib_id = uuid.UUID(library_id)
-        # Prevent uploading to Calibre libraries
-        lib_result = await db.execute(select(Library).where(Library.id == lib_id))
-        lib = lib_result.scalar_one_or_none()
-        if lib and lib.calibre_path:
-            raise HTTPException(
-                status_code=403, detail="Cannot upload to a Calibre library"
-            )
-        lb = LibraryBook(library_id=lib_id, book_id=book_id, added_by=current_user.id)
-        db.add(lb)
+
+@router.post("", response_model=BookOut, status_code=status.HTTP_201_CREATED)
+async def upload_book(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+    library_id: str | None = Form(None),
+):
+    _require_upload_permission(current_user)
+    if not file.filename or not file.filename.lower().endswith(".epub"):
+        raise HTTPException(status_code=400, detail="Only EPUB files are supported")
+
+    lib_id = await _validate_upload_library(library_id, current_user, db)
+    book = await _ingest_epub(file, current_user, lib_id, db)
 
     await db.commit()
     await db.refresh(book)
 
-    extract_book_text.delay(str(book_id))
-    fetch_book_metadata.delay(str(book_id))
+    extract_book_text.delay(str(book.id))
+    fetch_book_metadata.delay(str(book.id))
     return book
 
 
@@ -156,52 +190,20 @@ async def upload_books_bulk(
     files: list[UploadFile] = File(...),
     library_id: str | None = Form(None),
 ):
-    # Prevent uploading to Calibre libraries
-    if library_id:
-        lib_result = await db.execute(
-            select(Library).where(Library.id == uuid.UUID(library_id))
-        )
-        lib = lib_result.scalar_one_or_none()
-        if lib and lib.calibre_path:
-            raise HTTPException(
-                status_code=403, detail="Cannot upload to a Calibre library"
-            )
+    _require_upload_permission(current_user)
+    lib_id = await _validate_upload_library(library_id, current_user, db)
 
     books = []
     for file in files:
         if not file.filename or not file.filename.lower().endswith(".epub"):
             continue
-        book_id = uuid.uuid4()
-        file_path = get_book_path(book_id, file.filename)
-        cover_path = get_cover_path(book_id)
-        file_size = await save_upload_file(file, file_path)
-        metadata = parse_epub_metadata(file_path)
-        cover_ok = extract_cover(file_path, cover_path)
-        book = Book(
-            id=book_id,
-            file_path=file_path,
-            file_size=file_size,
-            format="epub",
-            cover_path=cover_path if cover_ok else None,
-            added_by=current_user.id,
-            **metadata,
-        )
-        db.add(book)
-        await db.flush()
-        if library_id:
-            lb = LibraryBook(
-                library_id=uuid.UUID(library_id),
-                book_id=book_id,
-                added_by=current_user.id,
-            )
-            db.add(lb)
-        books.append(book)
-        extract_book_text.delay(str(book_id))
-        fetch_book_metadata.delay(str(book_id))
+        books.append(await _ingest_epub(file, current_user, lib_id, db))
 
     await db.commit()
     for book in books:
         await db.refresh(book)
+        extract_book_text.delay(str(book.id))
+        fetch_book_metadata.delay(str(book.id))
     return books
 
 

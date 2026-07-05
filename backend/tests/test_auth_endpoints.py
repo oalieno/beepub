@@ -42,6 +42,7 @@ def _make_user(
         role=role,
         is_active=is_active,
         can_download=False,
+        can_upload=False,
     )
     user.created_at = datetime.now(UTC)
     return user

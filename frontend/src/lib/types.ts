@@ -15,6 +15,7 @@ export interface UserOut {
   role: UserRole;
   is_active: boolean;
   can_download: boolean;
+  can_upload: boolean;
   created_at: string;
 }
 

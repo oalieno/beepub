@@ -139,7 +139,10 @@ async def update_user_permissions(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    user.can_download = body.can_download
+    if body.can_download is not None:
+        user.can_download = body.can_download
+    if body.can_upload is not None:
+        user.can_upload = body.can_upload
     await db.commit()
     await db.refresh(user)
     return user

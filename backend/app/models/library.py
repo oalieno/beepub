@@ -40,8 +40,9 @@ class Library(Base, TimestampMixin):
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    created_by: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id"), nullable=False
+    # Audit column only — nulled when the creating user is deleted.
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # Relationships
@@ -63,8 +64,8 @@ class UserLibraryExclusion(Base):
     library_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("libraries.id", ondelete="CASCADE"), primary_key=True
     )
-    excluded_by: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("users.id"), nullable=False
+    excluded_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     excluded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -90,7 +91,9 @@ class LibraryBook(Base):
     book_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("books.id", ondelete="CASCADE"), primary_key=True
     )
-    added_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False)
+    added_by: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

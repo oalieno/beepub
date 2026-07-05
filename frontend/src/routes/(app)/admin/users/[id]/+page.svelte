@@ -10,6 +10,7 @@
     Shield,
     User,
     Download,
+    Upload,
     Library,
     KeyRound,
     Trash2,
@@ -65,6 +66,21 @@
       user = updated;
       toastStore.success(
         `Download ${updated.can_download ? "enabled" : "disabled"} for ${user.username}`,
+      );
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function toggleUpload() {
+    if (!user) return;
+    try {
+      const updated = await adminApi.updatePermissions(userId, {
+        can_upload: !user.can_upload,
+      });
+      user = updated;
+      toastStore.success(
+        `Upload ${updated.can_upload ? "enabled" : "disabled"} for ${user.username}`,
       );
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -277,10 +293,36 @@
               ? 'bg-primary'
               : 'bg-secondary'}"
             onclick={toggleDownload}
-            aria-label="Toggle download permission"
+            aria-label={m.admin_user_download_label()}
           >
             <span
               class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {user.can_download
+                ? 'translate-x-6'
+                : 'translate-x-1'}"
+            ></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between gap-4 mt-4">
+          <div class="flex items-center gap-3 min-w-0">
+            <Upload size={18} class="text-muted-foreground shrink-0" />
+            <div class="min-w-0">
+              <p class="text-sm font-medium text-foreground">
+                {m.admin_user_upload_label()}
+              </p>
+              <p class="text-xs text-muted-foreground">
+                {m.admin_user_upload_help()}
+              </p>
+            </div>
+          </div>
+          <button
+            class="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors {user.can_upload
+              ? 'bg-primary'
+              : 'bg-secondary'}"
+            onclick={toggleUpload}
+            aria-label={m.admin_user_upload_label()}
+          >
+            <span
+              class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform {user.can_upload
                 ? 'translate-x-6'
                 : 'translate-x-1'}"
             ></span>

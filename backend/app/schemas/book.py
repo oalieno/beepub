@@ -58,7 +58,7 @@ class BookOut(BaseModel):
     popularity_score: int = 0
     calibre_id: int | None = None
     calibre_added_at: datetime | None = None
-    added_by: uuid.UUID
+    added_by: uuid.UUID | None = None
     created_at: datetime
     updated_at: datetime
     library_id: uuid.UUID | None = None

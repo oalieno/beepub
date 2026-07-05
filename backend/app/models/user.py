@@ -34,6 +34,7 @@ class User(Base, TimestampMixin):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    can_upload: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )

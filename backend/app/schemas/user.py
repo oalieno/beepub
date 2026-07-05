@@ -12,6 +12,7 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     can_download: bool
+    can_upload: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -22,7 +23,9 @@ class UserUpdateRole(BaseModel):
 
 
 class UserUpdatePermissions(BaseModel):
-    can_download: bool
+    # None = leave unchanged, so callers can toggle one permission at a time.
+    can_download: bool | None = None
+    can_upload: bool | None = None
 
 
 class AdminCreateUser(BaseModel):

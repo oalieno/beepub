@@ -545,6 +545,8 @@
   "admin_user_permissions": "Permissions",
   "admin_user_download_label": "Download EPUBs",
   "admin_user_download_help": "Allow this user to download EPUB files to their device",
+  "admin_user_upload_label": "Upload EPUBs",
+  "admin_user_upload_help": "Allow this user to upload EPUB files to the library",
   "admin_user_library_access": "Library Access",
   "admin_user_select_all": "Select all",
   "admin_user_deselect_all": "Deselect all",
