@@ -100,6 +100,25 @@ async def _user_can_access_book(
     return result.scalar_one_or_none() is not None
 
 
+def book_search_conditions(q: str) -> list:
+    """The shared 7-column book search filter (books/all-books/library search).
+
+    The authors arrays are matched through beepub_join_authors() — an
+    IMMUTABLE SQL function created in migration 044 — so the trigram
+    expression indexes on those columns apply. Keep the two in sync.
+    """
+    pattern = f"%{q}%"
+    return [
+        Book.title.ilike(pattern),
+        Book.epub_title.ilike(pattern),
+        func.beepub_join_authors(Book.authors).ilike(pattern),
+        func.beepub_join_authors(Book.epub_authors).ilike(pattern),
+        Book.series.ilike(pattern),
+        Book.epub_series.ilike(pattern),
+        Book.epub_isbn.ilike(pattern),
+    ]
+
+
 def _require_upload_permission(user: User) -> None:
     if user.role != UserRole.admin and not user.can_upload:
         raise HTTPException(status_code=403, detail="Upload permission required")
@@ -568,12 +587,10 @@ async def search_books(
     q: str = Query("", min_length=1),
     limit: int = Query(20, ge=1, le=100),
 ):
-    from sqlalchemy import String as SAString
-    from sqlalchemy import case, cast
+    from sqlalchemy import case
 
     from app.routers.libraries import accessible_libraries_condition
 
-    pattern = f"%{q}%"
     # Subquery: accessible library IDs
     accessible_libs = select(Library.id)
     cond = accessible_libraries_condition(current_user)
@@ -589,15 +606,7 @@ async def search_books(
         .join(Library, Library.id == LibraryBook.library_id)
         .where(
             LibraryBook.library_id.in_(select(accessible_lib_ids.c.id)),
-            or_(
-                Book.title.ilike(pattern),
-                Book.epub_title.ilike(pattern),
-                cast(Book.authors, SAString).ilike(pattern),
-                cast(Book.epub_authors, SAString).ilike(pattern),
-                Book.series.ilike(pattern),
-                Book.epub_series.ilike(pattern),
-                Book.epub_isbn.ilike(pattern),
-            ),
+            or_(*book_search_conditions(q)),
         )
         .group_by(Book.id)
     )
@@ -802,8 +811,6 @@ async def list_all_books(
     series-detail page only shows that library's volumes (series identity is
     ``(library_id, series_key)``).
     """
-    from sqlalchemy import String as SAString
-    from sqlalchemy import cast
     from sqlalchemy.sql.functions import coalesce
 
     # Subquery: accessible book IDs (avoids DISTINCT on the main query)
@@ -824,18 +831,7 @@ async def list_all_books(
 
     # Apply filters
     if search:
-        pattern = f"%{search}%"
-        base_query = base_query.where(
-            or_(
-                Book.title.ilike(pattern),
-                Book.epub_title.ilike(pattern),
-                cast(Book.authors, SAString).ilike(pattern),
-                cast(Book.epub_authors, SAString).ilike(pattern),
-                Book.series.ilike(pattern),
-                Book.epub_series.ilike(pattern),
-                Book.epub_isbn.ilike(pattern),
-            )
-        )
+        base_query = base_query.where(or_(*book_search_conditions(search)))
     if author:
         base_query = base_query.where(
             or_(

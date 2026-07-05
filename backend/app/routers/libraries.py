@@ -2,10 +2,9 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import cast, exists, func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
-from sqlalchemy.types import String as SAString
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
@@ -13,6 +12,7 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
+from app.routers.books import book_search_conditions
 from app.schemas.book import (
     BookWithInteractionOut,
     PaginatedBooksWithInteraction,
@@ -193,18 +193,7 @@ async def list_library_books(
         .where(LibraryBook.library_id == library_id)
     )
     if search:
-        pattern = f"%{search}%"
-        base_query = base_query.where(
-            or_(
-                Book.title.ilike(pattern),
-                Book.epub_title.ilike(pattern),
-                cast(Book.authors, SAString).ilike(pattern),
-                cast(Book.epub_authors, SAString).ilike(pattern),
-                Book.series.ilike(pattern),
-                Book.epub_series.ilike(pattern),
-                Book.epub_isbn.ilike(pattern),
-            )
-        )
+        base_query = base_query.where(or_(*book_search_conditions(search)))
     if author:
         base_query = base_query.where(
             or_(
