@@ -1103,13 +1103,18 @@ async def delete_book(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    # Only delete the EPUB file for non-Calibre books (Calibre files are on read-only mount)
+    # Only delete the EPUB file for non-Calibre books (Calibre files are on
+    # a read-only mount). Files are removed AFTER the commit — if the commit
+    # fails, a row pointing at a deleted file would be unrecoverable.
+    paths = []
     if book.calibre_id is None:
-        delete_file(book.file_path)
+        paths.append(book.file_path)
     if book.cover_path:
-        delete_file(book.cover_path)
+        paths.append(book.cover_path)
     await db.delete(book)
     await db.commit()
+    for path in paths:
+        delete_file(path)
 
 
 @router.get("/{book_id}/file")

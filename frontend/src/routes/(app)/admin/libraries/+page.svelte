@@ -56,17 +56,20 @@
     }
   }
 
-  async function handleDelete(id: string, name: string) {
+  async function handleDelete(lib: (typeof libraries)[number]) {
     if (
       !(await confirmDialog({
-        title: m.admin_libraries_delete_confirm({ name }),
+        title: m.admin_libraries_delete_confirm({ name: lib.name }),
+        description: m.admin_libraries_delete_warning({
+          count: String(lib.book_count ?? 0),
+        }),
         destructive: true,
       }))
     )
       return;
     try {
-      await librariesApi.delete(id);
-      libraries = libraries.filter((l) => l.id !== id);
+      await librariesApi.delete(lib.id);
+      libraries = libraries.filter((l) => l.id !== lib.id);
       toastStore.success(m.admin_libraries_deleted());
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -159,7 +162,7 @@
             </a>
             <button
               class="w-8 h-8 rounded-full bg-secondary/50 flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              onclick={() => handleDelete(lib.id, lib.name)}
+              onclick={() => handleDelete(lib)}
               title="Delete"
             >
               <Trash2 size={14} />

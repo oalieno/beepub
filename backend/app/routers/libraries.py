@@ -152,7 +152,9 @@ async def delete_library(
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
 
-    # Delete all books in this library (and their files)
+    # Delete all books in this library (and their files). Files are removed
+    # AFTER the commit — a failed commit must not leave rows pointing at
+    # already-deleted files.
     from app.services.storage import delete_file
 
     book_result = await db.execute(
@@ -160,16 +162,19 @@ async def delete_library(
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .where(LibraryBook.library_id == library_id)
     )
+    paths: list[str] = []
     for book in book_result.scalars().all():
         # Only delete EPUB file for non-Calibre books (Calibre files are on read-only mount)
         if book.calibre_id is None:
-            delete_file(book.file_path)
+            paths.append(book.file_path)
         if book.cover_path:
-            delete_file(book.cover_path)
+            paths.append(book.cover_path)
         await db.delete(book)
 
     await db.delete(library)
     await db.commit()
+    for path in paths:
+        delete_file(path)
 
 
 @router.get("/{library_id}/books", response_model=PaginatedBooksWithInteraction)

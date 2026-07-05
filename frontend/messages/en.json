@@ -389,6 +389,7 @@
   "admin_libraries_dialog_title": "Create Library",
   "admin_libraries_creating": "Creating...",
   "admin_libraries_delete_confirm": "Delete library \"{name}\"?",
+  "admin_libraries_delete_warning": "This permanently deletes its {count} books, along with every user's highlights, ratings, and reading progress for them.",
   "admin_libraries_created": "Library created",
   "admin_libraries_deleted": "Library deleted",
   "admin_library_updated": "Library updated",

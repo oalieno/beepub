@@ -389,6 +389,7 @@
   "admin_libraries_dialog_title": "建立書庫",
   "admin_libraries_creating": "建立中...",
   "admin_libraries_delete_confirm": "確定刪除書庫「{name}」？",
+  "admin_libraries_delete_warning": "將永久刪除其中的 {count} 本書，以及所有使用者對這些書的畫線、評分與閱讀進度。",
   "admin_libraries_created": "書庫已建立",
   "admin_libraries_deleted": "書庫已刪除",
   "admin_library_updated": "書庫已更新",
