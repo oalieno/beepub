@@ -18,6 +18,7 @@ from app.models.work import Work
 from app.schemas.work import (
     DuplicateSuggestionsOut,
     WorkCreate,
+    WorkExclusionCreate,
     WorkOut,
     WorkUpdate,
 )
@@ -186,36 +187,29 @@ async def get_suggestions(
 
 @router.post("/exclusions", status_code=status.HTTP_201_CREATED)
 async def create_exclusion(
-    body: dict,
+    body: WorkExclusionCreate,
     _admin: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Mark a group of books as 'not duplicates'. Stores all C(N,2) pairs."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
     from app.models.work import WorkScanExclusion
 
-    book_ids = body.get("book_ids", [])
-    if len(book_ids) < 2:
-        raise HTTPException(status_code=422, detail="At least 2 book IDs required")
-
-    # Insert all pairs (smaller ID first for consistency)
-    import uuid as uuid_mod
-
-    parsed_ids = [uuid_mod.UUID(str(bid)) for bid in book_ids]
-    for i, a in enumerate(parsed_ids):
-        for b in parsed_ids[i + 1 :]:
-            pair_a, pair_b = (min(a, b), max(a, b))
-            # Upsert: skip if pair already exists
-            existing = await db.execute(
-                select(WorkScanExclusion).where(
-                    WorkScanExclusion.book_id_a == pair_a,
-                    WorkScanExclusion.book_id_b == pair_b,
-                )
-            )
-            if not existing.scalar_one_or_none():
-                db.add(WorkScanExclusion(book_id_a=pair_a, book_id_b=pair_b))
-
+    # All pairs, smaller ID first for consistency; one bulk insert instead
+    # of O(N^2) SELECT-then-INSERT round-trips.
+    pairs = [
+        {"book_id_a": min(a, b), "book_id_b": max(a, b)}
+        for i, a in enumerate(body.book_ids)
+        for b in body.book_ids[i + 1 :]
+    ]
+    await db.execute(
+        pg_insert(WorkScanExclusion)
+        .values(pairs)
+        .on_conflict_do_nothing(index_elements=["book_id_a", "book_id_b"])
+    )
     await db.commit()
-    return {"status": "excluded", "pairs": len(parsed_ids) * (len(parsed_ids) - 1) // 2}
+    return {"status": "excluded", "pairs": len(pairs)}
 
 
 @router.get("/{work_id}", response_model=WorkOut)

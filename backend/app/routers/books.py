@@ -101,6 +101,16 @@ async def _user_can_access_book(
     return result.scalar_one_or_none() is not None
 
 
+async def _today_in_app_timezone(db: AsyncSession) -> date:
+    """Today's date in the configured timezone; a bad setting must never 500
+    (it would break every progress save), so fall back to UTC."""
+    tz_name = await get_setting(db, "timezone")
+    try:
+        return datetime.now(ZoneInfo(tz_name)).date()
+    except Exception:
+        return datetime.now(UTC).date()
+
+
 def book_search_conditions(q: str) -> list:
     """The shared 7-column book search filter (books/all-books/library search).
 
@@ -259,11 +269,7 @@ async def get_reading_stats(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get reading streak and goal progress for the current user."""
-    tz_name = await get_setting(db, "timezone")
-    try:
-        today = datetime.now(ZoneInfo(tz_name)).date()
-    except (KeyError, Exception):
-        today = datetime.now(UTC).date()
+    today = await _today_in_app_timezone(db)
 
     # Fetch all reading days ordered by date desc
     result = await db.execute(
@@ -1786,8 +1792,7 @@ async def update_progress(
             MAX_READING_SESSION_GAP = 300  # 5 minutes
             if 0 < delta < MAX_READING_SESSION_GAP:
                 delta_seconds = int(delta)
-                tz_name = await get_setting(db, "timezone")
-                today = datetime.now(ZoneInfo(tz_name)).date()
+                today = await _today_in_app_timezone(db)
                 result = await db.execute(
                     select(ReadingActivity).where(
                         ReadingActivity.user_id == current_user.id,

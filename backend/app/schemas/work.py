@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class WorkBookBrief(BaseModel):
@@ -54,3 +54,7 @@ class DuplicateSuggestionsOut(BaseModel):
     groups: list[DuplicateGroup]
     total_books_scanned: int
     truncated: bool = False
+
+
+class WorkExclusionCreate(BaseModel):
+    book_ids: list[uuid.UUID] = Field(min_length=2, max_length=100)

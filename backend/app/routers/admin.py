@@ -6,6 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -54,14 +55,19 @@ async def create_user(
 ):
     existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Username already exists")
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
         role=UserRole.user,
     )
     db.add(user)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Concurrent create racing past the existence check above
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Username already exists")
     await db.refresh(user)
     return user
 
@@ -198,6 +204,16 @@ async def update_user_library_access(
     result = await db.execute(select(User).where(User.id == user_id))
     if not result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Reject stale/unknown library ids up front — otherwise the insert
+    # below fails the FK and surfaces as a 500.
+    if body.excluded_library_ids:
+        found = await db.execute(
+            select(Library.id).where(Library.id.in_(body.excluded_library_ids))
+        )
+        missing = set(body.excluded_library_ids) - set(found.scalars().all())
+        if missing:
+            raise HTTPException(status_code=422, detail="Unknown library ids")
 
     # Delete all existing exclusions for this user
     from sqlalchemy import delete
@@ -492,6 +508,26 @@ async def list_ai_models(
 
     api_key, base_url = _resolve_credentials(settings, provider)
 
+    import httpx
+
+    models: list[dict[str, str]] = []
+
+    try:
+        models = await _fetch_provider_models(provider, api_key, base_url)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"{provider} returned HTTP {exc.response.status_code}",
+        )
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Cannot reach {provider}: {exc}")
+
+    return models
+
+
+async def _fetch_provider_models(
+    provider: str, api_key: str | None, base_url: str | None
+) -> list[dict[str, str]]:
     import httpx
 
     models: list[dict[str, str]] = []
