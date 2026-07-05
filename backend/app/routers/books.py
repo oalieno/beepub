@@ -1,3 +1,4 @@
+import asyncio
 import mimetypes
 import os
 import re
@@ -138,8 +139,10 @@ async def _ingest_epub(
 
     file_size = await save_upload_file(file, file_path)
     try:
-        metadata = parse_epub_metadata(file_path)
-        cover_ok = extract_cover(file_path, cover_path)
+        # EPUB parsing is blocking zip/XML work — keep it off the event loop
+        # (a bulk upload would otherwise stall every other request).
+        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
+        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
     except Exception:
         delete_file(file_path)
         delete_file(cover_path)
@@ -1164,13 +1167,26 @@ async def get_book_content(
         return Response(status_code=304, headers=headers)
 
     try:
-        with zipfile.ZipFile(book.file_path, "r") as zf:
-            data = zf.read(path)
+        # Zip decompression + regex rewrite are blocking CPU/disk work and
+        # this endpoint fires on every chapter turn — keep it off the event
+        # loop so concurrent readers don't serialize behind each other.
+        data = await asyncio.to_thread(_read_epub_entry, book.file_path, path)
     except KeyError:
         raise HTTPException(status_code=404, detail="Path not found in EPUB")
     content_type, _ = mimetypes.guess_type(path)
     if content_type is None:
         content_type = "application/octet-stream"
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers=headers,
+    )
+
+
+def _read_epub_entry(file_path: str, path: str) -> bytes:
+    with zipfile.ZipFile(file_path, "r") as zf:
+        data = zf.read(path)
 
     # Fix malformed XHTML: self-close void elements (e.g. <link ...> → <link .../>)
     if path.endswith((".xhtml", ".html", ".htm")):
@@ -1182,12 +1198,7 @@ async def get_book_content(
             text,
         )
         data = text.encode("utf-8")
-
-    return Response(
-        content=data,
-        media_type=content_type,
-        headers=headers,
-    )
+    return data
 
 
 @router.get("/{book_id}/images")
@@ -1201,12 +1212,16 @@ async def list_epub_images(
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
     image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-    with zipfile.ZipFile(book.file_path, "r") as zf:
-        return [
-            {"path": name, "name": os.path.basename(name)}
-            for name in sorted(zf.namelist())
-            if os.path.splitext(name)[1].lower() in image_exts
-        ]
+
+    def scan() -> list[dict]:
+        with zipfile.ZipFile(book.file_path, "r") as zf:
+            return [
+                {"path": name, "name": os.path.basename(name)}
+                for name in sorted(zf.namelist())
+                if os.path.splitext(name)[1].lower() in image_exts
+            ]
+
+    return await asyncio.to_thread(scan)
 
 
 @router.get("/{book_id}/cover")
