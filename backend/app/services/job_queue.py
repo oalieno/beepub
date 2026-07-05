@@ -151,6 +151,16 @@ async def get_pending_count(job_type: str) -> int:
         return max(int(data), 0) if data else 0
 
 
+async def get_pending_counts(job_types: list[str]) -> dict[str, int]:
+    """Get pending counts for many job types over a single Redis connection."""
+    async with _redis() as client:
+        values = await client.mget([_pending_key(k) for k in job_types])
+    return {
+        key: max(int(val), 0) if val else 0
+        for key, val in zip(job_types, values, strict=True)
+    }
+
+
 async def reset_pending(job_type: str) -> None:
     """Reset the pending counter to 0 (called on stop)."""
     async with _redis() as client:
@@ -198,6 +208,53 @@ def _missing_filters(job_type: str):
         return [Book.metadata_count < NUM_METADATA_SOURCES], None
 
     return None, None
+
+
+@dataclass
+class JobQueueStats:
+    total: int
+    image_book_count: int
+    # job type key -> (missing, blocked)
+    counts: dict[str, tuple[int, int]]
+
+
+async def count_all_job_stats(db: AsyncSession) -> JobQueueStats:
+    """Compute every job type's missing/blocked counts in ONE table pass.
+
+    Uses Postgres conditional aggregation (count FILTER (WHERE ...)) so the
+    jobs status endpoint issues a single query instead of ~11 sequential
+    count(*) scans over books.
+    """
+    from sqlalchemy import and_
+
+    columns = [
+        func.count(Book.id).label("total"),
+        func.count(Book.id).filter(Book.is_image_book.is_(True)).label("image"),
+    ]
+    blocked_keys = set()
+    for key in JOB_TYPES:
+        missing_where, blocked_where = _missing_filters(key)
+        columns.append(
+            func.count(Book.id).filter(and_(*missing_where)).label(f"m_{key}")
+        )
+        if blocked_where is not None:
+            blocked_keys.add(key)
+            columns.append(
+                func.count(Book.id).filter(and_(*blocked_where)).label(f"b_{key}")
+            )
+
+    row = (await db.execute(select(*columns))).one()
+
+    counts = {
+        key: (
+            getattr(row, f"m_{key}") or 0,
+            (getattr(row, f"b_{key}") or 0) if key in blocked_keys else 0,
+        )
+        for key in JOB_TYPES
+    }
+    return JobQueueStats(
+        total=row.total or 0, image_book_count=row.image or 0, counts=counts
+    )
 
 
 async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int]:

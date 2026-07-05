@@ -13,7 +13,8 @@ from app.deps import require_admin
 from app.models.user import User
 from app.services.job_queue import (
     JOB_TYPES,
-    get_pending_count,
+    count_all_job_stats,
+    get_pending_counts,
     start_job,
     stop_job,
 )
@@ -50,50 +51,33 @@ async def get_jobs_status(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get status of all job types with missing counts and active task counts."""
-    import asyncio
-
-    from sqlalchemy import func, select
-
-    from app.models.book import Book
-    from app.services.job_queue import count_missing_books
-
-    # Total and image count — query once
-    total_result = await db.execute(select(func.count(Book.id)))
-    total = total_result.scalar() or 0
-    img_result = await db.execute(
-        select(func.count(Book.id)).where(Book.is_image_book.is_(True))
-    )
-    image_book_count = img_result.scalar() or 0
-
-    # Per-job-type missing/blocked counts (sequential — single DB session)
     keys = list(JOB_TYPES.keys())
-    missing_results = []
-    for key in keys:
-        missing_results.append(await count_missing_books(db, key))
 
-    # Redis calls can run in parallel
-    pending_results = await asyncio.gather(*[get_pending_count(k) for k in keys])
+    # One conditional-aggregation query for all counts, one Redis MGET for
+    # all pending counters — instead of ~11 sequential count(*) scans plus
+    # a fresh Redis connection per job type.
+    stats = await count_all_job_stats(db)
+    pending_by_key = await get_pending_counts(keys)
 
     jobs = []
-    for i, key in enumerate(keys):
+    for key in keys:
         job_type = JOB_TYPES[key]
-        missing, blocked = missing_results[i]
-        pending = pending_results[i]
+        missing, blocked = stats.counts[key]
         jobs.append(
             JobStatusOut(
                 key=key,
                 label=job_type.label,
                 description=job_type.description,
-                total=total,
+                total=stats.total,
                 missing=missing,
                 blocked=blocked,
                 blocked_label=BLOCKED_LABELS.get(key, "Needs Text"),
-                pending=pending,
+                pending=pending_by_key[key],
                 requires_ai=job_type.requires_ai,
             )
         )
 
-    return AllJobsResponse(jobs=jobs, image_book_count=image_book_count)
+    return AllJobsResponse(jobs=jobs, image_book_count=stats.image_book_count)
 
 
 @router.post("/{job_type}", status_code=status.HTTP_202_ACCEPTED)
