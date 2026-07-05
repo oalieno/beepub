@@ -368,14 +368,15 @@ async def reorder_shelf_books(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_owned_shelf(shelf_id, current_user, db)
-    for i, book_id in enumerate(body.book_ids):
-        result = await db.execute(
-            select(BookshelfBook).where(
-                BookshelfBook.bookshelf_id == shelf_id,
-                BookshelfBook.book_id == book_id,
-            )
+    result = await db.execute(
+        select(BookshelfBook).where(
+            BookshelfBook.bookshelf_id == shelf_id,
+            BookshelfBook.book_id.in_(body.book_ids),
         )
-        bb = result.scalar_one_or_none()
+    )
+    rows = {bb.book_id: bb for bb in result.scalars().all()}
+    for i, book_id in enumerate(body.book_ids):
+        bb = rows.get(book_id)
         if bb:
             bb.sort_order = i
     await db.commit()

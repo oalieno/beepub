@@ -21,6 +21,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, Response
 from sqlalchemy import and_, exists, func, literal_column, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import coalesce
@@ -1672,14 +1673,13 @@ async def update_favorite(
 
     # Sync to all sibling editions in the same Work
     if book.work_id:
-        siblings = await db.execute(
-            select(Book.id).where(Book.work_id == book.work_id, Book.id != book_id)
+        await _sync_sibling_interactions(
+            current_user.id,
+            book.work_id,
+            book_id,
+            {"is_favorite": body.is_favorite},
+            db,
         )
-        for (sib_id,) in siblings.all():
-            sib_interaction = await _get_or_create_interaction(
-                current_user.id, sib_id, db
-            )
-            sib_interaction.is_favorite = body.is_favorite
 
     await db.commit()
     return {"status": "updated"}
@@ -1709,16 +1709,17 @@ async def update_reading_status(
 
     # Sync to all sibling editions in the same Work
     if book.work_id:
-        siblings = await db.execute(
-            select(Book.id).where(Book.work_id == book.work_id, Book.id != book_id)
+        await _sync_sibling_interactions(
+            current_user.id,
+            book.work_id,
+            book_id,
+            {
+                "reading_status": body.reading_status,
+                "started_at": body.started_at,
+                "finished_at": body.finished_at,
+            },
+            db,
         )
-        for (sib_id,) in siblings.all():
-            sib_interaction = await _get_or_create_interaction(
-                current_user.id, sib_id, db
-            )
-            sib_interaction.reading_status = body.reading_status
-            sib_interaction.started_at = body.started_at
-            sib_interaction.finished_at = body.finished_at
 
     await db.commit()
     return {"status": "updated"}
@@ -1939,18 +1940,48 @@ async def _get_book_with_access(
 async def _get_or_create_interaction(
     user_id: uuid.UUID, book_id: uuid.UUID, db: AsyncSession
 ) -> UserBookInteraction:
+    # ON CONFLICT DO NOTHING makes concurrent first-interactions (e.g. a
+    # double tap racing two requests) converge instead of 500ing on the PK.
+    await db.execute(
+        pg_insert(UserBookInteraction)
+        .values(user_id=user_id, book_id=book_id, is_favorite=False)
+        .on_conflict_do_nothing(index_elements=["user_id", "book_id"])
+    )
     result = await db.execute(
         select(UserBookInteraction).where(
             UserBookInteraction.user_id == user_id,
             UserBookInteraction.book_id == book_id,
         )
     )
-    interaction = result.scalar_one_or_none()
-    if not interaction:
-        interaction = UserBookInteraction(user_id=user_id, book_id=book_id)
-        db.add(interaction)
-        await db.flush()
-    return interaction
+    return result.scalar_one()
+
+
+async def _sync_sibling_interactions(
+    user_id: uuid.UUID,
+    work_id: uuid.UUID,
+    exclude_book_id: uuid.UUID,
+    values: dict,
+    db: AsyncSession,
+) -> None:
+    """Propagate interaction fields to all sibling editions in one upsert."""
+    sib_result = await db.execute(
+        select(Book.id).where(Book.work_id == work_id, Book.id != exclude_book_id)
+    )
+    sibling_ids = [row[0] for row in sib_result.all()]
+    if not sibling_ids:
+        return
+    stmt = pg_insert(UserBookInteraction).values(
+        [
+            {"user_id": user_id, "book_id": sib_id, "is_favorite": False, **values}
+            for sib_id in sibling_ids
+        ]
+    )
+    await db.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["user_id", "book_id"],
+            set_={**values, "updated_at": func.now()},
+        )
+    )
 
 
 # --- Book Reports ---
