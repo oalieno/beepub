@@ -146,6 +146,10 @@
 
   async function handleResetPassword() {
     if (!user || !resetPassword) return;
+    if (resetPassword.length < 8) {
+      toastStore.error(m.auth_password_too_short());
+      return;
+    }
     resetting = true;
     try {
       await adminApi.resetPassword(userId, resetPassword);

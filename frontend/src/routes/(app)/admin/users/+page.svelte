@@ -41,6 +41,10 @@
 
   async function handleCreateUser() {
     if (!newUsername || !newPassword) return;
+    if (newPassword.length < 8) {
+      createError = m.auth_password_too_short();
+      return;
+    }
     creating = true;
     createError = "";
     try {

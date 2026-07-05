@@ -51,6 +51,10 @@
 
   async function handleRegister() {
     if (!username || !password) return;
+    if (password.length < 8) {
+      errorMessage = m.auth_password_too_short();
+      return;
+    }
     loading = true;
     errorMessage = "";
     try {

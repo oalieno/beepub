@@ -85,6 +85,10 @@
       passwordError = m.profile_password_mismatch();
       return;
     }
+    if (newPassword.length < 8) {
+      passwordError = m.auth_password_too_short();
+      return;
+    }
     changingPassword = true;
     try {
       await authApi.changePassword(currentPassword, newPassword);

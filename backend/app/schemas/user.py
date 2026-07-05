@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.user import UserRole
 
@@ -30,11 +30,11 @@ class UserUpdatePermissions(BaseModel):
 
 class AdminCreateUser(BaseModel):
     username: str
-    password: str
+    password: str = Field(min_length=8)
 
 
 class AdminResetPassword(BaseModel):
-    new_password: str
+    new_password: str = Field(min_length=8)
 
 
 class UserLibraryAccessOut(BaseModel):

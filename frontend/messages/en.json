@@ -50,6 +50,7 @@
   "auth_enter_password": "Enter password",
   "auth_choose_username": "Choose username",
   "auth_choose_password": "Choose password",
+  "auth_password_too_short": "Password must be at least 8 characters",
   "auth_logging_in": "Logging in...",
   "auth_creating_account": "Creating account...",
   "auth_page_title": "BeePub - Login",

@@ -50,6 +50,7 @@
   "auth_enter_password": "輸入密碼",
   "auth_choose_username": "設定使用者名稱",
   "auth_choose_password": "設定密碼",
+  "auth_password_too_short": "密碼至少需要 8 個字元",
   "auth_logging_in": "登入中...",
   "auth_creating_account": "建立帳號中...",
   "auth_page_title": "BeePub - 登入",
