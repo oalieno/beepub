@@ -58,18 +58,21 @@ async def _run_summarize_chunks(
     Does NOT auto-trigger embed_book_summary — caller decides follow-up.
     """
     import redis.asyncio as aioredis
-    from sqlalchemy import select
+    from sqlalchemy import func as sa_func
+    from sqlalchemy import select, update
 
     from app.config import settings
     from app.database import create_task_engine
     from app.models.book import Book
     from app.models.book_text import BookTextChunk
     from app.services.llm import LLMNotConfiguredError, get_tag_provider
+    from app.services.llm_usage import log_llm_usage
     from app.services.settings import get_all_settings
 
-    # Prevent duplicate summarization of the same book
+    # Prevent duplicate summarization of the same book. The timeout must
+    # cover the whole per-book runtime (large books × LLM latency).
     client = aioredis.from_url(settings.redis_url)
-    lock = client.lock(f"summarize:{book_id}", timeout=600)
+    lock = client.lock(f"summarize:{book_id}", timeout=2400)
     if not await lock.acquire(blocking=False):
         logger.info(f"Summarize already running for book {book_id}, skipping")
         await client.aclose()
@@ -77,9 +80,12 @@ async def _run_summarize_chunks(
 
     try:
         async with create_task_engine() as (_engine, session_factory):
-            async with session_factory() as db:
-                bid = uuid.UUID(book_id)
+            bid = uuid.UUID(book_id)
 
+            # Phase 1: read everything up front in one short session. The
+            # LLM loop below must NOT hold a session — the task pool is tiny
+            # (2+1) and a multi-minute open transaction starves other tasks.
+            async with session_factory() as db:
                 # Skip image books — no meaningful text to summarize
                 img_result = await db.execute(
                     select(Book.is_image_book).where(Book.id == bid)
@@ -114,32 +120,40 @@ async def _run_summarize_chunks(
                 if up_to_spine_index is not None:
                     filters.append(BookTextChunk.spine_index <= up_to_spine_index)
                 result = await db.execute(
-                    select(BookTextChunk)
+                    select(
+                        BookTextChunk.id,
+                        BookTextChunk.spine_index,
+                        BookTextChunk.text,
+                    )
                     .where(*filters)
                     .order_by(BookTextChunk.spine_index)
                 )
-                chunks = result.scalars().all()
+                chunk_data = result.all()
 
-                if not chunks:
+                if not chunk_data:
                     return
 
-                # Get LLM provider
                 db_settings = await get_all_settings(db)
-                try:
-                    provider = get_tag_provider(db_settings)
-                except LLMNotConfiguredError:
-                    logger.warning("Tag AI not configured, skipping summarization")
-                    return
 
-                for chunk in chunks:
-                    stripped = chunk.text.strip()
-                    # Skip short/non-content sections
-                    if len(stripped) < 1000:
-                        chunk.summary = stripped[:200]
-                        continue
+            try:
+                provider = get_tag_provider(db_settings)
+            except LLMNotConfiguredError:
+                logger.warning("Tag AI not configured, skipping summarization")
+                return
 
+            # Phase 2: LLM loop with no session held. Each summary commits
+            # individually, so progress is durable and a retried/re-run task
+            # resumes where it left off (via the summary IS NULL filter).
+            summarized = 0
+            for chunk_id, spine_index, chunk_text in chunk_data:
+                stripped = chunk_text.strip()
+                usage = None
+                if len(stripped) < 1000:
+                    # Short/non-content section — no LLM call needed
+                    summary = stripped[:200]
+                else:
                     # Truncate very long sections for the summary prompt
-                    text = chunk.text
+                    text = chunk_text
                     if len(text) > 12_000:
                         text = text[:12_000] + "\n\n[...truncated...]"
 
@@ -148,36 +162,42 @@ async def _run_summarize_chunks(
                         result = await provider.generate(
                             SUMMARY_PROMPT.format(language=lang, text=text),
                         )
-                        chunk.summary = result.text.strip()
-
-                        # Log usage (fire-and-forget)
-                        from app.services.llm_usage import log_llm_usage
-
-                        await log_llm_usage(
-                            feature="summarize",
-                            provider=db_settings.get("tag_provider", ""),
-                            model=db_settings.get("tag_model", ""),
-                            usage=result.usage,
-                            book_id=bid,
-                            session_factory=session_factory,
-                        )
+                        summary = result.text.strip()
+                        usage = result.usage
                     except Exception:
                         logger.warning(
-                            f"Failed to summarize chunk {chunk.id} (spine {chunk.spine_index}) of book {book_id}",
+                            f"Failed to summarize chunk {chunk_id} (spine {spine_index}) of book {book_id}",
                             exc_info=True,
                         )
                         # Don't fail the whole task — skip this chunk
                         continue
 
-                await db.commit()
-                summarized = sum(1 for c in chunks if c.summary is not None)
-                logger.info(
-                    f"Summarized {summarized}/{len(chunks)} chunks for book {book_id} (up to spine {up_to_spine_index})"
-                )
+                async with session_factory() as db:
+                    await db.execute(
+                        update(BookTextChunk)
+                        .where(BookTextChunk.id == chunk_id)
+                        .values(summary=summary)
+                    )
+                    await db.commit()
+                summarized += 1
 
-                # Check if all chunks are now summarized and update flag
-                from sqlalchemy import func as sa_func
+                if usage is not None:
+                    # Log usage (fire-and-forget)
+                    await log_llm_usage(
+                        feature="summarize",
+                        provider=db_settings.get("tag_provider", ""),
+                        model=db_settings.get("tag_model", ""),
+                        usage=usage,
+                        book_id=bid,
+                        session_factory=session_factory,
+                    )
 
+            logger.info(
+                f"Summarized {summarized}/{len(chunk_data)} chunks for book {book_id} (up to spine {up_to_spine_index})"
+            )
+
+            # Phase 3: check if all chunks are now summarized and update flag
+            async with session_factory() as db:
                 unsummarized_result = await db.execute(
                     select(sa_func.count())
                     .select_from(BookTextChunk)
@@ -187,8 +207,6 @@ async def _run_summarize_chunks(
                     )
                 )
                 if unsummarized_result.scalar() == 0:
-                    from sqlalchemy import update
-
                     await db.execute(
                         update(Book).where(Book.id == bid).values(is_summarized=True)
                     )

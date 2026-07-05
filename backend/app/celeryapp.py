@@ -47,6 +47,13 @@ celery.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     task_default_queue="default",
+    # Nothing ever reads task results — don't store them in Redis.
+    task_ignore_result=True,
+    # Backstop against hung external calls (LLM/scrapes): with prefetch=1 a
+    # single stuck task would otherwise stall its whole queue forever. Long
+    # legitimate tasks (calibre sync) override this on their own decorator.
+    task_soft_time_limit=3300,
+    task_time_limit=3600,
     imports=[
         "app.tasks.metadata",
         "app.tasks.illustration",

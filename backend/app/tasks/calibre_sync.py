@@ -98,7 +98,11 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
         await client.aclose()
 
 
-@celery.task(name="app.tasks.calibre_sync.check_and_sync_calibre")
+@celery.task(
+    name="app.tasks.calibre_sync.check_and_sync_calibre",
+    soft_time_limit=6 * 3600,
+    time_limit=6 * 3600 + 300,
+)
 def check_and_sync_calibre(force: bool = False) -> None:
     """Celery beat task: periodic calibre sync dispatcher."""
     from app.celeryapp import run_async
@@ -106,7 +110,11 @@ def check_and_sync_calibre(force: bool = False) -> None:
     run_async(_check_and_sync_calibre(force=force))
 
 
-@celery.task(name="app.tasks.calibre_sync.sync_calibre_library")
+@celery.task(
+    name="app.tasks.calibre_sync.sync_calibre_library",
+    soft_time_limit=6 * 3600,
+    time_limit=6 * 3600 + 300,
+)
 def sync_calibre_library(
     calibre_path: str, library_id: str, admin_user_id: str
 ) -> None:

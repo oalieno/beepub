@@ -96,24 +96,34 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
     redis_client = aioredis.from_url(app_config.redis_url)
 
+    # Per-book lock: with acks_late a worker crash redelivers the task, and
+    # the same book can be dispatched via both the bulk queue and the
+    # default-queue task — without this both re-scrape every source.
+    lock = redis_client.lock(f"beepub:metadata:{book_id}", timeout=900)
+    if not await lock.acquire(blocking=False):
+        logger.info(f"Metadata backfill already running for book {book_id}, skipping")
+        await redis_client.aclose()
+        return
+
     try:
         async with create_task_engine() as (_engine, session_factory):
             sources = await init_metadata_sources(session_factory)
 
             async with session_factory() as db:
                 book_info = await fetch_book_info(db, book_id)
-                if not book_info:
-                    return
+            if not book_info:
+                return
 
-                display_title, display_authors, isbn = book_info
+            display_title, display_authors, isbn = book_info
 
-                for source in sources:
-                    try:
-                        # Skip if rate-limited
-                        if await _is_rate_limited(redis_client, source.source_name):
-                            continue
+            for source in sources:
+                try:
+                    # Skip if rate-limited
+                    if await _is_rate_limited(redis_client, source.source_name):
+                        continue
 
-                        # Skip if already fetched this source
+                    # Skip if already fetched this source
+                    async with session_factory() as db:
                         existing = await db.execute(
                             text(
                                 "SELECT 1 FROM external_metadata "
@@ -121,28 +131,34 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
                             ),
                             {"book_id": book_id, "source": source.source_name},
                         )
-                        if existing.one_or_none():
-                            continue
+                        already_fetched = existing.one_or_none() is not None
+                    if already_fetched:
+                        continue
 
-                        result = await search_and_fetch(
-                            source, display_title, display_authors, isbn, book_id
-                        )
+                    # HTTP scraping runs with NO session open — the task
+                    # engine pool is tiny and these calls take seconds each.
+                    result = await search_and_fetch(
+                        source, display_title, display_authors, isbn, book_id
+                    )
+
+                    async with session_factory() as db:
                         if not result:
                             await _write_empty_marker(db, book_id, source.source_name)
-                            continue
-
-                        fetch_result, source_url = result
-                        await upsert_external_metadata(
-                            db, book_id, source.source_name, source_url, fetch_result
-                        )
-                    except RateLimitError:
-                        await _set_rate_limited(redis_client, source.source_name)
-                        await db.rollback()
-                    except Exception as e:
-                        logger.error(
-                            f"Error fetching {source.source_name} for book {book_id}: {e}"
-                        )
-                        await db.rollback()
+                        else:
+                            fetch_result, source_url = result
+                            await upsert_external_metadata(
+                                db,
+                                book_id,
+                                source.source_name,
+                                source_url,
+                                fetch_result,
+                            )
+                except RateLimitError:
+                    await _set_rate_limited(redis_client, source.source_name)
+                except Exception as e:
+                    logger.error(
+                        f"Error fetching {source.source_name} for book {book_id}: {e}"
+                    )
 
             # Update metadata_count flag on the book
             async with session_factory() as db:
@@ -167,6 +183,10 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
             # Rate limit: pause between books
             await asyncio.sleep(DELAY_BETWEEN_BOOKS)
     finally:
+        try:
+            await lock.release()
+        except Exception:
+            pass
         await redis_client.aclose()
 
 
