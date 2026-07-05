@@ -34,18 +34,24 @@
     });
   }
 
+  let unavailable = $state(false);
+
   async function prefetch() {
     try {
       const books = await booksApi.getRandomBooks(1);
       if (books.length === 0) {
         nextBook = null;
+        unavailable = true;
         return;
       }
       nextBook = books[0];
       await preloadCover(nextBook);
       ready = true;
+      unavailable = false;
     } catch {
       nextBook = null;
+      unavailable = true;
+      toastStore.error(m.gacha_load_failed());
     }
   }
 
@@ -122,7 +128,21 @@
 >
   <!-- Pack / Card area -->
   <div class="relative w-64 sm:w-80">
-    {#if phase === "idle"}
+    {#if phase === "idle" && unavailable}
+      <!-- Nothing to pull: empty library or load failure -->
+      <div class="flex flex-col items-center gap-3 py-12 text-center">
+        <BookOpen size={40} class="text-muted-foreground/40" />
+        <p class="font-medium text-foreground">{m.gacha_empty()}</p>
+        <p class="text-sm text-muted-foreground">{m.gacha_empty_subtitle()}</p>
+        <button
+          class="mt-2 inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+          onclick={prefetch}
+        >
+          <RotateCcw size={14} />
+          {m.common_retry()}
+        </button>
+      </div>
+    {:else if phase === "idle"}
       <!-- Card pack using bookpack.png -->
       <button class="w-full pack-idle cursor-pointer" onclick={pull}>
         <img
@@ -271,7 +291,7 @@
 
   <!-- Buttons -->
   <div class="flex items-center gap-3">
-    {#if phase === "idle"}
+    {#if phase === "idle" && !unavailable}
       <div class="text-muted-foreground/50 text-sm">
         {m.gacha_subtitle()}
       </div>

@@ -96,7 +96,7 @@
     ? 'w-16'
     : 'w-[280px]'}"
   style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); padding-left: env(safe-area-inset-left, 0px);"
-  aria-label="Main navigation"
+  aria-label={m.nav_main_navigation()}
 >
   <!-- Logo + Toggle -->
   <div
@@ -124,7 +124,7 @@
         ? ''
         : 'ml-auto'}"
       onclick={toggleSidebar}
-      aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      aria-label={collapsed ? m.nav_expand_sidebar() : m.nav_collapse_sidebar()}
     >
       {#if collapsed}
         <PanelLeftOpen size={16} />
@@ -139,7 +139,7 @@
     <button
       class="flex items-center w-full rounded-lg text-sm transition-colors {collapsed
         ? 'justify-center px-0 py-2.5 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-        : 'gap-3 px-3 py-2 border border-sidebar-border bg-white'} {!online
+        : 'gap-3 px-3 py-2 border border-sidebar-border bg-card'} {!online
         ? 'opacity-25 cursor-default'
         : collapsed
           ? ''

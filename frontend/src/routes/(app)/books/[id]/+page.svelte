@@ -8,6 +8,7 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import StarRating from "$lib/components/StarRating.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import type {
@@ -315,7 +316,13 @@
   }
 
   async function handleDelete() {
-    if (!confirm(m.book_delete_confirm())) return;
+    if (
+      !(await confirmDialog({
+        title: m.book_delete_confirm(),
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await booksApi.delete(bookId);
       toastStore.success(m.book_deleted());
@@ -520,7 +527,7 @@
   async function addToShelf(shelfId: string) {
     try {
       await bookshelvesApi.addBook(shelfId, bookId);
-      toastStore.success("Added to bookshelf");
+      toastStore.success(m.book_added_to_shelf());
       showAddToShelf = false;
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -869,9 +876,18 @@
         <div class="bg-card card-soft rounded-2xl p-4 max-h-80 overflow-y-auto">
           <HighlightList
             highlights={bookHighlights}
-            onselect={(hl) => goto(`/books/${bookId}/read`)}
+            onselect={(hl) =>
+              goto(
+                `/books/${bookId}/read?cfi=${encodeURIComponent(hl.cfi_range)}`,
+              )}
             ondelete={async (hl) => {
-              if (!confirm(m.highlights_delete_confirm())) return;
+              if (
+                !(await confirmDialog({
+                  title: m.highlights_delete_confirm(),
+                  destructive: true,
+                }))
+              )
+                return;
               const prev = bookHighlights;
               // Optimistic remove, then delete immediately (no delayed undo).
               bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
@@ -942,7 +958,7 @@
               {/if}
               {#if isAdmin}
                 <div
-                  class="absolute top-1 right-1 flex gap-1 opacity-0 group-hover/edition:opacity-100 transition-opacity"
+                  class="absolute top-1 right-1 flex gap-1 opacity-70 can-hover:opacity-0 can-hover:group-hover/edition:opacity-100 transition-opacity"
                 >
                   {#if edition.id !== primaryBookId}
                     <button
@@ -972,7 +988,9 @@
     {#if similarBooks.length > 0}
       <div class="border-t border-border my-8"></div>
       <div>
-        <h2 class="text-xl font-bold mb-3 text-foreground">Similar Books</h2>
+        <h2 class="text-xl font-bold mb-3 text-foreground">
+          {m.book_similar()}
+        </h2>
         <div class="flex gap-4 overflow-x-auto pb-2 -mx-2 px-2 snap-x">
           {#each similarBooks as simBook}
             <a
@@ -1319,7 +1337,7 @@
 
 <!-- Remove from Work Confirmation -->
 <Dialog.Root bind:open={showWorkRemoveConfirm}>
-  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-sm bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.work_remove_from_work()}</Dialog.Title>
       <Dialog.Description
@@ -1346,7 +1364,7 @@
 
 <!-- Split Work Confirmation -->
 <Dialog.Root bind:open={showWorkSplitConfirm}>
-  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-sm bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.work_split_work()}</Dialog.Title>
       <Dialog.Description
@@ -1482,7 +1500,7 @@
 
 <!-- Remove Offline Copy Confirmation -->
 <Dialog.Root bind:open={showRemoveDownloadDialog}>
-  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-sm bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.book_remove_offline_title()}</Dialog.Title>
       <Dialog.Description>

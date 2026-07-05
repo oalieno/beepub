@@ -161,7 +161,7 @@
   {#if scanned && allGroups.length > 0}
     <div class="flex justify-end mb-8">
       <button
-        class="inline-flex items-center gap-2 px-3 py-1.5 border border-input bg-white rounded-md text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+        class="inline-flex items-center gap-2 px-3 py-1.5 border border-input bg-card rounded-md text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
         onclick={() => (showMergeAllConfirm = true)}
         disabled={mergingAll}
       >
@@ -202,7 +202,7 @@
     {:else if currentGroup}
       <!-- Current group card -->
       {#key reviewIndex + "-" + reviewedCount}
-        <div class="border border-border rounded-xl p-6 bg-white">
+        <div class="border border-border rounded-xl p-6 bg-card">
           <p class="text-xs text-muted-foreground uppercase tracking-wide mb-5">
             {currentGroup.match_method === "fuzzy"
               ? m.duplicates_match_label_fuzzy({
@@ -250,7 +250,7 @@
             class="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-border/50"
           >
             <button
-              class="inline-flex items-center gap-2 px-4 py-2 border border-input bg-white rounded-md text-sm font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
+              class="inline-flex items-center gap-2 px-4 py-2 border border-input bg-card rounded-md text-sm font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
               onclick={excludeCurrentGroup}
               disabled={processing}
             >
@@ -258,7 +258,7 @@
               {m.duplicates_not_duplicates()}
             </button>
             <button
-              class="inline-flex items-center gap-2 px-4 py-2 border border-input bg-white rounded-md text-sm font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
+              class="inline-flex items-center gap-2 px-4 py-2 border border-input bg-card rounded-md text-sm font-medium text-muted-foreground hover:bg-accent disabled:opacity-50"
               onclick={skipCurrentGroup}
               disabled={processing}
             >
@@ -286,7 +286,7 @@
 
 <!-- Merge All Confirmation -->
 <Dialog.Root bind:open={showMergeAllConfirm}>
-  <Dialog.Content class="sm:max-w-sm bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-sm bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.duplicates_merge_all()}</Dialog.Title>
       <Dialog.Description>

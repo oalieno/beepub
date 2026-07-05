@@ -120,7 +120,11 @@
   {:else if series}
     <!-- Back Button -->
     <div class="mb-6 -ml-1">
-      <BackButton href="/" label="Back" onclick={() => history.back()} />
+      <BackButton
+        href="/"
+        label={m.common_back()}
+        onclick={() => history.back()}
+      />
     </div>
 
     <!-- Hero Section -->

@@ -9,6 +9,7 @@
   import { hasServerUrl } from "$lib/api/client";
   import { initNetworkWatcher } from "$lib/services/network";
   import Toast from "$lib/components/Toast.svelte";
+  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import type { Snippet } from "svelte";
   import type { UserOut } from "$lib/types";
 
@@ -65,4 +66,5 @@
     {@render children()}
   </div>
   <Toast />
+  <ConfirmDialog />
 {/if}

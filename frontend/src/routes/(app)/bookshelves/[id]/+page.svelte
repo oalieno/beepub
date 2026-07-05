@@ -3,6 +3,7 @@
   import { page } from "$app/state";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import BookCard from "$lib/components/BookCard.svelte";
   import SeriesCard from "$lib/components/SeriesCard.svelte";
   import TierList from "$lib/components/TierList.svelte";
@@ -98,7 +99,14 @@
   }
 
   async function removeItem(target: LibraryFeedItem) {
-    if (!confirm(m.bookshelf_remove_confirm())) return;
+    if (
+      !(await confirmDialog({
+        title: m.bookshelf_remove_confirm(),
+        confirmLabel: m.common_remove(),
+        destructive: true,
+      }))
+    )
+      return;
     const index = items.findIndex((x) => itemKey(x) === itemKey(target));
     if (index === -1) return;
     const removed = items[index];
@@ -226,7 +234,7 @@
                 type="button"
                 onclick={() => removeItem(it)}
                 aria-label={m.bookshelf_remove()}
-                class="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition-opacity hover:text-foreground group-hover/item:opacity-100"
+                class="absolute right-1.5 top-1.5 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-70 shadow-sm transition-opacity hover:text-foreground can-hover:opacity-0 can-hover:group-hover/item:opacity-100"
               >
                 <X size={14} />
               </button>

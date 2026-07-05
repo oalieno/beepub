@@ -150,7 +150,7 @@
 
 <!-- Create User Dialog -->
 <Dialog.Root bind:open={showCreateDialog}>
-  <Dialog.Content class="sm:max-w-md bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-md bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.admin_users_dialog_title()}</Dialog.Title>
       <Dialog.Description>{m.admin_users_dialog_desc()}</Dialog.Description>

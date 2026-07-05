@@ -226,7 +226,7 @@
         google_books_api_key: googleBooksApiKey,
         hardcover_api_token: hardcoverApiToken,
       });
-      toastStore.success("Settings saved");
+      toastStore.success(m.admin_settings_saved());
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {

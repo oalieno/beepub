@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import type { UserOut, UserLibraryAccess } from "$lib/types";
   import { UserRole } from "$lib/types";
   import {
@@ -144,7 +145,12 @@
 
   async function handleDelete() {
     if (!user) return;
-    if (!confirm(`Delete user "${user.username}"? This cannot be undone.`))
+    if (
+      !(await confirmDialog({
+        title: m.admin_users_delete_confirm({ username: user.username }),
+        destructive: true,
+      }))
+    )
       return;
     try {
       await adminApi.deleteUser(userId);
@@ -220,7 +226,7 @@
     <div class="flex items-center gap-3 flex-wrap mb-6">
       <Button
         variant="outline"
-        class="rounded-xl bg-white"
+        class="rounded-xl bg-card"
         onclick={toggleRole}
         disabled={isLastAdmin}
       >
@@ -229,7 +235,7 @@
       </Button>
       <Button
         variant="outline"
-        class="rounded-xl bg-white"
+        class="rounded-xl bg-card"
         onclick={() => {
           resetPassword = "";
           showResetDialog = true;
@@ -371,7 +377,7 @@
 
 <!-- Reset Password Dialog -->
 <Dialog.Root bind:open={showResetDialog}>
-  <Dialog.Content class="sm:max-w-md bg-white dark:bg-neutral-900">
+  <Dialog.Content class="sm:max-w-md bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.admin_user_reset_title()}</Dialog.Title>
       <Dialog.Description

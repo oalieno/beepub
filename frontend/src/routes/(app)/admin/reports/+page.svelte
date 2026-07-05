@@ -40,7 +40,7 @@
     try {
       await adminApi.resolveReport(reportId);
       reports = reports.filter((r) => r.id !== reportId);
-      toastStore.success("Report resolved");
+      toastStore.success(m.admin_reports_resolved());
     } catch (e) {
       toastStore.error((e as Error).message);
     }

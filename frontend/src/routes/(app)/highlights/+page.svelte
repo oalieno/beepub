@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import type { HighlightOut } from "$lib/types";
   import { Highlighter, Share2, Trash2 } from "@lucide/svelte";
@@ -79,7 +80,13 @@
   });
 
   async function handleDelete(hl: HighlightOut) {
-    if (!confirm(m.highlights_delete_confirm())) return;
+    if (
+      !(await confirmDialog({
+        title: m.highlights_delete_confirm(),
+        destructive: true,
+      }))
+    )
+      return;
     const prev = highlights;
     // Optimistically remove, then delete immediately (no delayed undo).
     highlights = highlights.filter((h) => h.id !== hl.id);

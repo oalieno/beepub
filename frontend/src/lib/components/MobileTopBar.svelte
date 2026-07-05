@@ -70,7 +70,7 @@
           : page.url.pathname === '/gacha'
             ? 'bg-primary/10 text-primary'
             : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-        aria-label="Gacha"
+        aria-label={m.nav_gacha()}
         aria-disabled={!online || undefined}
         onclick={!online
           ? (e: Event) => {

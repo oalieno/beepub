@@ -3,7 +3,7 @@
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { Home, BookCopy, Compass, User } from "@lucide/svelte";
+  import { Home, BookOpen, BookCopy, Compass, User } from "@lucide/svelte";
   import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
@@ -15,6 +15,13 @@
       icon: Home,
       match: (p: string) => p === "/",
       requiresOnline: false,
+    },
+    {
+      href: "/my-books",
+      label: m.nav_my_books(),
+      icon: BookOpen,
+      match: (p: string) => p.startsWith("/my-books"),
+      requiresOnline: true,
     },
     {
       href: "/libraries",
@@ -73,16 +80,14 @@
   <nav
     class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border"
     style="padding-bottom: env(safe-area-inset-bottom, 0px);"
-    aria-label="Main navigation"
+    aria-label={m.nav_main_navigation()}
   >
-    <div class="flex items-stretch" role="tablist">
+    <div class="flex items-stretch">
       {#each tabs as tab}
         {@const active = tab.match(page.url.pathname)}
         {@const disabled = !online && tab.requiresOnline}
         <a
           href={disabled ? undefined : tab.href}
-          role="tab"
-          aria-selected={active}
           aria-current={active ? "page" : undefined}
           aria-disabled={disabled || undefined}
           class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[44px] transition-colors {disabled

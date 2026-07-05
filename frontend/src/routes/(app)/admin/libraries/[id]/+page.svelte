@@ -50,7 +50,7 @@
         name: editForm.name,
         description: editForm.description,
       });
-      toastStore.success("Library updated");
+      toastStore.success(m.admin_library_updated());
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {

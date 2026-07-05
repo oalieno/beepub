@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import Modal from "$lib/components/Modal.svelte";
   import { Input } from "$lib/components/ui/input";
   import { Textarea } from "$lib/components/ui/textarea";
@@ -47,7 +48,7 @@
         name: "",
         description: "",
       };
-      toastStore.success("Library created");
+      toastStore.success(m.admin_libraries_created());
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -56,11 +57,17 @@
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete library "${name}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: m.admin_libraries_delete_confirm({ name }),
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await librariesApi.delete(id);
       libraries = libraries.filter((l) => l.id !== id);
-      toastStore.success("Library deleted");
+      toastStore.success(m.admin_libraries_deleted());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -110,7 +117,7 @@
     </div>
   {:else if libraries.length === 0}
     <div class="bg-card card-soft rounded-2xl p-12 text-center">
-      <p class="text-muted-foreground text-lg">No libraries yet</p>
+      <p class="text-muted-foreground text-lg">{m.admin_libraries_empty()}</p>
       <p class="text-muted-foreground/70 text-sm mt-1">
         Create one to get started.
       </p>
@@ -191,7 +198,7 @@
       <Button
         variant="ghost"
         class="rounded-xl"
-        onclick={() => (showCreateModal = false)}>Cancel</Button
+        onclick={() => (showCreateModal = false)}>{m.common_cancel()}</Button
       >
       <Button
         disabled={!createForm.name || creating}

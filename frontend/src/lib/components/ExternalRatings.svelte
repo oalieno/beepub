@@ -62,7 +62,7 @@
       externalMeta = await booksApi
         .getExternal(bookId)
         .catch(() => [] as ExternalMetadataOut[]);
-      toastStore.success("Marked as not found");
+      toastStore.success(m.external_marked_not_found());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -74,7 +74,7 @@
       externalMeta = await booksApi
         .getExternal(bookId)
         .catch(() => [] as ExternalMetadataOut[]);
-      toastStore.success("Source unlinked");
+      toastStore.success(m.external_source_unlinked());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -172,11 +172,11 @@
     <div class="flex justify-end gap-2">
       <button
         class="text-sm text-muted-foreground hover:text-foreground"
-        onclick={() => (editingUrlSource = null)}>Cancel</button
+        onclick={() => (editingUrlSource = null)}>{m.common_cancel()}</button
       >
       <button
         class="text-sm bg-foreground text-background font-medium px-4 py-1.5 rounded-lg hover:bg-foreground/90 transition-colors"
-        onclick={saveExternalUrl}>Save</button
+        onclick={saveExternalUrl}>{m.common_save()}</button
       >
     </div>
   </div>
@@ -267,7 +267,7 @@
                       <!-- Searched but not found -->
                       <span
                         class="text-xs text-muted-foreground/60 bg-secondary/50 px-2 py-0.5 rounded"
-                        >not found</span
+                        >{m.external_not_found()}</span
                       >
                       <button
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
@@ -307,7 +307,7 @@
                       <button
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
                         onclick={() => markNotFound(key)}
-                        title="Mark as not found"
+                        title={m.external_mark_not_found()}
                       >
                         <Ban size={12} />
                       </button>

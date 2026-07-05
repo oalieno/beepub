@@ -13,6 +13,7 @@
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import * as m from "$lib/paraglide/messages.js";
+  import { toastStore } from "$lib/stores/toast";
 
   let {
     book,
@@ -40,6 +41,8 @@
         reading_status: newStatus,
       });
       onStatusChange?.(book.id, newStatus);
+    } catch (e) {
+      toastStore.error((e as Error).message);
     } finally {
       loading = false;
     }
@@ -128,8 +131,8 @@
             style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
             onclick={toggleWantToRead}
             title={readingStatus === "want_to_read"
-              ? "Remove from Want to Read"
-              : "Add to Want to Read"}
+              ? m.book_remove_want_to_read()
+              : m.book_want_to_read()}
           >
             <Bookmark
               size={26}

@@ -3,6 +3,7 @@
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import { BookOpen, Trash2, Download } from "@lucide/svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
@@ -42,13 +43,19 @@
   async function handleDelete(e: MouseEvent, bookId: string, title: string) {
     e.stopPropagation();
     e.preventDefault();
-    if (!confirm(`Delete "${title}"?`)) return;
+    if (
+      !(await confirmDialog({
+        title: m.downloads_delete_confirm({ title }),
+        destructive: true,
+      }))
+    )
+      return;
     try {
       const { deleteLocalBook } = await import("$lib/services/offline");
       await deleteLocalBook(bookId);
       entries = entries.filter((e) => e.bookId !== bookId);
       totalSize = entries.reduce((sum, e) => sum + e.fileSize, 0);
-      toastStore.success("Offline copy removed");
+      toastStore.success(m.downloads_removed());
     } catch (e) {
       toastStore.error((e as Error).message);
     }

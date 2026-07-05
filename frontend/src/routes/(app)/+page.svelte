@@ -32,6 +32,7 @@
   let currentYear = new Date().getFullYear();
   let loading = $state(true);
   let hasLoadedOnline = $state(false);
+  let loadFailed = $state(false);
 
   async function loadDownloadedBooks() {
     if (!isNative()) return;
@@ -93,8 +94,11 @@
         recentBooks.map((b) => [b.id, b.reading_status ?? null]),
       );
       hasLoadedOnline = true;
+      loadFailed = false;
     } catch {
-      // API calls failed — offline state handled by isOnline store
+      // Distinguish "couldn't load" from "library is empty" so the user
+      // sees a retry instead of a misleading empty state.
+      loadFailed = true;
     }
   }
 
@@ -226,7 +230,7 @@
                 {#if book.cover_path}
                   <img
                     use:authedSrc={coverUrl(book.id, book.updated_at)}
-                    alt={book.display_title ?? "Book cover"}
+                    alt={book.display_title ?? m.common_untitled()}
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   />
                 {:else}
@@ -250,7 +254,7 @@
               <p
                 class="text-sm font-medium text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors"
               >
-                {book.display_title ?? "Untitled"}
+                {book.display_title ?? m.common_untitled()}
               </p>
               {#if book.reading_percentage != null}
                 <p class="text-xs text-muted-foreground mt-0.5">
@@ -304,7 +308,18 @@
           >
         {/if}
       </div>
-      {#if recentBooks.length === 0}
+      {#if loadFailed}
+        <div class="bg-card card-soft rounded-2xl p-12 text-center">
+          <BookOpen class="mx-auto text-muted-foreground/30 mb-4" size={48} />
+          <p class="text-muted-foreground text-lg">{m.home_load_failed()}</p>
+          <button
+            class="mt-3 inline-flex items-center rounded-xl px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors"
+            onclick={loadOnlineData}
+          >
+            {m.common_retry()}
+          </button>
+        </div>
+      {:else if recentBooks.length === 0}
         <div class="bg-card card-soft rounded-2xl p-12 text-center">
           <BookOpen class="mx-auto text-muted-foreground/30 mb-4" size={48} />
           <p class="text-muted-foreground text-lg">{m.home_no_books()}</p>

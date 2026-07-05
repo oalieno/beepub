@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import Modal from "$lib/components/Modal.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import type { BookshelfOut } from "$lib/types";
@@ -55,7 +56,13 @@
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!confirm(m.shelves_confirm_delete({ name }))) return;
+    if (
+      !(await confirmDialog({
+        title: m.shelves_confirm_delete({ name }),
+        destructive: true,
+      }))
+    )
+      return;
     try {
       await bookshelvesApi.delete(id);
       bookshelves = bookshelves.filter((s) => s.id !== id);
@@ -118,7 +125,7 @@
           {/snippet}
           {#snippet overlay()}
             <button
-              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-all"
               onclick={() => handleDelete(shelf.id, shelf.name)}
             >
               <Trash2 size={13} />
@@ -168,7 +175,7 @@
         class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold rounded-xl"
         onclick={handleCreate}
       >
-        {creating ? "Creating..." : "Create"}
+        {creating ? m.shelves_creating() : m.shelves_create()}
       </button>
     </div>
   </div>

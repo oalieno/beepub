@@ -49,7 +49,7 @@
       recommendations = await booksApi.getRecommendations();
       recInteractions = statusMap(recommendations);
     } catch (e) {
-      toastStore.error("Failed to load recommendations");
+      toastStore.error(m.discover_recommendations_failed());
     } finally {
       loadingRecs = false;
     }
@@ -61,7 +61,7 @@
       browseSections = await booksApi.getBrowseByCategory(activeCategory);
       browseInteractions = statusMap(browseSections.flatMap((s) => s.books));
     } catch (e) {
-      toastStore.error("Failed to load browse sections");
+      toastStore.error(m.discover_browse_failed());
     } finally {
       loadingBrowse = false;
     }
