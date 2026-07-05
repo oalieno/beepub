@@ -12,15 +12,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.book import Book
+from app.services.metadata_sources import NUM_METADATA_SOURCES
 
 logger = logging.getLogger(__name__)
 
 GEN_KEY_PREFIX = "beepub:job:gen"
 PENDING_KEY_PREFIX = "beepub:job:pending"
-
-# Number of external metadata sources. Used to determine when a book has been
-# fully fetched (all sources attempted). Must match init_metadata_sources().
-NUM_METADATA_SOURCES = 4
 
 
 @dataclass

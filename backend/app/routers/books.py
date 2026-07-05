@@ -1108,7 +1108,12 @@ async def delete_book(
         paths.append(book.file_path)
     if book.cover_path:
         paths.append(book.cover_path)
+    work_id = book.work_id
     await db.delete(book)
+    if work_id:
+        from app.services.work_library import cleanup_orphan_works
+
+        await cleanup_orphan_works(db, [work_id])
     await db.commit()
     for path in paths:
         delete_file(path)

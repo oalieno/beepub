@@ -179,13 +179,21 @@ async def delete_library(
         .where(LibraryBook.library_id == library_id)
     )
     paths: list[str] = []
+    work_ids: set[uuid.UUID] = set()
     for book in book_result.scalars().all():
         # Only delete EPUB file for non-Calibre books (Calibre files are on read-only mount)
         if book.calibre_id is None:
             paths.append(book.file_path)
         if book.cover_path:
             paths.append(book.cover_path)
+        if book.work_id:
+            work_ids.add(book.work_id)
         await db.delete(book)
+
+    if work_ids:
+        from app.services.work_library import cleanup_orphan_works
+
+        await cleanup_orphan_works(db, list(work_ids))
 
     await db.delete(library)
     await db.commit()

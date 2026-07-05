@@ -86,3 +86,24 @@ async def book_is_in_work(book_id: uuid.UUID, db: AsyncSession) -> bool:
     result = await db.execute(select(Book.work_id).where(Book.id == book_id))
     work_id = result.scalar_one_or_none()
     return work_id is not None
+
+
+async def cleanup_orphan_works(db: AsyncSession, work_ids: list[uuid.UUID]) -> None:
+    """Delete Works that no longer have any editions.
+
+    Called after deleting books — without this, empty Work rows (and works
+    whose primary book was deleted) accumulate forever.
+    """
+    if not work_ids:
+        return
+    from sqlalchemy import delete, exists
+
+    from app.models.work import Work
+
+    await db.flush()
+    await db.execute(
+        delete(Work).where(
+            Work.id.in_(work_ids),
+            ~exists(select(Book.id).where(Book.work_id == Work.id)),
+        )
+    )

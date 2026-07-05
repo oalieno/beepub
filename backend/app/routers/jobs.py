@@ -15,6 +15,7 @@ from app.services.job_queue import (
     JOB_TYPES,
     count_all_job_stats,
     get_pending_counts,
+    reset_pending,
     start_job,
     stop_job,
 )
@@ -58,6 +59,16 @@ async def get_jobs_status(
     # a fresh Redis connection per job type.
     stats = await count_all_job_stats(db)
     pending_by_key = await get_pending_counts(keys)
+
+    # Reconcile: the Redis pending counter can desync (stop_job deletes the
+    # key under in-flight decrements, clamped under-runs, worker crashes).
+    # The DB flags are authoritative — if nothing is left to process, a
+    # nonzero counter is stale and would show a running job forever.
+    for key in keys:
+        missing, blocked = stats.counts[key]
+        if pending_by_key[key] > 0 and missing == 0 and blocked == 0:
+            await reset_pending(key)
+            pending_by_key[key] = 0
 
     jobs = []
     for key in keys:
