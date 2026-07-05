@@ -30,7 +30,14 @@ from app.services.calibre import (
     scan_calibre_libraries,
     sync_calibre_library,
 )
-from app.services.settings import get_all_settings, get_setting, update_settings
+from app.services.settings import (
+    SECRET_SETTINGS,
+    get_all_settings,
+    get_setting,
+    is_masked,
+    mask_secrets,
+    update_settings,
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -463,7 +470,9 @@ async def get_settings(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return await get_all_settings(db)
+    # API keys are masked (**** + last 4) — no reason to ship live
+    # third-party credentials to the browser on every settings load.
+    return mask_secrets(await get_all_settings(db))
 
 
 @router.put("/settings")
@@ -472,7 +481,14 @@ async def put_settings(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return await update_settings(db, body)
+    # A masked secret submitted back means "unchanged" — drop it so the
+    # stored credential isn't overwritten with the mask.
+    updates = {
+        key: value
+        for key, value in body.items()
+        if not (key in SECRET_SETTINGS and is_masked(value))
+    }
+    return mask_secrets(await update_settings(db, updates))
 
 
 # --- AI Status (accessible to all authenticated users) ---

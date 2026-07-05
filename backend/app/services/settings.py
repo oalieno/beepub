@@ -33,6 +33,36 @@ DEFAULTS = {
 }
 
 
+# Settings whose values are credentials. The admin GET endpoint masks
+# these; a masked value submitted back on PUT means "unchanged".
+SECRET_SETTINGS = {
+    "gemini_api_key",
+    "openai_api_key",
+    "embedding_api_key",
+    "google_books_api_key",
+    "hardcover_api_token",
+}
+
+MASK_PREFIX = "****"
+
+
+def mask_secret(value: str) -> str:
+    if not value:
+        return ""
+    return MASK_PREFIX + value[-4:]
+
+
+def mask_secrets(settings: dict[str, str]) -> dict[str, str]:
+    return {
+        key: mask_secret(value) if key in SECRET_SETTINGS else value
+        for key, value in settings.items()
+    }
+
+
+def is_masked(value: str) -> bool:
+    return value.startswith(MASK_PREFIX)
+
+
 async def get_setting(db: AsyncSession, key: str) -> str:
     result = await db.execute(select(AppSetting).where(AppSetting.key == key))
     setting = result.scalar_one_or_none()

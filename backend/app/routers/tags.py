@@ -48,6 +48,8 @@ async def list_tags(
 
 
 @router.get("/vocabulary")
-async def get_vocabulary() -> dict[str, dict[str, str]]:
+async def get_vocabulary(
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, dict[str, str]]:
     """Return the curated tag vocabulary with Chinese labels."""
     return CURATED_TAGS_WITH_LABELS
