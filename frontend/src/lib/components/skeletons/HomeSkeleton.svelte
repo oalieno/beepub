@@ -35,7 +35,7 @@
     </div>
     <div class="flex gap-4 overflow-hidden pb-2">
       {#each Array(5) as _}
-        <div class="shrink-0 w-[140px]">
+        <div class="shrink-0 w-[140px] sm:w-[160px]">
           <Skeleton class="aspect-[2/3] rounded-xl mb-2" />
           <Skeleton class="h-4 w-full mb-1" />
           <Skeleton class="h-3 w-10" />

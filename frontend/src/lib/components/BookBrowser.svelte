@@ -332,6 +332,7 @@
     />
     {#if searchQuery}
       <button
+        aria-label={m.common_clear()}
         class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
         onclick={() => {
           searchQuery = "";
@@ -482,7 +483,7 @@
 {#if loading}
   <div
     class="grid gap-4 items-start book-grid"
-    style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
+    style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
   >
     {#each Array(12) as _}
       <div class="animate-pulse">
@@ -514,7 +515,7 @@
     <!-- One grid, mixing whole-series cards and standalone book cards -->
     <div
       class="grid gap-4 items-start book-grid"
-      style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"
+      style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
     >
       {#each feedItems as item (item.type === "series" ? `s:${item.series.series_key}` : `b:${item.book.id}`)}
         {#if item.type === "series"}

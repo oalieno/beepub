@@ -226,7 +226,7 @@
       {:else}
         <div
           class="grid gap-4 items-start"
-          style="grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));"
+          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
         >
           {#each items as it (itemKey(it))}
             <div class="group/item relative">

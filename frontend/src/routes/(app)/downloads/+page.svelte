@@ -93,7 +93,7 @@
   {:else}
     <div
       class="grid gap-4"
-      style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
+      style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
     >
       {#each entries as entry (entry.bookId)}
         <div

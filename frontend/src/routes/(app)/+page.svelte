@@ -158,7 +158,7 @@
         </div>
         <div
           class="grid gap-4"
-          style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));"
+          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
         >
           {#each downloadedBooks as entry (entry.bookId)}
             <a href="/books/{entry.bookId}/read" class="group">
@@ -222,7 +222,7 @@
           {#each continueReadingBooks as book}
             <a
               href="/books/{book.id}/read"
-              class="shrink-0 snap-start w-[140px] group"
+              class="shrink-0 snap-start w-[140px] sm:w-[160px] group"
             >
               <div
                 class="aspect-[2/3] rounded-xl overflow-hidden bg-muted mb-2 relative"
@@ -360,7 +360,7 @@
           {#each downloadedBooks as entry (entry.bookId)}
             <a
               href="/books/{entry.bookId}/read"
-              class="shrink-0 snap-start w-[140px] group"
+              class="shrink-0 snap-start w-[140px] sm:w-[160px] group"
             >
               <div
                 class="aspect-[2/3] rounded-xl overflow-hidden bg-muted mb-2"
