@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
 from starlette.middleware.base import BaseHTTPMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import settings
 from app.logging import setup_logging
@@ -34,6 +35,14 @@ app = FastAPI(title="BeePub API", version="1.0.0")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Resolve the real client IP from X-Forwarded-For. Without this,
+# request.client.host is always the nginx container IP, so the login/register
+# rate limits shared ONE bucket across all clients (no per-attacker
+# isolation, and one user could lock everyone out). Trusting all peers is
+# safe here: the backend port is not published — it is only reachable
+# through nginx on the internal docker network.
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=["*"])
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
