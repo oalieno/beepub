@@ -27,6 +27,9 @@
     {},
   );
   let loading = $state(true);
+  let total = $state(0);
+  let loadingMore = $state(false);
+  const PAGE_SIZE = 200;
 
   // Share modal state
   let shareHighlight = $state<HighlightOut | null>(null);
@@ -51,33 +54,56 @@
     return groups;
   });
 
+  async function fetchBookData(items: HighlightOut[]) {
+    const bookIds = [
+      ...new Set(items.map((h) => h.book_id).filter((id) => !(id in bookData))),
+    ];
+    const data: Record<string, { title: string; authors: string[] }> = {};
+    await Promise.all(
+      bookIds.map(async (id) => {
+        try {
+          const book = await booksApi.get(id);
+          data[id] = {
+            title: book.display_title ?? book.epub_title ?? "Untitled",
+            authors: book.display_authors ?? book.epub_authors ?? [],
+          };
+        } catch {
+          data[id] = { title: m.common_untitled(), authors: [] };
+        }
+      }),
+    );
+    bookData = { ...bookData, ...data };
+  }
+
   onMount(async () => {
     try {
-      highlights = await booksApi.getAllHighlights();
-
-      // Fetch book data for all unique book IDs
-      const bookIds = [...new Set(highlights.map((h) => h.book_id))];
-      const data: Record<string, { title: string; authors: string[] }> = {};
-      await Promise.all(
-        bookIds.map(async (id) => {
-          try {
-            const book = await booksApi.get(id);
-            data[id] = {
-              title: book.display_title ?? book.epub_title ?? "Untitled",
-              authors: book.display_authors ?? book.epub_authors ?? [],
-            };
-          } catch {
-            data[id] = { title: m.common_untitled(), authors: [] };
-          }
-        }),
-      );
-      bookData = data;
+      const page = await booksApi.getAllHighlights(PAGE_SIZE, 0);
+      highlights = page.items;
+      total = page.total;
+      await fetchBookData(page.items);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
       loading = false;
     }
   });
+
+  async function loadMore() {
+    loadingMore = true;
+    try {
+      const page = await booksApi.getAllHighlights(
+        PAGE_SIZE,
+        highlights.length,
+      );
+      highlights = [...highlights, ...page.items];
+      total = page.total;
+      await fetchBookData(page.items);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      loadingMore = false;
+    }
+  }
 
   async function handleDelete(hl: HighlightOut) {
     if (
@@ -199,6 +225,17 @@
         </div>
       </section>
     {/each}
+    {#if highlights.length < total}
+      <div class="flex justify-center mt-8">
+        <button
+          class="px-6 py-2.5 bg-secondary hover:bg-secondary/80 text-foreground font-medium rounded-xl transition-colors disabled:opacity-50"
+          onclick={loadMore}
+          disabled={loadingMore}
+        >
+          {m.browser_load_more()}
+        </button>
+      </div>
+    {/if}
   {/if}
 </div>
 

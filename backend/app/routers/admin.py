@@ -3,7 +3,7 @@ import os
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -42,8 +42,12 @@ _background_tasks: set[asyncio.Task] = set()
 async def list_users(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    limit: int = Query(500, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
-    result = await db.execute(select(User).order_by(User.created_at.asc()))
+    result = await db.execute(
+        select(User).order_by(User.created_at.asc()).limit(limit).offset(offset)
+    )
     return result.scalars().all()
 
 
@@ -787,6 +791,8 @@ async def list_reports(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
     resolved: bool = False,
+    limit: int = Query(200, ge=1, le=500),
+    offset: int = Query(0, ge=0),
 ):
     """List book reports. Defaults to unresolved only."""
     from app.models.book_report import BookReport
@@ -795,6 +801,8 @@ async def list_reports(
         select(BookReport)
         .where(BookReport.resolved == resolved)
         .order_by(BookReport.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     result = await db.execute(query)
     reports = result.scalars().all()

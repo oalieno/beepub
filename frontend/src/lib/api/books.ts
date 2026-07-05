@@ -156,7 +156,11 @@ export const booksApi = {
   deleteHighlight: (bookId: string, highlightId: string) =>
     del(`/books/${bookId}/highlights/${highlightId}`),
 
-  getAllHighlights: () => get("/highlights") as Promise<HighlightOut[]>,
+  getAllHighlights: (limit = 200, offset = 0) =>
+    get(`/highlights?limit=${limit}&offset=${offset}`) as Promise<{
+      items: HighlightOut[];
+      total: number;
+    }>,
 
   // Illustrations
   getIllustrations: (bookId: string) =>
