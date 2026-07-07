@@ -11,6 +11,10 @@ web reader, an iOS native app built with Capacitor, reading progress,
 highlights, tags, metadata tools, and optional AI-assisted features in one
 private deployment.
 
+**[Try the live demo](https://demo.beepub.app)** — one-click sign-in from the
+login page (`demo` / `demodemo`). Includes vertical (直排) Chinese classics to
+show off CJK rendering. Demo data resets every 6 hours.
+
 ![BeePub home screen](docs/screenshots/home.png)
 
 ![BeePub reader screen](docs/screenshots/reader.png)
