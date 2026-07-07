@@ -5,7 +5,9 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-beepub}
       POSTGRES_USER: ${POSTGRES_USER:-beepub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      # Postgres is only reachable inside the compose network, so a default
+      # password is acceptable; set POSTGRES_PASSWORD to override.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beepub}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -34,10 +36,11 @@ services:
     pull_policy: missing
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
     volumes:
+      - app_data:/data/app
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
@@ -54,8 +57,11 @@ services:
     restart: "no"
     command: ["sh", "migrate.sh"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:-}
+    volumes:
+      # migrate runs first, so it generates the auto SECRET_KEY when unset
+      - app_data:/data/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -68,9 +74,10 @@ services:
     mem_limit: 4g
     command: ["bash", "start-worker.sh"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:-}
     volumes:
+      - app_data:/data/app
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
@@ -96,8 +103,10 @@ services:
         "--loglevel=info",
       ]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
-      SECRET_KEY: ${SECRET_KEY:?SECRET_KEY is required}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:-}
+    volumes:
+      - app_data:/data/app
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -131,6 +140,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  app_data:
   books_data:
   covers_data:
   illustrations_data:

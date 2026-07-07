@@ -30,40 +30,33 @@ private deployment.
 
 ## Quick Start
 
-You only need two files — `docker-compose.yml` and `.env`. All services run
-from prebuilt multi-arch (amd64/arm64) images on GHCR; nothing is built
-locally.
+One file, one command — no required configuration. All services run from
+prebuilt multi-arch (amd64/arm64) images on GHCR; nothing is built locally.
 
 ```bash
 mkdir beepub && cd beepub
 curl -LO https://raw.githubusercontent.com/oalieno/beepub/main/docker-compose.yml
-curl -Lo .env https://raw.githubusercontent.com/oalieno/beepub/main/.env.example
-```
-
-Edit `.env` and replace at least (generate the secret with
-`openssl rand -hex 32`):
-
-```env
-POSTGRES_PASSWORD=replace-me
-SECRET_KEY=replace-me-with-openssl-output
-```
-
-Start the full stack:
-
-```bash
 docker compose up -d
 ```
 
-Open `http://localhost` (or the `PORT` you set in `.env`) and register — the
-first account automatically becomes the admin.
+Open `http://localhost` and register — the first account automatically
+becomes the admin. A JWT secret is auto-generated on first start and
+persisted in the `app_data` volume; the database is only reachable inside
+the compose network.
 
 Using Portainer, Synology Container Manager, or another compose UI? Paste
-`docker-compose.yml` as the stack definition and set `POSTGRES_PASSWORD` and
-`SECRET_KEY` as environment variables — the compose file references no other
-local files.
+`docker-compose.yml` as the stack definition — it references no other local
+files.
 
-To pin a release instead of tracking `latest`, set `BEEPUB_VERSION` in `.env`
-(e.g. `BEEPUB_VERSION=0.1.0`). To upgrade later:
+To customize (port, secrets, version pinning), download the example env file
+next to the compose file and uncomment what you need:
+
+```bash
+curl -Lo .env https://raw.githubusercontent.com/oalieno/beepub/main/.env.example
+```
+
+To pin a release instead of tracking `latest`, set `BEEPUB_VERSION=0.1.0` in
+`.env`. To upgrade later:
 
 ```bash
 docker compose pull && docker compose up -d
@@ -77,7 +70,6 @@ pulling:
 
 ```bash
 git clone https://github.com/oalieno/beepub.git && cd beepub
-cp .env.example .env  # then edit as above
 docker compose up -d --build
 ```
 
@@ -106,8 +98,11 @@ The main deployment settings live in `.env`.
 Important variables:
 
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL database
-  settings
-- `SECRET_KEY`: JWT signing secret; generate a strong random value
+  settings; the database is not reachable from outside the compose network,
+  so the defaults are safe to keep
+- `SECRET_KEY`: JWT signing secret; auto-generated and persisted in the
+  `app_data` volume when unset. Set it explicitly to control or rotate it —
+  changing it logs every session out
 - `PORT`: public nginx port
 - `CORS_ORIGINS`: comma-separated public origins allowed to call the API;
   localhost browser origins on any port are always allowed
