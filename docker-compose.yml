@@ -1,32 +1,4 @@
 services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-beepub}
-      POSTGRES_USER: ${POSTGRES_USER:-beepub}
-      # Postgres is only reachable inside the compose network, so a default
-      # password is acceptable; set POSTGRES_PASSWORD to override.
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beepub}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beepub}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   # Every app service pairs a published image with a build context and
   # pull_policy: missing — `docker compose up` pulls the prebuilt image,
   # `docker compose up --build` builds from source instead.
@@ -51,22 +23,6 @@ services:
       migrate:
         condition: service_completed_successfully
       redis:
-        condition: service_healthy
-
-  migrate:
-    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
-    build: ./backend
-    pull_policy: missing
-    restart: "no"
-    command: ["sh", "migrate.sh"]
-    environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
-      SECRET_KEY: ${SECRET_KEY:-}
-    volumes:
-      # migrate runs first, so it generates the auto SECRET_KEY when unset
-      - app_data:/data/app
-    depends_on:
-      postgres:
         condition: service_healthy
 
   worker:
@@ -118,6 +74,22 @@ services:
       redis:
         condition: service_healthy
 
+  migrate:
+    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
+    build: ./backend
+    pull_policy: missing
+    restart: "no"
+    command: ["sh", "migrate.sh"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
+      SECRET_KEY: ${SECRET_KEY:-}
+    volumes:
+      # migrate runs first, so it generates the auto SECRET_KEY when unset
+      - app_data:/data/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   frontend:
     image: ghcr.io/oalieno/beepub-frontend:${BEEPUB_VERSION:-latest}
     build: ./frontend
@@ -128,6 +100,34 @@ services:
       BACKEND_URL: http://backend:8000
     depends_on:
       - backend
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-beepub}
+      POSTGRES_USER: ${POSTGRES_USER:-beepub}
+      # Postgres is only reachable inside the compose network, so a default
+      # password is acceptable; set POSTGRES_PASSWORD to override.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beepub}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beepub}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   nginx:
     image: ghcr.io/oalieno/beepub-nginx:${BEEPUB_VERSION:-latest}
