@@ -315,6 +315,30 @@ class Resources {
 
     return textResponse.then(
       (text) => {
+        // Rewrite @import urls first: this file is about to be served from a
+        // blob: URL, and a relative @import cannot resolve against a blob:
+        // base. An import-shell stylesheet (the ebpaj template used by most
+        // vertical-rl EPUBs) would then load none of its rules and the book
+        // silently renders horizontal. Point each import at the imported
+        // file's replacement URL instead. The generic substitute() below
+        // can't cover this: it matches canonical relative paths, while
+        // @import hrefs are free-form (e.g. "../Styles/x.css" from inside
+        // Styles/), which it would corrupt with a partial match.
+        var cssPath = new Path(absolute);
+        var replacementsByPath = {};
+        relUrls.forEach((rel, i) => {
+          if (this.replacementUrls[i]) {
+            replacementsByPath[cssPath.resolve(rel)] = this.replacementUrls[i];
+          }
+        });
+        text = text.replace(
+          /(@import\s+(?:url\(\s*)?["']?)([^"')\s;]+)(["']?\s*\)?)/g,
+          (match, before, importHref, after) => {
+            var replacement = replacementsByPath[cssPath.resolve(importHref)];
+            return replacement ? before + replacement + after : match;
+          },
+        );
+
         // Replacements in the css text
         text = substitute(text, relUrls, this.replacementUrls);
 
