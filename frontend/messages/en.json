@@ -488,6 +488,7 @@
   "admin_settings_title": "Settings - Admin - BeePub",
   "admin_settings_heading": "Settings",
   "admin_settings_subtitle": "Configure application settings",
+  "admin_settings_update_available": "Update available: {version}",
   "admin_settings_registration": "User Registration",
   "admin_settings_registration_desc": "Control whether new users can register accounts",
   "admin_settings_registration_label": "Allow public registration",

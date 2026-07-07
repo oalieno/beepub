@@ -488,6 +488,7 @@
   "admin_settings_title": "設定 - 管理 - BeePub",
   "admin_settings_heading": "設定",
   "admin_settings_subtitle": "設定應用程式",
+  "admin_settings_update_available": "有新版本:{version}",
   "admin_settings_registration": "使用者註冊",
   "admin_settings_registration_desc": "控制是否允許新使用者註冊帳號",
   "admin_settings_registration_label": "允許公開註冊",

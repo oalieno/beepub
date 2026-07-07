@@ -19,6 +19,7 @@
   let loading = $state(true);
   let saving = $state(false);
   let appVersion = $state("");
+  let latestVersion = $state("");
   // Form state
   let registrationEnabled = $state(false);
   let timezone = $state("Asia/Taipei");
@@ -152,9 +153,55 @@
       const health = (await get("/health")) as { version?: string };
       const v = health.version ?? "";
       appVersion = /^\d/.test(v) ? `v${v}` : v;
+      void checkForUpdate(v);
     } catch {
       // version display is cosmetic; ignore failures
     }
+  }
+
+  // Ask GitHub for the newest release, from the admin's browser only (the
+  // server never phones home) and at most once a day.
+  async function checkForUpdate(current: string) {
+    if (!/^\d/.test(current)) return; // dev/edge builds have nothing to compare
+    try {
+      const cacheKey = "beepub-latest-release";
+      let latest = "";
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached) as { version: string; at: number };
+        if (Date.now() - parsed.at < 24 * 60 * 60 * 1000) {
+          latest = parsed.version;
+        }
+      }
+      if (!latest) {
+        const res = await fetch(
+          "https://api.github.com/repos/oalieno/beepub/releases/latest",
+        );
+        if (!res.ok) return;
+        const release = (await res.json()) as { tag_name?: string };
+        latest = (release.tag_name ?? "").replace(/^v/, "");
+        if (!latest) return;
+        localStorage.setItem(
+          cacheKey,
+          JSON.stringify({ version: latest, at: Date.now() }),
+        );
+      }
+      if (isNewerVersion(latest, current)) {
+        latestVersion = `v${latest}`;
+      }
+    } catch {
+      // update hint is cosmetic; ignore failures
+    }
+  }
+
+  function isNewerVersion(a: string, b: string): boolean {
+    const pa = a.split(".").map(Number);
+    const pb = b.split(".").map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const diff = (pa[i] || 0) - (pb[i] || 0);
+      if (diff !== 0) return diff > 0;
+    }
+    return false;
   }
 
   async function loadSettings() {
@@ -380,7 +427,19 @@
     </h1>
     <p class="text-muted-foreground mt-1">{m.admin_settings_subtitle()}</p>
     {#if appVersion}
-      <p class="text-xs text-muted-foreground mt-1">BeePub {appVersion}</p>
+      <p class="text-xs text-muted-foreground mt-1">
+        BeePub {appVersion}
+        {#if latestVersion}
+          <a
+            href="https://github.com/oalieno/beepub/releases/latest"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-primary hover:underline ml-2"
+          >
+            {m.admin_settings_update_available({ version: latestVersion })}
+          </a>
+        {/if}
+      </p>
     {/if}
   </div>
 
