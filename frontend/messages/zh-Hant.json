@@ -820,6 +820,7 @@
   "error_registration_closed": "目前不開放註冊",
   "error_report_not_found": "找不到回報",
   "error_search_not_configured": "語意搜尋未設定",
+  "error_server_unreachable": "無法連線到伺服器",
   "error_sync_in_progress": "同步進行中",
   "error_user_not_found": "找不到使用者",
   "error_username_exists": "使用者名稱已存在",

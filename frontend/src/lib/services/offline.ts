@@ -5,9 +5,18 @@
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
-import { apiBase, getAuthHeader } from "$lib/api/client";
+import { apiBase, getAuthHeader, getServerUrl } from "$lib/api/client";
 
-const MANIFEST_KEY = "offline-manifest";
+const LEGACY_MANIFEST_KEY = "offline-manifest";
+
+// Downloads are scoped to the server they came from. A single global
+// manifest bled across accounts when switching servers: books downloaded
+// from one server kept showing on another, where their book ids don't
+// exist and every detail-page navigation errored.
+function manifestKey(): string {
+  const server = getServerUrl().replace(/\/+$/, "");
+  return server ? `${LEGACY_MANIFEST_KEY}:${server}` : LEGACY_MANIFEST_KEY;
+}
 
 export interface DownloadEntry {
   bookId: string;
@@ -20,7 +29,19 @@ export interface DownloadEntry {
 }
 
 async function getManifest(): Promise<DownloadEntry[]> {
-  const { value } = await Preferences.get({ key: MANIFEST_KEY });
+  const key = manifestKey();
+  let { value } = await Preferences.get({ key });
+  if (!value && key !== LEGACY_MANIFEST_KEY) {
+    // One-time migration: pre-scoping manifests were global. Attribute
+    // them to the currently configured server — that matches what the
+    // old code displayed anyway.
+    const legacy = await Preferences.get({ key: LEGACY_MANIFEST_KEY });
+    if (legacy.value) {
+      await Preferences.set({ key, value: legacy.value });
+      await Preferences.remove({ key: LEGACY_MANIFEST_KEY });
+      value = legacy.value;
+    }
+  }
   if (!value) return [];
   try {
     return JSON.parse(value) as DownloadEntry[];
@@ -31,7 +52,7 @@ async function getManifest(): Promise<DownloadEntry[]> {
 
 async function saveManifest(entries: DownloadEntry[]): Promise<void> {
   await Preferences.set({
-    key: MANIFEST_KEY,
+    key: manifestKey(),
     value: JSON.stringify(entries),
   });
 }

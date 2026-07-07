@@ -1,4 +1,9 @@
 import * as m from "$lib/paraglide/messages.js";
+import {
+  getIsOnline,
+  reportServerReachable,
+  reportServerUnreachable,
+} from "$lib/services/network";
 
 const SERVER_URL_KEY = "serverUrl";
 
@@ -160,12 +165,23 @@ async function doFetch(
   bodyContent: string | URLSearchParams | undefined,
   baseHeaders: Record<string, string>,
 ): Promise<Response> {
-  return fetch(`${apiBase()}${path}`, {
-    method,
-    headers: { ...getAuthHeader(), ...baseHeaders },
-    body: bodyContent,
-    credentials: "include",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${apiBase()}${path}`, {
+      method,
+      headers: { ...getAuthHeader(), ...baseHeaders },
+      body: bodyContent,
+      credentials: "include",
+    });
+  } catch {
+    // fetch rejects only when the server never answered (no network,
+    // server down, wrong network). On native this flips the app into
+    // offline mode instead of surfacing raw errors on every screen.
+    reportServerUnreachable();
+    throw new Error(m.error_server_unreachable());
+  }
+  reportServerReachable();
+  return res;
 }
 
 async function request(
@@ -215,7 +231,6 @@ async function request(
     // Auto-redirect on persistent 401 (refresh already failed above).
     // Only when online — offline 401s may be stale/proxy responses.
     if (res.status === 401 && typeof window !== "undefined") {
-      const { getIsOnline } = await import("$lib/services/network");
       if (getIsOnline() && window.location.pathname !== "/login") {
         window.location.href = "/login";
       }

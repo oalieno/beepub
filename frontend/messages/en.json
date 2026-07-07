@@ -820,6 +820,7 @@
   "error_registration_closed": "Registration is currently closed",
   "error_report_not_found": "Report not found",
   "error_search_not_configured": "Semantic search is not configured",
+  "error_server_unreachable": "Cannot reach the server",
   "error_sync_in_progress": "Sync already in progress",
   "error_user_not_found": "User not found",
   "error_username_exists": "Username already exists",
