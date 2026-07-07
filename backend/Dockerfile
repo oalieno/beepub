@@ -16,6 +16,10 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
+# Set by CI to the release version (e.g. 0.2.0); source builds report "dev"
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 RUN mkdir -p /data/books /data/covers
 
 COPY migrate.sh start.sh /app/

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
+  import { get } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
   import type { AdminSettings } from "$lib/types";
   import { Input } from "$lib/components/ui/input";
@@ -17,6 +18,7 @@
   let settings = $state<AdminSettings | null>(null);
   let loading = $state(true);
   let saving = $state(false);
+  let appVersion = $state("");
   // Form state
   let registrationEnabled = $state(false);
   let timezone = $state("Asia/Taipei");
@@ -141,8 +143,19 @@
   }
 
   onMount(async () => {
+    void loadVersion();
     await loadSettings();
   });
+
+  async function loadVersion() {
+    try {
+      const health = (await get("/health")) as { version?: string };
+      const v = health.version ?? "";
+      appVersion = /^\d/.test(v) ? `v${v}` : v;
+    } catch {
+      // version display is cosmetic; ignore failures
+    }
+  }
 
   async function loadSettings() {
     loading = true;
@@ -366,6 +379,9 @@
       {m.admin_settings_heading()}
     </h1>
     <p class="text-muted-foreground mt-1">{m.admin_settings_subtitle()}</p>
+    {#if appVersion}
+      <p class="text-xs text-muted-foreground mt-1">BeePub {appVersion}</p>
+    {/if}
   </div>
 
   {#if loading}

@@ -110,4 +110,4 @@ app.include_router(series.router)
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": settings.app_version}

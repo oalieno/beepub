@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     database_url: str
     redis_url: str = "redis://redis:6379"
+    # Baked into the Docker image by CI; "dev" when running from source
+    app_version: str = "dev"
     # JWT signing secret. Leave unset to auto-generate one on first start,
     # persisted at secret_key_file (a shared volume in docker-compose, so
     # every backend-image service signs with the same key). The migrate
