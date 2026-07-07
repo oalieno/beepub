@@ -37,6 +37,12 @@ services:
     command: >
       sh -c "corepack pnpm install && exec corepack pnpm run dev --host 0.0.0.0 --port 3000"
 
+  nginx:
+    # The published image bakes nginx.conf in; mount the working copy in dev
+    # so edits apply on container restart without rebuilding the image.
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
 volumes:
   backend_venv:
   frontend_node_modules:

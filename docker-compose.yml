@@ -25,8 +25,13 @@ services:
       timeout: 5s
       retries: 5
 
+  # Every app service pairs a published image with a build context and
+  # pull_policy: missing — `docker compose up` pulls the prebuilt image,
+  # `docker compose up --build` builds from source instead.
   backend:
+    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
     build: ./backend
+    pull_policy: missing
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB:-beepub}
@@ -43,7 +48,9 @@ services:
         condition: service_healthy
 
   migrate:
+    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
     build: ./backend
+    pull_policy: missing
     restart: "no"
     command: ["sh", "migrate.sh"]
     environment:
@@ -54,7 +61,9 @@ services:
         condition: service_healthy
 
   worker:
+    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
     build: ./backend
+    pull_policy: missing
     restart: unless-stopped
     mem_limit: 4g
     command: ["bash", "start-worker.sh"]
@@ -72,7 +81,9 @@ services:
         condition: service_healthy
 
   beat:
+    image: ghcr.io/oalieno/beepub-backend:${BEEPUB_VERSION:-latest}
     build: ./backend
+    pull_policy: missing
     restart: unless-stopped
     command:
       [
@@ -94,7 +105,9 @@ services:
         condition: service_healthy
 
   frontend:
+    image: ghcr.io/oalieno/beepub-frontend:${BEEPUB_VERSION:-latest}
     build: ./frontend
+    pull_policy: missing
     restart: unless-stopped
     environment:
       ORIGIN: http://localhost:${PORT:-80}
@@ -103,12 +116,13 @@ services:
       - backend
 
   nginx:
-    image: nginx:alpine
+    image: ghcr.io/oalieno/beepub-nginx:${BEEPUB_VERSION:-latest}
+    build: ./nginx
+    pull_policy: missing
     restart: unless-stopped
     ports:
       - "${PORT:-80}:80"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - covers_data:/data/covers:ro
     depends_on:
       - backend

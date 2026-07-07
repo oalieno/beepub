@@ -19,6 +19,8 @@ jobs:
             context: ./backend
           - image: beepub-frontend
             context: ./frontend
+          - image: beepub-nginx
+            context: ./nginx
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3

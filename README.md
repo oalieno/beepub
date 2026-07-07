@@ -30,14 +30,18 @@ private deployment.
 
 ## Quick Start
 
-Copy the example environment file and set real secrets:
+You only need two files — `docker-compose.yml` and `.env`. All services run
+from prebuilt multi-arch (amd64/arm64) images on GHCR; nothing is built
+locally.
 
 ```bash
-cp .env.example .env
-openssl rand -hex 32
+mkdir beepub && cd beepub
+curl -LO https://raw.githubusercontent.com/oalieno/beepub/main/docker-compose.yml
+curl -Lo .env https://raw.githubusercontent.com/oalieno/beepub/main/.env.example
 ```
 
-Edit `.env` and replace at least:
+Edit `.env` and replace at least (generate the secret with
+`openssl rand -hex 32`):
 
 ```env
 POSTGRES_PASSWORD=replace-me
@@ -47,16 +51,35 @@ SECRET_KEY=replace-me-with-openssl-output
 Start the full stack:
 
 ```bash
+docker compose up -d
+```
+
+Open `http://localhost` (or the `PORT` you set in `.env`) and register — the
+first account automatically becomes the admin.
+
+Using Portainer, Synology Container Manager, or another compose UI? Paste
+`docker-compose.yml` as the stack definition and set `POSTGRES_PASSWORD` and
+`SECRET_KEY` as environment variables — the compose file references no other
+local files.
+
+To pin a release instead of tracking `latest`, set `BEEPUB_VERSION` in `.env`
+(e.g. `BEEPUB_VERSION=0.1.0`). To upgrade later:
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+### Building From Source
+
+Clone the repository and add `--build` — every service also carries a build
+context, so the same compose file builds the images locally instead of
+pulling:
+
+```bash
+git clone https://github.com/oalieno/beepub.git && cd beepub
+cp .env.example .env  # then edit as above
 docker compose up -d --build
 ```
-
-By default the app is served through nginx on:
-
-```text
-http://localhost
-```
-
-If you change `PORT` in `.env`, use that port instead.
 
 ### Reverse Proxy
 
