@@ -8,7 +8,9 @@
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { isNative } from "$lib/platform";
-  import { isOnline } from "$lib/services/network";
+  import { isOnline, checkServerNow } from "$lib/services/network";
+  import { toastStore } from "$lib/stores/toast";
+  import { Button } from "$lib/components/ui/button";
   import type {
     BookWithInteractionOut,
     LibraryOut,
@@ -116,6 +118,21 @@
       loadOnlineData();
     }
   });
+
+  let checkingConnection = $state(false);
+
+  async function retryConnection() {
+    checkingConnection = true;
+    try {
+      const ok = await checkServerNow();
+      if (!ok) {
+        toastStore.error(m.error_server_unreachable());
+      }
+      // When reachable again, `offline` flips and the effect above reloads.
+    } finally {
+      checkingConnection = false;
+    }
+  }
 </script>
 
 <svelte:head>
@@ -133,9 +150,20 @@
         class="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-4 flex items-center gap-3"
       >
         <WifiOff class="text-amber-500 shrink-0" size={20} />
-        <p class="text-sm text-foreground">
+        <p class="text-sm text-foreground flex-1">
           {m.home_offline_message()}
         </p>
+        <Button
+          variant="outline"
+          size="sm"
+          class="shrink-0 rounded-xl"
+          disabled={checkingConnection}
+          onclick={retryConnection}
+        >
+          {checkingConnection
+            ? m.home_offline_checking()
+            : m.home_offline_retry()}
+        </Button>
       </div>
     </section>
 

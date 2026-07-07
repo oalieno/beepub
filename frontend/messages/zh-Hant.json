@@ -72,6 +72,8 @@
 
   "home_page_title": "BeePub - 首頁",
   "home_offline_message": "你目前離線。下載的書籍可在下方閱讀。",
+  "home_offline_retry": "重新檢查連線",
+  "home_offline_checking": "檢查中…",
   "home_downloaded_books": "已下載書籍",
   "home_downloaded_subtitle": "可離線閱讀",
   "home_manage": "管理 →",
