@@ -76,12 +76,23 @@ def _clear_auth_cookies(response: Response) -> None:
 
 @router.get("/registration-status")
 async def registration_status(db: Annotated[AsyncSession, Depends(get_db)]):
+    # Demo hint for the login page. Purely informational: the operator
+    # created the account and chose to publish its credentials.
+    demo = (
+        {"username": settings.demo_username, "password": settings.demo_password}
+        if settings.demo_mode
+        else None
+    )
     count_result = await db.execute(select(func.count(User.id)))
     user_count = count_result.scalar()
     if user_count == 0:
-        return {"registration_enabled": True, "first_user": True}
+        return {"registration_enabled": True, "first_user": True, "demo": demo}
     reg_enabled = await get_setting(db, "registration_enabled")
-    return {"registration_enabled": reg_enabled == "true", "first_user": False}
+    return {
+        "registration_enabled": reg_enabled == "true",
+        "first_user": False,
+        "demo": demo,
+    }
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -231,6 +242,12 @@ async def change_password(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    # Visitors share the demo account; letting one change the password
+    # would lock everyone else out until the next data reset.
+    if settings.demo_mode and current_user.username == settings.demo_username:
+        raise HTTPException(
+            status_code=403, detail="The demo account's password cannot be changed"
+        )
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.password_hash = hash_password(body.new_password)

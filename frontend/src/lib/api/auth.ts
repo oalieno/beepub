@@ -18,6 +18,7 @@ export const authApi = {
     get("/auth/registration-status") as Promise<{
       registration_enabled: boolean;
       first_user: boolean;
+      demo: { username: string; password: string } | null;
     }>,
 
   changePassword: (currentPassword: string, newPassword: string) =>

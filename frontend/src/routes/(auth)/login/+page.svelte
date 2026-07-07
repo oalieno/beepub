@@ -21,15 +21,24 @@
   let showPassword = $state(false);
   let errorMessage = $state("");
   let registrationAllowed = $state(false);
+  let demo = $state<{ username: string; password: string } | null>(null);
 
   onMount(async () => {
     try {
       const status = await authApi.registrationStatus();
       registrationAllowed = status.registration_enabled;
+      demo = status.demo ?? null;
     } catch {
       registrationAllowed = false;
     }
   });
+
+  async function handleDemoLogin() {
+    if (!demo) return;
+    username = demo.username;
+    password = demo.password;
+    await handleLogin();
+  }
 
   async function handleLogin() {
     if (!username || !password) return;
@@ -163,6 +172,28 @@
         </button>
       {/if}
     </div>
+
+    {#if demo}
+      <div
+        class="mb-4 rounded-2xl border border-primary/25 bg-primary/5 p-4 text-sm"
+      >
+        <p class="font-medium">{m.auth_demo_notice()}</p>
+        <p class="text-muted-foreground mt-1">
+          {m.auth_demo_credentials({
+            username: demo.username,
+            password: demo.password,
+          })}
+        </p>
+        <Button
+          variant="outline"
+          class="mt-3 w-full rounded-xl h-10"
+          disabled={loading}
+          onclick={handleDemoLogin}
+        >
+          {m.auth_demo_login()}
+        </Button>
+      </div>
+    {/if}
 
     <!-- Card -->
     <div class="bg-card card-soft rounded-2xl p-6">

@@ -27,6 +27,15 @@ class Settings(BaseSettings):
     covers_dir: str = "/data/covers"
     illustrations_dir: str = "/data/illustrations"
 
+    # Demo-instance login hint, shown on the login page when demo_mode is
+    # on. The flag grants no access by itself: no account is created and no
+    # auth is bypassed — the operator creates the demo account manually and
+    # chooses to publish its credentials here. It also locks the demo
+    # account's password so visitors can't lock each other out.
+    demo_mode: bool = False
+    demo_username: str = "demo"
+    demo_password: str = ""
+
     # Comma-separated list of additional web origins allowed by CORS, e.g.
     # "https://beepub.example.com,https://reader.example.com". Capacitor and
     # localhost origins are always allowed automatically.

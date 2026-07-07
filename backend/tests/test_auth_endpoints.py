@@ -652,3 +652,93 @@ class TestRefresh:
             assert resp.status_code == 401
         finally:
             _cleanup()
+
+
+# ---------------------------------------------------------------------------
+# Demo mode
+# ---------------------------------------------------------------------------
+
+
+class TestDemoMode:
+    @pytest.mark.asyncio
+    async def test_registration_status_hides_demo_by_default(self):
+        session = _mock_db_session(users=[], user_count=0)
+        _override_db(session)
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/auth/registration-status")
+            assert resp.status_code == 200
+            assert resp.json()["demo"] is None
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_registration_status_shows_demo_credentials(self, monkeypatch):
+        monkeypatch.setattr(settings, "demo_mode", True)
+        monkeypatch.setattr(settings, "demo_username", "demo")
+        monkeypatch.setattr(settings, "demo_password", "demo1234")
+        session = _mock_db_session(users=[], user_count=0)
+        _override_db(session)
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/auth/registration-status")
+            assert resp.status_code == 200
+            assert resp.json()["demo"] == {
+                "username": "demo",
+                "password": "demo1234",
+            }
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_demo_account_cannot_change_password(self, monkeypatch):
+        monkeypatch.setattr(settings, "demo_mode", True)
+        monkeypatch.setattr(settings, "demo_username", "demo")
+        demo_user = _make_user(username="demo", password="demo1234")
+        session = _mock_db_session(users=[demo_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(demo_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/change-password",
+                    json={
+                        "current_password": "demo1234",
+                        "new_password": "hijacked123",
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 403
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_other_accounts_still_change_password_in_demo_mode(
+        self, monkeypatch, test_user
+    ):
+        monkeypatch.setattr(settings, "demo_mode", True)
+        monkeypatch.setattr(settings, "demo_username", "demo")
+        session = _mock_db_session(users=[test_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(test_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/change-password",
+                    json={
+                        "current_password": "testpass",
+                        "new_password": "newpass123",
+                    },
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 200
+        finally:
+            _cleanup()
