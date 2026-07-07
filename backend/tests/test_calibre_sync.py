@@ -53,6 +53,32 @@ class TestScanCalibreLibraries:
 
         assert result == []
 
+    def test_library_mounted_directly_at_base_dir(self, tmp_path):
+        root = tmp_path / "MyLibrary"
+        root.mkdir()
+        (root / "metadata.db").write_text("not a real sqlite db")
+
+        result = scan_calibre_libraries(str(root))
+
+        assert result == [
+            {
+                "path": str(root),
+                "name": "MyLibrary",
+                "book_count": None,
+            }
+        ]
+
+    def test_root_and_subfolder_libraries_both_found(self, tmp_path):
+        root = tmp_path / "calibre"
+        sub = root / "Library B"
+        sub.mkdir(parents=True)
+        (root / "metadata.db").write_text("not a real sqlite db")
+        (sub / "metadata.db").write_text("not a real sqlite db")
+
+        result = scan_calibre_libraries(str(root))
+
+        assert [r["name"] for r in result] == ["calibre", "Library B"]
+
 
 def _make_library(**overrides):
     """Create a mock Library object."""

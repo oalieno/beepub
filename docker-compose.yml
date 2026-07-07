@@ -44,6 +44,9 @@ services:
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
+      # To import an existing Calibre library, mount it read-only here and
+      # in the worker service below, then use Admin -> Calibre in the app:
+      # - /path/to/calibre:/calibre:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -81,6 +84,8 @@ services:
       - books_data:/data/books
       - covers_data:/data/covers
       - illustrations_data:/data/illustrations
+      # Calibre mount, same as the backend service:
+      # - /path/to/calibre:/calibre:ro
     depends_on:
       migrate:
         condition: service_completed_successfully

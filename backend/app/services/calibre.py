@@ -66,8 +66,12 @@ def scan_calibre_libraries(base_dir: str = "/calibre") -> list[dict]:
     results = []
     if not os.path.isdir(base_dir):
         return results
-    for entry in sorted(os.listdir(base_dir)):
-        lib_path = os.path.join(base_dir, entry)
+    # Accept a single library mounted directly at base_dir (the common
+    # `-v ~/Calibre:/calibre:ro` case) as well as libraries in subfolders.
+    candidates = [base_dir] + [
+        os.path.join(base_dir, entry) for entry in sorted(os.listdir(base_dir))
+    ]
+    for lib_path in candidates:
         db_path = os.path.join(lib_path, "metadata.db")
         if os.path.isdir(lib_path) and os.path.isfile(db_path):
             # Count EPUB books
@@ -78,7 +82,7 @@ def scan_calibre_libraries(base_dir: str = "/calibre") -> list[dict]:
             results.append(
                 {
                     "path": lib_path,
-                    "name": entry,
+                    "name": os.path.basename(lib_path.rstrip("/")),
                     "book_count": count,
                 }
             )

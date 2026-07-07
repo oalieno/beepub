@@ -73,6 +73,24 @@ git clone https://github.com/oalieno/beepub.git && cd beepub
 docker compose up -d --build
 ```
 
+### Importing A Calibre Library
+
+Coming from calibre-web? Mount your Calibre library (the folder containing
+`metadata.db`) read-only into the `backend` and `worker` services — both
+have a commented-out line ready in `docker-compose.yml`:
+
+```yaml
+    volumes:
+      # ...existing volumes...
+      - /path/to/calibre:/calibre:ro
+```
+
+Restart the stack, open **Admin → Calibre** in the app, and import the
+library it finds. Books are read in place from the mount — BeePub never
+writes to your Calibre library — and a periodic sync picks up books you add
+or change in Calibre later. To serve several libraries, mount each one as a
+subfolder of `/calibre`.
+
 ### Reverse Proxy
 
 For a domain-based deployment behind Traefik, Caddy, nginx, or another reverse
