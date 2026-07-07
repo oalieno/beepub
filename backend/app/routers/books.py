@@ -136,12 +136,15 @@ def _require_upload_permission(user: User) -> None:
 
 async def _validate_upload_library(
     library_id: str | None, user: User, db: AsyncSession
-) -> uuid.UUID | None:
+) -> uuid.UUID:
     """Parse and authorize the target library BEFORE any file hits disk."""
     from app.routers.libraries import _get_accessible_library
 
+    # Every book must belong to a library: every listing (all/feed/search/
+    # random) reaches books through library membership, so a library-less
+    # book would be invisible to everyone — including its uploader.
     if not library_id:
-        return None
+        raise HTTPException(status_code=422, detail="library_id is required")
     try:
         lib_id = uuid.UUID(library_id)
     except ValueError:
@@ -198,7 +201,7 @@ async def upload_book(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     file: UploadFile = File(...),
-    library_id: str | None = Form(None),
+    library_id: str = Form(...),
 ):
     _require_upload_permission(current_user)
     if not file.filename or not file.filename.lower().endswith(".epub"):
@@ -220,7 +223,7 @@ async def upload_books_bulk(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     files: list[UploadFile] = File(...),
-    library_id: str | None = Form(None),
+    library_id: str = Form(...),
 ):
     _require_upload_permission(current_user)
     lib_id = await _validate_upload_library(library_id, current_user, db)
@@ -580,10 +583,9 @@ async def get_random_books(
         .order_by(func.random())
         .limit(count)
     )
-    books = result.scalars().all()
-    if not books:
-        raise HTTPException(status_code=404, detail="No accessible books found")
-    return books
+    # An empty library is not an error — the frontend renders its own
+    # "nothing to pull" state for an empty list.
+    return result.scalars().all()
 
 
 @router.get("/search", response_model=PaginatedBookSearchResults)

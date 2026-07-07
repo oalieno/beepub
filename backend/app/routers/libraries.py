@@ -428,6 +428,23 @@ async def remove_book_from_library(
                 "or remove all its editions together."
             ),
         )
+    # A book must always belong to at least one library — outside of one it
+    # is unreachable by every listing, even for admins.
+    membership_count = (
+        await db.execute(
+            select(func.count())
+            .select_from(LibraryBook)
+            .where(LibraryBook.book_id == book_id)
+        )
+    ).scalar()
+    if membership_count <= 1:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This is the book's only library. Delete the book instead, "
+                "or add it to another library first."
+            ),
+        )
     await db.delete(lb)
     await db.commit()
 

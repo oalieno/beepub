@@ -23,10 +23,10 @@ import type {
 } from "$lib/types";
 
 export const booksApi = {
-  upload: (file: File, libraryId?: string) => {
+  upload: (file: File, libraryId: string) => {
     const formData = new FormData();
     formData.append("file", file);
-    if (libraryId) formData.append("library_id", libraryId);
+    formData.append("library_id", libraryId);
     return fetch(`${apiBase()}/books`, {
       method: "POST",
       headers: getAuthHeader(),
