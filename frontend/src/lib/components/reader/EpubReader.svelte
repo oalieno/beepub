@@ -1197,6 +1197,25 @@
         color: darkMode ? "#ece5da" : "#1a1a1a",
         background: darkMode ? "#171310" : "#ffffff",
       },
+      // A book that colors text through element selectors (`p { color: #000 }`,
+      // common in InDesign/Calibre output) beats the color set on body — a
+      // direct match wins over inheritance. In dark mode force those elements
+      // back to inherit so the themed color applies; class selectors
+      // (intentionally colored spans) are more specific and still win, and
+      // light mode leaves the book's palette untouched.
+      ...(darkMode
+        ? {
+            "p, div, span, li, ul, ol, dl, dt, dd, table, tr, td, th, caption, h1, h2, h3, h4, h5, h6, blockquote, pre, code, section, article, aside, figure, figcaption, small, em, strong, b, i, u":
+              {
+                color: "inherit",
+              },
+            // Book CSS link colors (typically #0000ff) are unreadable on the
+            // dark background; class-colored links still override this.
+            a: {
+              color: "#d8a558",
+            },
+          }
+        : {}),
       // Reading gutter only on reflowable pages. Fixed-layout pages
       // (marked beepub-pre-paginated by epub.js fit()) need the full
       // viewport box for the scaled body, otherwise the padding overflows
