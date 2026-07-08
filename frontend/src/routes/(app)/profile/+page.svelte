@@ -300,180 +300,188 @@
       </div>
     {/if}
 
-    <!-- Divider -->
-    <div class="flex justify-center">
-      <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
-    </div>
+    <!-- Username/password changes are blocked server-side for the shared
+         demo account, so don't offer them. -->
+    {#if !$authStore.user?.is_demo}
+      <!-- Divider -->
+      <div class="flex justify-center">
+        <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
+      </div>
 
-    <!-- Change Username -->
-    <button
-      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
-      onclick={() => {
-        showChangeUsername = !showChangeUsername;
-        newUsername = $authStore.user?.username ?? "";
-        usernameError = "";
-      }}
-    >
-      <UserRound size={20} class="text-muted-foreground shrink-0" />
-      <span class="text-sm font-medium flex-1"
-        >{m.profile_change_username()}</span
-      >
-      <ChevronRight
-        size={16}
-        class="text-muted-foreground/50 transition-transform {showChangeUsername
-          ? 'rotate-90'
-          : ''}"
-      />
-    </button>
-    {#if showChangeUsername}
-      <form
-        onsubmit={(e) => {
-          e.preventDefault();
-          handleChangeUsername();
+      <!-- Change Username -->
+      <button
+        class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
+        onclick={() => {
+          showChangeUsername = !showChangeUsername;
+          newUsername = $authStore.user?.username ?? "";
+          usernameError = "";
         }}
-        class="px-4 py-4 space-y-3"
       >
-        <div class="space-y-1.5">
-          <Label for="new-username" class="text-sm"
-            >{m.profile_new_username()}</Label
-          >
-          <Input
-            id="new-username"
-            bind:value={newUsername}
-            placeholder={m.profile_new_username_placeholder()}
-            autocapitalize="none"
-            autocomplete="username"
-            autocorrect="off"
-            spellcheck={false}
-            inputmode="text"
-            maxlength={50}
-            required
-          />
-        </div>
-        {#if usernameError}
-          <p class="text-sm text-red-600">{usernameError}</p>
-        {/if}
-        <Button
-          type="submit"
-          disabled={changingUsername}
-          class="rounded-xl text-sm"
+        <UserRound size={20} class="text-muted-foreground shrink-0" />
+        <span class="text-sm font-medium flex-1"
+          >{m.profile_change_username()}</span
         >
-          {changingUsername ? m.profile_saving() : m.profile_change_username()}
-        </Button>
-      </form>
-    {/if}
+        <ChevronRight
+          size={16}
+          class="text-muted-foreground/50 transition-transform {showChangeUsername
+            ? 'rotate-90'
+            : ''}"
+        />
+      </button>
+      {#if showChangeUsername}
+        <form
+          onsubmit={(e) => {
+            e.preventDefault();
+            handleChangeUsername();
+          }}
+          class="px-4 py-4 space-y-3"
+        >
+          <div class="space-y-1.5">
+            <Label for="new-username" class="text-sm"
+              >{m.profile_new_username()}</Label
+            >
+            <Input
+              id="new-username"
+              bind:value={newUsername}
+              placeholder={m.profile_new_username_placeholder()}
+              autocapitalize="none"
+              autocomplete="username"
+              autocorrect="off"
+              spellcheck={false}
+              inputmode="text"
+              maxlength={50}
+              required
+            />
+          </div>
+          {#if usernameError}
+            <p class="text-sm text-red-600">{usernameError}</p>
+          {/if}
+          <Button
+            type="submit"
+            disabled={changingUsername}
+            class="rounded-xl text-sm"
+          >
+            {changingUsername
+              ? m.profile_saving()
+              : m.profile_change_username()}
+          </Button>
+        </form>
+      {/if}
 
-    <!-- Divider -->
-    <div class="flex justify-center">
-      <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
-    </div>
+      <!-- Divider -->
+      <div class="flex justify-center">
+        <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
+      </div>
 
-    <!-- Change Password -->
-    <button
-      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
-      onclick={() => {
-        showChangePassword = !showChangePassword;
-        passwordError = "";
-      }}
-    >
-      <KeyRound size={20} class="text-muted-foreground shrink-0" />
-      <span class="text-sm font-medium flex-1"
-        >{m.profile_change_password()}</span
-      >
-      <ChevronRight
-        size={16}
-        class="text-muted-foreground/50 transition-transform {showChangePassword
-          ? 'rotate-90'
-          : ''}"
-      />
-    </button>
-    {#if showChangePassword}
-      <form
-        onsubmit={(e) => {
-          e.preventDefault();
-          handleChangePassword();
+      <!-- Change Password -->
+      <button
+        class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
+        onclick={() => {
+          showChangePassword = !showChangePassword;
+          passwordError = "";
         }}
-        class="px-4 py-4 space-y-3"
       >
-        <div class="space-y-1.5">
-          <Label for="current-pw" class="text-sm"
-            >{m.profile_current_password()}</Label
-          >
-          <div class="relative">
-            <Input
-              id="current-pw"
-              type={showCurrentPw ? "text" : "password"}
-              bind:value={currentPassword}
-              placeholder={m.profile_current_password_placeholder()}
-              required
-              class="pr-10"
-            />
-            <button
-              aria-label={m.common_toggle_password()}
-              type="button"
-              class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
-              onclick={() => (showCurrentPw = !showCurrentPw)}
-              tabindex={-1}
-            >
-              {#if showCurrentPw}
-                <EyeOff size={16} />
-              {:else}
-                <Eye size={16} />
-              {/if}
-            </button>
-          </div>
-        </div>
-        <div class="space-y-1.5">
-          <Label for="new-pw" class="text-sm">{m.profile_new_password()}</Label>
-          <div class="relative">
-            <Input
-              id="new-pw"
-              type={showNewPw ? "text" : "password"}
-              bind:value={newPassword}
-              placeholder={m.profile_new_password_placeholder()}
-              required
-              class="pr-10"
-            />
-            <button
-              aria-label={m.common_toggle_password()}
-              type="button"
-              class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
-              onclick={() => (showNewPw = !showNewPw)}
-              tabindex={-1}
-            >
-              {#if showNewPw}
-                <EyeOff size={16} />
-              {:else}
-                <Eye size={16} />
-              {/if}
-            </button>
-          </div>
-        </div>
-        <div class="space-y-1.5">
-          <Label for="confirm-pw" class="text-sm"
-            >{m.profile_confirm_password()}</Label
-          >
-          <Input
-            id="confirm-pw"
-            type="password"
-            bind:value={confirmPassword}
-            placeholder={m.profile_confirm_password_placeholder()}
-            required
-          />
-        </div>
-        {#if passwordError}
-          <p class="text-sm text-red-600">{passwordError}</p>
-        {/if}
-        <Button
-          type="submit"
-          disabled={changingPassword}
-          class="rounded-xl text-sm"
+        <KeyRound size={20} class="text-muted-foreground shrink-0" />
+        <span class="text-sm font-medium flex-1"
+          >{m.profile_change_password()}</span
         >
-          {changingPassword
-            ? m.profile_changing()
-            : m.profile_change_password()}
-        </Button>
-      </form>
+        <ChevronRight
+          size={16}
+          class="text-muted-foreground/50 transition-transform {showChangePassword
+            ? 'rotate-90'
+            : ''}"
+        />
+      </button>
+      {#if showChangePassword}
+        <form
+          onsubmit={(e) => {
+            e.preventDefault();
+            handleChangePassword();
+          }}
+          class="px-4 py-4 space-y-3"
+        >
+          <div class="space-y-1.5">
+            <Label for="current-pw" class="text-sm"
+              >{m.profile_current_password()}</Label
+            >
+            <div class="relative">
+              <Input
+                id="current-pw"
+                type={showCurrentPw ? "text" : "password"}
+                bind:value={currentPassword}
+                placeholder={m.profile_current_password_placeholder()}
+                required
+                class="pr-10"
+              />
+              <button
+                aria-label={m.common_toggle_password()}
+                type="button"
+                class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
+                onclick={() => (showCurrentPw = !showCurrentPw)}
+                tabindex={-1}
+              >
+                {#if showCurrentPw}
+                  <EyeOff size={16} />
+                {:else}
+                  <Eye size={16} />
+                {/if}
+              </button>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="new-pw" class="text-sm"
+              >{m.profile_new_password()}</Label
+            >
+            <div class="relative">
+              <Input
+                id="new-pw"
+                type={showNewPw ? "text" : "password"}
+                bind:value={newPassword}
+                placeholder={m.profile_new_password_placeholder()}
+                required
+                class="pr-10"
+              />
+              <button
+                aria-label={m.common_toggle_password()}
+                type="button"
+                class="absolute right-0 top-0 h-full px-3 text-muted-foreground hover:text-foreground transition-colors"
+                onclick={() => (showNewPw = !showNewPw)}
+                tabindex={-1}
+              >
+                {#if showNewPw}
+                  <EyeOff size={16} />
+                {:else}
+                  <Eye size={16} />
+                {/if}
+              </button>
+            </div>
+          </div>
+          <div class="space-y-1.5">
+            <Label for="confirm-pw" class="text-sm"
+              >{m.profile_confirm_password()}</Label
+            >
+            <Input
+              id="confirm-pw"
+              type="password"
+              bind:value={confirmPassword}
+              placeholder={m.profile_confirm_password_placeholder()}
+              required
+            />
+          </div>
+          {#if passwordError}
+            <p class="text-sm text-red-600">{passwordError}</p>
+          {/if}
+          <Button
+            type="submit"
+            disabled={changingPassword}
+            class="rounded-xl text-sm"
+          >
+            {changingPassword
+              ? m.profile_changing()
+              : m.profile_change_password()}
+          </Button>
+        </form>
+      {/if}
     {/if}
   </div>
 

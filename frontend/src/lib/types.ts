@@ -17,6 +17,8 @@ export interface UserOut {
   can_download: boolean;
   can_upload: boolean;
   created_at: string;
+  /** Demo-mode shared account — username/password changes are disabled. */
+  is_demo?: boolean;
 }
 
 export interface UserLibraryAccess {
@@ -269,6 +271,7 @@ export interface LoginResponse {
   username: string;
   role: UserRole;
   is_active: boolean;
+  is_demo?: boolean;
   access_token: string;
   refresh_token: string;
 }

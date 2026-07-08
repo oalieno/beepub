@@ -719,6 +719,48 @@ class TestDemoMode:
             _cleanup()
 
     @pytest.mark.asyncio
+    async def test_demo_account_cannot_change_username(self, monkeypatch):
+        monkeypatch.setattr(settings, "demo_mode", True)
+        monkeypatch.setattr(settings, "demo_username", "demo")
+        demo_user = _make_user(username="demo", password="demo1234")
+        session = _mock_db_session(users=[demo_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(demo_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.put(
+                    "/api/auth/username",
+                    json={"new_username": "hijacked"},
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 403
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
+    async def test_me_marks_the_demo_account(self, monkeypatch):
+        monkeypatch.setattr(settings, "demo_mode", True)
+        monkeypatch.setattr(settings, "demo_username", "demo")
+        demo_user = _make_user(username="demo", password="demo1234")
+        session = _mock_db_session(users=[demo_user])
+        _override_db(session)
+        try:
+            token = create_access_token({"sub": str(demo_user.id)})
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    "/api/auth/me",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+            assert resp.status_code == 200
+            assert resp.json()["is_demo"] is True
+        finally:
+            _cleanup()
+
+    @pytest.mark.asyncio
     async def test_other_accounts_still_change_password_in_demo_mode(
         self, monkeypatch, test_user
     ):

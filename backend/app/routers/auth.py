@@ -169,6 +169,7 @@ async def login(
         username=user.username,
         role=user.role.value,
         is_active=user.is_active,
+        is_demo=bool(settings.demo_mode and user.username == settings.demo_username),
         access_token=access_token,
         refresh_token=refresh_token,
     )
@@ -230,6 +231,15 @@ async def update_username(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    # Renaming the shared demo account would break the published
+    # credentials for everyone until the next data reset (same reasoning
+    # as the change-password guard below).
+    if settings.demo_mode and current_user.username == settings.demo_username:
+        raise HTTPException(
+            status_code=403,
+            detail="The demo account's username cannot be changed",
+        )
+
     if body.new_username == current_user.username:
         return current_user
 

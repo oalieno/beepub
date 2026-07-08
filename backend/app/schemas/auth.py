@@ -42,6 +42,7 @@ class LoginResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    is_demo: bool = False
     access_token: str
     refresh_token: str
 

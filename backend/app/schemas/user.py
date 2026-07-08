@@ -1,8 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
+from app.config import settings
 from app.models.user import UserRole
 
 
@@ -14,8 +15,18 @@ class UserOut(BaseModel):
     can_download: bool
     can_upload: bool
     created_at: datetime
+    # Demo-mode account restrictions (no username/password changes) are
+    # enforced server-side; this lets the UI hide those controls too.
+    is_demo: bool = False
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="after")
+    def _mark_demo(self) -> "UserOut":
+        self.is_demo = bool(
+            settings.demo_mode and self.username == settings.demo_username
+        )
+        return self
 
 
 class UserUpdateRole(BaseModel):
