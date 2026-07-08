@@ -36,6 +36,9 @@ dev = [
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+markers = [
+    "integration: runs the real app against real Postgres/Redis (tests/integration/conftest.py)",
+]
 
 [tool.ruff]
 target-version = "py312"
