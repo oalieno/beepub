@@ -86,10 +86,4 @@ export const librariesApi = {
 
   getFeed: (id: string, options?: FeedParams) =>
     get(`/libraries/${id}/feed${feedQuery(options)}`) as Promise<PaginatedFeed>,
-
-  addBook: (id: string, bookId: string) =>
-    post(`/libraries/${id}/books`, { book_id: bookId }),
-
-  removeBook: (id: string, bookId: string) =>
-    del(`/libraries/${id}/books/${bookId}`),
 };

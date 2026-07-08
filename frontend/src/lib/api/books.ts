@@ -42,6 +42,11 @@ export const booksApi = {
 
   get: (bookId: string) => get(`/books/${bookId}`) as Promise<BookOut>,
 
+  moveToLibrary: (bookId: string, libraryId: string) =>
+    put(`/books/${bookId}/library`, { library_id: libraryId }) as Promise<{
+      status: "moved" | "unchanged";
+    }>,
+
   getSeriesNeighbors: (bookId: string) =>
     get(`/books/${bookId}/series-neighbors`) as Promise<SeriesNeighborsOut>,
 

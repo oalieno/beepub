@@ -33,6 +33,7 @@ from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.schemas.book import (
+    BookLibraryUpdate,
     BookMetadataUpdate,
     BookOut,
     BookSearchResult,
@@ -240,6 +241,69 @@ async def upload_books_bulk(
         extract_book_text.delay(str(book.id))
         fetch_book_metadata.delay(str(book.id))
     return books
+
+
+@router.put("/{book_id}/library")
+async def move_book_to_library(
+    book_id: uuid.UUID,
+    body: BookLibraryUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Set the library a book belongs to (a book lives in exactly one)."""
+    book_result = await db.execute(select(Book).where(Book.id == book_id))
+    if not book_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    lib_result = await db.execute(select(Library).where(Library.id == body.library_id))
+    target = lib_result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if target.calibre_path:
+        raise HTTPException(
+            status_code=403, detail="Cannot move books into a Calibre library"
+        )
+
+    membership_result = await db.execute(
+        select(LibraryBook).where(LibraryBook.book_id == book_id)
+    )
+    membership = membership_result.scalar_one_or_none()
+    if membership is not None and membership.library_id == body.library_id:
+        return {"status": "unchanged"}
+
+    from app.services.work_library import book_is_in_work
+
+    if await book_is_in_work(book_id, db):
+        # A Work's editions must live in one library — move them together
+        # or not at all.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Book is part of a Work. Dissolve the Work first, "
+                "or move all its editions together."
+            ),
+        )
+
+    if membership is None:
+        # Legacy orphan (pre-invariant data) — adopt it into the target.
+        db.add(
+            LibraryBook(
+                library_id=body.library_id,
+                book_id=book_id,
+                added_by=current_user.id,
+            )
+        )
+    else:
+        source = await db.get(Library, membership.library_id)
+        if source is not None and source.calibre_path:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot move books out of a Calibre library",
+            )
+        membership.library_id = body.library_id
+        membership.added_by = current_user.id
+    await db.commit()
+    return {"status": "moved"}
 
 
 @router.get("/reading-activity", response_model=list[ReadingActivityOut])

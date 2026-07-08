@@ -67,6 +67,12 @@ class BookOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class BookLibraryUpdate(BaseModel):
+    """Target library for PUT /books/{id}/library — a book lives in exactly one."""
+
+    library_id: uuid.UUID
+
+
 class PaginatedBooks(BaseModel):
     items: list[BookOut]
     total: int

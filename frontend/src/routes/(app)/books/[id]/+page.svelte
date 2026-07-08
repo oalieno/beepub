@@ -7,6 +7,7 @@
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
+  import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import StarRating from "$lib/components/StarRating.svelte";
@@ -15,6 +16,7 @@
     BookOut,
     ExternalMetadataOut,
     BookshelfOut,
+    LibraryOut,
     InteractionOut,
     HighlightOut,
     ReadingStatus,
@@ -30,6 +32,7 @@
     Trash2,
     Pencil,
     RefreshCw,
+    FolderInput,
     ShelvingUnit,
     EllipsisVertical,
     NotebookPen,
@@ -109,6 +112,8 @@
   let loading = $state(true);
   let showEditModal = $state(false);
   let showAddToShelf = $state(false);
+  let showMoveLibrary = $state(false);
+  let moveLibraries = $state<LibraryOut[]>([]);
   let notesStartEditing = $state(false);
   let notesSectionEl = $state<HTMLDivElement | null>(null);
 
@@ -533,6 +538,30 @@
       toastStore.error((e as Error).message);
     }
   }
+
+  async function openMoveLibrary() {
+    try {
+      // Calibre libraries are sync-managed — not valid move targets.
+      moveLibraries = (await librariesApi.list()).filter(
+        (l) => !l.calibre_path,
+      );
+      showMoveLibrary = true;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function moveToLibrary(libraryId: string) {
+    try {
+      const result = await booksApi.moveToLibrary(bookId, libraryId);
+      if (result.status === "moved") {
+        toastStore.success(m.book_moved_library());
+      }
+      showMoveLibrary = false;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
 </script>
 
 <svelte:head>
@@ -775,6 +804,10 @@
                 <DropdownMenu.Item onclick={handleRefreshMeta}>
                   <RefreshCw size={14} />
                   {m.book_refresh_metadata()}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onclick={openMoveLibrary}>
+                  <FolderInput size={14} />
+                  {m.book_move_library()}
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator />
                 {#if book.work_id}
@@ -1322,6 +1355,34 @@
             {#if shelf.description}
               <p class="text-muted-foreground text-xs mt-0.5">
                 {shelf.description}
+              </p>
+            {/if}
+          </button>
+        {/each}
+      {/if}
+    </div>
+  </Modal>
+
+  <Modal
+    title={m.book_move_library()}
+    open={showMoveLibrary}
+    onclose={() => (showMoveLibrary = false)}
+  >
+    <div class="space-y-2">
+      {#if moveLibraries.length === 0}
+        <p class="text-muted-foreground text-sm">
+          {m.book_move_library_none()}
+        </p>
+      {:else}
+        {#each moveLibraries as library}
+          <button
+            class="w-full text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary hover:shadow-sm transition-all"
+            onclick={() => moveToLibrary(library.id)}
+          >
+            <p class="font-medium text-foreground">{library.name}</p>
+            {#if library.description}
+              <p class="text-muted-foreground text-xs mt-0.5">
+                {library.description}
               </p>
             {/if}
           </button>

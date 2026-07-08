@@ -12,11 +12,14 @@ const ERROR_MAP: Record<string, () => string> = {
   "Account is disabled": () => m.error_account_disabled(),
   "An illustration already exists for this text selection": () =>
     m.error_illustration_exists(),
-  "Book already in library": () => m.error_book_in_library(),
   "Book already in shelf": () => m.error_book_in_shelf(),
+  "Book is part of a Work. Dissolve the Work first, or move all its editions together.":
+    () => m.error_move_book_in_work(),
   "Book not found": () => m.error_book_not_found(),
-  "Book not in library": () => m.error_book_not_in_library(),
   "Book not in shelf": () => m.error_book_not_in_shelf(),
+  "Cannot move books into a Calibre library": () => m.error_move_into_calibre(),
+  "Cannot move books out of a Calibre library": () =>
+    m.error_move_out_calibre(),
   "Bookshelf not found": () => m.error_bookshelf_not_found(),
   "Calibre library already linked": () => m.error_calibre_already_linked(),
   "Cannot add books to a Calibre library": () => m.error_calibre_no_add(),

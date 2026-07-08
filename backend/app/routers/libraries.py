@@ -18,7 +18,6 @@ from app.schemas.book import (
     PaginatedBooksWithInteraction,
 )
 from app.schemas.library import (
-    LibraryBookAdd,
     LibraryCreate,
     LibraryListOut,
     LibraryOut,
@@ -356,118 +355,6 @@ async def list_library_feed_view(
         offset=offset,
     )
     return PaginatedFeed(items=items, total=total)
-
-
-@router.post("/{library_id}/books", status_code=status.HTTP_201_CREATED)
-async def add_book_to_library(
-    library_id: uuid.UUID,
-    body: LibraryBookAdd,
-    current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    result = await db.execute(select(Library).where(Library.id == library_id))
-    library = result.scalar_one_or_none()
-    if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
-    if library.calibre_path:
-        raise HTTPException(
-            status_code=403, detail="Cannot add books to a Calibre library"
-        )
-    existing = await db.execute(
-        select(LibraryBook).where(
-            LibraryBook.library_id == library_id, LibraryBook.book_id == body.book_id
-        )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Book already in library")
-
-    book_result = await db.execute(select(Book).where(Book.id == body.book_id))
-    if not book_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Book not found")
-
-    # A book lives in exactly one library, so adding it to another one is a
-    # MOVE. (Remove-then-add cannot work: removing the only membership is
-    # refused because it would orphan the book.)
-    other = await db.execute(
-        select(LibraryBook).where(LibraryBook.book_id == body.book_id)
-    )
-    membership = other.scalar_one_or_none()
-    if membership is not None:
-        from app.services.work_library import book_is_in_work
-
-        if await book_is_in_work(body.book_id, db):
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "Book is part of a Work. Dissolve the Work first, "
-                    "or move all its editions together."
-                ),
-            )
-        source = await db.get(Library, membership.library_id)
-        if source is not None and source.calibre_path:
-            raise HTTPException(
-                status_code=403,
-                detail="Cannot move books out of a Calibre library",
-            )
-        membership.library_id = library_id
-        membership.added_by = current_user.id
-        await db.commit()
-        return {"status": "moved"}
-
-    lb = LibraryBook(
-        library_id=library_id, book_id=body.book_id, added_by=current_user.id
-    )
-    db.add(lb)
-    await db.commit()
-    return {"status": "added"}
-
-
-@router.delete("/{library_id}/books/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_book_from_library(
-    library_id: uuid.UUID,
-    book_id: uuid.UUID,
-    current_user: Annotated[User, Depends(require_admin)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    result = await db.execute(
-        select(LibraryBook).where(
-            LibraryBook.library_id == library_id, LibraryBook.book_id == book_id
-        )
-    )
-    lb = result.scalar_one_or_none()
-    if not lb:
-        raise HTTPException(status_code=404, detail="Book not in library")
-    # If the book is part of a Work, removing it would leave that Work
-    # spanning libraries (or empty-library) — break the invariant.
-    from app.services.work_library import book_is_in_work
-
-    if await book_is_in_work(book_id, db):
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Book is part of a Work. Dissolve the Work first, "
-                "or remove all its editions together."
-            ),
-        )
-    # A book must always belong to at least one library — outside of one it
-    # is unreachable by every listing, even for admins.
-    membership_count = (
-        await db.execute(
-            select(func.count())
-            .select_from(LibraryBook)
-            .where(LibraryBook.book_id == book_id)
-        )
-    ).scalar()
-    if membership_count <= 1:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "This is the book's only library. Delete the book instead, "
-                "or move it by adding it to the target library."
-            ),
-        )
-    await db.delete(lb)
-    await db.commit()
 
 
 async def _get_accessible_library(

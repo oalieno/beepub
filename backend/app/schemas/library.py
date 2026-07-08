@@ -29,7 +29,3 @@ class LibraryOut(BaseModel):
 class LibraryListOut(LibraryOut):
     book_count: int = 0
     preview_book_ids: list[uuid.UUID] = []
-
-
-class LibraryBookAdd(BaseModel):
-    book_id: uuid.UUID
