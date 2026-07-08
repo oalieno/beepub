@@ -12,13 +12,13 @@ tests create users and books.
 ## Start a disposable stack
 
 ```sh
-# From the repo root. -p is REQUIRED: without it the project is named
-# "beepub" and would replace a live stack running on the same daemon.
-PORT=8091 docker compose -p beepub-e2e -f docker-compose.yml up -d --build
-
-# tear down (volumes included)
-docker compose -p beepub-e2e -f docker-compose.yml down -v
+./e2e/stack.sh up      # build from the working tree and start
+./e2e/stack.sh down    # tear down, volumes included
 ```
+
+The script pins the compose project name to `beepub-e2e`; never run the
+base compose file for testing without a `-p` — the default project name
+would replace a live beepub stack running on the same daemon.
 
 ## Run the tests
 
