@@ -805,10 +805,13 @@
                   <RefreshCw size={14} />
                   {m.book_refresh_metadata()}
                 </DropdownMenu.Item>
-                <DropdownMenu.Item onclick={openMoveLibrary}>
-                  <FolderInput size={14} />
-                  {m.book_move_library()}
-                </DropdownMenu.Item>
+                {#if book.calibre_id === null}
+                  <!-- Calibre books are sync-managed; they cannot move. -->
+                  <DropdownMenu.Item onclick={openMoveLibrary}>
+                    <FolderInput size={14} />
+                    {m.book_move_library()}
+                  </DropdownMenu.Item>
+                {/if}
                 <DropdownMenu.Separator />
                 {#if book.work_id}
                   {#if primaryBookId === bookId}
