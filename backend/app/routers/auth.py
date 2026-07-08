@@ -37,24 +37,34 @@ REFRESH_COOKIE_NAME = "refresh_token"
 REFRESH_COOKIE_PATH = "/api/auth"
 
 
-def _set_access_cookie(response: Response, token: str) -> None:
+def _cookie_secure(request: Request) -> bool:
+    # Browsers reject Set-Cookie with Secure over plain http (localhost
+    # excepted), so an unconditional Secure flag breaks login entirely for
+    # instances reached as http://<lan-ip>:<port>. Follow the scheme of the
+    # original request instead — ProxyHeadersMiddleware has already applied
+    # X-Forwarded-Proto, which nginx preserves from any TLS-terminating
+    # proxy in front of it.
+    return request.url.scheme == "https"
+
+
+def _set_access_cookie(response: Response, token: str, secure: bool) -> None:
     response.set_cookie(
         key=ACCESS_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         max_age=settings.access_token_expire_minutes * 60,
         path="/",
     )
 
 
-def _set_refresh_cookie(response: Response, token: str) -> None:
+def _set_refresh_cookie(response: Response, token: str, secure: bool) -> None:
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
         value=token,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
         path=REFRESH_COOKIE_PATH,
@@ -151,8 +161,9 @@ async def login(
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
-    _set_access_cookie(response, access_token)
-    _set_refresh_cookie(response, refresh_token)
+    secure = _cookie_secure(request)
+    _set_access_cookie(response, access_token, secure)
+    _set_refresh_cookie(response, refresh_token, secure)
     return LoginResponse(
         id=str(user.id),
         username=user.username,
@@ -203,7 +214,7 @@ async def refresh(
         raise invalid
 
     new_access = create_access_token({"sub": str(user.id)})
-    _set_access_cookie(response, new_access)
+    _set_access_cookie(response, new_access, _cookie_secure(request))
     return RefreshResponse(access_token=new_access)
 
 
