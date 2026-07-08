@@ -161,3 +161,7 @@ build/
 # Xcode user/machine-specific files
 ios/App/App.xcodeproj/project.xcworkspace/
 ios/App/App.xcodeproj/xcuserdata/
+# Playwright
+playwright-report/
+test-results/
+e2e/.auth/

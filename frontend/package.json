@@ -9,6 +9,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "build:app": "node scripts/build-app.js",
     "cap:sync": "pnpm build:app && npx cap sync",
+    "test:e2e": "playwright test",
     "format": "prettier --plugin prettier-plugin-svelte --ignore-path .prettierignore --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
   },
   "devDependencies": {
@@ -16,6 +17,7 @@
     "@inlang/paraglide-js": "^2.15.1",
     "@internationalized/date": "^3.11.0",
     "@lucide/svelte": "^1.7.0",
+    "@playwright/test": "^1.61.1",
     "@sveltejs/adapter-node": "^5.2.9",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.7.0",
