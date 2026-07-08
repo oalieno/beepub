@@ -380,19 +380,40 @@ async def add_book_to_library(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=409, detail="Book already in library")
-    # 1:N invariant — a book lives in at most one library. Move = remove first.
+
+    book_result = await db.execute(select(Book).where(Book.id == body.book_id))
+    if not book_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    # A book lives in exactly one library, so adding it to another one is a
+    # MOVE. (Remove-then-add cannot work: removing the only membership is
+    # refused because it would orphan the book.)
     other = await db.execute(
-        select(LibraryBook.library_id).where(LibraryBook.book_id == body.book_id)
+        select(LibraryBook).where(LibraryBook.book_id == body.book_id)
     )
-    other_lib_id = other.scalar_one_or_none()
-    if other_lib_id is not None:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"Book is already in library {other_lib_id}. "
-                "Remove it from that library first."
-            ),
-        )
+    membership = other.scalar_one_or_none()
+    if membership is not None:
+        from app.services.work_library import book_is_in_work
+
+        if await book_is_in_work(body.book_id, db):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "Book is part of a Work. Dissolve the Work first, "
+                    "or move all its editions together."
+                ),
+            )
+        source = await db.get(Library, membership.library_id)
+        if source is not None and source.calibre_path:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot move books out of a Calibre library",
+            )
+        membership.library_id = library_id
+        membership.added_by = current_user.id
+        await db.commit()
+        return {"status": "moved"}
+
     lb = LibraryBook(
         library_id=library_id, book_id=body.book_id, added_by=current_user.id
     )
@@ -442,7 +463,7 @@ async def remove_book_from_library(
             status_code=409,
             detail=(
                 "This is the book's only library. Delete the book instead, "
-                "or add it to another library first."
+                "or move it by adding it to the target library."
             ),
         )
     await db.delete(lb)
