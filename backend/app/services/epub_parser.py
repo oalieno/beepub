@@ -24,9 +24,12 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
         "epub_series_index": None,
         "epub_tags": None,
     }
-    try:
-        book = epub.read_epub(file_path, options={"ignore_ncx": True})
+    # A file that cannot be opened as an EPUB at all must fail the upload
+    # (the router turns this into a 400); anything after that is best-effort,
+    # because real-world EPUBs get metadata wrong in endless ways.
+    book = epub.read_epub(file_path, options={"ignore_ncx": True})
 
+    try:
         title = book.get_metadata("DC", "title")
         if title:
             result["epub_title"] = title[0][0]
