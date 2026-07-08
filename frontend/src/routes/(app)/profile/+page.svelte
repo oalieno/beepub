@@ -1,7 +1,9 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { authApi } from "$lib/api/auth";
+  import { get } from "$lib/api/client";
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
@@ -35,6 +37,17 @@
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let online = $derived($isOnline);
+
+  let appVersion = $state("");
+  onMount(async () => {
+    try {
+      const health = (await get("/health")) as { version?: string };
+      const v = health.version ?? "";
+      appVersion = /^\d/.test(v) ? `v${v}` : v;
+    } catch {
+      // version display is cosmetic; ignore failures (e.g. offline)
+    }
+  });
 
   // Language
   let showLanguage = $state(false);
@@ -536,4 +549,10 @@
       <span class="text-sm font-medium">{m.profile_logout()}</span>
     </button>
   </div>
+
+  {#if appVersion}
+    <p class="mt-6 text-center text-xs text-muted-foreground/60">
+      BeePub {appVersion}
+    </p>
+  {/if}
 </div>
