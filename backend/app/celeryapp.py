@@ -78,7 +78,11 @@ celery.conf.update(
         },
     },
     task_routes={
-        "app.tasks.bulk_jobs.run_bulk_job": {"queue": "bulk"},
+        # The orchestrator must NOT share the bulk queue with its own
+        # per-book tasks: after a re-run, the new orchestrator would sit
+        # behind thousands of now-stale messages from the previous
+        # generation, and the UI shows pending=0 until it executes.
+        "app.tasks.bulk_jobs.run_bulk_job": {"queue": "default"},
         "app.tasks.bulk_jobs.run_book_job": {"queue": "bulk"},
     },
 )
