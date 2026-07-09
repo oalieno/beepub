@@ -30,11 +30,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.book import Book
 from app.models.kosync import KosyncProgress
-from app.models.reading import UserBookInteraction
 from app.models.user import User
 from app.routers.libraries import accessible_book_ids_select
 from app.services.auth import verify_password
 from app.services.credential_cache import CredentialCache
+from app.services.kosync_bridge import bridge_kosync_percentage
 
 router = APIRouter(tags=["kosync"])
 
@@ -113,9 +113,7 @@ async def _bridge_percentage_to_book(
 ) -> None:
     """Reflect e-reader progress in BeePub's own reading progress.
 
-    Percentage only (BeePub stores 0–100): the CFI and section fields are
-    left untouched, so the web reader still restores at its last own
-    position. Books the user cannot access are skipped.
+    Books the user cannot access are skipped.
     """
     result = await db.execute(
         select(Book.id).where(
@@ -126,23 +124,7 @@ async def _bridge_percentage_to_book(
     book_id = result.scalar_one_or_none()
     if book_id is None:
         return
-
-    interaction = (
-        await db.execute(
-            select(UserBookInteraction).where(
-                UserBookInteraction.user_id == user.id,
-                UserBookInteraction.book_id == book_id,
-            )
-        )
-    ).scalar_one_or_none()
-    if interaction is None:
-        interaction = UserBookInteraction(user_id=user.id, book_id=book_id)
-        db.add(interaction)
-
-    reading_progress = dict(interaction.reading_progress or {})
-    reading_progress["percentage"] = round(percentage * 100, 2)
-    reading_progress["last_read_at"] = datetime.now(UTC).isoformat()
-    interaction.reading_progress = reading_progress
+    await bridge_kosync_percentage(db, user.id, book_id, percentage)
 
 
 @router.put("/syncs/progress")

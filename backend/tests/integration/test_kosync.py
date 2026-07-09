@@ -132,6 +132,36 @@ async def test_backfill_fills_missing_digests(admin_client):
     assert await _document_digest(admin_client, book["id"]) == original
 
 
+async def test_backfill_retro_bridges_preexisting_records(admin_client):
+    """Progress that arrived before the book had a digest gets applied."""
+    from sqlalchemy import update
+
+    from app.database import engine
+    from app.models.book import Book
+    from app.tasks.digests import _run_backfill
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    digest = await _document_digest(admin_client, book["id"])
+
+    # Pre-upgrade state: the book has no digest yet…
+    async with engine.begin() as conn:
+        await conn.execute(update(Book).values(partial_md5=None))
+
+    # …so this push is stored but cannot bridge.
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": digest, "progress": "xp", "percentage": 0.33},
+        headers=_headers(),
+    )
+    before = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
+    assert before == {} or before.get("percentage") is None
+
+    assert await _run_backfill() == 1
+    after = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
+    assert after["percentage"] == pytest.approx(33.0)
+
+
 async def test_bridge_preserves_existing_reader_state(admin_client):
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
