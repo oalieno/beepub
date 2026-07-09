@@ -63,6 +63,12 @@ JOB_TYPES: dict[str, JobType] = {
         label="Metadata & Tags",
         description="Fetch external metadata and generate tags (no AI)",
     ),
+    "digest": JobType(
+        key="digest",
+        label="KOReader Digest",
+        description="Compute KOReader sync digests so e-reader progress "
+        "can be matched to books",
+    ),
 }
 
 
@@ -203,6 +209,11 @@ def _missing_filters(job_type: str):
 
     elif job_type == "metadata_backfill":
         return [Book.metadata_count < NUM_METADATA_SOURCES], None
+
+    elif job_type == "digest":
+        # "" marks a file that could not be read (kept out of the missing
+        # count); calibre sync recomputes it when the file comes back.
+        return [Book.partial_md5.is_(None)], None
 
     return None, None
 

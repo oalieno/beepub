@@ -113,12 +113,12 @@ async def test_no_progress_yet(admin_client):
     assert "percentage" not in response.json()
 
 
-async def test_backfill_fills_missing_digests(admin_client):
+async def test_digest_job_fills_missing_digests(admin_client):
     from sqlalchemy import update
 
     from app.database import engine
     from app.models.book import Book
-    from app.tasks.digests import _run_backfill
+    from app.tasks.digests import _run_book_digest
 
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
@@ -128,17 +128,57 @@ async def test_backfill_fills_missing_digests(admin_client):
     async with engine.begin() as conn:
         await conn.execute(update(Book).values(partial_md5=None))
 
-    assert await _run_backfill() == 1
+    await _run_book_digest(book["id"])
     assert await _document_digest(admin_client, book["id"]) == original
 
 
-async def test_backfill_retro_bridges_preexisting_records(admin_client):
+async def test_digest_job_marks_unreadable_files(admin_client):
+    from sqlalchemy import update
+
+    from app.database import engine
+    from app.models.book import Book
+    from app.tasks.digests import _run_book_digest
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    async with engine.begin() as conn:
+        await conn.execute(
+            update(Book).values(partial_md5=None, file_path="/nonexistent.epub")
+        )
+
+    # "" keeps the book out of the missing count instead of retrying forever.
+    await _run_book_digest(book["id"])
+    assert await _document_digest(admin_client, book["id"]) == ""
+
+
+async def test_auto_kick_starts_the_bulk_job(admin_client):
+    from sqlalchemy import update
+
+    from app.database import engine
+    from app.models.book import Book
+    from app.services.job_queue import get_generation
+    from app.tasks.digests import _auto_kick
+
+    library_id = await create_library(admin_client)
+    await upload_epub(admin_client, library_id)
+
+    # Nothing missing → no run started.
+    assert await _auto_kick() is False
+
+    async with engine.begin() as conn:
+        await conn.execute(update(Book).values(partial_md5=None))
+    generation_before = await get_generation("digest")
+    assert await _auto_kick() is True
+    assert await get_generation("digest") == generation_before + 1
+
+
+async def test_digest_job_retro_bridges_preexisting_records(admin_client):
     """Progress that arrived before the book had a digest gets applied."""
     from sqlalchemy import update
 
     from app.database import engine
     from app.models.book import Book
-    from app.tasks.digests import _run_backfill
+    from app.tasks.digests import _run_book_digest
 
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
@@ -157,9 +197,69 @@ async def test_backfill_retro_bridges_preexisting_records(admin_client):
     before = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert before == {} or before.get("percentage") is None
 
-    assert await _run_backfill() == 1
+    await _run_book_digest(book["id"])
     after = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert after["percentage"] == pytest.approx(33.0)
+
+
+async def test_bridge_sets_reading_status(admin_client):
+    """A kosync push makes the book show up as currently reading."""
+    from sqlalchemy import select
+
+    from app.database import engine
+    from app.models.reading import UserBookInteraction
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": document, "progress": "xp", "percentage": 0.2},
+        headers=_headers(),
+    )
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                select(
+                    UserBookInteraction.reading_status,
+                    UserBookInteraction.started_at,
+                )
+            )
+        ).one()
+    assert row.reading_status == "currently_reading"
+    assert row.started_at is not None
+
+
+async def test_bridge_never_demotes_reading_status(admin_client):
+    from sqlalchemy import select, update
+
+    from app.database import engine
+    from app.models.reading import UserBookInteraction
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": document, "progress": "xp", "percentage": 0.5},
+        headers=_headers(),
+    )
+    async with engine.begin() as conn:
+        await conn.execute(update(UserBookInteraction).values(reading_status="read"))
+
+    # A re-read on the e-reader must not flip a finished book back.
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": document, "progress": "xp2", "percentage": 0.6},
+        headers=_headers(),
+    )
+    async with engine.connect() as conn:
+        status_value = (
+            await conn.execute(select(UserBookInteraction.reading_status))
+        ).scalar_one()
+    assert status_value == "read"
 
 
 async def test_bridge_preserves_existing_reader_state(admin_client):

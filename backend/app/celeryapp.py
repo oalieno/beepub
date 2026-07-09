@@ -72,7 +72,9 @@ celery.conf.update(
         },
         "kosync-digest-backfill": {
             "task": "app.tasks.digests.backfill_partial_md5",
-            "schedule": 600.0,  # exits immediately when nothing lacks a digest
+            # Auto-starts the "digest" bulk job when books lack digests
+            # and no run is in flight; a no-op otherwise.
+            "schedule": 600.0,
         },
     },
     task_routes={

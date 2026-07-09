@@ -31,6 +31,9 @@ _TASK_REGISTRY: dict[str, list[tuple[str, str]]] = {
     "book_embedding": [
         ("app.tasks.embed", "_run_embed_book_summary"),
     ],
+    "digest": [
+        ("app.tasks.digests", "_run_book_digest"),
+    ],
 }
 
 

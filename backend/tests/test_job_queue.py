@@ -37,8 +37,8 @@ def _patch_redis(client):
 
 
 class TestJobTypes:
-    def test_has_six_types(self):
-        assert len(JOB_TYPES) == 6
+    def test_has_seven_types(self):
+        assert len(JOB_TYPES) == 7
 
     def test_expected_keys(self):
         expected = {
@@ -48,6 +48,7 @@ class TestJobTypes:
             "auto_tag",
             "book_embedding",
             "metadata_backfill",
+            "digest",
         }
         assert set(JOB_TYPES.keys()) == expected
 

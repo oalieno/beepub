@@ -1,18 +1,29 @@
 """Bridge kosync percentages into BeePub's own reading progress.
 
-Shared by the kosync router (live pushes) and the digest backfill task
+Shared by the kosync router (live pushes) and the digest bulk job
 (retro-bridging records that arrived before their book had a digest).
 Percentage only (BeePub stores 0–100): the CFI and section fields are
 left untouched, so the web reader still restores at its last own position.
 """
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reading import UserBookInteraction
+
+
+async def _today_in_app_timezone(db: AsyncSession) -> date:
+    from app.services.settings import get_setting
+
+    tz_name = await get_setting(db, "timezone")
+    try:
+        return datetime.now(ZoneInfo(tz_name)).date()
+    except Exception:
+        return datetime.now(UTC).date()
 
 
 async def bridge_kosync_percentage(
@@ -35,3 +46,54 @@ async def bridge_kosync_percentage(
     reading_progress["percentage"] = round(percentage * 100, 2)
     reading_progress["last_read_at"] = datetime.now(UTC).isoformat()
     interaction.reading_progress = reading_progress
+
+    # Mirror the web reader's auto-mark behaviour: reading on an e-reader
+    # means the book is being read. Only upgrade from empty/want_to_read —
+    # never demote read / did_not_finish, and keep an existing started_at.
+    if interaction.reading_status in (None, "want_to_read"):
+        interaction.reading_status = "currently_reading"
+        if interaction.started_at is None:
+            interaction.started_at = await _today_in_app_timezone(db)
+
+
+async def retro_bridge_document(
+    db: AsyncSession, book_id: uuid.UUID, digest: str
+) -> int:
+    """Apply stored kosync records whose document just gained a book.
+
+    Mirrors the router's access rule by skipping users excluded from the
+    book's library. Returns the number of records applied.
+    """
+    from app.models.kosync import KosyncProgress
+    from app.models.library import Library, LibraryBook, UserLibraryExclusion
+
+    records = (
+        (
+            await db.execute(
+                select(KosyncProgress).where(
+                    KosyncProgress.document == digest,
+                    KosyncProgress.percentage.is_not(None),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    bridged = 0
+    for record in records:
+        excluded = (
+            await db.execute(
+                select(UserLibraryExclusion.library_id)
+                .join(Library, Library.id == UserLibraryExclusion.library_id)
+                .join(LibraryBook, LibraryBook.library_id == Library.id)
+                .where(
+                    UserLibraryExclusion.user_id == record.user_id,
+                    LibraryBook.book_id == book_id,
+                )
+            )
+        ).first()
+        if excluded:
+            continue
+        await bridge_kosync_percentage(db, record.user_id, book_id, record.percentage)
+        bridged += 1
+    return bridged
