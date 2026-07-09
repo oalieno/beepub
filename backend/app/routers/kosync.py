@@ -88,12 +88,15 @@ class ProgressPayload(BaseModel):
 
 @router.post("/users/create")
 async def kosync_register():
-    # KOReader's plugin surfaces body.message on non-201 responses.
+    # KOReader's plugin surfaces body.message on non-201 responses, and
+    # some clients (Readest) auto-try register after a 401 — so this is
+    # also what a user with no sync key yet ends up reading.
     return JSONResponse(
         status_code=status.HTTP_403_FORBIDDEN,
         content={
-            "message": "Create accounts in the BeePub web UI, then sync "
-            "with your BeePub username and password."
+            "message": "Sync uses your BeePub username and password. "
+            "Create the account in the BeePub web UI — and if it already "
+            "exists, log in to the web UI once to enable sync."
         },
     )
 
