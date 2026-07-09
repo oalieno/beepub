@@ -48,6 +48,7 @@ def run_bulk_job(self, job_type: str, generation: int) -> None:
 async def _run_bulk_job(job_type: str, generation: int) -> None:
     from app.database import create_task_engine
     from app.services.job_queue import (
+        decr_pending,
         get_missing_book_ids,
         incr_pending,
         is_current_generation,
@@ -68,22 +69,29 @@ async def _run_bulk_job(job_type: str, generation: int) -> None:
         return
 
     # Set pending count upfront
-    pending_val = await incr_pending(job_type, total)
+    pending_val = await incr_pending(job_type, generation, total)
 
     logger.info(
         f"bulk_job {job_type}: dispatching {total} tasks (generation {generation}), pending set to {pending_val}"
     )
 
+    dispatched = 0
     for bid in book_ids:
         bid_str = str(bid)
         try:
             run_book_job.delay(job_type, bid_str, generation)
+            dispatched += 1
         except Exception:
             logger.exception(
                 f"bulk_job {job_type}: failed to dispatch for book {bid_str}"
             )
 
-    logger.info(f"bulk_job {job_type}: dispatched {total} tasks")
+    if dispatched < total:
+        # Tasks that never made it onto the queue will never decrement —
+        # take them off the counter now or the run shows as stuck.
+        await decr_pending(job_type, generation, total - dispatched)
+
+    logger.info(f"bulk_job {job_type}: dispatched {dispatched}/{total} tasks")
 
 
 @celery.task(name="app.tasks.bulk_jobs.run_book_job", bind=True, max_retries=2)
@@ -92,9 +100,9 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
     from app.celeryapp import run_async
     from app.services.job_queue import decr_pending, is_current_generation
 
-    # Skip if generation is stale (job was stopped)
+    # Skip if generation is stale (job was stopped). No decrement needed:
+    # the counter is scoped to this stale generation, which nothing reads.
     if not run_async(is_current_generation(job_type, generation)):
-        # Don't decr — stop_job already reset pending to 0
         return
 
     try:
@@ -106,7 +114,7 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )
-    pending_after = run_async(decr_pending(job_type))
+    pending_after = run_async(decr_pending(job_type, generation))
     logger.info(
         f"run_book_job {job_type} book {book_id} done, pending now {pending_after}"
     )

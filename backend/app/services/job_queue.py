@@ -76,8 +76,17 @@ def _gen_key(job_type: str) -> str:
     return f"{GEN_KEY_PREFIX}:{job_type}"
 
 
-def _pending_key(job_type: str) -> str:
-    return f"{PENDING_KEY_PREFIX}:{job_type}"
+def _pending_key(job_type: str, generation: int) -> str:
+    # Scoped per generation: tasks of a stopped/superseded run can never
+    # touch the counter the UI is reading, which kills the whole class of
+    # "pending stuck > 0 forever" desyncs (double-start races, stale
+    # skip-without-decrement, dispatch crashes of an old run).
+    return f"{PENDING_KEY_PREFIX}:{job_type}:{generation}"
+
+
+# Abandoned generations stop being read but their keys would linger; let
+# Redis collect them. Far longer than any real run.
+_PENDING_TTL_SECONDS = 30 * 24 * 3600
 
 
 @asynccontextmanager
@@ -102,15 +111,17 @@ async def start_job(job_type: str) -> int:
 
 
 async def stop_job(job_type: str) -> int:
-    """Stop a run by incrementing the generation counter and resetting pending.
+    """Stop a run by incrementing the generation counter.
 
     In-flight tasks with the old generation will finish, but pending tasks
-    will see a different generation and skip.
+    will see a different generation and skip. The old generation's pending
+    counter is deleted; stragglers touching it are harmless because nothing
+    reads it anymore.
     Returns the new generation.
     """
     async with _redis() as client:
         gen = await client.incr(_gen_key(job_type))
-        await client.delete(_pending_key(job_type))
+        await client.delete(_pending_key(job_type, gen - 1))
         return gen
 
 
@@ -131,33 +142,50 @@ async def is_current_generation(job_type: str, generation: int) -> bool:
 # ---------------------------------------------------------------------------
 
 
-async def incr_pending(job_type: str, count: int = 1) -> int:
-    """Increment the pending counter (called on dispatch). Returns the new count."""
+async def incr_pending(job_type: str, generation: int, count: int = 1) -> int:
+    """Increment a run's pending counter (called on dispatch). Returns the new count."""
     async with _redis() as client:
-        return await client.incrby(_pending_key(job_type), count)
+        key = _pending_key(job_type, generation)
+        val = await client.incrby(key, count)
+        await client.expire(key, _PENDING_TTL_SECONDS)
+        return val
 
 
-async def decr_pending(job_type: str) -> int:
-    """Decrement the pending counter (called on task completion). Returns the new count (min 0)."""
+async def decr_pending(job_type: str, generation: int, count: int = 1) -> int:
+    """Decrement a run's pending counter. Returns the new count (min 0).
+
+    The key is deleted when the counter reaches zero, so a finished run
+    leaves nothing behind and a straggler's extra decrement can't push a
+    fresh key negative for long.
+    """
     async with _redis() as client:
-        val = await client.decr(_pending_key(job_type))
-        if val < 0:
-            await client.set(_pending_key(job_type), 0)
+        key = _pending_key(job_type, generation)
+        val = await client.decrby(key, count)
+        if val <= 0:
+            await client.delete(key)
             return 0
         return val
 
 
 async def get_pending_count(job_type: str) -> int:
-    """Get the number of pending tasks (queued + active) for a job type."""
+    """Get the number of pending tasks (queued + active) for the current run."""
     async with _redis() as client:
-        data = await client.get(_pending_key(job_type))
+        gen = await client.get(_gen_key(job_type))
+        if not gen:
+            return 0
+        data = await client.get(_pending_key(job_type, int(gen)))
         return max(int(data), 0) if data else 0
 
 
 async def get_pending_counts(job_types: list[str]) -> dict[str, int]:
-    """Get pending counts for many job types over a single Redis connection."""
+    """Get current-run pending counts for many job types over one connection."""
     async with _redis() as client:
-        values = await client.mget([_pending_key(k) for k in job_types])
+        gens = await client.mget([_gen_key(k) for k in job_types])
+        keys = [
+            _pending_key(k, int(g) if g else 0)
+            for k, g in zip(job_types, gens, strict=True)
+        ]
+        values = await client.mget(keys)
     return {
         key: max(int(val), 0) if val else 0
         for key, val in zip(job_types, values, strict=True)
@@ -165,9 +193,11 @@ async def get_pending_counts(job_types: list[str]) -> dict[str, int]:
 
 
 async def reset_pending(job_type: str) -> None:
-    """Reset the pending counter to 0 (called on stop)."""
+    """Reset the current run's pending counter to 0."""
     async with _redis() as client:
-        await client.delete(_pending_key(job_type))
+        gen = await client.get(_gen_key(job_type))
+        if gen:
+            await client.delete(_pending_key(job_type, int(gen)))
 
 
 # ---------------------------------------------------------------------------

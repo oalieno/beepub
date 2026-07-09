@@ -24,6 +24,9 @@ def _mock_redis(**overrides) -> MagicMock:
     client.incr = AsyncMock(return_value=1)
     client.incrby = AsyncMock(return_value=1)
     client.decr = AsyncMock(return_value=0)
+    client.decrby = AsyncMock(return_value=0)
+    client.expire = AsyncMock()
+    client.mget = AsyncMock(return_value=[])
     client.delete = AsyncMock()
     client.exists = AsyncMock(return_value=0)
     client.aclose = AsyncMock()
@@ -88,12 +91,13 @@ class TestStartJob:
 
 class TestStopJob:
     @pytest.mark.asyncio
-    async def test_increments_generation(self):
+    async def test_increments_generation_and_drops_old_counter(self):
         client = _mock_redis(incr=AsyncMock(return_value=5))
         with _patch_redis(client):
             gen = await stop_job("embedding")
         assert gen == 5
         client.incr.assert_called_once()
+        client.delete.assert_called_once_with("beepub:job:pending:embedding:4")
 
 
 class TestGetGeneration:
@@ -134,37 +138,48 @@ class TestIsCurrentGeneration:
 
 class TestPendingCounter:
     @pytest.mark.asyncio
-    @pytest.mark.asyncio
-    async def test_incr_pending(self):
+    async def test_incr_pending_scopes_key_to_generation(self):
         client = _mock_redis(incrby=AsyncMock(return_value=3))
         with _patch_redis(client):
-            count = await incr_pending("embedding")
+            count = await incr_pending("embedding", 7, 3)
         assert count == 3
+        client.incrby.assert_called_once_with("beepub:job:pending:embedding:7", 3)
+        client.expire.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_decr_pending(self):
-        client = _mock_redis(decr=AsyncMock(return_value=2))
+        client = _mock_redis(decrby=AsyncMock(return_value=2))
         with _patch_redis(client):
-            count = await decr_pending("embedding")
+            count = await decr_pending("embedding", 7)
         assert count == 2
+        client.decrby.assert_called_once_with("beepub:job:pending:embedding:7", 1)
 
     @pytest.mark.asyncio
-    async def test_decr_pending_floors_at_zero(self):
-        client = _mock_redis(decr=AsyncMock(return_value=-1))
+    async def test_decr_pending_deletes_key_at_zero(self):
+        client = _mock_redis(decrby=AsyncMock(return_value=0))
         with _patch_redis(client):
-            count = await decr_pending("embedding")
+            count = await decr_pending("embedding", 7)
         assert count == 0
-        client.set.assert_called_once()
+        client.delete.assert_called_once_with("beepub:job:pending:embedding:7")
 
     @pytest.mark.asyncio
-    async def test_get_pending_count(self):
-        client = _mock_redis(get=AsyncMock(return_value=b"5"))
+    async def test_decr_pending_floors_below_zero(self):
+        client = _mock_redis(decrby=AsyncMock(return_value=-1))
+        with _patch_redis(client):
+            count = await decr_pending("embedding", 7)
+        assert count == 0
+        client.delete.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_pending_count_reads_current_generation(self):
+        client = _mock_redis(get=AsyncMock(side_effect=[b"7", b"5"]))
         with _patch_redis(client):
             count = await get_pending_count("embedding")
         assert count == 5
+        assert client.get.call_args_list[1].args == ("beepub:job:pending:embedding:7",)
 
     @pytest.mark.asyncio
-    async def test_get_pending_count_zero_when_no_key(self):
+    async def test_get_pending_count_zero_when_never_run(self):
         client = _mock_redis()
         with _patch_redis(client):
             count = await get_pending_count("embedding")
