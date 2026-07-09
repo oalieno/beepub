@@ -25,6 +25,8 @@ show off CJK rendering. Demo data resets every 6 hours.
   mobile-friendly reading controls
 - iOS native app support through Capacitor
 - Offline reading for downloaded books
+- Works with e-readers: OPDS catalog for browsing and downloading, plus
+  KOReader progress sync (kosync-compatible)
 - Automatic reading activity tracking, streaks
 - Gacha-style random book pulls for choosing what to read next
 - Metadata lookup from external book sources
@@ -94,6 +96,31 @@ library it finds. Books are read in place from the mount — BeePub never
 writes to your Calibre library — and a periodic sync picks up books you add
 or change in Calibre later. To serve several libraries, mount each one as a
 subfolder of `/calibre`.
+
+### E-Readers: OPDS And KOReader Sync
+
+Any OPDS client — KOReader, Readest, Foliate, Cantook, and most e-reader
+apps — can browse, search, and download your library:
+
+```
+Catalog URL:  https://<your-host>/opds
+Credentials:  your BeePub username and password (HTTP Basic)
+```
+
+KOReader can also sync reading progress through BeePub. In KOReader open
+**Tools → Progress sync → Custom sync server** and set:
+
+```
+Server:       https://<your-host>/kosync
+Username:     your BeePub username
+Password:     your BeePub password
+```
+
+Progress syncs between KOReader devices with exact positions, and books
+matched to your library show the e-reader progress in BeePub too. Log in to
+the web UI once after upgrading to enable sync for accounts created on
+older versions. Book matching uses KOReader's default *binary* checksum
+method — download the book via OPDS so both sides have the same file.
 
 ### Reverse Proxy
 
