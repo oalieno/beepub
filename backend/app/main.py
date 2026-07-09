@@ -23,6 +23,7 @@ from app.routers import (
     interactions,
     jobs,
     libraries,
+    opds,
     search,
     series,
     tags,
@@ -94,6 +95,11 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(libraries.router)
 app.include_router(books.router)
+# /opds is the e-reader convention (nginx routes it to the backend);
+# /api/opds is kept as an alias and hidden from the OpenAPI schema to
+# avoid duplicate operation ids.
+app.include_router(opds.router, prefix="/opds")
+app.include_router(opds.router, prefix="/api/opds", include_in_schema=False)
 app.include_router(interactions.router)
 app.include_router(bookshelves.router)
 app.include_router(admin.router)
