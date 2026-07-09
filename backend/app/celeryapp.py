@@ -63,11 +63,16 @@ celery.conf.update(
         "app.tasks.embed",
         "app.tasks.bulk_jobs",
         "app.tasks.calibre_sync",
+        "app.tasks.digests",
     ],
     beat_schedule={
         "calibre-auto-sync": {
             "task": "app.tasks.calibre_sync.check_and_sync_calibre",
             "schedule": 60.0,  # every 60 seconds, interval check is internal
+        },
+        "kosync-digest-backfill": {
+            "task": "app.tasks.digests.backfill_partial_md5",
+            "schedule": 600.0,  # exits immediately when nothing lacks a digest
         },
     },
     task_routes={

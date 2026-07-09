@@ -52,6 +52,8 @@ class Book(Base, TimestampMixin):
     file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
     format: Mapped[str] = mapped_column(String(10), nullable=False, default="epub")
     cover_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # KOReader's kosync document digest of file_path (services/partial_md5).
+    partial_md5: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     # EPUB original metadata
     epub_title: Mapped[str | None] = mapped_column(String(500), nullable=True)

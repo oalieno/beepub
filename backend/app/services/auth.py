@@ -23,6 +23,16 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(_prehash(plain_password), hashed_password.encode())
 
 
+def derive_kosync_key_hash(password: str) -> str:
+    """Hash for users.kosync_key_hash, set wherever we see the plaintext.
+
+    KOReader's sync client authenticates with md5(password) computed on the
+    device — unverifiable against password_hash, so the md5 gets its own
+    bcrypt. Lets KOReader users sync with their normal BeePub credentials.
+    """
+    return hash_password(hashlib.md5(password.encode()).hexdigest())
+
+
 def create_access_token(data: dict[str, Any]) -> str:
     to_encode = data.copy()
     to_encode["type"] = "access"

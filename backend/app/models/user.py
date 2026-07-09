@@ -29,6 +29,9 @@ class User(Base, TimestampMixin):
     )
     username: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    # bcrypt(md5(password)) — KOReader's sync client auth key, derived
+    # whenever the plaintext is seen (see services/auth.py).
+    kosync_key_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(
         SAEnum(UserRole), nullable=False, default=UserRole.user
     )

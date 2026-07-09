@@ -8,9 +8,7 @@ hrefs are absolute paths; clients resolve them against the catalog's host.
 import asyncio
 import base64
 import binascii
-import hashlib
 import os
-import time
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -32,6 +30,7 @@ from app.routers.libraries import (
     accessible_libraries_condition,
 )
 from app.services.auth import verify_password
+from app.services.credential_cache import CredentialCache
 
 # Mounted twice in main.py: /opds (the e-reader convention) and /api/opds
 # (compatibility alias). Feed hrefs follow the prefix the request came in on.
@@ -54,13 +53,7 @@ THUMBNAIL_REL = "http://opds-spec.org/image/thumbnail"
 
 # --- HTTP Basic auth -------------------------------------------------------
 
-# bcrypt verification costs ~100ms and OPDS clients re-send credentials on
-# every request (feed, then a cover per entry), so successful verifications
-# are cached briefly. Keyed by a hash of the exact credentials: a password
-# change invalidates naturally on the next TTL expiry.
-_credential_cache: dict[str, tuple[uuid.UUID, float]] = {}
-_CACHE_TTL_SECONDS = 300.0
-_CACHE_MAX_ENTRIES = 1000
+_credential_cache = CredentialCache()
 
 
 def _unauthorized() -> HTTPException:
@@ -86,18 +79,16 @@ async def get_opds_user(
     if not sep or not username or not password:
         raise _unauthorized()
 
-    cache_key = hashlib.sha256(f"{username}\x00{password}".encode()).hexdigest()
-    now = time.monotonic()
-    cached = _credential_cache.get(cache_key)
-
+    cache_key = CredentialCache.key(username, password)
+    cached_id = _credential_cache.get(cache_key)
     user: User | None = None
-    if cached and cached[1] > now:
-        result = await db.execute(select(User).where(User.id == cached[0]))
+    if cached_id is not None:
+        result = await db.execute(select(User).where(User.id == cached_id))
         user = result.scalar_one_or_none()
         if user is None:
             # The cached account is gone; fall through to a fresh
             # verification (the same username may exist under a new id).
-            _credential_cache.pop(cache_key, None)
+            _credential_cache.invalidate(cache_key)
 
     if user is None:
         result = await db.execute(select(User).where(User.username == username))
@@ -107,12 +98,10 @@ async def get_opds_user(
             verify_password, password, user.password_hash
         ):
             raise _unauthorized()
-        if len(_credential_cache) >= _CACHE_MAX_ENTRIES:
-            _credential_cache.clear()
-        _credential_cache[cache_key] = (user.id, now + _CACHE_TTL_SECONDS)
+        _credential_cache.put(cache_key, user.id)
 
     if not user.is_active:
-        _credential_cache.pop(cache_key, None)
+        _credential_cache.invalidate(cache_key)
         raise _unauthorized()
     return user
 

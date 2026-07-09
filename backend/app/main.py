@@ -22,6 +22,7 @@ from app.routers import (
     illustrations,
     interactions,
     jobs,
+    kosync,
     libraries,
     opds,
     search,
@@ -100,6 +101,8 @@ app.include_router(books.router)
 # avoid duplicate operation ids.
 app.include_router(opds.router, prefix="/opds")
 app.include_router(opds.router, prefix="/api/opds", include_in_schema=False)
+# KOReader progress sync: custom sync server URL = https://<host>/kosync
+app.include_router(kosync.router, prefix="/kosync")
 app.include_router(interactions.router)
 app.include_router(bookshelves.router)
 app.include_router(admin.router)

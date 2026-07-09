@@ -53,6 +53,7 @@ from app.schemas.reading import (
 )
 from app.schemas.series import PaginatedFeed
 from app.services.epub_parser import extract_cover, parse_epub_metadata
+from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_setting
 from app.services.storage import (
     delete_file,
@@ -187,6 +188,7 @@ async def _ingest_epub(
         file_size=file_size,
         format="epub",
         cover_path=cover_path if cover_ok else None,
+        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
         added_by=user.id,
         **metadata,
     )

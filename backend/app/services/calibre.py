@@ -16,6 +16,7 @@ from app.config import settings
 from app.database import create_task_engine
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
+from app.services.partial_md5 import compute_partial_md5
 from app.services.storage import get_cover_path
 from app.tasks.text_extract import extract_book_text
 
@@ -354,6 +355,11 @@ async def sync_calibre_library(
                                     book.is_image_book = None
                                     re_extract_book_ids.append(str(book.id))
                                 book.epub_mtime = current_epub_mtime
+                                # Calibre rewrites the EPUB on metadata edits,
+                                # which changes KOReader's document digest.
+                                book.partial_md5 = await asyncio.to_thread(
+                                    compute_partial_md5, cal_book.epub_path
+                                )
                                 changed = True
 
                         # Re-sync cover if Calibre's cover is newer than ours,
@@ -429,6 +435,9 @@ async def sync_calibre_library(
                             calibre_id=cal_book.calibre_id,
                             calibre_added_at=calibre_added,
                             epub_mtime=epub_mtime,
+                            partial_md5=await asyncio.to_thread(
+                                compute_partial_md5, cal_book.epub_path
+                            ),
                             added_by=admin_user_id,
                             **epub_meta,
                         )

@@ -5,6 +5,7 @@ from app.models.book_text import BookTextChunk
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.illustration import Illustration
+from app.models.kosync import KosyncProgress
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.llm_usage import LLMUsageLog
 from app.models.reading import (
@@ -32,6 +33,7 @@ __all__ = [
     "UserSeriesInteraction",
     "Highlight",
     "Illustration",
+    "KosyncProgress",
     "AppSetting",
     "BookTag",
     "TagCategory",

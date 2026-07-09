@@ -23,7 +23,7 @@ from app.schemas.user import (
     UserUpdatePermissions,
     UserUpdateRole,
 )
-from app.services.auth import hash_password
+from app.services.auth import derive_kosync_key_hash, hash_password
 from app.services.calibre import (
     _count_calibre_epubs,
     get_sync_status,
@@ -70,6 +70,7 @@ async def create_user(
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
+        kosync_key_hash=derive_kosync_key_hash(body.password),
         role=UserRole.user,
     )
     db.add(user)
@@ -125,6 +126,7 @@ async def reset_user_password(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.password_hash = hash_password(body.new_password)
+    user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
     await db.commit()
     return {"ok": True}
 

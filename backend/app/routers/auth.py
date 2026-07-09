@@ -23,6 +23,7 @@ from app.services.auth import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    derive_kosync_key_hash,
     hash_password,
     verify_password,
 )
@@ -133,6 +134,7 @@ async def register(
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
+        kosync_key_hash=derive_kosync_key_hash(body.password),
         role=role,
     )
     db.add(user)
@@ -158,6 +160,12 @@ async def login(
         )
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is disabled")
+
+    # Accounts that predate kosync support get their sync key on first
+    # login — the only later moment the plaintext is available.
+    if user.kosync_key_hash is None:
+        user.kosync_key_hash = derive_kosync_key_hash(form_data.password)
+        await db.commit()
 
     access_token = create_access_token({"sub": str(user.id)})
     refresh_token = create_refresh_token({"sub": str(user.id)})
@@ -272,6 +280,7 @@ async def change_password(
     if not verify_password(body.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     current_user.password_hash = hash_password(body.new_password)
+    current_user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
     await db.commit()
     return {"ok": True}
 
