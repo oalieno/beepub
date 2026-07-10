@@ -96,6 +96,59 @@ async def test_highlight_lifecycle(admin_client, book_id):
     assert listing == []
 
 
+async def test_highlight_anchor_context_roundtrip(admin_client, book_id):
+    """prefix/suffix/section_index (re-anchoring raw material) persist when
+    given and stay null for clients that don't send them."""
+    with_context = await admin_client.post(
+        f"/api/books/{book_id}/highlights",
+        json={
+            "cfi_range": "epubcfi(/6/4!/4/2,/1:10,/1:29)",
+            "text": "The quick brown fox",
+            "color": "yellow",
+            "prefix": "Once upon a time, ",
+            "suffix": " jumped over the lazy dog.",
+            "section_index": 1,
+        },
+    )
+    assert with_context.status_code == 201, with_context.text
+    body = with_context.json()
+    assert body["prefix"] == "Once upon a time, "
+    assert body["suffix"] == " jumped over the lazy dog."
+    assert body["section_index"] == 1
+
+    without_context = await admin_client.post(
+        f"/api/books/{book_id}/highlights",
+        json={
+            "cfi_range": "epubcfi(/6/4!/4/2,/1:0,/1:9)",
+            "text": "The quick",
+            "color": "blue",
+        },
+    )
+    assert without_context.status_code == 201, without_context.text
+    assert without_context.json()["prefix"] is None
+    assert without_context.json()["suffix"] is None
+    assert without_context.json()["section_index"] is None
+
+    listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
+    by_id = {h["id"]: h for h in listing}
+    assert by_id[body["id"]]["section_index"] == 1
+
+    # Healing: a client that re-anchored the quote writes the new position
+    # back without touching color/note.
+    healed = await admin_client.put(
+        f"/api/books/{book_id}/highlights/{body['id']}",
+        json={"cfi_range": "epubcfi(/6/6!/4/4,/1:2,/1:21)", "section_index": 2},
+    )
+    assert healed.status_code == 200, healed.text
+    assert healed.json()["cfi_range"] == "epubcfi(/6/6!/4/4,/1:2,/1:21)"
+    assert healed.json()["section_index"] == 2
+    assert healed.json()["color"] == "yellow"
+    assert healed.json()["prefix"] == "Once upon a time, "
+
+    for h in listing:
+        await admin_client.delete(f"/api/books/{book_id}/highlights/{h['id']}")
+
+
 async def test_interactions_are_per_user(admin_client, user_client, book_id):
     await admin_client.put(f"/api/books/{book_id}/rating", json={"rating": 5})
 

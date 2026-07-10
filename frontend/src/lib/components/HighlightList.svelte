@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Trash2, Share2 } from "@lucide/svelte";
+  import { Trash2, Share2, TriangleAlert } from "@lucide/svelte";
   import type { HighlightOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -8,6 +8,7 @@
     showBookTitle = false,
     bookTitles = {},
     darkMode = false,
+    brokenIds,
     onselect,
     ondelete,
     onshare,
@@ -16,6 +17,7 @@
     showBookTitle?: boolean;
     bookTitles?: Record<string, string>;
     darkMode?: boolean;
+    brokenIds?: Set<string>;
     onselect?: (highlight: HighlightOut) => void;
     ondelete?: (highlight: HighlightOut) => void;
     onshare?: (highlight: HighlightOut) => void;
@@ -88,6 +90,16 @@
                 : 'text-muted-foreground'}"
             >
               {truncate(hl.note, 80)}
+            </p>
+          {/if}
+          {#if brokenIds?.has(hl.id)}
+            <p
+              class="text-xs mt-1 flex items-center gap-1 {darkMode
+                ? 'text-amber-500'
+                : 'text-amber-600'}"
+            >
+              <TriangleAlert size={12} class="flex-shrink-0" />
+              {m.highlight_anchor_lost()}
             </p>
           {/if}
           <p

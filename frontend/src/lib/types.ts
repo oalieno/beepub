@@ -228,6 +228,9 @@ export interface HighlightOut {
   text: string;
   color: string;
   note: string | null;
+  prefix?: string | null;
+  suffix?: string | null;
+  section_index?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -235,6 +238,7 @@ export interface HighlightOut {
 export interface KosyncMarkerOut {
   percentage: number | null;
   device: string | null;
+  section_index?: number | null;
   synced_at: string | null;
 }
 

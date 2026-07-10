@@ -90,6 +90,8 @@ async def test_progress_roundtrip_and_bridge(admin_client):
     assert progress["kosync"]["percentage"] == pytest.approx(42.69)
     assert progress["kosync"]["device"] == "kobo"
     assert progress["kosync"]["synced_at"]
+    # DocFragment[7] = 1-based spine item → 0-based section hint 6.
+    assert progress["kosync"]["section_index"] == 6
 
 
 async def test_unknown_document_is_stored_but_not_bridged(admin_client):
@@ -313,6 +315,102 @@ async def test_web_save_clears_kosync_marker(admin_client):
     progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert progress["kosync"] is None
     assert progress["percentage"] == pytest.approx(31.0)
+
+
+async def test_get_serves_web_position_when_web_is_newer(admin_client):
+    """Chapter-level web→KOReader: after the user reads on the web (which
+    clears the kosync marker), GET synthesizes a DocFragment position as
+    device "BeePub Web" instead of replaying the stale device record."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={
+            "document": document,
+            "progress": "/body/DocFragment[2]/body/p[1]/text().0",
+            "percentage": 0.2,
+            "device": "kobo",
+        },
+        headers=_headers(),
+    )
+
+    # The user then reads further on the web.
+    saved = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={
+            "cfi": "epubcfi(/6/10!/4/2/1:0)",
+            "percentage": 55.5,
+            "section_index": 4,
+        },
+    )
+    assert saved.status_code == 200
+
+    fetched = (
+        await admin_client.get(f"/kosync/syncs/progress/{document}", headers=_headers())
+    ).json()
+    assert fetched["device"] == "BeePub Web"
+    assert fetched["progress"] == "/body/DocFragment[5]/body"
+    assert fetched["percentage"] == pytest.approx(0.555)
+
+
+async def test_get_serves_device_record_when_device_is_newer(admin_client):
+    """A device push after the web save restores the marker — GET must
+    return the device record verbatim so KOReader↔KOReader stays exact."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={
+            "cfi": "epubcfi(/6/4!/4/2/1:0)",
+            "percentage": 10.0,
+            "section_index": 1,
+        },
+    )
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={
+            "document": document,
+            "progress": "/body/DocFragment[9]/body/p[4]/text().12",
+            "percentage": 0.9,
+            "device": "kobo",
+        },
+        headers=_headers(),
+    )
+
+    fetched = (
+        await admin_client.get(f"/kosync/syncs/progress/{document}", headers=_headers())
+    ).json()
+    assert fetched["device"] == "kobo"
+    assert fetched["progress"] == "/body/DocFragment[9]/body/p[4]/text().12"
+    assert fetched["percentage"] == pytest.approx(0.9)
+
+
+async def test_get_serves_web_position_without_device_record(admin_client):
+    """A book only ever read on the web still syncs down to a first-time
+    KOReader pull."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={
+            "cfi": "epubcfi(/6/8!/4/2/1:0)",
+            "percentage": 40.0,
+            "section_index": 3,
+        },
+    )
+
+    fetched = (
+        await admin_client.get(f"/kosync/syncs/progress/{document}", headers=_headers())
+    ).json()
+    assert fetched["device"] == "BeePub Web"
+    assert fetched["progress"] == "/body/DocFragment[4]/body"
+    assert fetched["percentage"] == pytest.approx(0.4)
 
 
 async def test_cfi_save_without_percentage_keeps_bridged_value(admin_client):

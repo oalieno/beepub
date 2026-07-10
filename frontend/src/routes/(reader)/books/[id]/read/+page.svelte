@@ -25,7 +25,7 @@
   import Spinner from "$lib/components/Spinner.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
-  import { BookX } from "@lucide/svelte";
+  import { BookX, Undo2 } from "@lucide/svelte";
   import { UserRole } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
   import type {
@@ -156,6 +156,21 @@
   });
   let epubLoaded = $state(false);
   let canScrub = $state(false);
+  // Highlights whose anchor no longer resolves and couldn't be healed —
+  // shown with a warning in the sidebar instead of silently doing nothing.
+  let brokenHighlightIds = $state<Set<string>>(new Set());
+  // A highlight jump left the reading position behind; the bottom info row
+  // offers the way back (part of progress navigation, same level as the %).
+  let peekReturn = $state<{ percentage: number | null } | null>(null);
+  const peekLabel = $derived(
+    peekReturn
+      ? peekReturn.percentage != null
+        ? m.reader_peek_return_pct({
+            percentage: Math.round(peekReturn.percentage),
+          })
+        : m.reader_peek_return()
+      : null,
+  );
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
 
@@ -312,6 +327,7 @@
   async function handleKosyncPosition(detail: {
     percentage: number;
     device: string | null;
+    sectionIndex: number | null;
     autoJumped: boolean;
   }) {
     const device = detail.device || "KOReader";
@@ -330,7 +346,8 @@
       confirmLabel: m.reader_kosync_jump(),
       cancelLabel: m.reader_kosync_dialog_stay(),
     });
-    if (jump) reader?.displayPercentage(detail.percentage);
+    if (jump)
+      reader?.displayKosyncPosition(detail.percentage, detail.sectionIndex);
   }
 
   let reachedEnd = $state(false);
@@ -562,7 +579,9 @@
   <!-- Mobile top bar (always visible) -->
   <ReaderTopBar {bookId} {title} {percentage} {darkMode} />
 
-  <div class="flex-1 min-h-0 overflow-hidden relative">
+  <!-- md:pb reserves a sliver for the collapsed progress line so book text
+       can never sit on it, even with the page margin set to minimum. -->
+  <div class="flex-1 min-h-0 overflow-hidden relative md:pb-2.5">
     {#if ready && !loadError}
       {#key readerKey}
         <EpubReader
@@ -600,6 +619,8 @@
             toastStore.info(
               m.reader_restore_fallback({ percentage: Math.round(pct) }),
             )}
+          onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
+          onpeekchange={(peek) => (peekReturn = peek)}
           onatend={() => {
             reachedEnd = true;
             prefetchSeriesNeighbors();
@@ -668,29 +689,67 @@
       <GestureHintOverlay {darkMode} {isRtl} onclose={dismissGestureHint} />
     {/if}
 
-    <!-- Bottom progress (desktop only, mobile has it in the bottom bar) -->
+    <!-- Bottom progress (desktop only, mobile has it in the bottom bar).
+         Collapsed: a hair-thin line flush with the bottom edge, sitting in
+         the reserved sliver below the text. Hovering the bottom strip (or
+         an active peek, whose return link must be discoverable) expands the
+         full scrubber + info row as a transient overlay — no layout change,
+         so epub.js never repaginates. -->
     {#if epubLoaded && percentage != null}
       <div
-        class="hidden md:flex absolute bottom-0 left-0 right-0 z-20 flex-col items-center gap-1 px-8 pb-1.5 pointer-events-none"
+        class="hidden md:block absolute bottom-0 left-0 right-0 z-20 h-4 group"
       >
-        <span
-          class="text-xs px-3 py-1 rounded-full {darkMode
-            ? 'bg-ink-800/80 text-ink-400'
-            : 'bg-black/5 text-muted-foreground'}"
+        <div
+          class="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden transition-opacity {peekLabel
+            ? 'opacity-0'
+            : 'group-hover:opacity-0'} {darkMode
+            ? 'bg-ink-800'
+            : 'bg-secondary'}"
         >
-          {percentage}%
-        </span>
-        {#if canScrub}
-          <div class="w-full max-w-xl pointer-events-auto">
-            <ProgressScrubber
-              {percentage}
-              {darkMode}
-              {isRtl}
-              ariaLabel={m.reader_progress()}
-              onseek={(p) => reader?.displayPercentage(p)}
-            />
+          <div
+            class="h-full transition-[width] duration-300 {darkMode
+              ? 'bg-ink-500'
+              : 'bg-primary'} {isRtl ? 'ml-auto' : ''}"
+            style="width: {percentage}%;"
+          ></div>
+        </div>
+        <div
+          class="absolute bottom-0 left-0 right-0 flex-col items-center gap-0 px-8 pb-3 pt-8 bg-gradient-to-t to-transparent {darkMode
+            ? 'from-ink-900 via-ink-900/85'
+            : 'from-white via-white/85'} {peekLabel
+            ? 'flex'
+            : 'hidden group-hover:flex'}"
+        >
+          {#if canScrub}
+            <div class="w-full max-w-xl">
+              <ProgressScrubber
+                {percentage}
+                {darkMode}
+                {isRtl}
+                ariaLabel={m.reader_progress()}
+                onseek={(p) => reader?.displayPercentage(p)}
+              />
+            </div>
+          {/if}
+          <div
+            class="flex items-center gap-2.5 text-sm {darkMode
+              ? 'text-ink-400'
+              : 'text-muted-foreground'}"
+          >
+            <span>{percentage}%</span>
+            {#if peekLabel}
+              <span class="opacity-50">·</span>
+              <button
+                type="button"
+                class="flex items-center gap-1.5 underline underline-offset-4 text-primary transition-opacity hover:opacity-80"
+                onclick={() => reader?.returnFromPeek()}
+              >
+                <Undo2 size={14} />
+                {peekLabel}
+              </button>
+            {/if}
           </div>
-        {/if}
+        </div>
       </div>
     {/if}
 
@@ -726,8 +785,9 @@
         {illustrations}
         {bookId}
         {darkMode}
+        brokenIds={brokenHighlightIds}
         onselect={(hl) => {
-          reader?.displayCfi(hl.cfi_range);
+          reader?.displayHighlight(hl);
           activeSidebar = null;
         }}
         ondelete={async (hl) => {
@@ -775,6 +835,8 @@
   {#if showMobileBottomBar}
     <ReaderBottomBar
       {percentage}
+      {peekLabel}
+      onpeekreturn={() => reader?.returnFromPeek()}
       canSeek={canScrub}
       onseek={(p) => reader?.displayPercentage(p)}
       {darkMode}

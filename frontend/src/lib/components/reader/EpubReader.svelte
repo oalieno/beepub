@@ -17,6 +17,10 @@
   import { updateIllustrationOverlays } from "./illustration-overlays";
   import { prefetchSections } from "./image-prefetch";
   import { findActiveTocHref, findTocLabelForHref } from "./toc-utils";
+  import {
+    sectionIndexFromCfi,
+    verifyHighlightAnchors,
+  } from "./highlight-anchor";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -49,6 +53,8 @@
     onbookend,
     onkosyncposition,
     onrestorefallback,
+    onbrokenhighlights,
+    onpeekchange,
   }: {
     bookId: string;
     initialCfi?: string | null;
@@ -79,9 +85,12 @@
     onkosyncposition?: (detail: {
       percentage: number;
       device: string | null;
+      sectionIndex: number | null;
       autoJumped: boolean;
     }) => void;
     onrestorefallback?: (percentage: number) => void;
+    onbrokenhighlights?: (ids: string[]) => void;
+    onpeekchange?: (peek: { percentage: number | null } | null) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -103,6 +112,8 @@
   let highlightMenuY = $state(0);
   let selectedCfi = $state("");
   let selectedText = $state("");
+  let selectedPrefix = "";
+  let selectedSuffix = "";
   let existingHighlight: HighlightOut | null = $state(null);
   let highlightMenuShownAt = 0;
   let highlightMenuEl: HTMLDivElement | undefined = $state();
@@ -129,6 +140,32 @@
     clearIOSSelection();
   }
 
+  const QUOTE_CONTEXT = 48;
+
+  /**
+   * W3C TextQuoteSelector-style context around a selection, taken from the
+   * boundary text nodes — the raw material for re-anchoring a highlight
+   * whose CFI stops resolving after the book file is rewritten.
+   */
+  function quoteContext(range: Range): { prefix: string; suffix: string } {
+    let prefix = "";
+    let suffix = "";
+    const sc = range.startContainer;
+    if (sc.nodeType === 3) {
+      const t = sc.textContent ?? "";
+      prefix = t.slice(
+        Math.max(0, range.startOffset - QUOTE_CONTEXT),
+        range.startOffset,
+      );
+    }
+    const ec = range.endContainer;
+    if (ec.nodeType === 3) {
+      const t = ec.textContent ?? "";
+      suffix = t.slice(range.endOffset, range.endOffset + QUOTE_CONTEXT);
+    }
+    return { prefix, suffix };
+  }
+
   /** Show highlight menu at a given range with scroll-offset correction */
   function showMenuAtRange(
     range: Range,
@@ -142,6 +179,9 @@
     const scrollTop = mgr?.container?.scrollTop ?? 0;
     selectedCfi = cfiRange;
     selectedText = text;
+    const ctx = quoteContext(range);
+    selectedPrefix = ctx.prefix;
+    selectedSuffix = ctx.suffix;
     existingHighlight = existing;
     setClampedMenuPosition(
       rect.left - scrollLeft + rect.width / 2,
@@ -178,7 +218,11 @@
   // Captured from the progress payload at open; resolved once the canonical
   // percentage is known (locations ready): jump when the book was never read
   // on the web, otherwise let the parent offer the jump.
-  let kosyncMarker: { percentage: number; device: string | null } | null = null;
+  let kosyncMarker: {
+    percentage: number;
+    device: string | null;
+    sectionIndex: number | null;
+  } | null = null;
   let kosyncAutoJump = false;
   // Set on any user navigation. When locations finish late (large books)
   // the kosync auto-jump downgrades to an offer instead of yanking the
@@ -189,6 +233,11 @@
   // couldn't be applied yet because locations weren't ready. Resolved the
   // same way as kosyncMarker once they are.
   let restoreFallbackPct: number | null = null;
+  // Peek: a highlight jump is a visit, not a move. Remember where the
+  // reader was (pill offers the way back) and hold progress saves until
+  // they either return, dismiss, or start reading here (page turn).
+  let peekReturn: { cfi: string; percentage: number | null } | null = null;
+  let peekSaveHold = false;
 
   // TOC tracking
   let tocData: { label: string; href: string; subitems?: any[] }[] = [];
@@ -472,12 +521,44 @@
     const marker = kosyncMarker;
     kosyncMarker = null;
     if (kosyncAutoJump && !userNavigated) {
-      if (await displayPercentage(marker.percentage)) {
+      if (await displayKosyncPosition(marker.percentage, marker.sectionIndex)) {
         onkosyncposition?.({ ...marker, autoJumped: true });
       }
     } else if (Math.abs(marker.percentage - currentPercentage) > 1) {
       onkosyncposition?.({ ...marker, autoJumped: false });
     }
+  }
+
+  /**
+   * Jump to an e-reader position: global percentage refined by the chapter
+   * hint parsed from the device xpointer. When the percentage-derived CFI
+   * disagrees with the hint (renderers paginate differently, especially
+   * image-heavy books), the chapter wins — landing at the right section
+   * start beats a wrong-section guess.
+   */
+  export async function displayKosyncPosition(
+    pct: number,
+    sectionIndex: number | null,
+  ): Promise<boolean> {
+    if (
+      sectionIndex != null &&
+      !isImageBook &&
+      locationsGenerated &&
+      epubBook?.locations
+    ) {
+      const fraction = Math.min(100, Math.max(0, pct)) / 100;
+      const cfi = epubBook.locations.cfiFromPercentage(fraction);
+      if (cfi && sectionIndexFromCfi(cfi) === sectionIndex) {
+        await rendition?.display(cfi);
+        return true;
+      }
+      const href = epubBook?.spine?.get(sectionIndex)?.href;
+      if (href) {
+        await rendition?.display(href);
+        return true;
+      }
+    }
+    return displayPercentage(pct);
   }
 
   function doFindActiveTocHref(sectionIndex: number): string {
@@ -585,7 +666,10 @@
       // never depends on locations. Before locations are ready the save
       // carries percentage: null and the server keeps the stored value, so
       // a slow (or never-finishing) generation can't lose reading progress.
-      debouncedSave();
+      // Exception: while peeking at a highlight the position on screen is a
+      // visit, not progress — the UI below still updates, only persistence
+      // (server + localStorage) is held.
+      if (!peekSaveHold) debouncedSave();
 
       if (waitingForCanonicalProgress && !locationsGenerated) {
         return;
@@ -610,6 +694,7 @@
       }
 
       // Cache progress in localStorage for offline/resume fallback
+      if (peekSaveHold) return;
       try {
         localStorage.setItem(
           `reader-progress-${bookId}`,
@@ -1062,13 +1147,19 @@
       kosyncMarker = {
         percentage: kosyncRaw.percentage,
         device: kosyncRaw.device ?? null,
+        sectionIndex: kosyncRaw.section_index ?? null,
       };
       kosyncAutoJump = !savedProgress?.cfi;
     }
     try {
       if (initialCfi) {
         // Explicit jump target (e.g. a highlight clicked on the detail
-        // page) takes precedence over saved progress.
+        // page) takes precedence over saved progress — but it's a visit:
+        // keep the way back and don't overwrite the reading position.
+        startPeek(
+          savedProgress?.cfi ?? null,
+          savedProgress?.percentage ?? null,
+        );
         waitingForCanonicalProgress = !isImageBook;
         emitProgress(null);
         restoringProgress = true;
@@ -1181,6 +1272,9 @@
 
     // Apply existing highlights & illustrations
     applyAllHighlights();
+    // ...then verify their anchors in the background and heal the ones the
+    // file rewrite moved (best-effort; never blocks reading).
+    void healHighlights();
     applyAllIllustrations();
 
     // Get book title & TOC
@@ -1239,6 +1333,7 @@
   function handleBeforeUnload() {
     if (!currentCfi) return;
     if (restoreFallbackPct != null && !userNavigated) return;
+    if (peekSaveHold) return;
     const data = {
       cfi: currentCfi,
       percentage: hasCanonicalPercentage() ? currentPercentage : null,
@@ -1312,6 +1407,7 @@
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
     if (restoreFallbackPct != null && !userNavigated) return;
+    if (peekSaveHold) return;
     const payload = {
       cfi: currentCfi,
       // null tells the server to keep the stored percentage — never write
@@ -1404,6 +1500,48 @@
     }
   }
 
+  // Highlights whose anchor couldn't be verified or healed — surfaced in
+  // the sidebar instead of silently never painting.
+  let brokenHighlightIds = new Set<string>();
+
+  /**
+   * Verify every highlight's CFI against the actual book and heal the ones
+   * the file rewrite moved: swap the annotation, persist the new anchor,
+   * and report the rest as broken.
+   */
+  async function healHighlights() {
+    if (isImageBook || !epubBook || highlights.length === 0) return;
+    try {
+      const report = await verifyHighlightAnchors(epubBook, highlights);
+      for (const heal of report.healed) {
+        const h = highlights.find((x) => x.id === heal.id);
+        if (!h) continue;
+        removeHighlightAnnotation(heal.oldCfi);
+        h.cfi_range = heal.cfi;
+        h.section_index = heal.sectionIndex;
+        addHighlightAnnotation(heal.cfi, h.color);
+        if (!offline) {
+          booksApi
+            .updateHighlight(bookId, heal.id, {
+              cfi_range: heal.cfi,
+              section_index: heal.sectionIndex,
+            })
+            .catch(() => {});
+        }
+      }
+      if (report.healed.length) {
+        highlights = [...highlights];
+        onhighlightschange?.(highlights);
+      }
+      brokenHighlightIds = new Set(report.broken);
+      if (report.broken.length) {
+        onbrokenhighlights?.(report.broken);
+      }
+    } catch {
+      // Verification is best-effort; a failure here must never break reading.
+    }
+  }
+
   function applyAllIllustrations() {
     if (!rendition) return;
     for (const ill of illustrations) {
@@ -1439,6 +1577,7 @@
   function _doPrev() {
     showFootnote = false;
     userNavigated = true;
+    peekSaveHold = false;
     rendition?.prev();
   }
 
@@ -1449,6 +1588,7 @@
     }
     showFootnote = false;
     userNavigated = true;
+    peekSaveHold = false;
     rendition?.next();
   }
 
@@ -1463,6 +1603,7 @@
   export function displayChapter(href: string) {
     restoringProgress = false;
     userNavigated = true;
+    peekSaveHold = false;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(href);
@@ -1496,7 +1637,53 @@
     userNavigated = true;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
-    rendition?.display(cfi);
+    rendition?.display(cfi)?.catch(() => {});
+  }
+
+  function startPeek(cfi: string | null, percentage: number | null) {
+    if (!cfi) return; // nothing to lose — the book has no position yet
+    peekReturn = { cfi, percentage };
+    peekSaveHold = true;
+    onpeekchange?.({ percentage });
+  }
+
+  /**
+   * Jump to a highlight as a visit: the pre-jump position stays the saved
+   * progress (and the pill's return target) until the reader turns a page.
+   * A highlight known to be un-anchorable jumps to its section instead.
+   */
+  export function displayHighlight(hl: HighlightOut) {
+    if (!peekSaveHold) {
+      startPeek(
+        currentCfi || null,
+        hasCanonicalPercentage() ? currentPercentage : null,
+      );
+    }
+    if (brokenHighlightIds.has(hl.id)) {
+      const index = hl.section_index ?? sectionIndexFromCfi(hl.cfi_range);
+      const href = index != null ? epubBook?.spine?.get(index)?.href : null;
+      if (href) {
+        displayCfi(href);
+        return;
+      }
+    }
+    displayCfi(hl.cfi_range);
+  }
+
+  export async function returnFromPeek() {
+    if (!peekReturn) return;
+    const { cfi, percentage } = peekReturn;
+    peekReturn = null;
+    peekSaveHold = false;
+    onpeekchange?.(null);
+    restoringProgress = false;
+    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
+    if (waitingForCanonicalProgress) emitProgress(null);
+    try {
+      await rendition?.display(cfi);
+    } catch {
+      if (percentage != null) await displayPercentage(percentage);
+    }
   }
 
   export function getCurrentCfi(): string {
@@ -1513,6 +1700,7 @@
   export async function displaySearchResult(cfi: string) {
     restoringProgress = false;
     userNavigated = true;
+    peekSaveHold = false;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
 
@@ -1632,6 +1820,9 @@
         cfi_range: selectedCfi,
         text: selectedText,
         color: "yellow",
+        prefix: selectedPrefix || null,
+        suffix: selectedSuffix || null,
+        section_index: sectionIndexFromCfi(selectedCfi) ?? currentSectionIndex,
       });
       highlights = [...highlights, created];
 

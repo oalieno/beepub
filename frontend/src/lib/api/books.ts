@@ -158,13 +158,26 @@ export const booksApi = {
 
   createHighlight: (
     bookId: string,
-    data: { cfi_range: string; text: string; color: string; note?: string },
+    data: {
+      cfi_range: string;
+      text: string;
+      color: string;
+      note?: string;
+      prefix?: string | null;
+      suffix?: string | null;
+      section_index?: number | null;
+    },
   ) => post(`/books/${bookId}/highlights`, data) as Promise<HighlightOut>,
 
   updateHighlight: (
     bookId: string,
     highlightId: string,
-    data: { color?: string; note?: string },
+    data: {
+      color?: string;
+      note?: string;
+      cfi_range?: string;
+      section_index?: number;
+    },
   ) =>
     put(
       `/books/${bookId}/highlights/${highlightId}`,

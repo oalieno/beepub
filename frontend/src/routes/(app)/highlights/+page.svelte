@@ -177,11 +177,16 @@
               class="group/hl relative cursor-pointer rounded-r-lg bg-card border-l-2 border-border p-4 transition-colors hover:border-primary/50"
               role="button"
               tabindex="0"
-              onclick={() => goto(`/books/${hl.book_id}/read`)}
+              onclick={() =>
+                goto(
+                  `/books/${hl.book_id}/read?cfi=${encodeURIComponent(hl.cfi_range)}`,
+                )}
               onkeydown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  goto(`/books/${hl.book_id}/read`);
+                  goto(
+                    `/books/${hl.book_id}/read?cfi=${encodeURIComponent(hl.cfi_range)}`,
+                  );
                 }
               }}
             >

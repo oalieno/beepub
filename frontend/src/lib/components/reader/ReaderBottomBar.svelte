@@ -7,6 +7,7 @@
     Highlighter,
     MessageCircle,
     Settings,
+    Undo2,
   } from "@lucide/svelte";
   import { toastStore } from "$lib/stores/toast";
   import ProgressScrubber from "./ProgressScrubber.svelte";
@@ -14,12 +15,14 @@
 
   let {
     percentage = null,
+    peekLabel = null,
     darkMode = false,
     isRtl = false,
     isImageBook = false,
     highlightCount = 0,
     offline = false,
     canSeek = false,
+    onpeekreturn,
     onseek,
     onprev,
     onnext,
@@ -30,12 +33,14 @@
     onsettings,
   }: {
     percentage?: number | null;
+    peekLabel?: string | null;
     darkMode?: boolean;
     isRtl?: boolean;
     isImageBook?: boolean;
     highlightCount?: number;
     offline?: boolean;
     canSeek?: boolean;
+    onpeekreturn?: () => void;
     onseek?: (percentage: number) => void;
     onprev?: () => void;
     onnext?: () => void;
@@ -67,6 +72,19 @@
   role="toolbar"
   aria-label={m.reader_controls()}
 >
+  {#if peekLabel}
+    <div class="flex justify-center pt-2 -mb-0.5">
+      <button
+        type="button"
+        class="flex items-center gap-1.5 text-sm underline underline-offset-4 text-primary transition-opacity active:opacity-70"
+        onclick={() => onpeekreturn?.()}
+      >
+        <Undo2 size={14} />
+        {peekLabel}
+      </button>
+    </div>
+  {/if}
+
   <!-- Progress row -->
   <div class="flex items-center gap-2 px-3 py-2">
     <button

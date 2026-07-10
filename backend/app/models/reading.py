@@ -121,6 +121,12 @@ class Highlight(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
     color: Mapped[str] = mapped_column(String(20), nullable=False, default="yellow")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # TextQuoteSelector context (W3C Annotation style): raw material for
+    # re-anchoring when the cfi_range stops resolving (file rewritten).
+    # Nullable — highlights created before this existed only have `text`.
+    prefix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    suffix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    section_index: Mapped[int | None] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

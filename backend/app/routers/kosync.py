@@ -11,12 +11,19 @@ Progress records are stored verbatim keyed by the client's document digest
 (KOReader's partial MD5 of the file), so exact positions survive
 KOReader-to-KOReader sync through us. When the digest matches a book we
 also bridge the percentage into the book's reading progress, so progress
-made on an e-reader shows up in the BeePub UI. The reverse direction (web
-progress into KOReader) is not served: KOReader jumps to the ``progress``
-xpointer, and we cannot express a CFI position as one.
+made on an e-reader shows up in the BeePub UI.
+
+The reverse direction is chapter-level: an exact CFI cannot be expressed
+as a crengine xpointer, but the spine index can. When the web position is
+newer than the device record (no kosync marker on the interaction — the
+web PUT /progress rebuilds the dict, so marker presence alone orders the
+two), GET serves a synthesized ``/body/DocFragment[N]/body`` position as
+device "BeePub Web"; otherwise the device record is returned verbatim and
+KOReader-to-KOReader sync stays byte-exact.
 """
 
 import asyncio
+import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -30,11 +37,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.book import Book
 from app.models.kosync import KosyncProgress
+from app.models.reading import UserBookInteraction
 from app.models.user import User
 from app.routers.libraries import accessible_book_ids_select
 from app.services.auth import verify_password
 from app.services.credential_cache import CredentialCache
-from app.services.kosync_bridge import bridge_kosync_percentage
+from app.services.kosync_bridge import (
+    bridge_kosync_percentage,
+    section_hint_from_xpointer,
+)
 
 router = APIRouter(tags=["kosync"])
 
@@ -108,27 +119,36 @@ async def kosync_authorize(
     return {"authorized": "OK"}
 
 
-async def _bridge_percentage_to_book(
-    db: AsyncSession,
-    user: User,
-    document: str,
-    percentage: float,
-    device: str | None = None,
-) -> None:
-    """Reflect e-reader progress in BeePub's own reading progress.
-
-    Books the user cannot access are skipped.
-    """
+async def _accessible_book_id(
+    db: AsyncSession, user: User, document: str
+) -> uuid.UUID | None:
     result = await db.execute(
         select(Book.id).where(
             Book.partial_md5 == document,
             Book.id.in_(accessible_book_ids_select(user)),
         )
     )
-    book_id = result.scalar_one_or_none()
+    return result.scalars().first()
+
+
+async def _bridge_percentage_to_book(
+    db: AsyncSession,
+    user: User,
+    document: str,
+    percentage: float,
+    device: str | None = None,
+    section_index: int | None = None,
+) -> None:
+    """Reflect e-reader progress in BeePub's own reading progress.
+
+    Books the user cannot access are skipped.
+    """
+    book_id = await _accessible_book_id(db, user, document)
     if book_id is None:
         return
-    await bridge_kosync_percentage(db, user.id, book_id, percentage, device=device)
+    await bridge_kosync_percentage(
+        db, user.id, book_id, percentage, device=device, section_index=section_index
+    )
 
 
 @router.put("/syncs/progress")
@@ -156,7 +176,12 @@ async def kosync_update_progress(
 
     if payload.percentage is not None:
         await _bridge_percentage_to_book(
-            db, current_user, payload.document, payload.percentage, payload.device
+            db,
+            current_user,
+            payload.document,
+            payload.percentage,
+            payload.device,
+            section_index=section_hint_from_xpointer(payload.progress),
         )
 
     await db.commit()
@@ -166,12 +191,58 @@ async def kosync_update_progress(
     }
 
 
+async def _web_position(db: AsyncSession, user: User, document: str) -> dict | None:
+    """The web reading position, when it is newer than the device record.
+
+    No timestamp comparison needed: the bridge stamps a ``kosync`` marker
+    on every device push and the web PUT /progress rebuilds the dict
+    without it — marker absent + web progress present means the web moved
+    last. The position is chapter-level (``/body/DocFragment[N]/body``,
+    crengine's 1-based spine fragment) because an exact CFI cannot be
+    translated into an xpointer; percentage carries the fine-grained part.
+    """
+    book_id = await _accessible_book_id(db, user, document)
+    if book_id is None:
+        return None
+    interaction = (
+        await db.execute(
+            select(UserBookInteraction).where(
+                UserBookInteraction.user_id == user.id,
+                UserBookInteraction.book_id == book_id,
+            )
+        )
+    ).scalar_one_or_none()
+    progress = dict(interaction.reading_progress or {}) if interaction else {}
+    if "kosync" in progress:
+        return None  # the device position is newer
+    percentage = progress.get("percentage")
+    section_index = progress.get("section_index")
+    if percentage is None or section_index is None:
+        return None
+    try:
+        timestamp = int(datetime.fromisoformat(progress["last_read_at"]).timestamp())
+    except (KeyError, TypeError, ValueError):
+        timestamp = int(datetime.now(UTC).timestamp())
+    return {
+        "document": document,
+        "progress": f"/body/DocFragment[{int(section_index) + 1}]/body",
+        "percentage": round(float(percentage) / 100, 4),
+        "device": "BeePub Web",
+        "device_id": None,
+        "timestamp": timestamp,
+    }
+
+
 @router.get("/syncs/progress/{document}")
 async def kosync_get_progress(
     document: str,
     current_user: Annotated[User, Depends(get_kosync_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    web = await _web_position(db, current_user, document)
+    if web is not None:
+        return web
+
     record = (
         await db.execute(
             select(KosyncProgress).where(

@@ -8,6 +8,7 @@ but a ``kosync`` marker is added so the reader can offer jumping to the
 device position.
 """
 
+import re
 import uuid
 from datetime import UTC, date, datetime
 from zoneinfo import ZoneInfo
@@ -16,6 +17,25 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reading import UserBookInteraction
+
+_DOCFRAGMENT_RE = re.compile(r"/DocFragment\[(\d+)\]")
+
+
+def section_hint_from_xpointer(progress: str | None) -> int | None:
+    """0-based spine index from a crengine xpointer, if one is encoded.
+
+    KOReader EPUB positions look like ``/body/DocFragment[7]/body/p[3]/...``
+    where DocFragment[N] is the 1-based spine item. Page-number strings
+    (PDF) and anything else yield None. The full path is a cross-renderer
+    mapping minefield; the fragment index alone is a safe chapter hint.
+    """
+    if not progress:
+        return None
+    match = _DOCFRAGMENT_RE.search(progress)
+    if not match:
+        return None
+    n = int(match.group(1))
+    return n - 1 if n >= 1 else None
 
 
 async def _today_in_app_timezone(db: AsyncSession) -> date:
@@ -34,6 +54,7 @@ async def bridge_kosync_percentage(
     book_id: uuid.UUID,
     percentage: float,
     device: str | None = None,
+    section_index: int | None = None,
 ) -> None:
     """Upsert the interaction's progress percentage (kosync scale 0–1)."""
     interaction = (
@@ -60,6 +81,10 @@ async def bridge_kosync_percentage(
         "percentage": reading_progress["percentage"],
         "device": device,
         "synced_at": now,
+        # Chapter hint parsed from the device xpointer: lets the web jump
+        # land on the right section even when percentage scales diverge
+        # between renderers (image-heavy books).
+        "section_index": section_index,
     }
     interaction.reading_progress = reading_progress
 
@@ -111,7 +136,12 @@ async def retro_bridge_document(
         if excluded:
             continue
         await bridge_kosync_percentage(
-            db, record.user_id, book_id, record.percentage, device=record.device
+            db,
+            record.user_id,
+            book_id,
+            record.percentage,
+            device=record.device,
+            section_index=section_hint_from_xpointer(record.progress),
         )
         bridged += 1
     return bridged

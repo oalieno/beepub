@@ -44,6 +44,9 @@
   .reader-scrubber {
     -webkit-appearance: none;
     appearance: none;
+    /* An input is inline by default and sits on the text baseline, which
+       adds phantom space below and knocks the bar off vertical center. */
+    display: block;
     height: 20px;
     background: transparent;
     cursor: pointer;

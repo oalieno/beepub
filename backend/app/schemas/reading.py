@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RatingUpdate(BaseModel):
@@ -36,6 +36,8 @@ class KosyncMarkerOut(BaseModel):
     percentage: float | None = None
     device: str | None = None
     synced_at: str | None = None
+    # Chapter hint parsed from the device xpointer (DocFragment[N] → N-1).
+    section_index: int | None = None
 
 
 class ProgressOut(BaseModel):
@@ -56,11 +58,19 @@ class HighlightCreate(BaseModel):
     text: str
     color: str = "yellow"
     note: str | None = None
+    # TextQuoteSelector context for re-anchoring (see model comment).
+    prefix: str | None = Field(default=None, max_length=255)
+    suffix: str | None = Field(default=None, max_length=255)
+    section_index: int | None = Field(default=None, ge=0)
 
 
 class HighlightUpdate(BaseModel):
     color: str | None = None
     note: str | None = None
+    # Healing: the client re-anchored the quote after the book file changed
+    # and writes the new position back.
+    cfi_range: str | None = Field(default=None, max_length=2000)
+    section_index: int | None = Field(default=None, ge=0)
 
 
 class HighlightOut(BaseModel):
@@ -71,6 +81,9 @@ class HighlightOut(BaseModel):
     text: str
     color: str
     note: str | None
+    prefix: str | None = None
+    suffix: str | None = None
+    section_index: int | None = None
     created_at: datetime
     updated_at: datetime
 

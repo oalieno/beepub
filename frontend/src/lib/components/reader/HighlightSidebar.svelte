@@ -20,6 +20,7 @@
     illustrations = [],
     bookId = "",
     darkMode = false,
+    brokenIds,
     onselect,
     ondelete,
     onshare,
@@ -31,6 +32,7 @@
     illustrations?: IllustrationOut[];
     bookId?: string;
     darkMode?: boolean;
+    brokenIds?: Set<string>;
     onselect?: (highlight: HighlightOut) => void;
     ondelete?: (highlight: HighlightOut) => void;
     onshare?: (highlight: HighlightOut) => void;
@@ -154,7 +156,14 @@
   <!-- Content -->
   <div class="flex-1 overflow-y-auto p-2">
     {#if activeTab === "highlights"}
-      <HighlightList {highlights} {darkMode} {onselect} {ondelete} {onshare} />
+      <HighlightList
+        {highlights}
+        {darkMode}
+        {brokenIds}
+        {onselect}
+        {ondelete}
+        {onshare}
+      />
     {:else if illustrations.length === 0}
       <p
         class="text-sm {darkMode
