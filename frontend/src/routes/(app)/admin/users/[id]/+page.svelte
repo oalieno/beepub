@@ -306,6 +306,14 @@
             ></span>
           </button>
         </div>
+        {#if !user.can_download}
+          <div
+            class="mt-3 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400"
+          >
+            <TriangleAlert size={14} class="mt-0.5 shrink-0" />
+            <span>{m.admin_user_download_off_warning()}</span>
+          </div>
+        {/if}
         <div class="flex items-center justify-between gap-4 mt-4">
           <div class="flex items-center gap-3 min-w-0">
             <Upload size={18} class="text-muted-foreground shrink-0" />
