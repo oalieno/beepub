@@ -36,7 +36,11 @@ class User(Base, TimestampMixin):
         SAEnum(UserRole), nullable=False, default=UserRole.user
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    can_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Default True: users can already read whole books online, so blocking
+    # the file is an opt-in restriction, not protection — and a False
+    # default breaks OPDS/kosync for non-admins as an opaque client-side
+    # "download failed" that the admin (who bypasses the gate) never sees.
+    can_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_upload: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True

@@ -95,15 +95,27 @@ async def test_search_matches_title(admin_client):
     assert [e.findtext(f"{ATOM}title") for e in entries] == ["Vertical Writing Primer"]
 
 
-async def test_download_requires_permission(admin_client, user_client):
+async def test_download_permission_gate(admin_client, user_client):
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
 
-    # Catalog browsing works for a regular user without download rights…
+    # A regular account downloads out of the box — kosync depends on the
+    # OPDS file, and a 403 surfaces as an opaque "download failed" inside
+    # e-reader clients.
+    response = await user_client.get(
+        f"/api/opds/books/{book['id']}/file", auth=USER_BASIC
+    )
+    assert response.status_code == 200
+
+    # When an admin revokes can_download, acquisition is gated exactly
+    # like the web UI while catalog browsing keeps working.
+    me = await user_client.get("/api/auth/me")
+    await admin_client.put(
+        f"/api/admin/users/{me.json()['id']}/permissions",
+        json={"can_download": False},
+    )
     entries = _entries(await user_client.get("/api/opds/all", auth=USER_BASIC))
     assert len(entries) == 1
-
-    # …but acquisition is gated on can_download, exactly like the web UI.
     response = await user_client.get(
         f"/api/opds/books/{book['id']}/file", auth=USER_BASIC
     )

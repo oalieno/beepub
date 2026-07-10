@@ -40,21 +40,23 @@ async def test_upload_requires_permission(admin_client, user_client):
     assert response.status_code == 201, response.text
 
 
-async def test_download_requires_permission(admin_client, user_client):
+async def test_download_allowed_by_default_and_revocable(admin_client, user_client):
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
+
+    # New accounts can download out of the box (OPDS/kosync depend on it).
+    response = await user_client.get(f"/api/books/{book['id']}/file")
+    assert response.status_code == 200
+
+    # The permission remains as an opt-in restriction.
+    user_id = await _user_id(admin_client, USER_CREDENTIALS["username"])
+    await admin_client.put(
+        f"/api/admin/users/{user_id}/permissions", json={"can_download": False}
+    )
 
     response = await user_client.get(f"/api/books/{book['id']}/file")
     assert response.status_code == 403
     assert response.json()["detail"] == "Download permission required"
-
-    user_id = await _user_id(admin_client, USER_CREDENTIALS["username"])
-    await admin_client.put(
-        f"/api/admin/users/{user_id}/permissions", json={"can_download": True}
-    )
-
-    response = await user_client.get(f"/api/books/{book['id']}/file")
-    assert response.status_code == 200
 
 
 async def test_excluded_library_is_invisible(admin_client, user_client):
