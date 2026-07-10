@@ -14,7 +14,10 @@ class Locations {
   constructor(spine, request, pause) {
     this.spine = spine;
     this.request = request;
-    this.pause = pause || 100;
+    // Upstream default is 100ms, which turns a 163-section book into 16s of
+    // pure sleep. setTimeout(fn, 0) still yields a macrotask per section, so
+    // rendering and input stay responsive without the artificial wait.
+    this.pause = pause ?? 0;
 
     this.q = new Queue(this);
     this.epubcfi = new EpubCFI();

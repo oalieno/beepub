@@ -339,17 +339,40 @@
       await epubBook.ready;
 
       // Generating locations parses every spine section (slow for large
-      // books), but the result only depends on the book file — cache it.
+      // books), but the result only depends on the book file — cache it
+      // locally (IndexedDB) and share it server-side (first client to
+      // finish uploads; every other user/device just downloads).
       const LOCATION_BREAK = 1600;
       const fingerprint = `${epubBook.packaging?.uniqueIdentifier ?? ""}:${
         epubBook.spine?.spineItems?.length ?? 0
       }:${LOCATION_BREAK}`;
       const cached = await getCachedLocations(bookId);
+      let shared: { fingerprint: string; locations: string } | null = null;
+      if (!(cached && cached.fingerprint === fingerprint) && !offline) {
+        try {
+          shared = await booksApi.getLocations(bookId);
+        } catch {
+          // Server cache is best-effort; fall through to generating.
+        }
+      }
       if (cached && cached.fingerprint === fingerprint) {
         epubBook.locations.load(cached.locations);
+      } else if (shared && shared.fingerprint === fingerprint) {
+        epubBook.locations.load(shared.locations);
+        setCachedLocations(bookId, fingerprint, shared.locations);
       } else {
+        // Warm the HTTP cache for every linear section concurrently —
+        // generate() fetches them one at a time, so without this each
+        // section costs a full round trip.
+        warmSectionCache();
         await epubBook.locations.generate(LOCATION_BREAK);
-        setCachedLocations(bookId, fingerprint, epubBook.locations.save());
+        const serialized = epubBook.locations.save();
+        setCachedLocations(bookId, fingerprint, serialized);
+        if (!offline) {
+          booksApi
+            .putLocations(bookId, fingerprint, serialized)
+            .catch(() => {});
+        }
       }
       locationsGenerated = true;
       onlocationsready?.();
@@ -381,6 +404,37 @@
       await resolveKosyncMarker();
     } finally {
       generatingLocations = false;
+    }
+  }
+
+  /**
+   * Fire-and-forget cache warmer for locations generation: fetch all linear
+   * spine sections with limited concurrency so generate()'s sequential
+   * requests hit the browser HTTP cache. Streaming books only — archived
+   * (offline/native) books read sections from the local zip already.
+   */
+  function warmSectionCache() {
+    if (epubBook?.archived) return;
+    const urls: string[] = (epubBook?.spine?.spineItems ?? [])
+      .filter((s: any) => s.linear)
+      .map((s: any) => s.url)
+      .filter(Boolean);
+    let next = 0;
+    const worker = async () => {
+      while (next < urls.length) {
+        const url = urls[next++]!;
+        try {
+          const res = await fetch(url, { headers: getAuthHeader() });
+          // Consume the body so the response is fully received and cached.
+          await res.arrayBuffer();
+        } catch {
+          // Best-effort: generate() fetches on its own anyway.
+        }
+      }
+    };
+    const CONCURRENCY = 8;
+    for (let i = 0; i < Math.min(CONCURRENCY, urls.length); i++) {
+      void worker();
     }
   }
 

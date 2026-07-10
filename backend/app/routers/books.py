@@ -28,12 +28,15 @@ from sqlalchemy.sql.functions import coalesce
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata, MetadataSource
+from app.models.book_locations import BookLocations
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.schemas.book import (
     BookLibraryUpdate,
+    BookLocationsIn,
+    BookLocationsOut,
     BookMetadataUpdate,
     BookOut,
     BookSearchResult,
@@ -1064,6 +1067,48 @@ async def get_book(
     )
     out.has_unresolved_reports = report_result.scalar_one_or_none() is not None
     return out
+
+
+@router.get("/{book_id}/locations", response_model=BookLocationsOut)
+async def get_book_locations(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Shared cache of epub.js-generated locations.
+
+    Locations are deterministic per book file, so the first client to
+    generate them serves every user and device. 204 = nobody has yet;
+    the client generates and PUTs them back.
+    """
+    await _get_book_with_access(book_id, current_user, db)
+    row = (
+        await db.execute(select(BookLocations).where(BookLocations.book_id == book_id))
+    ).scalar_one_or_none()
+    if row is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    return row
+
+
+@router.put("/{book_id}/locations")
+async def put_book_locations(
+    book_id: uuid.UUID,
+    body: BookLocationsIn,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    await _get_book_with_access(book_id, current_user, db)
+    row = (
+        await db.execute(select(BookLocations).where(BookLocations.book_id == book_id))
+    ).scalar_one_or_none()
+    if row is None:
+        row = BookLocations(book_id=book_id)
+        db.add(row)
+    row.fingerprint = body.fingerprint
+    row.locations = body.locations
+    row.updated_at = datetime.now(UTC)
+    await db.commit()
+    return {"status": "stored"}
 
 
 @router.get("/{book_id}/editions")

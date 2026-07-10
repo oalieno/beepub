@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 
 class BookTagNested(BaseModel):
@@ -176,5 +176,28 @@ class ExternalMetadataOut(BaseModel):
     rating_count: int | None
     reviews: list | None
     fetched_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class BookLocationsIn(BaseModel):
+    """Client-generated epub.js locations (an opaque JSON array of CFIs)."""
+
+    fingerprint: str = Field(min_length=1, max_length=255)
+    # ~30 chars per CFI anchor; even a 5000-location monster stays well
+    # under this cap, while garbage uploads can't balloon the table.
+    locations: str = Field(min_length=2, max_length=1_000_000)
+
+    @field_validator("locations")
+    @classmethod
+    def _must_be_json_array(cls, value: str) -> str:
+        if not value.lstrip().startswith("["):
+            raise ValueError("locations must be a JSON array")
+        return value
+
+
+class BookLocationsOut(BaseModel):
+    fingerprint: str
+    locations: str
 
     model_config = {"from_attributes": True}
