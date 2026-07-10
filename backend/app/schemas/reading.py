@@ -14,7 +14,9 @@ class FavoriteUpdate(BaseModel):
 
 class ProgressUpdate(BaseModel):
     cfi: str
-    percentage: float
+    # None = the reader's CFI moved before the canonical (locations-based)
+    # percentage was known; the previously stored percentage is kept.
+    percentage: float | None = None
     current_page: int | None = None
     font_size: int | None = None
     section_index: int | None = None
@@ -22,6 +24,18 @@ class ProgressUpdate(BaseModel):
     section_page_counts: list[int] | None = None
     total_pages: int | None = None
     track_activity: bool = True
+
+
+class KosyncMarkerOut(BaseModel):
+    """E-reader position bridged from kosync, newer than the stored CFI.
+
+    Written by the kosync bridge; the web PUT /progress rebuilds the whole
+    progress dict, so the marker disappears once the user reads on the web.
+    """
+
+    percentage: float | None = None
+    device: str | None = None
+    synced_at: str | None = None
 
 
 class ProgressOut(BaseModel):
@@ -34,6 +48,7 @@ class ProgressOut(BaseModel):
     section_page_counts: list[int] | None = None
     total_pages: int | None = None
     last_read_at: str | None = None
+    kosync: KosyncMarkerOut | None = None
 
 
 class HighlightCreate(BaseModel):

@@ -305,6 +305,34 @@
     }
   }
 
+  // Progress bridged from an e-reader (KOReader/Readest via kosync). The
+  // reader auto-jumps when the book was never read on the web; otherwise
+  // the jump is a real decision tied to opening the book, so it gets a
+  // dialog (the KOReader/Readest convention), not a dismissable toast.
+  async function handleKosyncPosition(detail: {
+    percentage: number;
+    device: string | null;
+    autoJumped: boolean;
+  }) {
+    const device = detail.device || "KOReader";
+    const pct = Math.round(detail.percentage);
+    if (detail.autoJumped) {
+      toastStore.info(m.reader_kosync_jumped({ device, percentage: pct }));
+      return;
+    }
+    const jump = await confirmDialog({
+      title: m.reader_kosync_dialog_title(),
+      description: m.reader_kosync_dialog_body({
+        device,
+        remote: pct,
+        local: Math.round(percentage ?? 0),
+      }),
+      confirmLabel: m.reader_kosync_jump(),
+      cancelLabel: m.reader_kosync_dialog_stay(),
+    });
+    if (jump) reader?.displayPercentage(detail.percentage);
+  }
+
   let reachedEnd = $state(false);
 
   // Auto-mark as read when the estimated progress hits 99% (covers books
@@ -567,6 +595,7 @@
           onready={() => (epubLoaded = true)}
           onerror={() => (loadError = true)}
           onlocationsready={() => (canScrub = true)}
+          onkosyncposition={handleKosyncPosition}
           onatend={() => {
             reachedEnd = true;
             prefetchSeriesNeighbors();

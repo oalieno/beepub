@@ -47,6 +47,7 @@
     ontap,
     onatend,
     onbookend,
+    onkosyncposition,
   }: {
     bookId: string;
     initialCfi?: string | null;
@@ -74,6 +75,11 @@
     ontap?: () => void;
     onatend?: () => void;
     onbookend?: () => void;
+    onkosyncposition?: (detail: {
+      percentage: number;
+      device: string | null;
+      autoJumped: boolean;
+    }) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -165,6 +171,17 @@
   let generatingLocations = false;
   let restoringProgress = false;
   let waitingForCanonicalProgress = false;
+
+  // Position bridged from an e-reader (kosync), newer than the stored CFI.
+  // Captured from the progress payload at open; resolved once the canonical
+  // percentage is known (locations ready): jump when the book was never read
+  // on the web, otherwise let the parent offer the jump.
+  let kosyncMarker: { percentage: number; device: string | null } | null = null;
+  let kosyncAutoJump = false;
+  // Set on any user navigation. When locations finish late (large books)
+  // the kosync auto-jump downgrades to an offer instead of yanking the
+  // reader away from a position they have already started reading at.
+  let userNavigated = false;
 
   // TOC tracking
   let tocData: { label: string; href: string; subitems?: any[] }[] = [];
@@ -349,6 +366,7 @@
           emitProgress(null);
         }
       }
+      await resolveKosyncMarker();
     } catch {
       // Image-heavy or malformed EPUBs may not produce text locations.
       waitingForCanonicalProgress = false;
@@ -360,8 +378,28 @@
         emitProgress();
         debouncedSave();
       }
+      await resolveKosyncMarker();
     } finally {
       generatingLocations = false;
+    }
+  }
+
+  /**
+   * Act on an e-reader position bridged from kosync, once the canonical
+   * percentage is known. Never read on the web → adopt the device position
+   * outright; otherwise (positions meaningfully apart) let the parent offer
+   * the jump — the web CFI stays authoritative until the user accepts.
+   */
+  async function resolveKosyncMarker() {
+    if (!kosyncMarker) return;
+    const marker = kosyncMarker;
+    kosyncMarker = null;
+    if (kosyncAutoJump && !userNavigated) {
+      if (await displayPercentage(marker.percentage)) {
+        onkosyncposition?.({ ...marker, autoJumped: true });
+      }
+    } else if (Math.abs(marker.percentage - currentPercentage) > 1) {
+      onkosyncposition?.({ ...marker, autoJumped: false });
     }
   }
 
@@ -458,6 +496,12 @@
         return;
       }
 
+      // Persist every position change — the CFI is what restore uses and it
+      // never depends on locations. Before locations are ready the save
+      // carries percentage: null and the server keeps the stored value, so
+      // a slow (or never-finishing) generation can't lose reading progress.
+      debouncedSave();
+
       if (waitingForCanonicalProgress && !locationsGenerated) {
         return;
       }
@@ -470,7 +514,6 @@
       currentPercentage = progress.percentage;
       emitProgress();
       onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
-      debouncedSave();
       doUpdateOverlays();
       doPrefetch();
 
@@ -929,6 +972,14 @@
         // ignore
       }
     }
+    const kosyncRaw = savedProgress?.kosync;
+    if (!initialCfi && typeof kosyncRaw?.percentage === "number") {
+      kosyncMarker = {
+        percentage: kosyncRaw.percentage,
+        device: kosyncRaw.device ?? null,
+      };
+      kosyncAutoJump = !savedProgress?.cfi;
+    }
     try {
       if (initialCfi) {
         // Explicit jump target (e.g. a highlight clicked on the detail
@@ -1091,7 +1142,7 @@
     if (!currentCfi) return;
     const data = {
       cfi: currentCfi,
-      percentage: currentPercentage,
+      percentage: hasCanonicalPercentage() ? currentPercentage : null,
       current_page: currentPage,
       font_size: fontSize,
       section_index: currentSectionIndex,
@@ -1153,12 +1204,20 @@
     saveDebounceTimer = setTimeout(saveProgress, 2000);
   }
 
+  /** Text books only have a trustworthy percentage once locations exist;
+   *  image books use page-based percentages from the start. */
+  function hasCanonicalPercentage(): boolean {
+    return isImageBook || locationsGenerated;
+  }
+
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
-    if (waitingForCanonicalProgress && !locationsGenerated) return;
     const payload = {
       cfi: currentCfi,
-      percentage: currentPercentage,
+      // null tells the server to keep the stored percentage — never write
+      // a made-up value, and never skip the save (the CFI must survive
+      // even when locations generation is slow or dies).
+      percentage: hasCanonicalPercentage() ? currentPercentage : null,
       current_page: currentPage,
       font_size: fontSize,
       section_index: currentSectionIndex,
@@ -1279,6 +1338,7 @@
 
   function _doPrev() {
     showFootnote = false;
+    userNavigated = true;
     rendition?.prev();
   }
 
@@ -1288,6 +1348,7 @@
       return;
     }
     showFootnote = false;
+    userNavigated = true;
     rendition?.next();
   }
 
@@ -1301,20 +1362,38 @@
 
   export function displayChapter(href: string) {
     restoringProgress = false;
+    userNavigated = true;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(href);
   }
 
-  export async function displayPercentage(pct: number) {
-    if (!locationsGenerated || !epubBook?.locations || !rendition) return;
+  export async function displayPercentage(pct: number): Promise<boolean> {
+    if (!rendition) return false;
     const fraction = Math.min(100, Math.max(0, pct)) / 100;
+    // Image books produce few or no text locations, so a percentage maps
+    // poorly through them — but sections are pages there, so a spine-index
+    // jump is the faithful conversion.
+    if (isImageBook) {
+      const items = epubBook?.spine?.spineItems ?? [];
+      if (!items.length) return false;
+      const index = Math.min(
+        items.length - 1,
+        Math.round(fraction * (items.length - 1)),
+      );
+      await rendition.display(items[index].href);
+      return true;
+    }
+    if (!locationsGenerated || !epubBook?.locations) return false;
     const cfi = epubBook.locations.cfiFromPercentage(fraction);
-    if (cfi) await rendition.display(cfi);
+    if (!cfi) return false;
+    await rendition.display(cfi);
+    return true;
   }
 
   export function displayCfi(cfi: string) {
     restoringProgress = false;
+    userNavigated = true;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(cfi);
@@ -1333,6 +1412,7 @@
    */
   export async function displaySearchResult(cfi: string) {
     restoringProgress = false;
+    userNavigated = true;
     waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
     if (waitingForCanonicalProgress) emitProgress(null);
 

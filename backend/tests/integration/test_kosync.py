@@ -83,9 +83,13 @@ async def test_progress_roundtrip_and_bridge(admin_client):
     assert fetched["percentage"] == payload["percentage"]
     assert fetched["device"] == "kobo"
 
-    # …and the percentage shows up in BeePub's own reading progress (0-100).
+    # …and the percentage shows up in BeePub's own reading progress (0-100),
+    # with the kosync marker the web reader uses to offer the jump.
     progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert progress["percentage"] == pytest.approx(42.69)
+    assert progress["kosync"]["percentage"] == pytest.approx(42.69)
+    assert progress["kosync"]["device"] == "kobo"
+    assert progress["kosync"]["synced_at"]
 
 
 async def test_unknown_document_is_stored_but_not_bridged(admin_client):
@@ -200,6 +204,7 @@ async def test_digest_job_retro_bridges_preexisting_records(admin_client):
     await _run_book_digest(book["id"])
     after = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert after["percentage"] == pytest.approx(33.0)
+    assert after["kosync"]["percentage"] == pytest.approx(33.0)
 
 
 async def test_bridge_sets_reading_status(admin_client):
@@ -283,3 +288,52 @@ async def test_bridge_preserves_existing_reader_state(admin_client):
     progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
     assert progress["cfi"] == "epubcfi(/6/8!/4/2/1:0)"
     assert progress["percentage"] == pytest.approx(90.0)
+
+
+async def test_web_save_clears_kosync_marker(admin_client):
+    """The marker means "device position is newer than the stored CFI" —
+    a web save rebuilds the progress dict, so the marker must not survive."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": document, "progress": "xp", "percentage": 0.3},
+        headers=_headers(),
+    )
+    progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
+    assert progress["kosync"]["percentage"] == pytest.approx(30.0)
+
+    saved = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={"cfi": "epubcfi(/6/10!/4/2/1:0)", "percentage": 31.0},
+    )
+    assert saved.status_code == 200
+    progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
+    assert progress["kosync"] is None
+    assert progress["percentage"] == pytest.approx(31.0)
+
+
+async def test_cfi_save_without_percentage_keeps_bridged_value(admin_client):
+    """The reader saves percentage=null while locations are still generating;
+    the CFI must be stored without zeroing the kosync-bridged percentage."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    await admin_client.put(
+        "/kosync/syncs/progress",
+        json={"document": document, "progress": "xp", "percentage": 0.23},
+        headers=_headers(),
+    )
+
+    saved = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={"cfi": "epubcfi(/6/4!/4/2/1:0)", "percentage": None},
+    )
+    assert saved.status_code == 200
+    progress = (await admin_client.get(f"/api/books/{book['id']}/progress")).json()
+    assert progress["cfi"] == "epubcfi(/6/4!/4/2/1:0)"
+    assert progress["percentage"] == pytest.approx(23.0)
+    assert progress["kosync"] is None

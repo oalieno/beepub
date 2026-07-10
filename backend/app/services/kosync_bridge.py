@@ -3,7 +3,9 @@
 Shared by the kosync router (live pushes) and the digest bulk job
 (retro-bridging records that arrived before their book had a digest).
 Percentage only (BeePub stores 0–100): the CFI and section fields are
-left untouched, so the web reader still restores at its last own position.
+left untouched, so the web reader still restores at its last own position —
+but a ``kosync`` marker is added so the reader can offer jumping to the
+device position.
 """
 
 import uuid
@@ -27,7 +29,11 @@ async def _today_in_app_timezone(db: AsyncSession) -> date:
 
 
 async def bridge_kosync_percentage(
-    db: AsyncSession, user_id: uuid.UUID, book_id: uuid.UUID, percentage: float
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    book_id: uuid.UUID,
+    percentage: float,
+    device: str | None = None,
 ) -> None:
     """Upsert the interaction's progress percentage (kosync scale 0–1)."""
     interaction = (
@@ -42,9 +48,19 @@ async def bridge_kosync_percentage(
         interaction = UserBookInteraction(user_id=user_id, book_id=book_id)
         db.add(interaction)
 
+    now = datetime.now(UTC).isoformat()
     reading_progress = dict(interaction.reading_progress or {})
     reading_progress["percentage"] = round(percentage * 100, 2)
-    reading_progress["last_read_at"] = datetime.now(UTC).isoformat()
+    reading_progress["last_read_at"] = now
+    # Marker for the web reader: "an e-reader moved past the stored CFI".
+    # The web PUT /progress rebuilds the dict from scratch, so the marker
+    # lives exactly until the user reads on the web again — its presence
+    # alone means the device position is newer, no timestamp comparison.
+    reading_progress["kosync"] = {
+        "percentage": reading_progress["percentage"],
+        "device": device,
+        "synced_at": now,
+    }
     interaction.reading_progress = reading_progress
 
     # Mirror the web reader's auto-mark behaviour: reading on an e-reader
@@ -94,6 +110,8 @@ async def retro_bridge_document(
         ).first()
         if excluded:
             continue
-        await bridge_kosync_percentage(db, record.user_id, book_id, record.percentage)
+        await bridge_kosync_percentage(
+            db, record.user_id, book_id, record.percentage, device=record.device
+        )
         bridged += 1
     return bridged

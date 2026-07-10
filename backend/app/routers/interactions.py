@@ -235,6 +235,12 @@ async def update_progress(
         "percentage": body.percentage,
         "last_read_at": now.isoformat(),
     }
+    if body.percentage is None:
+        # Locations were still generating client-side — don't zero out the
+        # stored percentage (possibly bridged from kosync); the next
+        # canonical save corrects it.
+        prev = (interaction.reading_progress or {}).get("percentage")
+        progress["percentage"] = prev
     if body.current_page is not None:
         progress["current_page"] = body.current_page
     if body.font_size is not None:

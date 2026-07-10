@@ -232,6 +232,12 @@ export interface HighlightOut {
   updated_at: string;
 }
 
+export interface KosyncMarkerOut {
+  percentage: number | null;
+  device: string | null;
+  synced_at: string | null;
+}
+
 export interface ProgressOut {
   cfi: string | null;
   percentage: number | null;
@@ -242,6 +248,7 @@ export interface ProgressOut {
   section_page_counts: number[] | null;
   total_pages: number | null;
   last_read_at: string | null;
+  kosync: KosyncMarkerOut | null;
 }
 
 export type ReadingStatus =

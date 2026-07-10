@@ -129,7 +129,9 @@ export const booksApi = {
     bookId: string,
     data: {
       cfi: string;
-      percentage: number;
+      // null = CFI moved before the canonical (locations-based) percentage
+      // was known; the server keeps the previously stored percentage.
+      percentage: number | null;
       current_page?: number;
       font_size?: number;
       section_index?: number;

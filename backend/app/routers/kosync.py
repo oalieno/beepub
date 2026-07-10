@@ -109,7 +109,11 @@ async def kosync_authorize(
 
 
 async def _bridge_percentage_to_book(
-    db: AsyncSession, user: User, document: str, percentage: float
+    db: AsyncSession,
+    user: User,
+    document: str,
+    percentage: float,
+    device: str | None = None,
 ) -> None:
     """Reflect e-reader progress in BeePub's own reading progress.
 
@@ -124,7 +128,7 @@ async def _bridge_percentage_to_book(
     book_id = result.scalar_one_or_none()
     if book_id is None:
         return
-    await bridge_kosync_percentage(db, user.id, book_id, percentage)
+    await bridge_kosync_percentage(db, user.id, book_id, percentage, device=device)
 
 
 @router.put("/syncs/progress")
@@ -152,7 +156,7 @@ async def kosync_update_progress(
 
     if payload.percentage is not None:
         await _bridge_percentage_to_book(
-            db, current_user, payload.document, payload.percentage
+            db, current_user, payload.document, payload.percentage, payload.device
         )
 
     await db.commit()
