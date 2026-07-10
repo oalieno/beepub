@@ -272,6 +272,7 @@
   "reader_kosync_dialog_body": "{device} 讀到 {remote}%，目前位置在 {local}%。",
   "reader_kosync_dialog_stay": "保留目前位置",
   "reader_kosync_jump": "跳轉",
+  "reader_restore_fallback": "書檔已變更，已跳至約 {percentage}%",
   "reader_load_error_title": "無法載入這本書",
   "reader_load_error_desc": "檔案可能已損壞，或網路連線中斷。",
   "reader_toc": "目錄",

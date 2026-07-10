@@ -48,6 +48,7 @@
     onatend,
     onbookend,
     onkosyncposition,
+    onrestorefallback,
   }: {
     bookId: string;
     initialCfi?: string | null;
@@ -80,6 +81,7 @@
       device: string | null;
       autoJumped: boolean;
     }) => void;
+    onrestorefallback?: (percentage: number) => void;
   } = $props();
 
   let isRtl = $state(false);
@@ -182,6 +184,11 @@
   // the kosync auto-jump downgrades to an offer instead of yanking the
   // reader away from a position they have already started reading at.
   let userNavigated = false;
+  // Degraded restore: the saved CFI no longer resolves (the file was
+  // rewritten — calibre metadata edit, re-conversion) but a percentage
+  // couldn't be applied yet because locations weren't ready. Resolved the
+  // same way as kosyncMarker once they are.
+  let restoreFallbackPct: number | null = null;
 
   // TOC tracking
   let tocData: { label: string; href: string; subitems?: any[] }[] = [];
@@ -389,6 +396,7 @@
           emitProgress(null);
         }
       }
+      await resolveRestoreFallback();
       await resolveKosyncMarker();
     } catch {
       // Image-heavy or malformed EPUBs may not produce text locations.
@@ -401,6 +409,7 @@
         emitProgress();
         debouncedSave();
       }
+      await resolveRestoreFallback();
       await resolveKosyncMarker();
     } finally {
       generatingLocations = false;
@@ -435,6 +444,20 @@
     const CONCURRENCY = 8;
     for (let i = 0; i < Math.min(CONCURRENCY, urls.length); i++) {
       void worker();
+    }
+  }
+
+  /**
+   * Second half of the degraded restore: apply the stored percentage now
+   * that locations exist — unless the user has already started reading
+   * from wherever the failed restore left them.
+   */
+  async function resolveRestoreFallback() {
+    if (restoreFallbackPct == null) return;
+    const pct = restoreFallbackPct;
+    restoreFallbackPct = null;
+    if (!userNavigated && (await displayPercentage(pct))) {
+      onrestorefallback?.(pct);
     }
   }
 
@@ -547,6 +570,14 @@
       totalPages = progress.totalPages;
 
       if (restoringProgress) {
+        return;
+      }
+
+      // A degraded restore is still pending (waiting on locations): the
+      // reader is parked at page 1 only as a placeholder. Don't persist it
+      // over the position the fallback is about to recover — unless the
+      // user actively reads on, which makes page 1 their real position.
+      if (restoreFallbackPct != null && !userNavigated) {
         return;
       }
 
@@ -1109,7 +1140,20 @@
       }
     } catch {
       restoringProgress = false;
-      await rendition.display();
+      // The saved CFI no longer resolves (the file was rewritten since it
+      // was recorded). Degrade to the stored percentage instead of silently
+      // opening at page 1 — now if locations are ready (image books always
+      // are), otherwise once generation finishes. Explicit jump targets
+      // (initialCfi) get no fallback: progress isn't where they asked to go.
+      const fallbackPct = !initialCfi
+        ? (savedProgress?.percentage ?? null)
+        : null;
+      if (fallbackPct != null && (await displayPercentage(fallbackPct))) {
+        onrestorefallback?.(fallbackPct);
+      } else {
+        restoreFallbackPct = fallbackPct;
+        await rendition.display();
+      }
     }
 
     // Fix half-page offset on re-enter: snap scroll position after layout settles.
@@ -1194,6 +1238,7 @@
 
   function handleBeforeUnload() {
     if (!currentCfi) return;
+    if (restoreFallbackPct != null && !userNavigated) return;
     const data = {
       cfi: currentCfi,
       percentage: hasCanonicalPercentage() ? currentPercentage : null,
@@ -1266,6 +1311,7 @@
 
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
+    if (restoreFallbackPct != null && !userNavigated) return;
     const payload = {
       cfi: currentCfi,
       // null tells the server to keep the stored percentage — never write

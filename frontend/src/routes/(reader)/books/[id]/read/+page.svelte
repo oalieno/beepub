@@ -596,6 +596,10 @@
           onerror={() => (loadError = true)}
           onlocationsready={() => (canScrub = true)}
           onkosyncposition={handleKosyncPosition}
+          onrestorefallback={(pct) =>
+            toastStore.info(
+              m.reader_restore_fallback({ percentage: Math.round(pct) }),
+            )}
           onatend={() => {
             reachedEnd = true;
             prefetchSeriesNeighbors();

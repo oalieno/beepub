@@ -272,6 +272,7 @@
   "reader_kosync_dialog_body": "{device} is at {remote}%; you are at {local}%.",
   "reader_kosync_dialog_stay": "Stay here",
   "reader_kosync_jump": "Jump",
+  "reader_restore_fallback": "Book file changed — resumed near {percentage}%",
   "reader_load_error_title": "Unable to load this book",
   "reader_load_error_desc": "The file may be corrupted or the connection was interrupted.",
   "reader_toc": "Table of Contents",
