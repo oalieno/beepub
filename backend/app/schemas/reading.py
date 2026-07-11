@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field
 
 
 class RatingUpdate(BaseModel):
@@ -151,3 +151,60 @@ class InteractionOut(BaseModel):
 class PaginatedHighlights(BaseModel):
     items: list[HighlightOut]
     total: int
+
+
+# --- Device sync (routers/device_sync.py) ---
+#
+# Sync payloads carry CLIENT timestamps: the device is the authority on
+# when its writes happened, and the server merges by last-write-wins.
+# AwareDatetime rejects naive stamps up front — a naive/aware comparison
+# would raise (or silently misorder) deep inside the merge.
+
+
+class SyncHighlightIn(BaseModel):
+    id: uuid.UUID
+    cfi_range: str = Field(max_length=2000)
+    text: str
+    color: str = Field(default="yellow", max_length=20)
+    note: str | None = None
+    prefix: str | None = Field(default=None, max_length=255)
+    suffix: str | None = Field(default=None, max_length=255)
+    section_index: int | None = Field(default=None, ge=0)
+    created_at: AwareDatetime
+    updated_at: AwareDatetime
+    deleted_at: AwareDatetime | None = None
+
+
+class SyncProgressIn(BaseModel):
+    """ProgressUpdate minus track_activity (synced reading never counts
+    toward activity/streaks) plus the client's LWW anchor."""
+
+    cfi: str
+    percentage: float | None = None
+    current_page: int | None = None
+    font_size: int | None = None
+    section_index: int | None = None
+    section_page: int | None = None
+    section_page_counts: list[int] | None = None
+    total_pages: int | None = None
+    xpointer: str | None = Field(default=None, max_length=1000)
+    last_read_at: AwareDatetime
+
+
+class BookSyncRequest(BaseModel):
+    # progress None = pull-only (the device has nothing saved yet).
+    progress: SyncProgressIn | None = None
+    highlights: list[SyncHighlightIn] = Field(default_factory=list, max_length=5000)
+
+
+class HighlightSyncOut(HighlightOut):
+    # HighlightOut deliberately hides the tombstone; the sync response must
+    # expose it so devices can propagate deletions.
+    deleted_at: datetime | None = None
+
+
+class BookSyncResponse(BaseModel):
+    # Raw JSONB passthrough — ProgressOut would strip xpointer/kosync,
+    # which must round-trip for paragraph-level e-reader landings.
+    progress: dict | None
+    highlights: list[HighlightSyncOut]
