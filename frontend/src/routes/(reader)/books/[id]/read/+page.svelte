@@ -25,7 +25,7 @@
   import Spinner from "$lib/components/Spinner.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
-  import { BookX, Undo2 } from "@lucide/svelte";
+  import { BookX, Check, Undo2 } from "@lucide/svelte";
   import { UserRole } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
   import type {
@@ -139,10 +139,19 @@
   let illustrationModalCfi = $state("");
   let illustrationModalText = $state("");
 
-  // Series navigation overlay
+  // Book-end overlay: shown when paging past the last page. Carries the
+  // "marked as finished" feedback (a toast here would sit on top of the
+  // text and fight the safe area) plus series navigation when available.
   let seriesNeighbors: SeriesNeighborsOut | null = $state(null);
   let seriesFetchPromise: Promise<void> | null = null;
-  let showSeriesOverlay = $state(false);
+  let showEndOverlay = $state(false);
+  // Set when auto-mark-as-read fires; lets the end overlay offer undo.
+  let autoReadUndo = $state<{
+    status: InteractionOut["reading_status"];
+    startedAt: string | null;
+    finishedAt: string | null;
+  } | null>(null);
+  let autoReadReverted = $state(false);
   let viewingIllustration = $state<IllustrationOut | null>(null);
   let shareHighlight = $state<HighlightOut | null>(null);
   let shareModalOpen = $state(false);
@@ -305,19 +314,27 @@
       });
       interaction.reading_status = "read";
       interaction.finished_at = today;
-      toastStore.info(m.reader_auto_marked_read(), {
-        duration: 6000,
-        action: {
-          label: m.common_undo(),
-          onclick: () => {
-            autoReadSuppressed = true;
-            revertStatus(prevStatus, prevStartedAt, prevFinishedAt);
-          },
-        },
-      });
+      // No toast — the book-end overlay surfaces this with an undo.
+      autoReadUndo = {
+        status: prevStatus,
+        startedAt: prevStartedAt,
+        finishedAt: prevFinishedAt,
+      };
+      autoReadReverted = false;
     } catch {
       /* ignore */
     }
+  }
+
+  function undoAutoRead() {
+    if (!autoReadUndo) return;
+    autoReadSuppressed = true;
+    revertStatus(
+      autoReadUndo.status,
+      autoReadUndo.startedAt,
+      autoReadUndo.finishedAt,
+    );
+    autoReadReverted = true;
   }
 
   // Progress bridged from an e-reader (KOReader/Readest via kosync). The
@@ -399,9 +416,7 @@
     if (seriesFetchPromise) {
       await seriesFetchPromise;
     }
-    if (seriesNeighbors?.next || seriesNeighbors?.progress) {
-      showSeriesOverlay = true;
-    }
+    showEndOverlay = true;
   }
 
   function handleFontToggle() {
@@ -915,15 +930,17 @@
     }}
   />
 
-  {#if showSeriesOverlay && seriesNeighbors}
+  {#if showEndOverlay}
+    {@const seriesNext = seriesNeighbors?.next}
+    {@const seriesProgress = seriesNeighbors?.progress}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onkeydown={(e) => {
-        if (e.key === "Escape") showSeriesOverlay = false;
+        if (e.key === "Escape") showEndOverlay = false;
       }}
       onclick={(e) => {
-        if (e.target === e.currentTarget) showSeriesOverlay = false;
+        if (e.target === e.currentTarget) showEndOverlay = false;
       }}
     >
       <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -933,17 +950,17 @@
           : 'bg-white text-ink-900'}"
         onclick={(e) => e.stopPropagation()}
       >
-        {#if seriesNeighbors.next}
+        {#if seriesNext}
           <!-- Cover as hero banner -->
           <div
             class="relative flex items-center justify-center py-10 {darkMode
               ? 'bg-ink-900/60'
               : 'bg-ink-50'}"
           >
-            {#if seriesNeighbors.next.cover_path}
+            {#if seriesNext.cover_path}
               <img
-                use:authedSrc={coverUrl(seriesNeighbors.next.id)}
-                alt={seriesNeighbors.next.title ?? "Next book"}
+                use:authedSrc={coverUrl(seriesNext.id)}
+                alt={seriesNext.title ?? "Next book"}
                 class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
               />
             {:else}
@@ -965,20 +982,20 @@
                 : 'text-muted-foreground'}"
             >
               {m.reader_series_up_next({
-                series: seriesNeighbors.series_name ?? "",
+                series: seriesNeighbors?.series_name ?? "",
               })}
             </p>
             <p class="mt-3 text-center text-xl font-semibold">
-              {seriesNeighbors.next.title ?? "Untitled"}
+              {seriesNext.title ?? "Untitled"}
             </p>
-            {#if seriesNeighbors.next.series_index != null}
+            {#if seriesNext.series_index != null}
               <p
                 class="mt-1 text-center text-sm {darkMode
                   ? 'text-ink-400'
                   : 'text-muted-foreground'}"
               >
                 {m.reader_series_book_of({
-                  index: formatSeriesIndex(seriesNeighbors.next.series_index),
+                  index: formatSeriesIndex(seriesNext.series_index),
                   total: seriesDisplayTotal() || "?",
                 })}
               </p>
@@ -988,21 +1005,21 @@
                 class="flex-1 rounded-lg px-4 py-3 font-medium transition-colors {darkMode
                   ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
                   : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
-                onclick={() => (showSeriesOverlay = false)}
+                onclick={() => (showEndOverlay = false)}
               >
                 {m.common_close()}
               </button>
               <button
                 class="flex-1 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 onclick={() => {
-                  window.location.href = `/books/${seriesNeighbors!.next!.id}/read`;
+                  window.location.href = `/books/${seriesNext.id}/read`;
                 }}
               >
                 {m.reader_start_reading()}
               </button>
             </div>
           </div>
-        {:else if seriesNeighbors.progress}
+        {:else if seriesProgress}
           <div class="flex flex-col items-center gap-6 px-10 py-14">
             <span class="text-6xl">🎉</span>
             <div class="text-center">
@@ -1013,8 +1030,8 @@
                   : 'text-muted-foreground'}"
               >
                 {m.reader_series_complete_msg({
-                  count: String(seriesNeighbors.progress.total_in_library),
-                  series: seriesNeighbors.series_name ?? "",
+                  count: String(seriesProgress.total_in_library),
+                  series: seriesNeighbors?.series_name ?? "",
                 })}
               </p>
             </div>
@@ -1022,10 +1039,56 @@
               class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
                 ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
                 : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
-              onclick={() => (showSeriesOverlay = false)}
+              onclick={() => (showEndOverlay = false)}
             >
               {m.common_close()}
             </button>
+          </div>
+        {:else}
+          <div class="flex flex-col items-center gap-6 px-10 py-14">
+            <span class="text-6xl">🎉</span>
+            <div class="text-center">
+              <p class="text-2xl font-semibold">{m.reader_finished_title()}</p>
+              {#if title}
+                <p
+                  class="mt-2 {darkMode
+                    ? 'text-ink-400'
+                    : 'text-muted-foreground'}"
+                >
+                  {title}
+                </p>
+              {/if}
+            </div>
+            <button
+              class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
+                ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
+              onclick={() => (showEndOverlay = false)}
+            >
+              {m.common_close()}
+            </button>
+          </div>
+        {/if}
+
+        {#if autoReadUndo}
+          <div
+            class="flex items-center justify-center gap-2 border-t px-6 py-3.5 text-sm {darkMode
+              ? 'border-ink-700 text-ink-400'
+              : 'border-ink-100 text-muted-foreground'}"
+          >
+            {#if autoReadReverted}
+              <span>{m.reader_marked_read_undone()}</span>
+            {:else}
+              <Check size={14} class="text-primary" />
+              <span>{m.reader_auto_marked_read()}</span>
+              <button
+                type="button"
+                class="text-primary underline underline-offset-4"
+                onclick={undoAutoRead}
+              >
+                {m.common_undo()}
+              </button>
+            {/if}
           </div>
         {/if}
       </div>

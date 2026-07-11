@@ -18,14 +18,17 @@
     Download,
     PanelLeftClose,
     PanelLeftOpen,
+    Settings,
   } from "@lucide/svelte";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
+  import { UserRole } from "$lib/types";
 
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
 
   let online = $derived($isOnline);
   let collapsed = $derived($sidebarCollapsed);
+  let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
   const navLinks = $derived([
     {
@@ -80,6 +83,19 @@
             icon: Download,
             active: page.url.pathname.startsWith("/downloads"),
             requiresOnline: false,
+          },
+        ]
+      : []),
+    // Instance-level administration, not a personal setting — it lives in
+    // the global nav rather than behind the profile page.
+    ...(isAdmin
+      ? [
+          {
+            href: "/admin",
+            label: m.nav_admin(),
+            icon: Settings,
+            active: page.url.pathname.startsWith("/admin"),
+            requiresOnline: true,
           },
         ]
       : []),
@@ -242,8 +258,7 @@
       href="/profile"
       class="flex items-center gap-3 py-2.5 rounded-lg w-full text-left transition-colors {collapsed
         ? 'justify-center px-0'
-        : 'px-3'} {page.url.pathname.startsWith('/profile') ||
-      page.url.pathname.startsWith('/admin')
+        : 'px-3'} {page.url.pathname.startsWith('/profile')
         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
         : 'hover:bg-sidebar-accent/50'}"
       title={collapsed ? $authStore.user?.username : undefined}

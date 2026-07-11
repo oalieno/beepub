@@ -525,20 +525,6 @@
     {/each}
   </div>
 
-  <!-- Desktop nav links -->
-  {#if isAdmin}
-    <div class="bg-card card-soft rounded-2xl overflow-hidden hidden md:block">
-      <a
-        href="/admin"
-        class="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50 active:bg-secondary"
-      >
-        <Settings size={20} class="text-muted-foreground shrink-0" />
-        <span class="text-sm font-medium flex-1">{m.nav_admin()}</span>
-        <ChevronRight size={16} class="text-muted-foreground/50" />
-      </a>
-    </div>
-  {/if}
-
   <!-- Logout -->
   <div class="mt-4 bg-card card-soft rounded-2xl overflow-hidden">
     <button

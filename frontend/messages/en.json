@@ -794,6 +794,8 @@
   "reader_start_reading": "Start reading",
   "reader_series_complete": "Series Complete!",
   "reader_series_complete_msg": "You've finished all {count} books in {series}",
+  "reader_finished_title": "You finished this book",
+  "reader_marked_read_undone": "Finished mark removed",
 
   "error_access_denied": "Access denied",
   "error_account_disabled": "Account is disabled",
