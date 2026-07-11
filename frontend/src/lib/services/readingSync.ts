@@ -28,6 +28,7 @@ import {
 } from "$lib/reading/local";
 import {
   clearLocalBookLink,
+  getLocalBook,
   getLocalBookLinks,
   listLocalBooks,
   setLocalBookLink,
@@ -111,19 +112,27 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
 export async function linkAndSyncBook(entry: LocalBookEntry): Promise<boolean> {
   if (!canSync()) return false;
   try {
-    const links = await getLocalBookLinks();
-    if (!links[entry.id]) {
-      const { matches } = await booksApi.lookupByDigest([entry.digest]);
-      const match = matches[entry.digest];
-      if (!match) return false;
-      await setLocalBookLink(entry.id, match.id);
-    }
+    if ((await resolveLink(entry.id)) === null) return false;
     await syncLocalBook(entry.id);
     return true;
   } catch (err) {
     console.warn("readingSync: link failed", err);
     return false;
   }
+}
+
+/** The book's server id: the stored link, or a fresh by-digest resolution
+ *  (stored when found). Null = no accessible match on the server. */
+async function resolveLink(localBookId: string): Promise<string | null> {
+  const links = await getLocalBookLinks();
+  if (links[localBookId]) return links[localBookId];
+  const entry = await getLocalBook(localBookId);
+  if (!entry) return null;
+  const { matches } = await booksApi.lookupByDigest([entry.digest]);
+  const match = matches[entry.digest];
+  if (!match) return null;
+  await setLocalBookLink(localBookId, match.id);
+  return match.id;
 }
 
 /** Sync one local book's reading state. No-op when unlinked; re-entrant
@@ -155,29 +164,45 @@ function toSyncProgress(record: LocalProgressRecord): SyncProgressIn {
 
 async function doSync(localBookId: string): Promise<void> {
   if (!canSync()) return;
-  const links = await getLocalBookLinks();
-  const serverBookId = links[localBookId];
+  let serverBookId: string | null;
+  try {
+    // Unlinked books get a by-digest attempt here, so opening a book is
+    // always enough to (re)establish its link — no waiting for a full
+    // pass after the matching server book (re)appears.
+    serverBookId = await resolveLink(localBookId);
+  } catch (err) {
+    console.warn("readingSync: link lookup failed", err);
+    return;
+  }
   if (!serverBookId) return;
 
   const progress = await readLocalProgress(localBookId);
   const highlights = await readLocalHighlightRecords(localBookId);
+  const body = {
+    progress: progress && progress.cfi ? toSyncProgress(progress) : null,
+    highlights,
+  };
 
   let response: BookSyncResponse;
   try {
-    response = await booksApi.syncReadingState(serverBookId, {
-      progress: progress && progress.cfi ? toSyncProgress(progress) : null,
-      highlights,
-    });
+    response = await booksApi.syncReadingState(serverBookId, body);
   } catch (err) {
     const status = (err as { status?: number }).status;
-    if (status === 404 || status === 403) {
-      // The server book is gone or access was revoked. Unlink; the next
-      // full pass re-resolves by digest (self-healing for re-uploads).
-      await clearLocalBookLink(localBookId);
-    } else {
+    if (status !== 404 && status !== 403) {
       console.warn("readingSync: sync failed", err);
+      return;
     }
-    return;
+    // The linked server book is gone or access was revoked. Unlink, then
+    // re-resolve by digest right away — a deleted-and-re-uploaded book
+    // gets a new id, and this heals it in the same call.
+    await clearLocalBookLink(localBookId);
+    try {
+      const freshId = await resolveLink(localBookId);
+      if (!freshId || freshId === serverBookId) return;
+      response = await booksApi.syncReadingState(freshId, body);
+    } catch {
+      return; // Next trigger retries.
+    }
   }
 
   await applyHighlights(localBookId, response);
