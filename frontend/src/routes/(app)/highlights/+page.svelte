@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { booksApi } from "$lib/api/books";
+  import { beepubSync } from "$lib/reading/beepub";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
@@ -117,7 +118,7 @@
     // Optimistically remove, then delete immediately (no delayed undo).
     highlights = highlights.filter((h) => h.id !== hl.id);
     try {
-      await booksApi.deleteHighlight(hl.book_id, hl.id);
+      await beepubSync.deleteHighlight(hl.book_id, hl.id);
       toastStore.success(m.highlights_removed());
     } catch (e) {
       toastStore.error((e as Error).message);

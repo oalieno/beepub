@@ -821,7 +821,7 @@
           highlights = highlights.filter((h) => h.id !== hl.id);
           reader?.removeHighlightAnnotation(hl.cfi_range);
           try {
-            await booksApi.deleteHighlight(bookId, hl.id);
+            await beepubSync.deleteHighlight(bookId, hl.id);
           } catch (e) {
             toastStore.error((e as Error).message);
             highlights = prev;

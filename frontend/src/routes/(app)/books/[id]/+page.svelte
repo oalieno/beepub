@@ -3,6 +3,7 @@
   import { goto, afterNavigate } from "$app/navigation";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
+  import { beepubSync } from "$lib/reading/beepub";
   import { worksApi } from "$lib/api/works";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
@@ -201,8 +202,8 @@
             interaction = v;
           })
           .catch(() => {}),
-        booksApi
-          .getHighlights(bookId)
+        beepubSync
+          .listHighlights(bookId)
           .then((v) => {
             bookHighlights = v;
           })
@@ -929,7 +930,7 @@
               // Optimistic remove, then delete immediately (no delayed undo).
               bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
               try {
-                await booksApi.deleteHighlight(bookId, hl.id);
+                await beepubSync.deleteHighlight(bookId, hl.id);
                 toastStore.success(m.book_highlight_removed());
               } catch (e) {
                 toastStore.error((e as Error).message);
