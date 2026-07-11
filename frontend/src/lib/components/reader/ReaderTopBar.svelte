@@ -9,11 +9,14 @@
     title = "",
     percentage = null,
     darkMode = false,
+    backHref = null,
   }: {
     bookId?: string;
     title?: string;
     percentage?: number | null;
     darkMode?: boolean;
+    /** Overrides the back target (local books return to their shelf). */
+    backHref?: string | null;
   } = $props();
 </script>
 
@@ -29,7 +32,7 @@
         ? 'text-ink-400 hover:bg-ink-800'
         : 'text-muted-foreground hover:bg-secondary'}"
       onclick={() =>
-        goto(getIsOnline() ? `/books/${bookId}` : "/downloads", {
+        goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/downloads"), {
           replaceState: true,
         })}
       aria-label={m.reader_back_to_detail()}

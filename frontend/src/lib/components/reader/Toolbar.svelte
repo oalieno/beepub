@@ -28,6 +28,8 @@
     highlightCount = 0,
     illustrationCount = 0,
     offline = false,
+    backHref = null,
+    showAi = true,
     onprev,
     onnext,
     onthemeToggle,
@@ -49,6 +51,10 @@
     highlightCount?: number;
     illustrationCount?: number;
     offline?: boolean;
+    /** Overrides the back target (local books return to their shelf). */
+    backHref?: string | null;
+    /** AI actions are BeePub-server features; hidden for other backends. */
+    showAi?: boolean;
     onprev?: () => void;
     onnext?: () => void;
     onthemeToggle?: () => void;
@@ -78,7 +84,7 @@
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
     aria-label={m.reader_go_back()}
     onclick={() =>
-      goto(getIsOnline() ? `/books/${bookId}` : "/downloads", {
+      goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/downloads"), {
         replaceState: true,
       })}
   >
@@ -122,23 +128,25 @@
       {/if}
     </button>
 
-    <!-- Companion button -->
-    <button
-      class="p-1.5 rounded-md transition-colors {offline
-        ? 'opacity-40'
-        : btnClass(darkMode)}"
-      title={offline ? m.reader_ai_offline() : m.reader_ai_companion()}
-      aria-disabled={offline || undefined}
-      onclick={() => {
-        if (offline) {
-          toastStore.info(m.reader_ai_offline());
-          return;
-        }
-        oncompanion?.();
-      }}
-    >
-      <MessageCircle size={18} />
-    </button>
+    {#if showAi}
+      <!-- Companion button -->
+      <button
+        class="p-1.5 rounded-md transition-colors {offline
+          ? 'opacity-40'
+          : btnClass(darkMode)}"
+        title={offline ? m.reader_ai_offline() : m.reader_ai_companion()}
+        aria-disabled={offline || undefined}
+        onclick={() => {
+          if (offline) {
+            toastStore.info(m.reader_ai_offline());
+            return;
+          }
+          oncompanion?.();
+        }}
+      >
+        <MessageCircle size={18} />
+      </button>
+    {/if}
   {/if}
 
   <div

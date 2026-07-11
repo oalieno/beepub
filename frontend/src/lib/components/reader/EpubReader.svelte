@@ -2041,6 +2041,7 @@
       <HighlightMenu
         hasExisting={!!existingHighlight}
         {offline}
+        showAi={sync.kind === "beepub"}
         onhighlight={handleHighlight}
         onnote={handleNote}
         onremove={handleRemoveHighlight}

@@ -11,7 +11,10 @@
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
-  import { beepubSource, beepubSync } from "$lib/reading/beepub";
+  import { resolveReading } from "$lib/reading/resolve";
+  import type { BookSource } from "$lib/reading/source";
+  import type { SyncBackend } from "$lib/reading/sync";
+  import type { LocalBookEntry } from "$lib/services/localLibrary";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
@@ -41,6 +44,13 @@
   let bookId = $derived(page.params.id as string);
   // Jump target passed from the book detail page (highlight click)
   let initialCfi = $derived(page.url.searchParams.get("cfi"));
+
+  // Resolved per book id: local imports read and sync on-device, everything
+  // else goes through the BeePub server pair.
+  let source = $state<BookSource | null>(null);
+  let sync = $state<SyncBackend | null>(null);
+  let localEntry = $state<LocalBookEntry | null>(null);
+  let isBeepub = $derived(sync?.kind === "beepub");
 
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);
@@ -184,7 +194,7 @@
   let prevHtmlOverflow = "";
   let prevBodyOverflow = "";
 
-  onMount(() => {
+  onMount(async () => {
     prevHtmlOverflow = document.documentElement.style.overflow;
     prevBodyOverflow = document.body.style.overflow;
     document.documentElement.style.overflow = "hidden";
@@ -198,7 +208,23 @@
     if (savedSize) fontSize = parseInt(savedSize);
     if (savedLineHeight) lineHeight = parseFloat(savedLineHeight);
     if (savedMargin) pageMargin = parseInt(savedMargin);
+
+    const resolved = await resolveReading(bookId);
+    source = resolved.source;
+    sync = resolved.sync;
+    localEntry = resolved.localEntry;
+    if (localEntry) {
+      // Local imports carry their own display metadata; there is no server
+      // record to fetch it from.
+      title = localEntry.title;
+      hasDbTitle = true;
+      bookAuthors = localEntry.authors;
+    }
     ready = true;
+
+    // Server-side extras — reading status, AI features, display metadata —
+    // only exist for books the BeePub server knows about.
+    if (resolved.sync.kind !== "beepub") return;
 
     // Fetch AI feature status
     aiApi
@@ -396,6 +422,7 @@
   });
 
   function prefetchSeriesNeighbors() {
+    if (!isBeepub) return; // series live on the server
     if (seriesNeighbors || seriesFetchPromise) return;
     seriesFetchPromise = booksApi
       .getSeriesNeighbors(bookId)
@@ -580,6 +607,8 @@
       highlightCount={highlights.length}
       illustrationCount={illustrations.length}
       offline={!$isOnline}
+      backHref={localEntry ? "/local" : null}
+      showAi={isBeepub}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
       onthemeToggle={handleThemeToggle}
@@ -598,18 +627,24 @@
   </div>
 
   <!-- Mobile top bar (always visible) -->
-  <ReaderTopBar {bookId} {title} {percentage} {darkMode} />
+  <ReaderTopBar
+    {bookId}
+    {title}
+    {percentage}
+    {darkMode}
+    backHref={localEntry ? "/local" : null}
+  />
 
   <!-- md:pb reserves a sliver for the collapsed progress line so book text
        can never sit on it, even with the page margin set to minimum. -->
   <div class="flex-1 min-h-0 overflow-hidden relative md:pb-2.5">
-    {#if ready && !loadError}
+    {#if ready && source && sync && !loadError}
       {#key readerKey}
         <EpubReader
           bind:this={reader}
           {bookId}
-          source={beepubSource}
-          sync={beepubSync}
+          {source}
+          {sync}
           {initialCfi}
           {fontFamily}
           {fontSize}
@@ -689,7 +724,7 @@
             {m.common_retry()}
           </button>
           <a
-            href="/books/{bookId}"
+            href={localEntry ? "/local" : `/books/${bookId}`}
             class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
               ? 'text-ink-300 hover:bg-ink-800'
               : 'text-muted-foreground hover:bg-secondary'}"
@@ -826,7 +861,7 @@
           highlights = highlights.filter((h) => h.id !== hl.id);
           reader?.removeHighlightAnnotation(hl.cfi_range);
           try {
-            await beepubSync.deleteHighlight(bookId, hl.id);
+            await sync?.deleteHighlight(bookId, hl.id);
           } catch (e) {
             toastStore.error((e as Error).message);
             highlights = prev;
@@ -867,6 +902,7 @@
       {isImageBook}
       highlightCount={highlights.length}
       offline={!$isOnline}
+      showAi={isBeepub}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
       ontoc={() => toggleSidebar("toc")}

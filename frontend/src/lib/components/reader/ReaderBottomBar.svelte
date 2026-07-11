@@ -21,6 +21,7 @@
     isImageBook = false,
     highlightCount = 0,
     offline = false,
+    showAi = true,
     canSeek = false,
     onpeekreturn,
     onseek,
@@ -39,6 +40,8 @@
     isImageBook?: boolean;
     highlightCount?: number;
     offline?: boolean;
+    /** AI actions are BeePub-server features; hidden for other backends. */
+    showAi?: boolean;
     canSeek?: boolean;
     onpeekreturn?: () => void;
     onseek?: (percentage: number) => void;
@@ -170,23 +173,25 @@
         {/if}
       </button>
 
-      <button
-        class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {offline
-          ? 'opacity-25'
-          : actionBtnClass}"
-        onclick={() => {
-          if (offline) {
-            toastStore.info(m.reader_ai_offline());
-            return;
-          }
-          oncompanion?.();
-        }}
-        aria-label={m.reader_ai_companion()}
-        aria-disabled={offline || undefined}
-      >
-        <MessageCircle size={20} />
-        <span class="text-[10px]">{m.reader_ai_short()}</span>
-      </button>
+      {#if showAi}
+        <button
+          class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {offline
+            ? 'opacity-25'
+            : actionBtnClass}"
+          onclick={() => {
+            if (offline) {
+              toastStore.info(m.reader_ai_offline());
+              return;
+            }
+            oncompanion?.();
+          }}
+          aria-label={m.reader_ai_companion()}
+          aria-disabled={offline || undefined}
+        >
+          <MessageCircle size={20} />
+          <span class="text-[10px]">{m.reader_ai_short()}</span>
+        </button>
+      {/if}
     {/if}
 
     <button

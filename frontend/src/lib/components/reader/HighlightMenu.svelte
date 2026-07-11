@@ -15,6 +15,7 @@
   let {
     hasExisting = false,
     offline = false,
+    showAi = true,
     onhighlight,
     onnote,
     onremove,
@@ -26,6 +27,8 @@
   }: {
     hasExisting?: boolean;
     offline?: boolean;
+    /** AI actions are BeePub-server features; hidden for other backends. */
+    showAi?: boolean;
     onhighlight?: () => void;
     onnote?: () => void;
     onremove?: () => void;
@@ -79,41 +82,43 @@
     </button>
   {/if}
 
-  <div class="w-px h-4 bg-border"></div>
-  <button
-    class="p-0.5 transition-colors transform {offline
-      ? 'text-muted-foreground/40 cursor-not-allowed'
-      : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
-    title={offline ? m.reader_ai_offline() : m.highlight_action_illustrate()}
-    aria-disabled={offline || undefined}
-    onclick={() => {
-      if (offline) {
-        toastStore.info(m.reader_ai_offline());
-        return;
-      }
-      onillustrate?.();
-    }}
-  >
-    <Sparkles size={14} />
-  </button>
+  {#if showAi}
+    <div class="w-px h-4 bg-border"></div>
+    <button
+      class="p-0.5 transition-colors transform {offline
+        ? 'text-muted-foreground/40 cursor-not-allowed'
+        : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
+      title={offline ? m.reader_ai_offline() : m.highlight_action_illustrate()}
+      aria-disabled={offline || undefined}
+      onclick={() => {
+        if (offline) {
+          toastStore.info(m.reader_ai_offline());
+          return;
+        }
+        onillustrate?.();
+      }}
+    >
+      <Sparkles size={14} />
+    </button>
 
-  <div class="w-px h-4 bg-border"></div>
-  <button
-    class="p-0.5 transition-colors transform {offline
-      ? 'text-muted-foreground/40 cursor-not-allowed'
-      : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
-    title={offline ? m.reader_ai_offline() : m.highlight_action_companion()}
-    aria-disabled={offline || undefined}
-    onclick={() => {
-      if (offline) {
-        toastStore.info(m.reader_ai_offline());
-        return;
-      }
-      oncompanion?.();
-    }}
-  >
-    <MessageCircle size={14} />
-  </button>
+    <div class="w-px h-4 bg-border"></div>
+    <button
+      class="p-0.5 transition-colors transform {offline
+        ? 'text-muted-foreground/40 cursor-not-allowed'
+        : 'text-muted-foreground hover:text-foreground hover:scale-110'}"
+      title={offline ? m.reader_ai_offline() : m.highlight_action_companion()}
+      aria-disabled={offline || undefined}
+      onclick={() => {
+        if (offline) {
+          toastStore.info(m.reader_ai_offline());
+          return;
+        }
+        oncompanion?.();
+      }}
+    >
+      <MessageCircle size={14} />
+    </button>
+  {/if}
 
   {#if hasExisting}
     <div class="w-px h-4 bg-border"></div>
