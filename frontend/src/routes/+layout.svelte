@@ -52,10 +52,12 @@
   });
 
   // Serverless local mode only works on pages that don't need a server:
-  // the shelf, setup (to connect later), and the reader for local books.
+  // the shelf, OPDS catalogs, setup (to connect later), and the reader for
+  // local books.
   function isLocalPath(path: string): boolean {
     return (
       path.startsWith("/local") ||
+      path.startsWith("/catalogs") ||
       path === "/setup" ||
       /^\/books\/[^/]+\/read/.test(path)
     );
