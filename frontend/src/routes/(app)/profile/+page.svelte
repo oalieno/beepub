@@ -14,6 +14,7 @@
     Highlighter,
     Settings,
     Download,
+    HardDrive,
     Dices,
     LogOut,
     ChevronRight,
@@ -166,6 +167,12 @@
             href: "/downloads",
             label: m.nav_downloads(),
             icon: Download,
+            requiresOnline: false,
+          } satisfies ProfileLink,
+          {
+            href: "/local",
+            label: m.nav_local_books(),
+            icon: HardDrive,
             requiresOnline: false,
           } satisfies ProfileLink,
         ]

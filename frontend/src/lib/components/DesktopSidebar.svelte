@@ -16,6 +16,7 @@
     Search as SearchIcon,
     Dices,
     Download,
+    HardDrive,
     PanelLeftClose,
     PanelLeftOpen,
     Settings,
@@ -82,6 +83,13 @@
             label: m.nav_downloads(),
             icon: Download,
             active: page.url.pathname.startsWith("/downloads"),
+            requiresOnline: false,
+          },
+          {
+            href: "/local",
+            label: m.nav_local_books(),
+            icon: HardDrive,
+            active: page.url.pathname.startsWith("/local"),
             requiresOnline: false,
           },
         ]

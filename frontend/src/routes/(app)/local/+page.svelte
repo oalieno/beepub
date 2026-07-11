@@ -1,0 +1,233 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import { isNative } from "$lib/platform";
+  import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
+  import { Button } from "$lib/components/ui/button";
+  import { BookOpen, Trash2, HardDrive, Plus, Loader2 } from "@lucide/svelte";
+  import { BookGridSkeleton } from "$lib/components/skeletons";
+  import * as m from "$lib/paraglide/messages.js";
+  import type { LocalBookEntry } from "$lib/services/localLibrary";
+
+  // Cover URIs are re-derived per mount, so keep them beside the entry
+  // instead of mutating the manifest shape.
+  type ShelfEntry = LocalBookEntry & { coverSrc: string | null };
+
+  let entries = $state<ShelfEntry[]>([]);
+  let totalSize = $state(0);
+  let loading = $state(true);
+  let importing = $state(false);
+  let fileInput = $state<HTMLInputElement | null>(null);
+
+  function formatSize(bytes: number): string {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
+  async function withCover(entry: LocalBookEntry): Promise<ShelfEntry> {
+    const { getLocalCoverSrc } = await import("$lib/services/localLibrary");
+    return { ...entry, coverSrc: await getLocalCoverSrc(entry) };
+  }
+
+  async function loadEntries() {
+    if (!isNative()) {
+      loading = false;
+      return;
+    }
+    try {
+      const { listLocalBooks, getLocalStorageUsage } =
+        await import("$lib/services/localLibrary");
+      const books = await listLocalBooks();
+      entries = await Promise.all(books.map(withCover));
+      totalSize = await getLocalStorageUsage();
+    } catch {
+      // ignore
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function handleImport(e: Event) {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    importing = true;
+    const { importLocalBook, DuplicateBookError, InvalidEpubError } =
+      await import("$lib/services/localLibrary");
+    try {
+      const entry = await importLocalBook(file);
+      entries = [await withCover(entry), ...entries];
+      totalSize += entry.fileSize;
+      toastStore.success(m.local_import_success({ title: entry.title }));
+    } catch (err) {
+      if (err instanceof DuplicateBookError) {
+        toastStore.info(
+          m.local_import_duplicate({ title: err.existing.title }),
+        );
+      } else if (err instanceof InvalidEpubError) {
+        toastStore.error(m.local_import_invalid());
+      } else {
+        toastStore.error((err as Error).message);
+      }
+    } finally {
+      importing = false;
+      // Re-picking the same file must fire change again.
+      input.value = "";
+    }
+  }
+
+  async function handleDelete(e: MouseEvent, entry: ShelfEntry) {
+    e.stopPropagation();
+    e.preventDefault();
+    if (
+      !(await confirmDialog({
+        title: m.local_delete_confirm({ title: entry.title }),
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      const { removeLocalBook } = await import("$lib/services/localLibrary");
+      await removeLocalBook(entry.id);
+      entries = entries.filter((b) => b.id !== entry.id);
+      totalSize = entries.reduce((sum, b) => sum + b.fileSize, 0);
+      toastStore.success(m.local_deleted());
+    } catch (err) {
+      toastStore.error((err as Error).message);
+    }
+  }
+
+  onMount(loadEntries);
+</script>
+
+<svelte:head>
+  <title>{m.local_page_title()}</title>
+</svelte:head>
+
+<div class="px-6 sm:px-8 py-6">
+  {#if loading}
+    <BookGridSkeleton count={6} />
+  {:else if !isNative()}
+    <div class="bg-card card-soft rounded-2xl p-12 text-center">
+      <HardDrive class="mx-auto mb-4 text-muted-foreground/30" size={48} />
+      <p class="text-muted-foreground text-lg">
+        {m.local_native_only()}
+      </p>
+    </div>
+  {:else}
+    <input
+      bind:this={fileInput}
+      type="file"
+      accept=".epub,application/epub+zip"
+      class="hidden"
+      onchange={handleImport}
+    />
+
+    <div class="flex items-center justify-between gap-3 mb-6">
+      <p class="text-sm text-muted-foreground">
+        {#if entries.length > 0}
+          {formatSize(totalSize)}
+        {/if}
+      </p>
+      <Button size="sm" disabled={importing} onclick={() => fileInput?.click()}>
+        {#if importing}
+          <Loader2 class="animate-spin" size={16} />
+          {m.local_importing()}
+        {:else}
+          <Plus size={16} />
+          {m.local_import()}
+        {/if}
+      </Button>
+    </div>
+
+    {#if entries.length === 0}
+      <div class="flex flex-col items-center justify-center py-24 text-center">
+        <div class="mb-4 p-3 bg-primary/10 rounded-xl">
+          <HardDrive class="text-primary/50" size={28} />
+        </div>
+        <p class="text-foreground text-lg font-medium mb-2">
+          {m.local_empty()}
+        </p>
+        <p class="text-muted-foreground text-sm max-w-xs mb-6">
+          {m.local_empty_subtitle()}
+        </p>
+      </div>
+    {:else}
+      <div
+        class="grid gap-4"
+        style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
+      >
+        {#each entries as entry (entry.id)}
+          <div
+            role="button"
+            tabindex="0"
+            class="text-left w-full group cursor-pointer"
+            style="-webkit-tap-highlight-color: transparent;"
+            onclick={() => goto(`/books/${entry.id}/read`)}
+            onkeydown={(e) =>
+              e.key === "Enter" && goto(`/books/${entry.id}/read`)}
+          >
+            <!-- Cover -->
+            <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
+              <div
+                class="relative inline-flex book-shadow-hover transition-all duration-300"
+              >
+                {#if entry.coverSrc}
+                  <img
+                    src={entry.coverSrc}
+                    alt={entry.title}
+                    class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow"
+                    loading="lazy"
+                  />
+                {:else}
+                  <div
+                    class="h-56 sm:h-64 aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
+                  >
+                    <BookOpen class="text-muted-foreground/30" size={36} />
+                    <span
+                      class="text-muted-foreground/60 text-xs text-center line-clamp-3"
+                      >{entry.title}</span
+                    >
+                  </div>
+                {/if}
+
+                <!-- Delete button overlay -->
+                <button
+                  class="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 text-white/80 hover:bg-destructive hover:text-white transition-all duration-200
+                    opacity-70 can-hover:opacity-0 can-hover:group-hover:opacity-100"
+                  style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
+                  title={m.local_delete()}
+                  onclick={(e) => handleDelete(e, entry)}
+                >
+                  <Trash2 size={14} />
+                </button>
+
+                <!-- File size badge -->
+                <span
+                  class="absolute bottom-1.5 left-1.5 text-[10px] font-medium bg-black/50 text-white/90 px-1.5 py-0.5 rounded-full"
+                >
+                  {formatSize(entry.fileSize)}
+                </span>
+              </div>
+            </div>
+
+            <!-- Info below cover -->
+            <div class="min-h-[3rem]">
+              <h3
+                class="font-medium text-sm line-clamp-2 leading-snug text-foreground group-hover:text-primary transition-colors"
+              >
+                {entry.title}
+              </h3>
+              {#if entry.authors?.length}
+                <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
+                  {entry.authors.join(", ")}
+                </p>
+              {/if}
+            </div>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  {/if}
+</div>
