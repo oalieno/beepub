@@ -247,6 +247,12 @@
     xpointer: string | null;
   } | null = null;
   let kosyncAutoJump = false;
+  // The CFI the restore targeted. After a device push the STORED percentage
+  // is the device's (the bridge overwrites it — that's how the home screen
+  // shows e-reader progress), so comparing the marker against
+  // currentPercentage before the canonical recompute lands compares the
+  // device position against itself and silently drops the prompt.
+  let kosyncBaselineCfi: string | null = null;
   // Set on any user navigation. When locations finish late (large books)
   // the kosync auto-jump downgrades to an offer instead of yanking the
   // reader away from a position they have already started reading at.
@@ -553,7 +559,24 @@
       ) {
         onkosyncposition?.({ ...marker, autoJumped: true });
       }
-    } else if (Math.abs(marker.percentage - currentPercentage) > 1) {
+      return;
+    }
+    // Compare against where the reader actually sits, derived from the CFI.
+    // currentPercentage can still hold the bridge-written device percentage
+    // here — the canonical recompute races locations loading from cache
+    // (archived books reliably lose it) — and marker-vs-itself is always
+    // "close enough", which ate the prompt.
+    let herePct = currentPercentage;
+    const anchor = currentCfi || kosyncBaselineCfi;
+    if (anchor) {
+      try {
+        const p = epubBook?.locations?.percentageFromCfi(anchor);
+        if (typeof p === "number") herePct = clampPercentage(p * 100);
+      } catch {
+        // Keep the running percentage as the fallback baseline.
+      }
+    }
+    if (Math.abs(marker.percentage - herePct) > 1) {
       onkosyncposition?.({ ...marker, autoJumped: false });
     }
   }
@@ -1245,6 +1268,7 @@
         xpointer: devicePos.xpointer ?? null,
       };
       kosyncAutoJump = !savedProgress?.cfi;
+      kosyncBaselineCfi = savedProgress?.cfi ?? null;
     }
     try {
       if (initialCfi) {
