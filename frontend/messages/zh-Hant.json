@@ -815,6 +815,11 @@
   "catalogs_delete": "刪除目錄",
   "catalogs_delete_confirm": "移除「{name}」？已下載的書仍會留在本地書庫。",
   "catalogs_deleted": "已移除目錄",
+  "catalogs_search_placeholder": "搜尋這個目錄",
+  "catalogs_load_more": "載入更多",
+  "catalogs_feed_error": "無法載入這個目錄",
+  "catalogs_auth_error": "帳號或密碼被這個目錄拒絕",
+  "catalogs_feed_empty": "這裡沒有內容",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "這個書架還沒有書",

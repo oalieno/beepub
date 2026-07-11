@@ -815,6 +815,11 @@
   "catalogs_delete": "Delete catalog",
   "catalogs_delete_confirm": "Remove \"{name}\"? Downloaded books stay in your local library.",
   "catalogs_deleted": "Catalog removed",
+  "catalogs_search_placeholder": "Search this catalog",
+  "catalogs_load_more": "Load more",
+  "catalogs_feed_error": "Couldn't load this catalog",
+  "catalogs_auth_error": "This catalog rejected the credentials",
+  "catalogs_feed_empty": "Nothing here",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "No books in this shelf yet",
