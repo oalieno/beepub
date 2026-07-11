@@ -258,6 +258,37 @@ export interface ProgressOut {
   kosync: KosyncMarkerOut | null;
 }
 
+// --- Device sync (local books ↔ server) ---
+
+/** Highlight as the sync endpoint speaks it: HighlightOut plus the
+ *  tombstone; timestamps are client-authoritative on the way in. */
+export type HighlightSyncOut = HighlightOut & { deleted_at: string | null };
+
+export interface SyncProgressIn {
+  cfi: string;
+  percentage?: number | null;
+  current_page?: number;
+  font_size?: number;
+  section_index?: number;
+  section_page?: number;
+  section_page_counts?: number[];
+  total_pages?: number;
+  xpointer?: string | null;
+  last_read_at: string;
+}
+
+export interface BookSyncRequest {
+  progress: SyncProgressIn | null;
+  highlights: HighlightSyncOut[];
+}
+
+export interface BookSyncResponse {
+  /** Post-merge reading_progress dict, verbatim (carries the kosync
+   *  device marker when the server side won). */
+  progress: (ProgressOut & { xpointer?: string }) | null;
+  highlights: HighlightSyncOut[];
+}
+
 export type ReadingStatus =
   | "want_to_read"
   | "currently_reading"

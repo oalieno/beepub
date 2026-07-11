@@ -3,6 +3,8 @@ import { feedQuery, type FeedParams } from "./libraries";
 import type {
   BookOut,
   BookReport,
+  BookSyncRequest,
+  BookSyncResponse,
   BookWithInteractionOut,
   CompanionConversationOut,
   CompanionConversationSummary,
@@ -189,6 +191,16 @@ export const booksApi = {
 
   deleteHighlight: (bookId: string, highlightId: string) =>
     del(`/books/${bookId}/highlights/${highlightId}`),
+
+  // Device sync: resolve local files to server books, then merge reading
+  // state (see services/readingSync.ts).
+  lookupByDigest: (digests: string[]) =>
+    post(`/books/by-digest`, { digests }) as Promise<{
+      matches: Record<string, { id: string; title: string | null }>;
+    }>,
+
+  syncReadingState: (bookId: string, body: BookSyncRequest) =>
+    post(`/books/${bookId}/sync`, body) as Promise<BookSyncResponse>,
 
   getAllHighlights: (limit = 200, offset = 0) =>
     get(`/highlights?limit=${limit}&offset=${offset}`) as Promise<{

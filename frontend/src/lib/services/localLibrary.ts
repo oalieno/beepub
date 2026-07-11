@@ -12,10 +12,12 @@
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
+import { getServerUrl } from "$lib/api/client";
 import { computePartialMd5 } from "$lib/services/partialMd5";
 import { uint8ToBase64 } from "$lib/services/offline";
 
 const MANIFEST_KEY = "local-library";
+const LINKS_KEY_PREFIX = "local-links";
 
 // Filesystem.appendFile concatenates base64 strings, so each chunk must be
 // a multiple of 3 bytes — otherwise per-chunk padding corrupts the file.
@@ -84,6 +86,75 @@ export async function getLocalBook(
 export async function getLocalStorageUsage(): Promise<number> {
   const manifest = await getManifest();
   return manifest.reduce((sum, e) => sum + e.fileSize, 0);
+}
+
+// --- Server links ---
+//
+// A link ties a local book to a matching server book (same file, by
+// digest). Links are scoped per server URL — a server book id only means
+// anything on its own server — mirroring the offline manifest's scoping.
+// The manifest itself stays server-free.
+
+function linksKey(): string | null {
+  const server = getServerUrl().replace(/\/+$/, "");
+  return server ? `${LINKS_KEY_PREFIX}:${server}` : null;
+}
+
+/** Local-book-id → server-book-id map for the configured server. */
+export async function getLocalBookLinks(): Promise<Record<string, string>> {
+  const key = linksKey();
+  if (!key) return {};
+  const { value } = await Preferences.get({ key });
+  if (!value) return {};
+  try {
+    return JSON.parse(value) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+export async function setLocalBookLink(
+  localBookId: string,
+  serverBookId: string,
+): Promise<void> {
+  const key = linksKey();
+  if (!key) return;
+  const links = await getLocalBookLinks();
+  links[localBookId] = serverBookId;
+  await Preferences.set({ key, value: JSON.stringify(links) });
+}
+
+export async function clearLocalBookLink(localBookId: string): Promise<void> {
+  const key = linksKey();
+  if (!key) return;
+  const links = await getLocalBookLinks();
+  if (!(localBookId in links)) return;
+  delete links[localBookId];
+  await Preferences.set({ key, value: JSON.stringify(links) });
+}
+
+/** Drop a deleted book's links across every server, not just the current
+ *  one — the local id is gone for good. */
+async function clearLinksEverywhere(localBookId: string): Promise<void> {
+  try {
+    const { keys } = await Preferences.keys();
+    for (const key of keys) {
+      if (!key.startsWith(`${LINKS_KEY_PREFIX}:`)) continue;
+      const { value } = await Preferences.get({ key });
+      if (!value) continue;
+      let links: Record<string, string>;
+      try {
+        links = JSON.parse(value) as Record<string, string>;
+      } catch {
+        continue;
+      }
+      if (!(localBookId in links)) continue;
+      delete links[localBookId];
+      await Preferences.set({ key, value: JSON.stringify(links) });
+    }
+  } catch {
+    // Best-effort cleanup; a stale link entry is harmless.
+  }
 }
 
 interface ParsedEpub {
@@ -225,6 +296,7 @@ export async function removeLocalBook(bookId: string): Promise<void> {
   await saveManifest(manifest.filter((e) => e.id !== bookId));
   await Preferences.remove({ key: localProgressKey(bookId) });
   await Preferences.remove({ key: localHighlightsKey(bookId) });
+  await clearLinksEverywhere(bookId);
 }
 
 /**
