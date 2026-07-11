@@ -90,8 +90,10 @@ async def test_progress_roundtrip_and_bridge(admin_client):
     assert progress["kosync"]["percentage"] == pytest.approx(42.69)
     assert progress["kosync"]["device"] == "kobo"
     assert progress["kosync"]["synced_at"]
-    # DocFragment[7] = 1-based spine item → 0-based section hint 6.
+    # DocFragment[7] = 1-based spine item → 0-based section hint 6, and the
+    # raw xpointer rides along for the reader's paragraph-level resolution.
     assert progress["kosync"]["section_index"] == 6
+    assert progress["kosync"]["xpointer"] == payload["progress"]
 
 
 async def test_unknown_document_is_stored_but_not_bridged(admin_client):

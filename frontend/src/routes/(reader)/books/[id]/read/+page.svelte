@@ -346,6 +346,7 @@
     percentage: number;
     device: string | null;
     sectionIndex: number | null;
+    xpointer: string | null;
     autoJumped: boolean;
   }) {
     const device = detail.device || "KOReader";
@@ -365,7 +366,11 @@
       cancelLabel: m.reader_kosync_dialog_stay(),
     });
     if (jump)
-      reader?.displayKosyncPosition(detail.percentage, detail.sectionIndex);
+      reader?.displayKosyncPosition(
+        detail.percentage,
+        detail.sectionIndex,
+        detail.xpointer,
+      );
   }
 
   let reachedEnd = $state(false);

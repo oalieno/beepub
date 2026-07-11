@@ -21,6 +21,7 @@
     sectionIndexFromCfi,
     verifyHighlightAnchors,
   } from "./highlight-anchor";
+  import { parseKosyncXpointer, resolveXpointerRange } from "./kosync-xpointer";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -92,6 +93,7 @@
       percentage: number;
       device: string | null;
       sectionIndex: number | null;
+      xpointer: string | null;
       autoJumped: boolean;
     }) => void;
     onrestorefallback?: (percentage: number) => void;
@@ -231,6 +233,7 @@
     percentage: number;
     device: string | null;
     sectionIndex: number | null;
+    xpointer: string | null;
   } | null = null;
   let kosyncAutoJump = false;
   // Set on any user navigation. When locations finish late (large books)
@@ -530,7 +533,13 @@
     const marker = kosyncMarker;
     kosyncMarker = null;
     if (kosyncAutoJump && !userNavigated) {
-      if (await displayKosyncPosition(marker.percentage, marker.sectionIndex)) {
+      if (
+        await displayKosyncPosition(
+          marker.percentage,
+          marker.sectionIndex,
+          marker.xpointer,
+        )
+      ) {
         onkosyncposition?.({ ...marker, autoJumped: true });
       }
     } else if (Math.abs(marker.percentage - currentPercentage) > 1) {
@@ -539,16 +548,30 @@
   }
 
   /**
-   * Jump to an e-reader position: global percentage refined by the chapter
-   * hint parsed from the device xpointer. When the percentage-derived CFI
-   * disagrees with the hint (renderers paginate differently, especially
-   * image-heavy books), the chapter wins — landing at the right section
-   * start beats a wrong-section guess.
+   * Jump to an e-reader position, best anchor first:
+   * 1. Walk the device xpointer through the section DOM — paragraph-level,
+   *    immune to the renderers' diverging percentage scales.
+   * 2. Percentage-derived CFI, but only when it lands in the hinted chapter.
+   * 3. The hinted chapter's start — a right-chapter landing beats a
+   *    wrong-chapter guess.
+   * 4. Raw percentage (no usable hint at all).
    */
   export async function displayKosyncPosition(
     pct: number,
     sectionIndex: number | null,
+    xpointer: string | null = null,
   ): Promise<boolean> {
+    if (!isImageBook && xpointer && epubBook) {
+      try {
+        const cfi = await xpointerToCfi(xpointer);
+        if (cfi) {
+          await rendition?.display(cfi);
+          return true;
+        }
+      } catch {
+        // Best-effort — fall through to the coarser anchors.
+      }
+    }
     if (
       sectionIndex != null &&
       !isImageBook &&
@@ -568,6 +591,20 @@
       }
     }
     return displayPercentage(pct);
+  }
+
+  /** Resolve a device xpointer to a CFI via the section document. */
+  async function xpointerToCfi(xpointer: string): Promise<string | null> {
+    const parsed = parseKosyncXpointer(xpointer);
+    if (!parsed) return null;
+    const section = epubBook?.spine?.get(parsed.sectionIndex);
+    if (!section) return null;
+    await section.load(epubBook.load.bind(epubBook));
+    const doc: Document | null = section.document ?? null;
+    if (!doc) return null;
+    const range = resolveXpointerRange(doc, parsed);
+    if (!range) return null;
+    return section.cfiFromRange(range) ?? null;
   }
 
   function doFindActiveTocHref(sectionIndex: number): string {
@@ -1167,6 +1204,7 @@
         percentage: devicePos.percentage,
         device: devicePos.device ?? null,
         sectionIndex: devicePos.sectionIndex ?? null,
+        xpointer: devicePos.xpointer ?? null,
       };
       kosyncAutoJump = !savedProgress?.cfi;
     }

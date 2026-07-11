@@ -38,6 +38,9 @@ class KosyncMarkerOut(BaseModel):
     synced_at: str | None = None
     # Chapter hint parsed from the device xpointer (DocFragment[N] → N-1).
     section_index: int | None = None
+    # Raw device xpointer (present only when it parsed as an EPUB path):
+    # the reader walks it through the section DOM for a paragraph-level jump.
+    xpointer: str | None = None
 
 
 class ProgressOut(BaseModel):

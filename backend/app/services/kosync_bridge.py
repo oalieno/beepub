@@ -55,6 +55,7 @@ async def bridge_kosync_percentage(
     percentage: float,
     device: str | None = None,
     section_index: int | None = None,
+    xpointer: str | None = None,
 ) -> None:
     """Upsert the interaction's progress percentage (kosync scale 0–1)."""
     interaction = (
@@ -85,6 +86,10 @@ async def bridge_kosync_percentage(
         # land on the right section even when percentage scales diverge
         # between renderers (image-heavy books).
         "section_index": section_index,
+        # The raw device xpointer, kept only when it parsed as an EPUB path
+        # (section_index found): the web reader walks it through the section
+        # DOM for a paragraph-level jump, degrading to the chapter hint.
+        "xpointer": xpointer if section_index is not None else None,
     }
     interaction.reading_progress = reading_progress
 
@@ -142,6 +147,7 @@ async def retro_bridge_document(
             record.percentage,
             device=record.device,
             section_index=section_hint_from_xpointer(record.progress),
+            xpointer=record.progress,
         )
         bridged += 1
     return bridged

@@ -239,6 +239,9 @@ export interface KosyncMarkerOut {
   percentage: number | null;
   device: string | null;
   section_index?: number | null;
+  // Raw device xpointer (when it parsed as an EPUB path) — resolved
+  // through the section DOM for a paragraph-level jump.
+  xpointer?: string | null;
   synced_at: string | null;
 }
 

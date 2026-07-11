@@ -138,6 +138,7 @@ async def _bridge_percentage_to_book(
     percentage: float,
     device: str | None = None,
     section_index: int | None = None,
+    xpointer: str | None = None,
 ) -> None:
     """Reflect e-reader progress in BeePub's own reading progress.
 
@@ -147,7 +148,13 @@ async def _bridge_percentage_to_book(
     if book_id is None:
         return
     await bridge_kosync_percentage(
-        db, user.id, book_id, percentage, device=device, section_index=section_index
+        db,
+        user.id,
+        book_id,
+        percentage,
+        device=device,
+        section_index=section_index,
+        xpointer=xpointer,
     )
 
 
@@ -182,6 +189,7 @@ async def kosync_update_progress(
             payload.percentage,
             payload.device,
             section_index=section_hint_from_xpointer(payload.progress),
+            xpointer=payload.progress,
         )
 
     await db.commit()

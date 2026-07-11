@@ -104,6 +104,7 @@ class BeepubSyncBackend implements SyncBackend {
             percentage: p.kosync.percentage,
             device: p.kosync.device,
             sectionIndex: p.kosync.section_index ?? null,
+            xpointer: p.kosync.xpointer ?? null,
           }
         : null,
     };

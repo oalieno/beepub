@@ -13,6 +13,8 @@ export interface DevicePosition {
   percentage: number | null;
   device: string | null;
   sectionIndex: number | null;
+  /** Raw device xpointer for paragraph-level resolution, when available. */
+  xpointer: string | null;
 }
 
 export interface ProgressState {
