@@ -11,6 +11,7 @@
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
+  import { beepubSource } from "$lib/reading/beepub";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
@@ -602,6 +603,7 @@
         <EpubReader
           bind:this={reader}
           {bookId}
+          source={beepubSource}
           {initialCfi}
           {fontFamily}
           {fontSize}

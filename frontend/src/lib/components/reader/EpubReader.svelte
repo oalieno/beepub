@@ -2,13 +2,12 @@
   import { onMount, onDestroy } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { apiBase, getAuthHeader } from "$lib/api/client";
-  import { isNative } from "$lib/platform";
   import {
     getCachedLocations,
     setCachedLocations,
   } from "$lib/services/locationsCache";
   import { toastStore } from "$lib/stores/toast";
-  import { isBookDownloaded, readLocalBook } from "$lib/services/offline";
+  import type { BookSource } from "$lib/reading/source";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
   import ImageViewer from "./ImageViewer.svelte";
@@ -26,6 +25,7 @@
 
   let {
     bookId,
+    source,
     initialCfi = null,
     fontFamily = "serif",
     fontSize = 16,
@@ -57,6 +57,8 @@
     onpeekchange,
   }: {
     bookId: string;
+    /** Where the book's bytes come from (beepub server, later local/OPDS). */
+    source: BookSource;
     initialCfi?: string | null;
     fontFamily?: string;
     fontSize?: number;
@@ -208,6 +210,9 @@
   let totalPages = 0;
   let currentPercentage = 0;
   let sectionPageCounts: number[] = [];
+  // Fresh-auth-header function from the source's stream payload; null for
+  // byte-loaded books or unauthenticated streams.
+  let bookAuthHeader: (() => Record<string, string>) | null = null;
   let lastLocation: any = null;
   let locationsGenerated = false;
   let generatingLocations = false;
@@ -406,9 +411,9 @@
       let shared: { fingerprint: string; locations: string } | null = null;
       if (!(cached && cached.fingerprint === fingerprint) && !offline) {
         try {
-          shared = await booksApi.getLocations(bookId);
+          shared = (await source.getSharedLocations?.(bookId)) ?? null;
         } catch {
-          // Server cache is best-effort; fall through to generating.
+          // Shared cache is best-effort; fall through to generating.
         }
       }
       if (cached && cached.fingerprint === fingerprint) {
@@ -425,9 +430,9 @@
         const serialized = epubBook.locations.save();
         setCachedLocations(bookId, fingerprint, serialized);
         if (!offline) {
-          booksApi
-            .putLocations(bookId, fingerprint, serialized)
-            .catch(() => {});
+          source
+            .putSharedLocations?.(bookId, fingerprint, serialized)
+            ?.catch(() => {});
         }
       }
       locationsGenerated = true;
@@ -482,7 +487,7 @@
       while (next < urls.length) {
         const url = urls[next++]!;
         try {
-          const res = await fetch(url, { headers: getAuthHeader() });
+          const res = await fetch(url, { headers: bookAuthHeader?.() ?? {} });
           // Consume the body so the response is fully received and cached.
           await res.arrayBuffer();
         } catch {
@@ -577,38 +582,29 @@
   async function loadBook() {
     const Epub = (await import("$lib/epubjs/epub.js")).default;
 
-    // Check for offline copy first (native only)
-    let localArrayBuffer: ArrayBuffer | null = null;
-    if (isNative()) {
-      try {
-        if (await isBookDownloaded(bookId)) {
-          localArrayBuffer = await readLocalBook(bookId);
-        }
-      } catch {
-        // Fall through to online mode
-      }
-    }
+    const payload = await source.openBook(bookId);
 
-    if (localArrayBuffer) {
-      // Offline: load from local ArrayBuffer
-      epubBook = Epub(localArrayBuffer, {});
+    if (payload.kind === "bytes") {
+      // Whole file in hand (native downloaded copy, later: local library)
+      epubBook = Epub(payload.data, {});
     } else {
-      // Online: stream page-by-page from server
-      const hasAuth = Object.keys(getAuthHeader()).length > 0;
+      // Stream resource-by-resource from the source's root URL
+      bookAuthHeader = payload.authHeader;
 
-      // In native mode, epub.js needs auth headers on every XHR request
-      // (chapter HTML, OPF, images, CSS). The epub.js fork's substituteAsync
-      // mechanism fetches images via XHR and replaces URLs with blob: URIs
-      // before DOM injection (see docs/debug/023-ios-manga-lazy-image-loading.md).
-      // We read getAuthHeader() fresh on each call so that if the access
-      // token is refreshed mid-session, subsequent XHR calls pick up the
-      // new token automatically.
+      // When auth headers are needed (native mode), epub.js needs them on
+      // every XHR request (chapter HTML, OPF, images, CSS). The epub.js
+      // fork's substituteAsync mechanism fetches images via XHR and
+      // replaces URLs with blob: URIs before DOM injection (see
+      // docs/debug/023-ios-manga-lazy-image-loading.md). authHeader is a
+      // function so that if the access token is refreshed mid-session,
+      // subsequent XHR calls pick up the new token automatically.
       let nativeOpts = {};
-      if (hasAuth) {
+      const authHeader = payload.authHeader;
+      if (authHeader) {
         const defaultRequest = (await import("$lib/epubjs/utils/request"))
           .default;
         nativeOpts = {
-          requestHeaders: getAuthHeader(),
+          requestHeaders: authHeader(),
           replacements: "blobUrl",
           requestMethod: (
             url: string,
@@ -617,14 +613,14 @@
             headers: Record<string, string>,
           ) => {
             return defaultRequest(url, type, withCredentials, {
-              ...getAuthHeader(),
+              ...authHeader(),
               ...(headers || {}),
             });
           },
         };
       }
 
-      epubBook = Epub(`${apiBase()}/books/${bookId}/content/`, {
+      epubBook = Epub(payload.url, {
         openAs: "directory",
         ...nativeOpts,
       });
