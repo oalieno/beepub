@@ -1101,18 +1101,21 @@
 
     // Load highlights
     try {
-      highlights = await booksApi.getHighlights(bookId);
+      highlights = await sync.listHighlights(bookId);
       onhighlightschange?.(highlights);
     } catch {
       // ignore
     }
 
-    // Load illustrations
-    try {
-      illustrations = await booksApi.getIllustrations(bookId);
-      onillustrationschange?.(illustrations);
-    } catch {
-      // ignore
+    // Load illustrations — a BeePub-exclusive AI feature, deliberately not
+    // part of SyncBackend; other backends simply never have them.
+    if (sync.kind === "beepub") {
+      try {
+        illustrations = await booksApi.getIllustrations(bookId);
+        onillustrationschange?.(illustrations);
+      } catch {
+        // ignore
+      }
     }
 
     // Load saved progress & display. The SyncBackend speaks Locators; map
@@ -1530,7 +1533,9 @@
         h.section_index = heal.sectionIndex;
         addHighlightAnnotation(heal.cfi, h.color);
         if (!offline) {
-          booksApi
+          // Silent by design: the writeback can 404 when the highlight was
+          // deleted (tombstoned) on another device mid-heal.
+          sync
             .updateHighlight(bookId, heal.id, {
               cfi_range: heal.cfi,
               section_index: heal.sectionIndex,
@@ -1825,7 +1830,7 @@
     if (!selectedCfi || !selectedText) return null;
 
     try {
-      const created = await booksApi.createHighlight(bookId, {
+      const created = await sync.createHighlight(bookId, {
         cfi_range: selectedCfi,
         text: selectedText,
         color: "yellow",
@@ -1867,7 +1872,7 @@
     if (!target) return;
     try {
       // Empty string clears the note (backend excludes only None).
-      const updated = await booksApi.updateHighlight(bookId, target.id, {
+      const updated = await sync.updateHighlight(bookId, target.id, {
         note,
       });
       highlights = highlights.map((h) => (h.id === updated.id ? updated : h));
@@ -1912,7 +1917,7 @@
     dismissMenu();
     if (!existingHighlight) return;
     try {
-      await booksApi.deleteHighlight(bookId, existingHighlight.id);
+      await sync.deleteHighlight(bookId, existingHighlight.id);
       highlights = highlights.filter((h) => h.id !== existingHighlight!.id);
       rendition?.annotations.remove(selectedCfi, "highlight");
       onhighlightschange?.(highlights);
