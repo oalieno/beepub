@@ -820,6 +820,12 @@
   "catalogs_feed_error": "Couldn't load this catalog",
   "catalogs_auth_error": "This catalog rejected the credentials",
   "catalogs_feed_empty": "Nothing here",
+  "catalogs_download": "Download to local library",
+  "catalogs_downloading": "Downloading…",
+  "catalogs_imported": "In your local library",
+  "catalogs_duplicate": "Already in your local library",
+  "catalogs_no_epub": "No EPUB available for this entry",
+  "catalogs_download_error": "Couldn't download \"{title}\"",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "No books in this shelf yet",

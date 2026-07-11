@@ -10,10 +10,13 @@
   import BackButton from "$lib/components/BackButton.svelte";
   import {
     BookOpen,
+    Check,
     ChevronRight,
+    Download,
     FolderOpen,
     Loader2,
     Lock,
+    RefreshCw,
     Rss,
     Search,
   } from "@lucide/svelte";
@@ -121,6 +124,82 @@
       toastStore.error(m.catalogs_feed_error());
     } finally {
       loadingMore = false;
+    }
+  }
+
+  // --- Download queue ---
+  //
+  // Sequential, one book at a time (the readingSync "don't stampede
+  // NAS-class servers" posture); further taps enqueue. States persist for
+  // the page session so navigating feeds keeps imported/duplicate badges.
+  type DownloadState = {
+    status: "queued" | "downloading" | "imported" | "duplicate" | "error";
+    pct: number | null;
+  };
+  let downloadStates = $state<Record<string, DownloadState>>({});
+  const downloadQueue: OpdsBookEntry[] = [];
+  let downloadActive = false;
+
+  function setDownloadState(key: string, state: DownloadState) {
+    downloadStates = { ...downloadStates, [key]: state };
+  }
+
+  function requestDownload(entry: OpdsBookEntry) {
+    if (!entry.epubUrl) return;
+    const current = downloadStates[entry.key]?.status;
+    // error is re-tappable; everything else is settled or in flight.
+    if (current && current !== "error") return;
+    setDownloadState(entry.key, { status: "queued", pct: null });
+    downloadQueue.push(entry);
+    void pumpQueue();
+  }
+
+  async function pumpQueue() {
+    if (downloadActive) return;
+    downloadActive = true;
+    try {
+      let entry: OpdsBookEntry | undefined;
+      while ((entry = downloadQueue.shift())) {
+        await runDownload(entry);
+      }
+    } finally {
+      downloadActive = false;
+    }
+  }
+
+  async function runDownload(entry: OpdsBookEntry) {
+    const cat = catalog;
+    if (!cat) return;
+    setDownloadState(entry.key, { status: "downloading", pct: null });
+    const { downloadAndImport } = await import("$lib/opds/download");
+    const { DuplicateBookError, InvalidEpubError } =
+      await import("$lib/services/localLibrary");
+    try {
+      const imported = await downloadAndImport(entry, cat, (pct) => {
+        setDownloadState(entry.key, { status: "downloading", pct });
+      });
+      setDownloadState(entry.key, { status: "imported", pct: null });
+      toastStore.success(m.local_import_success({ title: imported.title }));
+      // Mirror the /local import hook: if the same file exists on the
+      // connected BeePub server, link it and start syncing right away.
+      void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
+        linkAndSyncBook(imported).then((linked) => {
+          if (linked) toastStore.info(m.local_linked());
+        }),
+      );
+    } catch (err) {
+      if (err instanceof DuplicateBookError) {
+        setDownloadState(entry.key, { status: "duplicate", pct: null });
+        toastStore.info(
+          m.local_import_duplicate({ title: err.existing.title }),
+        );
+      } else if (err instanceof InvalidEpubError) {
+        setDownloadState(entry.key, { status: "error", pct: null });
+        toastStore.error(m.local_import_invalid());
+      } else {
+        setDownloadState(entry.key, { status: "error", pct: null });
+        toastStore.error(m.catalogs_download_error({ title: entry.title }));
+      }
     }
   }
 
@@ -329,6 +408,7 @@
             {@const coverSrc = credentialed
               ? coverSrcs[entry.key]
               : (entry.thumbnailUrl ?? entry.coverUrl)}
+            {@const dl = downloadStates[entry.key]}
             <div class="group">
               <!-- Cover -->
               <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
@@ -350,6 +430,48 @@
                         >{entry.title}</span
                       >
                     </div>
+                  {/if}
+
+                  <!-- Download overlay -->
+                  {#if dl?.status === "imported" || dl?.status === "duplicate"}
+                    <span
+                      class="absolute bottom-1.5 right-1.5 bg-primary text-primary-foreground p-1.5 rounded-full"
+                      title={dl.status === "imported"
+                        ? m.catalogs_imported()
+                        : m.catalogs_duplicate()}
+                    >
+                      <Check size={14} />
+                    </span>
+                  {:else if dl?.status === "downloading" || dl?.status === "queued"}
+                    <span
+                      class="absolute bottom-1.5 right-1.5 flex items-center gap-1 bg-black/60 text-white/90 px-1.5 py-1 rounded-full text-[10px] font-medium"
+                      title={m.catalogs_downloading()}
+                    >
+                      <Loader2 class="animate-spin" size={12} />
+                      {#if dl.status === "downloading" && dl.pct !== null}
+                        {dl.pct}%
+                      {/if}
+                    </span>
+                  {:else if !entry.epubUrl}
+                    <span
+                      class="absolute bottom-1.5 right-1.5 bg-black/40 text-white/50 p-1.5 rounded-full"
+                      title={m.catalogs_no_epub()}
+                    >
+                      <Download size={14} />
+                    </span>
+                  {:else}
+                    <button
+                      class="absolute bottom-1.5 right-1.5 p-1.5 rounded-full bg-black/60 text-white/90 hover:bg-primary hover:text-primary-foreground transition-all duration-200"
+                      style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
+                      title={m.catalogs_download()}
+                      onclick={() => requestDownload(entry)}
+                    >
+                      {#if dl?.status === "error"}
+                        <RefreshCw size={14} />
+                      {:else}
+                        <Download size={14} />
+                      {/if}
+                    </button>
                   {/if}
                 </div>
               </div>

@@ -820,6 +820,12 @@
   "catalogs_feed_error": "無法載入這個目錄",
   "catalogs_auth_error": "帳號或密碼被這個目錄拒絕",
   "catalogs_feed_empty": "這裡沒有內容",
+  "catalogs_download": "下載到本地書庫",
+  "catalogs_downloading": "下載中…",
+  "catalogs_imported": "已在本地書庫",
+  "catalogs_duplicate": "本地書庫已有這本書",
+  "catalogs_no_epub": "這個項目沒有 EPUB 檔",
+  "catalogs_download_error": "無法下載「{title}」",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "這個書架還沒有書",

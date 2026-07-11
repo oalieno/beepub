@@ -13,6 +13,7 @@
     HardDrive,
     Plus,
     Loader2,
+    Rss,
     Server,
   } from "@lucide/svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
@@ -152,6 +153,17 @@
       <h1 class="text-xl font-bold" style="font-family: var(--font-heading)">
         {m.nav_local_books()}
       </h1>
+      <!-- The only entry point to OPDS catalogs in serverless mode (no
+           app chrome). -->
+      <Button
+        variant="ghost"
+        size="sm"
+        class="ml-auto"
+        onclick={() => goto("/catalogs")}
+      >
+        <Rss size={16} />
+        {m.nav_catalogs()}
+      </Button>
     </div>
   {/if}
   {#if loading}

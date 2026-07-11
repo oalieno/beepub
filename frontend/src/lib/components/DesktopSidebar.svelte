@@ -19,6 +19,7 @@
     HardDrive,
     PanelLeftClose,
     PanelLeftOpen,
+    Rss,
     Settings,
   } from "@lucide/svelte";
   import * as Avatar from "$lib/components/ui/avatar";
@@ -90,6 +91,16 @@
             label: m.nav_local_books(),
             icon: HardDrive,
             active: page.url.pathname.startsWith("/local"),
+            requiresOnline: false,
+          },
+          {
+            href: "/catalogs",
+            label: m.nav_catalogs(),
+            icon: Rss,
+            active: page.url.pathname.startsWith("/catalogs"),
+            // Needs the internet, not the BeePub server — isOnline tracks
+            // server reachability, which third-party catalogs don't care
+            // about. The page carries its own error states.
             requiresOnline: false,
           },
         ]

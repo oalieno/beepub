@@ -15,6 +15,7 @@
     Settings,
     Download,
     HardDrive,
+    Rss,
     Dices,
     LogOut,
     ChevronRight,
@@ -173,6 +174,15 @@
             href: "/local",
             label: m.nav_local_books(),
             icon: HardDrive,
+            requiresOnline: false,
+          } satisfies ProfileLink,
+          {
+            href: "/catalogs",
+            label: m.nav_catalogs(),
+            icon: Rss,
+            // Needs the internet, not the BeePub server — isOnline tracks
+            // server reachability, which third-party catalogs don't care
+            // about. The page carries its own error states.
             requiresOnline: false,
           } satisfies ProfileLink,
         ]
