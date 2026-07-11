@@ -18,6 +18,7 @@ from app.routers import (
     books,
     bookshelves,
     companion,
+    device_sync,
     highlights,
     illustrations,
     interactions,
@@ -104,6 +105,7 @@ app.include_router(opds.router, prefix="/api/opds", include_in_schema=False)
 # KOReader progress sync: custom sync server URL = https://<host>/kosync
 app.include_router(kosync.router, prefix="/kosync")
 app.include_router(interactions.router)
+app.include_router(device_sync.router)
 app.include_router(bookshelves.router)
 app.include_router(admin.router)
 app.include_router(admin.ai_router)
