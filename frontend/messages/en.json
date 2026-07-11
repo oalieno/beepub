@@ -794,6 +794,8 @@
   "local_delete_confirm": "Delete \"{title}\" and its reading progress?",
   "local_deleted": "Book deleted",
   "local_connect_server": "Connect to a BeePub server",
+  "local_linked": "Linked to your server library — reading will sync automatically",
+  "local_linked_badge": "Synced with your server",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "No books in this shelf yet",

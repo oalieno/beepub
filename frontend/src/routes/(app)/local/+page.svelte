@@ -8,6 +8,7 @@
   import { Button } from "$lib/components/ui/button";
   import {
     BookOpen,
+    Cloud,
     Trash2,
     HardDrive,
     Plus,
@@ -24,7 +25,10 @@
 
   // Cover URIs are re-derived per mount, so keep them beside the entry
   // instead of mutating the manifest shape.
-  type ShelfEntry = LocalBookEntry & { coverSrc: string | null };
+  type ShelfEntry = LocalBookEntry & {
+    coverSrc: string | null;
+    linked: boolean;
+  };
 
   let entries = $state<ShelfEntry[]>([]);
   let totalSize = $state(0);
@@ -37,9 +41,16 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  async function withCover(entry: LocalBookEntry): Promise<ShelfEntry> {
+  async function withCover(
+    entry: LocalBookEntry,
+    links: Record<string, string>,
+  ): Promise<ShelfEntry> {
     const { getLocalCoverSrc } = await import("$lib/services/localLibrary");
-    return { ...entry, coverSrc: await getLocalCoverSrc(entry) };
+    return {
+      ...entry,
+      coverSrc: await getLocalCoverSrc(entry),
+      linked: entry.id in links,
+    };
   }
 
   async function loadEntries() {
@@ -48,10 +59,11 @@
       return;
     }
     try {
-      const { listLocalBooks, getLocalStorageUsage } =
+      const { listLocalBooks, getLocalStorageUsage, getLocalBookLinks } =
         await import("$lib/services/localLibrary");
       const books = await listLocalBooks();
-      entries = await Promise.all(books.map(withCover));
+      const links = await getLocalBookLinks();
+      entries = await Promise.all(books.map((b) => withCover(b, links)));
       totalSize = await getLocalStorageUsage();
     } catch {
       // ignore
@@ -69,9 +81,20 @@
       await import("$lib/services/localLibrary");
     try {
       const entry = await importLocalBook(file);
-      entries = [await withCover(entry), ...entries];
+      entries = [await withCover(entry, {}), ...entries];
       totalSize += entry.fileSize;
       toastStore.success(m.local_import_success({ title: entry.title }));
+      // Fire-and-forget: if the same file exists on the server, link it
+      // and start syncing right away.
+      void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
+        linkAndSyncBook(entry).then((linked) => {
+          if (!linked) return;
+          entries = entries.map((b) =>
+            b.id === entry.id ? { ...b, linked: true } : b,
+          );
+          toastStore.info(m.local_linked());
+        }),
+      );
     } catch (err) {
       if (err instanceof DuplicateBookError) {
         toastStore.info(
@@ -234,6 +257,16 @@
                 >
                   {formatSize(entry.fileSize)}
                 </span>
+
+                {#if entry.linked}
+                  <!-- Linked to a server book: reading state syncs -->
+                  <span
+                    class="absolute bottom-1.5 right-1.5 bg-black/50 text-white/90 p-1 rounded-full"
+                    title={m.local_linked_badge()}
+                  >
+                    <Cloud size={12} />
+                  </span>
+                {/if}
               </div>
             </div>
 
