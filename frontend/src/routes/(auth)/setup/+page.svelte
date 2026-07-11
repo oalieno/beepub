@@ -1,8 +1,16 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { isLocalMode, setLocalMode, setServerUrl } from "$lib/api/client";
+  import {
+    clearServerUrl,
+    hasServerUrl,
+    isLocalMode,
+    setLocalMode,
+    setServerUrl,
+  } from "$lib/api/client";
   import { isNative } from "$lib/platform";
+  import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
+  import { confirmDialog } from "$lib/stores/confirm";
   import * as m from "$lib/paraglide/messages.js";
   import { BookOpen, Server, LoaderCircle, ArrowLeft } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
@@ -16,7 +24,21 @@
   // footer from "use without a server" to "back to local library" mid-tap.
   const cameFromLocalMode = isLocalMode();
 
-  function handleUseLocally() {
+  async function handleUseLocally() {
+    // A configured server would override the flag (isLocalMode requires no
+    // server), so here the button means "disconnect and go local".
+    if (hasServerUrl()) {
+      if (
+        !(await confirmDialog({
+          title: m.setup_local_mode_disconnect_title(),
+          description: m.setup_local_mode_disconnect_desc(),
+        }))
+      )
+        return;
+      // End the session while apiBase() still points at the server.
+      await authStore.logout();
+      clearServerUrl();
+    }
     setLocalMode(true);
     goto("/local");
   }

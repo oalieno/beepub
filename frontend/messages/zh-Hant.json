@@ -71,6 +71,8 @@
   "setup_error_timeout": "連線逾時。請確認網址後再試。",
   "setup_error_unreachable": "無法連線到伺服器。請確認網址並確認伺服器正在執行。",
   "setup_local_mode": "不連接伺服器使用",
+  "setup_local_mode_disconnect_title": "中斷與目前伺服器的連線？",
+  "setup_local_mode_disconnect_desc": "App 將改用本地模式。伺服器上的資料不受影響，隨時可重新連線。",
   "setup_back_to_local": "返回本地書庫",
 
   "home_page_title": "BeePub - 首頁",

@@ -71,6 +71,8 @@
   "setup_error_timeout": "Connection timed out. Check the URL and try again.",
   "setup_error_unreachable": "Cannot reach server. Check the URL and make sure the server is running.",
   "setup_local_mode": "Use without a server",
+  "setup_local_mode_disconnect_title": "Disconnect from the current server?",
+  "setup_local_mode_disconnect_desc": "The app switches to local mode. Nothing on the server is affected — reconnect anytime.",
   "setup_back_to_local": "Back to local library",
 
   "home_page_title": "BeePub - Home",

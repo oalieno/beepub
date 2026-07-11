@@ -74,6 +74,13 @@ export function setServerUrl(url: string): void {
   localStorage.removeItem(LOCAL_MODE_KEY);
 }
 
+/** Forget the configured server (switching to serverless local mode).
+ *  Per-server state like download manifests is keyed by URL and survives
+ *  untouched — reconnecting the same server brings it back. */
+export function clearServerUrl(): void {
+  localStorage.removeItem(SERVER_URL_KEY);
+}
+
 export function hasServerUrl(): boolean {
   if (typeof window !== "undefined") {
     return !!localStorage.getItem(SERVER_URL_KEY);
