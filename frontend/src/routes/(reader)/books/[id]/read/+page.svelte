@@ -395,6 +395,7 @@
     sectionIndex: number | null;
     xpointer: string | null;
     autoJumped: boolean;
+    localPercentage?: number;
   }) {
     const device = detail.device || "KOReader";
     const pct = Math.round(detail.percentage);
@@ -407,7 +408,9 @@
       description: m.reader_kosync_dialog_body({
         device,
         remote: pct,
-        local: Math.round(percentage ?? 0),
+        // The reader's CFI-derived position: the page-level percentage
+        // state is still null this early in the restore.
+        local: Math.round(detail.localPercentage ?? percentage ?? 0),
       }),
       confirmLabel: m.reader_kosync_jump(),
       cancelLabel: m.reader_kosync_dialog_stay(),

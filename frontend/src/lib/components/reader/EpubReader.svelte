@@ -99,6 +99,9 @@
       sectionIndex: number | null;
       xpointer: string | null;
       autoJumped: boolean;
+      /** Where the reader actually sits (CFI-derived) — the page-level
+       *  progress state may not have received a canonical value yet. */
+      localPercentage?: number;
     }) => void;
     onrestorefallback?: (percentage: number) => void;
     onbrokenhighlights?: (ids: string[]) => void;
@@ -577,7 +580,11 @@
       }
     }
     if (Math.abs(marker.percentage - herePct) > 1) {
-      onkosyncposition?.({ ...marker, autoJumped: false });
+      onkosyncposition?.({
+        ...marker,
+        autoJumped: false,
+        localPercentage: herePct,
+      });
     }
   }
 
