@@ -70,6 +70,8 @@
   "setup_error_status": "伺服器回應 HTTP {status}",
   "setup_error_timeout": "連線逾時。請確認網址後再試。",
   "setup_error_unreachable": "無法連線到伺服器。請確認網址並確認伺服器正在執行。",
+  "setup_local_mode": "不連接伺服器使用",
+  "setup_back_to_local": "返回本地書庫",
 
   "home_page_title": "BeePub - 首頁",
   "home_offline_message": "你目前離線。下載的書籍可在下方閱讀。",
@@ -789,6 +791,7 @@
   "local_delete": "刪除書籍",
   "local_delete_confirm": "確定刪除「{title}」與它的閱讀進度？",
   "local_deleted": "已刪除書籍",
+  "local_connect_server": "連接 BeePub 伺服器",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "這個書架還沒有書",

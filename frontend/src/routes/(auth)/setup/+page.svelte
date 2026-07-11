@@ -1,9 +1,10 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { setServerUrl } from "$lib/api/client";
+  import { isLocalMode, setLocalMode, setServerUrl } from "$lib/api/client";
+  import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { BookOpen, Server, LoaderCircle } from "@lucide/svelte";
+  import { BookOpen, Server, LoaderCircle, ArrowLeft } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -11,6 +12,14 @@
   let serverUrl = $state("");
   let loading = $state(false);
   let error = $state("");
+  // Captured once: entering local mode below would otherwise flip the
+  // footer from "use without a server" to "back to local library" mid-tap.
+  const cameFromLocalMode = isLocalMode();
+
+  function handleUseLocally() {
+    setLocalMode(true);
+    goto("/local");
+  }
 
   async function handleConnect() {
     error = "";
@@ -117,5 +126,28 @@
         </Button>
       </form>
     </div>
+
+    {#if isNative()}
+      <div class="mt-4 text-center">
+        {#if cameFromLocalMode}
+          <Button
+            variant="ghost"
+            class="text-sm text-muted-foreground"
+            onclick={() => goto("/local")}
+          >
+            <ArrowLeft size={16} />
+            {m.setup_back_to_local()}
+          </Button>
+        {:else}
+          <Button
+            variant="ghost"
+            class="text-sm text-muted-foreground"
+            onclick={handleUseLocally}
+          >
+            {m.setup_local_mode()}
+          </Button>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>

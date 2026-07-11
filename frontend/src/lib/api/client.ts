@@ -6,6 +6,7 @@ import {
 } from "$lib/services/network";
 
 const SERVER_URL_KEY = "serverUrl";
+const LOCAL_MODE_KEY = "localMode";
 
 const ERROR_MAP: Record<string, () => string> = {
   "Access denied": () => m.error_access_denied(),
@@ -69,6 +70,8 @@ export function getServerUrl(): string {
 
 export function setServerUrl(url: string): void {
   localStorage.setItem(SERVER_URL_KEY, url.replace(/\/$/, ""));
+  // Connecting a server always exits serverless local mode.
+  localStorage.removeItem(LOCAL_MODE_KEY);
 }
 
 export function hasServerUrl(): boolean {
@@ -76,6 +79,22 @@ export function hasServerUrl(): boolean {
     return !!localStorage.getItem(SERVER_URL_KEY);
   }
   return !!(import.meta.env.VITE_API_BASE as string);
+}
+
+/** Serverless local mode: the user chose to use the app without a server
+ *  (native only — the choice is made on /setup). A configured server always
+ *  wins over the flag. */
+export function isLocalMode(): boolean {
+  if (typeof window === "undefined") return false;
+  return localStorage.getItem(LOCAL_MODE_KEY) === "1" && !hasServerUrl();
+}
+
+export function setLocalMode(on: boolean): void {
+  if (on) {
+    localStorage.setItem(LOCAL_MODE_KEY, "1");
+  } else {
+    localStorage.removeItem(LOCAL_MODE_KEY);
+  }
 }
 
 export function apiBase(): string {

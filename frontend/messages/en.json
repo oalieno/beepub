@@ -70,6 +70,8 @@
   "setup_error_status": "Server responded with HTTP {status}",
   "setup_error_timeout": "Connection timed out. Check the URL and try again.",
   "setup_error_unreachable": "Cannot reach server. Check the URL and make sure the server is running.",
+  "setup_local_mode": "Use without a server",
+  "setup_back_to_local": "Back to local library",
 
   "home_page_title": "BeePub - Home",
   "home_offline_message": "You're offline. Your downloaded books are available below.",
@@ -789,6 +791,7 @@
   "local_delete": "Delete book",
   "local_delete_confirm": "Delete \"{title}\" and its reading progress?",
   "local_deleted": "Book deleted",
+  "local_connect_server": "Connect to a BeePub server",
 
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "No books in this shelf yet",
