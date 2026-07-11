@@ -51,6 +51,16 @@ export interface LocalProgressRecord {
   xpointer: string | null;
   last_read_at: string;
   updated_at: string;
+  /** E-reader position pulled through sync (the server's kosync marker).
+   *  saveProgress rewrites the record without it — the first local move
+   *  consumes the marker, mirroring the server's rebuild semantics. */
+  kosync?: {
+    percentage: number | null;
+    device: string | null;
+    synced_at: string | null;
+    section_index: number | null;
+    xpointer: string | null;
+  } | null;
 }
 
 export type LocalHighlightRecord = HighlightOut & {
@@ -121,7 +131,14 @@ class LocalSyncBackend implements SyncBackend {
       sectionPageCounts: p.section_page_counts,
       totalPages: p.total_pages,
       lastReadAt: p.last_read_at,
-      devicePosition: null,
+      devicePosition: p.kosync
+        ? {
+            percentage: p.kosync.percentage,
+            device: p.kosync.device,
+            sectionIndex: p.kosync.section_index ?? null,
+            xpointer: p.kosync.xpointer ?? null,
+          }
+        : null,
     };
   }
 

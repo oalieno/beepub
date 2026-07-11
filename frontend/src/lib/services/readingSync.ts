@@ -245,6 +245,17 @@ async function applyProgress(
     xpointer: dict.xpointer ?? null,
     last_read_at: dict.last_read_at,
     updated_at: dict.last_read_at,
+    // The server-side kosync marker rides along, so the reader can offer
+    // "jump to the e-reader position" for local books too.
+    kosync: dict.kosync
+      ? {
+          percentage: dict.kosync.percentage,
+          device: dict.kosync.device,
+          synced_at: dict.kosync.synced_at,
+          section_index: dict.kosync.section_index ?? null,
+          xpointer: dict.kosync.xpointer ?? null,
+        }
+      : null,
   };
   await writeLocalProgress(localBookId, record);
 }
