@@ -138,6 +138,9 @@ export const booksApi = {
       section_page?: number;
       section_page_counts?: number[];
       total_pages?: number;
+      // crengine-style xpointer for the position; kosync serves it to
+      // e-readers so they land on the paragraph, not the chapter start.
+      xpointer?: string;
       track_activity?: boolean;
     },
   ) => put(`/books/${bookId}/progress`, data),

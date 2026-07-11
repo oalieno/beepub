@@ -23,6 +23,9 @@ class ProgressUpdate(BaseModel):
     section_page: int | None = None
     section_page_counts: list[int] | None = None
     total_pages: int | None = None
+    # crengine-style xpointer computed by the reader for the same position;
+    # kosync GET serves it to e-readers for a paragraph-level landing.
+    xpointer: str | None = Field(default=None, max_length=1000)
     track_activity: bool = True
 
 

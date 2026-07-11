@@ -38,6 +38,10 @@ export interface ProgressSave {
   sectionPage: number;
   sectionPageCounts: number[];
   totalPages: number;
+  /** crengine-style xpointer for the same position, when the reader could
+   *  compute one — served to e-readers pulling through kosync so they land
+   *  on the paragraph instead of the chapter start. */
+  xpointer: string | null;
   trackActivity: boolean;
 }
 

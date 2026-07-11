@@ -21,7 +21,11 @@
     sectionIndexFromCfi,
     verifyHighlightAnchors,
   } from "./highlight-anchor";
-  import { parseKosyncXpointer, resolveXpointerRange } from "./kosync-xpointer";
+  import {
+    parseKosyncXpointer,
+    resolveXpointerRange,
+    xpointerFromRange,
+  } from "./kosync-xpointer";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -219,6 +223,13 @@
   // Fresh-auth-header function from the source's stream payload; null for
   // byte-loaded books or unauthenticated streams.
   let bookAuthHeader: (() => Record<string, string>) | null = null;
+  // crengine-style xpointer for the current position, recomputed async on
+  // each relocation from the pristine section DOM (the rendered iframe can
+  // contain injected overlays that would skew child indices). Shipped with
+  // progress saves so e-readers pulling through kosync land on the exact
+  // paragraph; the cfi tag keeps a stale pointer from ever being shipped.
+  let currentXpointer: string | null = null;
+  let currentXpointerCfi = "";
   let lastLocation: any = null;
   let locationsGenerated = false;
   let generatingLocations = false;
@@ -607,6 +618,32 @@
     return section.cfiFromRange(range) ?? null;
   }
 
+  /** The reverse: cache a crengine-style xpointer for the current CFI so
+   *  progress saves can carry it (kosync serves it to e-readers). */
+  async function updateCurrentXpointer(cfi: string) {
+    try {
+      const index = sectionIndexFromCfi(cfi);
+      const section = index != null ? epubBook?.spine?.get(index) : null;
+      if (!section) {
+        currentXpointer = null;
+        return;
+      }
+      await section.load(epubBook.load.bind(epubBook));
+      const doc: Document | null = section.document ?? null;
+      const EpubCFI = (await import("$lib/epubjs/epubcfi")).default;
+      const range: Range | null = doc ? new EpubCFI(cfi).toRange(doc) : null;
+      const xp = range ? xpointerFromRange(range, index!) : null;
+      // Another relocation may have raced this computation; only publish
+      // if the position we computed for is still the current one.
+      if (cfi === currentCfi) {
+        currentXpointer = xp;
+        currentXpointerCfi = cfi;
+      }
+    } catch {
+      if (cfi === currentCfi) currentXpointer = null;
+    }
+  }
+
   function doFindActiveTocHref(sectionIndex: number): string {
     return findActiveTocHref(epubBook, rendition, tocData, sectionIndex);
   }
@@ -683,6 +720,7 @@
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
+      void updateCurrentXpointer(currentCfi);
       const progress = calculateProgress(location);
       currentPage = progress.currentPage;
       totalPages = progress.totalPages;
@@ -1464,6 +1502,10 @@
       sectionPage: currentSectionPage,
       sectionPageCounts: normalizeSectionPageCounts(sectionPageCounts),
       totalPages,
+      // Only ship the xpointer computed for exactly this CFI — a stale one
+      // would point e-readers at the previous page's paragraph. Absent →
+      // the server degrades to chapter-start synthesis.
+      xpointer: currentXpointerCfi === currentCfi ? currentXpointer : null,
       trackActivity,
     };
   }

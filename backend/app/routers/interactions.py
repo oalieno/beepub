@@ -253,6 +253,8 @@ async def update_progress(
         progress["section_page_counts"] = body.section_page_counts
     if body.total_pages is not None:
         progress["total_pages"] = body.total_pages
+    if body.xpointer is not None:
+        progress["xpointer"] = body.xpointer
     interaction.reading_progress = progress
     await db.commit()
 

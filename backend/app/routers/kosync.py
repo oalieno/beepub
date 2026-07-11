@@ -205,9 +205,11 @@ async def _web_position(db: AsyncSession, user: User, document: str) -> dict | N
     No timestamp comparison needed: the bridge stamps a ``kosync`` marker
     on every device push and the web PUT /progress rebuilds the dict
     without it — marker absent + web progress present means the web moved
-    last. The position is chapter-level (``/body/DocFragment[N]/body``,
-    crengine's 1-based spine fragment) because an exact CFI cannot be
-    translated into an xpointer; percentage carries the fine-grained part.
+    last. The reader computes a paragraph-level xpointer from its section
+    DOM and ships it with every save; when present it is served verbatim.
+    Otherwise the position degrades to the chapter start
+    (``/body/DocFragment[N]/body``, crengine's 1-based spine fragment)
+    with percentage carrying the fine-grained part.
     """
     book_id = await _accessible_book_id(db, user, document)
     if book_id is None:
@@ -231,9 +233,12 @@ async def _web_position(db: AsyncSession, user: User, document: str) -> dict | N
         timestamp = int(datetime.fromisoformat(progress["last_read_at"]).timestamp())
     except (KeyError, TypeError, ValueError):
         timestamp = int(datetime.now(UTC).timestamp())
+    # Paragraph-level xpointer from the reader when available; otherwise
+    # the chapter start, which every engine can at least resolve.
+    xpointer = progress.get("xpointer")
     return {
         "document": document,
-        "progress": f"/body/DocFragment[{int(section_index) + 1}]/body",
+        "progress": xpointer or f"/body/DocFragment[{int(section_index) + 1}]/body",
         "percentage": round(float(percentage) / 100, 4),
         "device": "BeePub Web",
         "device_id": None,

@@ -76,6 +76,7 @@ function toWireProgress(state: ProgressSave) {
     section_page: state.sectionPage,
     section_page_counts: state.sectionPageCounts,
     total_pages: state.totalPages,
+    xpointer: state.xpointer ?? undefined,
     track_activity: state.trackActivity,
   };
 }

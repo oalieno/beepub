@@ -357,6 +357,50 @@ async def test_get_serves_web_position_when_web_is_newer(admin_client):
     assert fetched["percentage"] == pytest.approx(0.555)
 
 
+async def test_get_serves_web_xpointer_when_reader_computed_one(admin_client):
+    """Paragraph-level web→device: when the reader shipped an xpointer with
+    its save, GET serves it verbatim instead of the chapter-start synthesis."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    document = await _document_digest(admin_client, book["id"])
+
+    xpointer = "/body/DocFragment[5]/body/div/p[7]/text().42"
+    saved = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={
+            "cfi": "epubcfi(/6/10!/4/2/14/1:42)",
+            "percentage": 55.5,
+            "section_index": 4,
+            "xpointer": xpointer,
+        },
+    )
+    assert saved.status_code == 200
+
+    fetched = (
+        await admin_client.get(f"/kosync/syncs/progress/{document}", headers=_headers())
+    ).json()
+    assert fetched["device"] == "BeePub Web"
+    assert fetched["progress"] == xpointer
+    assert fetched["percentage"] == pytest.approx(0.555)
+
+    # A later save without an xpointer (e.g. computation failed) must not
+    # replay the stale one — the dict rebuild drops it, degrading to the
+    # chapter start.
+    saved = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={
+            "cfi": "epubcfi(/6/12!/4/2/1:0)",
+            "percentage": 60.0,
+            "section_index": 5,
+        },
+    )
+    assert saved.status_code == 200
+    fetched = (
+        await admin_client.get(f"/kosync/syncs/progress/{document}", headers=_headers())
+    ).json()
+    assert fetched["progress"] == "/body/DocFragment[6]/body"
+
+
 async def test_get_serves_device_record_when_device_is_newer(admin_client):
     """A device push after the web save restores the marker — GET must
     return the device record verbatim so KOReader↔KOReader stays exact."""

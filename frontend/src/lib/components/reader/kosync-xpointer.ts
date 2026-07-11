@@ -64,6 +64,66 @@ export function parseKosyncXpointer(xpointer: string): ParsedXpointer | null {
 }
 
 /**
+ * The reverse direction: express a position in one of OUR section documents
+ * as a crengine-style xpointer, so e-reader clients pulling through kosync
+ * can land on the exact paragraph instead of the chapter start. Emission
+ * mirrors what devices push (`[1]` omitted, `text()` unindexed when first)
+ * and skips whitespace-only text nodes when counting, matching crengine's
+ * stripped DOM. Returns null for anything that doesn't reduce to a clean
+ * body-rooted path — the caller degrades to the chapter-start synthesis.
+ */
+export function xpointerFromRange(
+  range: Range,
+  sectionIndex: number,
+): string | null {
+  let textPart: string | null = null;
+  let el: Element | null = null;
+
+  const container = range.startContainer;
+  if (container.nodeType === 3) {
+    const parent = (container as Text).parentElement;
+    if (!parent) return null;
+    const texts = Array.from(parent.childNodes).filter(
+      (node): node is Text =>
+        node.nodeType === 3 && !!node.nodeValue && node.nodeValue.trim() !== "",
+    );
+    const k = texts.indexOf(container as Text);
+    if (k >= 0) {
+      textPart =
+        k === 0
+          ? `text().${range.startOffset}`
+          : `text()[${k + 1}].${range.startOffset}`;
+    }
+    el = parent;
+  } else if (container.nodeType === 1) {
+    el = container as Element;
+  } else {
+    return null;
+  }
+
+  const doc = el.ownerDocument;
+  const parts: string[] = [];
+  let node: Element | null = el;
+  while (node && node !== doc.documentElement) {
+    const parent: Element | null = node.parentElement;
+    if (!parent) return null;
+    const tag = node.localName.toLowerCase();
+    const same: Element[] = Array.from(parent.children).filter(
+      (c) => c.localName.toLowerCase() === tag,
+    );
+    const idx = same.indexOf(node) + 1;
+    if (idx < 1) return null;
+    parts.unshift(idx === 1 ? tag : `${tag}[${idx}]`);
+    node = parent;
+  }
+  // crengine paths are body-rooted; anything else (detached node, head
+  // content) is not expressible.
+  if (!parts.length || parts[0] !== "body") return null;
+  if (textPart) parts.push(textPart);
+  return `/body/DocFragment[${sectionIndex + 1}]/${parts.join("/")}`;
+}
+
+/**
  * Walk the parsed path through a section document. The path starts at the
  * fragment root, so the first step (`body`) matches among the children of
  * `documentElement`. Returns a collapsed Range at the target, or null when
