@@ -1,13 +1,14 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { booksApi } from "$lib/api/books";
-  import { apiBase, getAuthHeader } from "$lib/api/client";
   import {
     getCachedLocations,
     setCachedLocations,
   } from "$lib/services/locationsCache";
   import { toastStore } from "$lib/stores/toast";
+  import { cfiOf, locatorFromCfi } from "$lib/reading/locator";
   import type { BookSource } from "$lib/reading/source";
+  import type { ProgressSave, SyncBackend } from "$lib/reading/sync";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
   import ImageViewer from "./ImageViewer.svelte";
@@ -26,6 +27,7 @@
   let {
     bookId,
     source,
+    sync,
     initialCfi = null,
     fontFamily = "serif",
     fontSize = 16,
@@ -59,6 +61,8 @@
     bookId: string;
     /** Where the book's bytes come from (beepub server, later local/OPDS). */
     source: BookSource;
+    /** Where the user's progress and highlights live. */
+    sync: SyncBackend;
     initialCfi?: string | null;
     fontFamily?: string;
     fontSize?: number;
@@ -1111,10 +1115,26 @@
       // ignore
     }
 
-    // Load saved progress & display
+    // Load saved progress & display. The SyncBackend speaks Locators; map
+    // back to the wire-ish local shape here so the restore logic below
+    // stays as-is (units: totalProgression 0..1 → percentage 0..100).
     let savedProgress: any = null;
     try {
-      savedProgress = await booksApi.getProgress(bookId);
+      const state = await sync.getProgress(bookId);
+      if (state) {
+        const totalProgression = state.locator?.locations.totalProgression;
+        savedProgress = {
+          cfi: state.locator ? cfiOf(state.locator) : null,
+          percentage: totalProgression == null ? null : totalProgression * 100,
+          current_page: state.locator?.locations.position ?? null,
+          font_size: state.fontSize,
+          section_index: state.sectionIndex,
+          section_page: state.sectionPage,
+          section_page_counts: state.sectionPageCounts,
+          total_pages: state.totalPages,
+          devicePosition: state.devicePosition,
+        };
+      }
     } catch {
       // API unreachable (e.g. iOS PWA resume with no network) — try localStorage
       try {
@@ -1138,12 +1158,12 @@
         // ignore
       }
     }
-    const kosyncRaw = savedProgress?.kosync;
-    if (!initialCfi && typeof kosyncRaw?.percentage === "number") {
+    const devicePos = savedProgress?.devicePosition;
+    if (!initialCfi && typeof devicePos?.percentage === "number") {
       kosyncMarker = {
-        percentage: kosyncRaw.percentage,
-        device: kosyncRaw.device ?? null,
-        sectionIndex: kosyncRaw.section_index ?? null,
+        percentage: devicePos.percentage,
+        device: devicePos.device ?? null,
+        sectionIndex: devicePos.sectionIndex ?? null,
       };
       kosyncAutoJump = !savedProgress?.cfi;
     }
@@ -1330,23 +1350,7 @@
     if (!currentCfi) return;
     if (restoreFallbackPct != null && !userNavigated) return;
     if (peekSaveHold) return;
-    const data = {
-      cfi: currentCfi,
-      percentage: hasCanonicalPercentage() ? currentPercentage : null,
-      current_page: currentPage,
-      font_size: fontSize,
-      section_index: currentSectionIndex,
-      section_page: currentSectionPage,
-      section_page_counts: normalizeSectionPageCounts(sectionPageCounts),
-      total_pages: totalPages,
-      track_activity: false,
-    };
-    fetch(`${apiBase()}/books/${bookId}/progress`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...getAuthHeader() },
-      body: JSON.stringify(data),
-      keepalive: true,
-    });
+    sync.saveProgressBeacon(bookId, buildProgressSave(false));
   }
 
   function handleKeyboard(e: KeyboardEvent) {
@@ -1400,26 +1404,35 @@
     return isImageBook || locationsGenerated;
   }
 
+  /** One builder for both the normal save and the unload beacon so the
+   *  two payloads can't drift. totalProgression left undefined tells the
+   *  backend to keep the stored percentage — never write a made-up value,
+   *  and never skip the save (the CFI must survive even when locations
+   *  generation is slow or dies). Units: reader percentage is 0..100,
+   *  locator totalProgression is 0..1. */
+  function buildProgressSave(trackActivity: boolean): ProgressSave {
+    return {
+      locator: locatorFromCfi(currentCfi, {
+        totalProgression: hasCanonicalPercentage()
+          ? currentPercentage / 100
+          : undefined,
+        position: currentPage,
+      }),
+      fontSize,
+      sectionIndex: currentSectionIndex,
+      sectionPage: currentSectionPage,
+      sectionPageCounts: normalizeSectionPageCounts(sectionPageCounts),
+      totalPages,
+      trackActivity,
+    };
+  }
+
   async function saveProgress(trackActivity = true) {
     if (!currentCfi) return;
     if (restoreFallbackPct != null && !userNavigated) return;
     if (peekSaveHold) return;
-    const payload = {
-      cfi: currentCfi,
-      // null tells the server to keep the stored percentage — never write
-      // a made-up value, and never skip the save (the CFI must survive
-      // even when locations generation is slow or dies).
-      percentage: hasCanonicalPercentage() ? currentPercentage : null,
-      current_page: currentPage,
-      font_size: fontSize,
-      section_index: currentSectionIndex,
-      section_page: currentSectionPage,
-      section_page_counts: normalizeSectionPageCounts(sectionPageCounts),
-      total_pages: totalPages,
-      track_activity: trackActivity,
-    };
     try {
-      await booksApi.updateProgress(bookId, payload);
+      await sync.saveProgress(bookId, buildProgressSave(trackActivity));
     } catch {}
   }
 
