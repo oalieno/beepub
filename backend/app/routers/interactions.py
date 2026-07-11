@@ -278,6 +278,7 @@ async def get_highlights(
         .where(
             Highlight.user_id == current_user.id,
             Highlight.book_id == book_id,
+            Highlight.deleted_at.is_(None),
         )
         .order_by(Highlight.created_at.asc())
     )
@@ -296,14 +297,40 @@ async def create_highlight(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    highlight = Highlight(
-        user_id=current_user.id,
-        book_id=book_id,
-        **body.model_dump(),
+    # id=None must not reach Highlight(**...) — an explicit None overrides
+    # the uuid4 column default and inserts a null PK.
+    content = body.model_dump(exclude={"id"})
+
+    if body.id is None:
+        highlight = Highlight(user_id=current_user.id, book_id=book_id, **content)
+        db.add(highlight)
+        await db.commit()
+        await db.refresh(highlight)
+        return highlight
+
+    # Idempotent create: the same id from the same user+book replaces the
+    # content and clears any tombstone (the client re-created it). The
+    # upsert keeps two concurrent retries from racing the PK; the WHERE
+    # guard means a conflicting row owned by another user or book updates
+    # nothing, which surfaces as a 409 instead of leaking or renumbering.
+    stmt = (
+        pg_insert(Highlight)
+        .values(id=body.id, user_id=current_user.id, book_id=book_id, **content)
+        .on_conflict_do_update(
+            index_elements=["id"],
+            # ORM onupdate does not fire for core upserts — set explicitly.
+            set_={**content, "deleted_at": None, "updated_at": func.now()},
+            where=(Highlight.user_id == current_user.id)
+            & (Highlight.book_id == book_id),
+        )
+        .returning(Highlight)
     )
-    db.add(highlight)
+    result = await db.execute(stmt)
+    highlight = result.scalars().one_or_none()
+    if highlight is None:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Highlight id conflict")
     await db.commit()
-    await db.refresh(highlight)
     return highlight
 
 
@@ -320,6 +347,10 @@ async def update_highlight(
             Highlight.id == highlight_id,
             Highlight.user_id == current_user.id,
             Highlight.book_id == book_id,
+            # Tombstoned rows are gone as far as PUT is concerned — editing
+            # one would bump updated_at and confuse sync ordering. The only
+            # way back is re-creating the id via POST.
+            Highlight.deleted_at.is_(None),
         )
     )
     highlight = result.scalar_one_or_none()
@@ -351,8 +382,12 @@ async def delete_highlight(
     highlight = result.scalar_one_or_none()
     if not highlight:
         raise HTTPException(status_code=404, detail="Highlight not found")
-    await db.delete(highlight)
-    await db.commit()
+    # Soft delete: the tombstone must survive so sync can propagate the
+    # deletion to offline devices. Re-deleting is an idempotent no-op that
+    # keeps the original tombstone time.
+    if highlight.deleted_at is None:
+        highlight.deleted_at = datetime.now(UTC)
+        await db.commit()
 
 
 async def _get_or_create_interaction(

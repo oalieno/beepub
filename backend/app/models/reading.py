@@ -136,6 +136,12 @@ class Highlight(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    # Soft-delete tombstone: a deletion must propagate to offline devices,
+    # so DELETE stamps this instead of removing the row. Filtered out of
+    # every list; cleared when a client re-creates the same id.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="highlights")

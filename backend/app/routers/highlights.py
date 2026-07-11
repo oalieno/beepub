@@ -25,16 +25,24 @@ async def get_all_highlights(
     Highlights carry full text/note payloads, so an unbounded response
     grows without limit for heavy highlighters.
     """
+    # Both queries must apply the tombstone filter or total drifts from
+    # the items and pagination breaks.
     total = (
         await db.execute(
             select(func.count())
             .select_from(Highlight)
-            .where(Highlight.user_id == current_user.id)
+            .where(
+                Highlight.user_id == current_user.id,
+                Highlight.deleted_at.is_(None),
+            )
         )
     ).scalar() or 0
     result = await db.execute(
         select(Highlight)
-        .where(Highlight.user_id == current_user.id)
+        .where(
+            Highlight.user_id == current_user.id,
+            Highlight.deleted_at.is_(None),
+        )
         .order_by(Highlight.created_at.desc(), Highlight.id)
         .limit(limit)
         .offset(offset)

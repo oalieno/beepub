@@ -1,5 +1,7 @@
 """Per-user book state: ratings, favorites, progress, highlights, status."""
 
+import uuid
+
 import pytest
 
 from tests.integration.util import create_library, upload_epub
@@ -147,6 +149,129 @@ async def test_highlight_anchor_context_roundtrip(admin_client, book_id):
 
     for h in listing:
         await admin_client.delete(f"/api/books/{book_id}/highlights/{h['id']}")
+
+
+def _highlight_payload(**overrides) -> dict:
+    payload = {
+        "cfi_range": "epubcfi(/6/4!/4/2,/1:0,/1:20)",
+        "text": "The quick brown fox",
+        "color": "yellow",
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def test_highlight_delete_idempotent(admin_client, book_id):
+    """DELETE tombstones the row; re-deleting converges to 204 (offline
+    clients retry deletions), while an unknown id still 404s."""
+    created = await admin_client.post(
+        f"/api/books/{book_id}/highlights", json=_highlight_payload()
+    )
+    highlight_id = created.json()["id"]
+
+    first = await admin_client.delete(f"/api/books/{book_id}/highlights/{highlight_id}")
+    assert first.status_code == 204
+    second = await admin_client.delete(
+        f"/api/books/{book_id}/highlights/{highlight_id}"
+    )
+    assert second.status_code == 204
+
+    listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
+    assert listing == []
+
+    missing = await admin_client.delete(
+        f"/api/books/{book_id}/highlights/{uuid.uuid4()}"
+    )
+    assert missing.status_code == 404
+
+
+async def test_highlight_create_with_client_id_idempotent(admin_client, book_id):
+    client_id = str(uuid.uuid4())
+    payload = _highlight_payload(id=client_id)
+
+    first = await admin_client.post(f"/api/books/{book_id}/highlights", json=payload)
+    assert first.status_code == 201, first.text
+    assert first.json()["id"] == client_id
+
+    retry = await admin_client.post(f"/api/books/{book_id}/highlights", json=payload)
+    assert retry.status_code == 201, retry.text
+    assert retry.json()["id"] == client_id
+
+    listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
+    assert [h["id"] for h in listing] == [client_id]
+
+
+async def test_highlight_create_client_id_undeletes_tombstone(admin_client, book_id):
+    """Re-creating a deleted id revives the row with the new content —
+    the client deliberately made it exist again."""
+    client_id = str(uuid.uuid4())
+    await admin_client.post(
+        f"/api/books/{book_id}/highlights", json=_highlight_payload(id=client_id)
+    )
+    deleted = await admin_client.delete(f"/api/books/{book_id}/highlights/{client_id}")
+    assert deleted.status_code == 204
+    assert (await admin_client.get(f"/api/books/{book_id}/highlights")).json() == []
+
+    revived = await admin_client.post(
+        f"/api/books/{book_id}/highlights",
+        json=_highlight_payload(id=client_id, color="blue"),
+    )
+    assert revived.status_code == 201, revived.text
+    body = revived.json()
+    assert body["id"] == client_id
+    assert body["color"] == "blue"
+    assert body["updated_at"] > body["created_at"]
+
+    listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
+    assert [h["id"] for h in listing] == [client_id]
+
+
+async def test_highlight_create_client_id_conflict_other_user(
+    admin_client, user_client, book_id
+):
+    """A client id owned by another user is a hard conflict: never leak the
+    other row, never silently generate a different id."""
+    client_id = str(uuid.uuid4())
+    owned = await admin_client.post(
+        f"/api/books/{book_id}/highlights", json=_highlight_payload(id=client_id)
+    )
+    assert owned.status_code == 201
+
+    stolen = await user_client.post(
+        f"/api/books/{book_id}/highlights",
+        json=_highlight_payload(id=client_id, color="red"),
+    )
+    assert stolen.status_code == 409, stolen.text
+
+    listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
+    assert [h["id"] for h in listing] == [client_id]
+    assert listing[0]["color"] == "yellow"
+
+
+async def test_update_tombstoned_highlight_is_404(admin_client, book_id):
+    """PUT never resurrects a tombstone (that would bump updated_at and
+    confuse sync ordering) — e.g. a healing writeback racing a delete on
+    another device lands here and the reader swallows the 404."""
+    created = await admin_client.post(
+        f"/api/books/{book_id}/highlights", json=_highlight_payload()
+    )
+    highlight_id = created.json()["id"]
+    await admin_client.delete(f"/api/books/{book_id}/highlights/{highlight_id}")
+
+    updated = await admin_client.put(
+        f"/api/books/{book_id}/highlights/{highlight_id}", json={"color": "blue"}
+    )
+    assert updated.status_code == 404
+
+
+async def test_highlight_create_without_id_still_generates(admin_client, book_id):
+    """Regression: HighlightCreate.id=None must not reach the model and
+    override the uuid4 PK default."""
+    created = await admin_client.post(
+        f"/api/books/{book_id}/highlights", json=_highlight_payload()
+    )
+    assert created.status_code == 201, created.text
+    assert uuid.UUID(created.json()["id"])
 
 
 async def test_interactions_are_per_user(admin_client, user_client, book_id):

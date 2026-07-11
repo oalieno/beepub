@@ -54,6 +54,9 @@ class ProgressOut(BaseModel):
 
 
 class HighlightCreate(BaseModel):
+    # Client-supplied id makes creation idempotent (offline retry / device
+    # sync). Omitted -> server generates, as before.
+    id: uuid.UUID | None = None
     cfi_range: str
     text: str
     color: str = "yellow"
