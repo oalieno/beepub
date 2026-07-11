@@ -15,12 +15,12 @@
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import { coverUrl } from "$lib/api/client";
+  import { coverUrl, hasServerUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
-  import { isOnline } from "$lib/services/network";
+  import { getIsOnline, isOnline } from "$lib/services/network";
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import SearchSidebar from "$lib/components/reader/SearchSidebar.svelte";
@@ -219,6 +219,16 @@
       title = localEntry.title;
       hasDbTitle = true;
       bookAuthors = localEntry.authors;
+      // Pull the linked server state first so the reader restores the
+      // newest position — but bounded: past 2.5s the sync continues in
+      // the background and this session opens with local state.
+      if (hasServerUrl() && getIsOnline()) {
+        const { syncLocalBook } = await import("$lib/services/readingSync");
+        await Promise.race([
+          syncLocalBook(bookId).catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, 2500)),
+        ]);
+      }
     }
     ready = true;
 
@@ -255,6 +265,17 @@
     document.documentElement.style.overflow = prevHtmlOverflow;
     document.body.style.overflow = prevBodyOverflow;
     if (readingTimer) clearTimeout(readingTimer);
+    if (localEntry) {
+      // Push this session's reading state. The delay sequences the sync
+      // after the reader's final beacon write (parent/child onDestroy
+      // ordering isn't contractual).
+      const id = bookId;
+      setTimeout(() => {
+        void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+          syncLocalBook(id).catch(() => {}),
+        );
+      }, 600);
+    }
   });
 
   async function fetchInteractionAndStartTimer() {

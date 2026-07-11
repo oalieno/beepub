@@ -8,6 +8,7 @@
   import { isNative } from "$lib/platform";
   import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { initNetworkWatcher } from "$lib/services/network";
+  import { initReadingSync, linkAndSyncAll } from "$lib/services/readingSync";
   import Toast from "$lib/components/Toast.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import type { Snippet } from "svelte";
@@ -23,12 +24,24 @@
 
   onMount(() => {
     initNetworkWatcher();
+    initReadingSync();
   });
 
   $effect(() => {
     if (browser && data.user) {
       authStore.setUser(data.user);
     }
+  });
+
+  // Local-book sync fires when a user appears — cold start rehydrate and
+  // fresh login both land here (login routes through authStore too).
+  let prevUser: unknown = null;
+  $effect(() => {
+    const user = $authStore.user;
+    if (browser && user && !prevUser && isNative() && hasServerUrl()) {
+      void linkAndSyncAll({ force: true });
+    }
+    prevUser = user;
   });
 
   // Clean up stale localStorage token in web mode (only native uses Bearer auth)

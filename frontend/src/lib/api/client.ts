@@ -265,7 +265,11 @@ async function request(
       }
     }
 
-    throw new Error(message);
+    // Callers that need to react to specific statuses (e.g. the sync
+    // engine unlinking on 404) get it alongside the translated message.
+    const error = new Error(message) as Error & { status?: number };
+    error.status = res.status;
+    throw error;
   }
 
   if (res.status === 204) {

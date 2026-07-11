@@ -38,8 +38,8 @@ class LocalBookSource implements BookSource {
 }
 
 /** Stored progress — the server wire dict plus updated_at (the LWW field
- *  a future sync compares against the server's). */
-interface LocalProgressRecord {
+ *  the sync engine compares against the server's). */
+export interface LocalProgressRecord {
   cfi: string;
   percentage: number | null;
   current_page: number;
@@ -53,7 +53,9 @@ interface LocalProgressRecord {
   updated_at: string;
 }
 
-type LocalHighlightRecord = HighlightOut & { deleted_at: string | null };
+export type LocalHighlightRecord = HighlightOut & {
+  deleted_at: string | null;
+};
 
 async function readJson<T>(key: string): Promise<T | null> {
   const { value } = await Preferences.get({ key });
@@ -67,6 +69,36 @@ async function readJson<T>(key: string): Promise<T | null> {
 
 async function writeJson(key: string, value: unknown): Promise<void> {
   await Preferences.set({ key, value: JSON.stringify(value) });
+}
+
+// Storage accessors for the sync engine (services/readingSync.ts) — it
+// merges server state into the same records this backend reads.
+export async function readLocalProgress(
+  bookId: string,
+): Promise<LocalProgressRecord | null> {
+  return readJson<LocalProgressRecord>(localProgressKey(bookId));
+}
+
+export async function writeLocalProgress(
+  bookId: string,
+  record: LocalProgressRecord,
+): Promise<void> {
+  await writeJson(localProgressKey(bookId), record);
+}
+
+export async function readLocalHighlightRecords(
+  bookId: string,
+): Promise<LocalHighlightRecord[]> {
+  return (
+    (await readJson<LocalHighlightRecord[]>(localHighlightsKey(bookId))) ?? []
+  );
+}
+
+export async function writeLocalHighlightRecords(
+  bookId: string,
+  records: LocalHighlightRecord[],
+): Promise<void> {
+  await writeJson(localHighlightsKey(bookId), records);
 }
 
 class LocalSyncBackend implements SyncBackend {
