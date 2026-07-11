@@ -32,6 +32,7 @@
     buildSearchUrl,
     type OpdsBookEntry,
     type OpdsEntry,
+    type OpdsFeed,
   } from "$lib/opds/parse";
   import type { OpdsCoverLoader } from "$lib/opds/covers";
   import type { OpdsCatalog } from "$lib/services/opdsCatalogs";
@@ -91,12 +92,57 @@
     }
   }
 
+  // A bare server origin — the mental model from connecting the app to a
+  // BeePub server — serves the web app's HTML, not a feed. Both BeePub and
+  // calibre-web keep their catalog at /opds, so on a parse failure at the
+  // catalog root with no path, probe /opds once and persist the fix.
+  async function probeOpdsPath(
+    err: unknown,
+    target: string,
+  ): Promise<OpdsFeed | null> {
+    if (page.url.searchParams.get("feed")) return null; // catalog roots only
+    if (!(err instanceof OpdsError) || err.kind !== "parse") return null;
+    const cat = catalog;
+    if (!cat) return null;
+    let probeUrl: string;
+    try {
+      const url = new URL(target);
+      if (url.pathname !== "/" && url.pathname !== "") return null;
+      probeUrl = `${url.origin}/opds`;
+    } catch {
+      return null;
+    }
+    try {
+      const feed = await fetchFeed(probeUrl, creds());
+      const { updateCatalog } = await import("$lib/services/opdsCatalogs");
+      const updated = await updateCatalog(cat.id, {
+        name: cat.name,
+        url: probeUrl,
+        username: cat.username,
+        password: cat.password,
+      });
+      // Triggers one redundant refetch via the $effect — once, on the
+      // visit that heals the URL.
+      if (updated) catalog = updated;
+      return feed;
+    } catch {
+      return null;
+    }
+  }
+
   async function loadFeed(target: string) {
     const token = ++loadToken;
     loading = true;
     error = null;
     try {
-      const feed = await fetchFeed(target, creds());
+      let feed: OpdsFeed;
+      try {
+        feed = await fetchFeed(target, creds());
+      } catch (err) {
+        const probed = await probeOpdsPath(err, target);
+        if (!probed) throw err;
+        feed = probed;
+      }
       if (token !== loadToken) return; // superseded by a newer navigation
       feedTitle = feed.title;
       entries = feed.entries;

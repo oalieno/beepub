@@ -45,7 +45,9 @@ async function saveAll(catalogs: OpdsCatalog[]): Promise<void> {
 function normalize(input: OpdsCatalogInput): OpdsCatalogInput {
   return {
     name: input.name.trim(),
-    url: input.url.trim().replace(/\/+$/, ""),
+    // Keep the URL as entered — trailing slashes are significant on some
+    // servers (Gutenberg's .opds/ endpoints 403 without one).
+    url: input.url.trim(),
     // Empty credential fields mean "no auth", not auth with empty strings.
     username: input.username?.trim() || undefined,
     password: input.password || undefined,
