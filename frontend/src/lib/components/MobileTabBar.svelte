@@ -3,7 +3,7 @@
   import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { Home, BookOpen, BookCopy, Compass, User } from "@lucide/svelte";
+  import { Home, ShelvingUnit, BookCopy, Compass, User } from "@lucide/svelte";
   import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
@@ -17,10 +17,12 @@
       requiresOnline: false,
     },
     {
-      href: "/my-books",
-      label: m.nav_my_books(),
-      icon: BookOpen,
-      match: (p: string) => p.startsWith("/my-books"),
+      href: "/bookshelves",
+      label: m.nav_shelves(),
+      icon: ShelvingUnit,
+      // /my-books is the system-shelf detail route — keep the tab lit there.
+      match: (p: string) =>
+        p.startsWith("/bookshelves") || p.startsWith("/my-books"),
       requiresOnline: true,
     },
     {

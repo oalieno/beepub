@@ -12,7 +12,7 @@
   // Derive page title from route
   const titleMap = $derived<Record<string, string>>({
     "/": m.nav_home(),
-    "/my-books": m.nav_my_books(),
+    "/my-books": m.nav_shelves(),
     "/libraries": m.nav_libraries(),
     "/bookshelves": m.nav_shelves(),
     "/highlights": m.nav_highlights(),

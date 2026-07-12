@@ -1,6 +1,5 @@
 {
   "nav_home": "首頁",
-  "nav_my_books": "我的書籍",
   "nav_libraries": "書庫",
   "nav_library": "書庫",
   "nav_shelves": "書架",
@@ -180,9 +179,6 @@
 
   "shelves_page_title": "我的書架 - BeePub",
   "shelves_new": "新增書架",
-  "shelves_no_shelves": "還沒有書架",
-  "shelves_empty_description": "書架可以幫你把書籍整理成自訂分類，例如「今年夏天要讀」或「最愛」。",
-  "shelves_create_shelf": "建立書架",
   "shelves_create_title": "建立書架",
   "shelves_name": "名稱",
   "shelves_name_placeholder": "例如：待讀清單、科幻最愛",

@@ -1,15 +1,53 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { bookshelvesApi } from "$lib/api/bookshelves";
+  import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import Modal from "$lib/components/Modal.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
-  import type { BookshelfOut } from "$lib/types";
-  import { Plus, ShelvingUnit, Trash2 } from "@lucide/svelte";
+  import type { BookshelfOut, ReadingStatus } from "$lib/types";
+  import {
+    Bookmark,
+    BookOpenCheck,
+    CircleCheck,
+    Plus,
+    ShelvingUnit,
+    Trash2,
+  } from "@lucide/svelte";
   import { CardListSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
 
+  // Goodreads-style exclusive shelves: reading statuses pinned as system
+  // shelves. Purely a display wrapper over /my-books — the backend has no
+  // system-shelf concept.
+  const systemShelves: {
+    status: ReadingStatus;
+    label: () => string;
+    icon: typeof Bookmark;
+    sort: string;
+  }[] = [
+    {
+      status: "want_to_read",
+      label: m.mybooks_tab_want_to_read,
+      icon: Bookmark,
+      sort: "updated_at",
+    },
+    {
+      status: "currently_reading",
+      label: m.mybooks_tab_reading,
+      icon: BookOpenCheck,
+      sort: "last_read_at",
+    },
+    {
+      status: "read",
+      label: m.mybooks_tab_read,
+      icon: CircleCheck,
+      sort: "updated_at",
+    },
+  ];
+
+  let systemData = $state<{ count: number; previewIds: string[] }[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
@@ -24,7 +62,24 @@
   async function loadData() {
     loading = true;
     try {
-      bookshelves = await bookshelvesApi.list();
+      const [system, shelves] = await Promise.all([
+        Promise.all(
+          systemShelves.map((s) =>
+            booksApi.getMyBooks({
+              status: s.status,
+              sort: s.sort,
+              limit: 4,
+              offset: 0,
+            }),
+          ),
+        ),
+        bookshelvesApi.list(),
+      ]);
+      systemData = system.map((r) => ({
+        count: r.total,
+        previewIds: r.items.filter((b) => b.cover_path).map((b) => b.id),
+      }));
+      bookshelves = shelves;
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -78,7 +133,7 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
-  {#if !loading && bookshelves.length > 0}
+  {#if !loading}
     <div class="flex justify-start mb-6">
       <button
         class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 sm:px-5 py-2.5 rounded-xl transition-colors whitespace-nowrap text-sm sm:text-base shrink-0"
@@ -92,27 +147,20 @@
 
   {#if loading}
     <CardListSkeleton count={4} />
-  {:else if bookshelves.length === 0}
-    <div class="flex flex-col items-center justify-center py-24 text-center">
-      <div class="mb-4 p-3 bg-primary/10 rounded-xl">
-        <ShelvingUnit class="text-primary/50" size={28} />
-      </div>
-      <p class="text-foreground text-lg font-medium mb-2">
-        {m.shelves_no_shelves()}
-      </p>
-      <p class="text-muted-foreground text-sm max-w-xs mb-6">
-        {m.shelves_empty_description()}
-      </p>
-      <button
-        class="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-5 py-2.5 rounded-xl transition-colors text-sm"
-        onclick={() => (showCreateModal = true)}
-      >
-        <Plus size={16} />
-        {m.shelves_create_shelf()}
-      </button>
-    </div>
   {:else}
     <div class="grid grid-cols-1 gap-5 collection-grid">
+      {#each systemShelves as shelf, i}
+        <CollectionCard
+          href="/my-books?tab={shelf.status}"
+          name={shelf.label()}
+          previewBookIds={systemData[i]?.previewIds ?? []}
+          bookCount={systemData[i]?.count ?? 0}
+        >
+          {#snippet icon()}
+            <shelf.icon class="text-muted-foreground/50 shrink-0" size={16} />
+          {/snippet}
+        </CollectionCard>
+      {/each}
       {#each bookshelves as shelf}
         <CollectionCard
           href="/bookshelves/{shelf.id}"

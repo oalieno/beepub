@@ -8,7 +8,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import {
     Home,
-    BookOpen,
     Library,
     ShelvingUnit,
     Highlighter,
@@ -40,10 +39,13 @@
       requiresOnline: false,
     },
     {
-      href: "/my-books",
-      label: m.nav_my_books(),
-      icon: BookOpen,
-      active: page.url.pathname.startsWith("/my-books"),
+      href: "/bookshelves",
+      label: m.nav_shelves(),
+      icon: ShelvingUnit,
+      // /my-books is the system-shelf detail route — keep the entry lit there.
+      active:
+        page.url.pathname.startsWith("/bookshelves") ||
+        page.url.pathname.startsWith("/my-books"),
       requiresOnline: true,
     },
     {
@@ -53,13 +55,6 @@
       active:
         page.url.pathname.startsWith("/libraries") ||
         page.url.pathname.startsWith("/all-books"),
-      requiresOnline: true,
-    },
-    {
-      href: "/bookshelves",
-      label: m.nav_shelves(),
-      icon: ShelvingUnit,
-      active: page.url.pathname.startsWith("/bookshelves"),
       requiresOnline: true,
     },
     {

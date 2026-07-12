@@ -10,7 +10,6 @@
   import { UserRole } from "$lib/types";
   import {
     BookOpen,
-    ShelvingUnit,
     Highlighter,
     Settings,
     HardDrive,
@@ -130,12 +129,6 @@
       href: "/highlights",
       label: m.nav_highlights(),
       icon: Highlighter,
-      requiresOnline: true,
-    },
-    {
-      href: "/bookshelves",
-      label: m.nav_shelves(),
-      icon: ShelvingUnit,
       requiresOnline: true,
     },
     ...(isNative()
