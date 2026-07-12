@@ -644,6 +644,23 @@
           ondatechange={handleDateChange}
         />
 
+        <!-- Reading progress — the home page shows it, so its absence here
+             read as a gap (UIUX audit 2026-07-12). -->
+        {#if interaction?.reading_progress?.percentage != null && interaction.reading_progress.percentage > 0}
+          {@const pct = Math.round(interaction.reading_progress.percentage)}
+          <div class="mt-4 flex items-center gap-3 max-w-xs">
+            <div class="h-1.5 flex-1 rounded-full bg-secondary overflow-hidden">
+              <div
+                class="h-full rounded-full bg-primary"
+                style="width: {Math.min(pct, 100)}%"
+              ></div>
+            </div>
+            <span class="text-sm text-muted-foreground shrink-0">
+              {m.book_progress_read({ percent: String(pct) })}
+            </span>
+          </div>
+        {/if}
+
         <!-- Action Buttons (desktop) -->
         <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
           <button

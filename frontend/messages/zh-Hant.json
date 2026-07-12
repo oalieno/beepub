@@ -241,6 +241,7 @@
   "external_not_found": "找不到",
   "external_mark_not_found": "標記為找不到",
   "book_download_epub": "下載 EPUB",
+  "book_progress_read": "已讀 {percent}%",
   "book_download_to_library": "下載到這台裝置",
   "book_in_local_library": "已在本機書庫，請到「本機書籍」管理",
   "book_on_device": "已下載到這台裝置",
