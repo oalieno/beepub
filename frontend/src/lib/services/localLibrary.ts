@@ -163,6 +163,51 @@ interface ParsedEpub {
   cover: Blob | null;
 }
 
+/**
+ * Cover for books without a standard declaration — epub.js only knows
+ * properties="cover-image" (EPUB3) and <meta name="cover"> (EPUB2), but
+ * e.g. Kadokawa EPUB3s declare the cover only as a guide reference to an
+ * XHTML page. Mirror the backend extractor's fallbacks: a manifest image
+ * named like a cover, else the first image on the first spine page (cover
+ * pages are conventionally spine[0]).
+ */
+async function fallbackCoverBlob(book: any): Promise<Blob | null> {
+  try {
+    const manifest: Record<string, { href?: string; type?: string }> =
+      book.packaging?.manifest ?? {};
+    for (const [id, item] of Object.entries(manifest)) {
+      if (
+        item?.type?.startsWith("image/") &&
+        item.href &&
+        /cover/i.test(`${id} ${item.href}`)
+      ) {
+        const blob = await book.archive.getBlob(book.resolve(item.href));
+        if (blob) return blob;
+      }
+    }
+
+    const section = book.spine?.get(0);
+    if (!section) return null;
+    await section.load(book.load.bind(book));
+    const doc: Document | null = section.document ?? null;
+    const img = doc?.querySelector("img[src], image");
+    // || not ?? — an empty attribute must fall through to the next form.
+    const src =
+      img?.getAttribute("src") ||
+      img?.getAttribute("xlink:href") ||
+      img?.getAttribute("href");
+    if (!src) return null;
+    // Resolve relative to the page, in the leading-slash root form
+    // archive.getBlob expects (it strips the first character).
+    const base = new URL(book.resolve(section.href), "https://epub/");
+    const path = new URL(src, base).pathname;
+    const blob = (await book.archive.getBlob(path)) ?? null;
+    return blob?.type?.startsWith("image/") ? blob : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Parse metadata and cover from EPUB bytes, in memory, via the epub.js fork. */
 async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
   const Epub = (await import("$lib/epubjs/epub.js")).default;
@@ -186,6 +231,7 @@ async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
         cover = null;
       }
     }
+    if (!cover) cover = await fallbackCoverBlob(book);
     return {
       title: metadata.title || null,
       authors: metadata.creator ? [metadata.creator] : [],
