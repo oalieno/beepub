@@ -388,6 +388,12 @@
         <X size={12} />
       </button>
     {/if}
+
+    {#if !loading && shownCount > 0}
+      <span class="ml-auto shrink-0 text-xs text-muted-foreground">
+        {m.browser_showing({ total: String(totalBooks) })}
+      </span>
+    {/if}
   </div>
 
   <!-- Filter panel -->
@@ -473,9 +479,6 @@
     </p>
   </div>
 {:else}
-  <p class="text-muted-foreground text-sm mb-4">
-    {m.browser_showing({ total: String(totalBooks) })}
-  </p>
   {#if collapse}
     <!-- One grid, mixing whole-series cards and standalone book cards -->
     <div

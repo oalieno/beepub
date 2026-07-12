@@ -1,7 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { page } from "$app/state";
-  import { goto, replaceState, afterNavigate } from "$app/navigation";
+  import { replaceState, afterNavigate } from "$app/navigation";
   import { isNative } from "$lib/platform";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
@@ -15,7 +15,7 @@
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Upload, HardDrive, ChevronRight } from "@lucide/svelte";
+  import { Upload, HardDrive } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
@@ -39,7 +39,6 @@
   let listLoading = $state(true);
   let selectedLib = $state<string>(page.url.searchParams.get("lib") || ALL);
   // null = not native (card hidden); loaded alongside the library list.
-  let localCount = $state<number | null>(null);
   // Bumped after an upload to force the browser to reload the current view.
   let reloadNonce = $state(0);
 
@@ -90,18 +89,7 @@
     },
   };
 
-  async function loadLocalCount() {
-    if (!isNative()) return;
-    try {
-      const { listLocalBooks } = await import("$lib/services/localLibrary");
-      localCount = (await listLocalBooks()).length;
-    } catch {
-      // card just stays hidden
-    }
-  }
-
   afterNavigate(async () => {
-    void loadLocalCount();
     if (restoredFromSnapshot) {
       restoredFromSnapshot = false;
       await tick();
@@ -219,28 +207,6 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
-  <!-- This device — the local library, pinned above the server libraries -->
-  {#if localCount !== null}
-    <button
-      class="w-full bg-card card-soft rounded-2xl p-4 flex items-center gap-3 mb-6 cursor-pointer hover:bg-secondary/30 transition-colors"
-      style="-webkit-tap-highlight-color: transparent;"
-      onclick={() => goto("/local")}
-    >
-      <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
-        <HardDrive class="text-primary" size={18} />
-      </div>
-      <div class="flex-1 min-w-0 text-left">
-        <h3 class="font-medium text-sm text-foreground">
-          {m.libraries_this_device()}
-        </h3>
-        <p class="text-muted-foreground text-xs mt-0.5">
-          {m.libraries_device_count({ count: String(localCount) })}
-        </p>
-      </div>
-      <ChevronRight size={16} class="text-muted-foreground shrink-0" />
-    </button>
-  {/if}
-
   {#if listLoading}
     <!-- Selector -->
     <div class="mb-6">
@@ -267,6 +233,7 @@
         {libraries}
         selected={selectedLib}
         onSelect={selectLibrary}
+        showDevice={isNative()}
       />
     </div>
 
