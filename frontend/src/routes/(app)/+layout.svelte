@@ -36,7 +36,19 @@
   }}
 />
 
-{#if isAuthenticated}
+<!-- localMode wins over isAuthenticated: entering serverless means no
+     server session can exist, but page.data.user is cached load output
+     and may lag until invalidation lands. -->
+{#if localMode}
+  <LocalTopBar />
+  <LocalTabBar />
+
+  <main
+    class="pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"
+  >
+    {@render children()}
+  </main>
+{:else if isAuthenticated}
   <!-- Desktop: sidebar -->
   <DesktopSidebar onSearchOpen={() => (searchOpen = true)} />
 
@@ -57,15 +69,6 @@
   </main>
 
   <SearchModal bind:open={searchOpen} />
-{:else if localMode}
-  <LocalTopBar />
-  <LocalTabBar />
-
-  <main
-    class="pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"
-  >
-    {@render children()}
-  </main>
 {:else}
   <main>
     {@render children()}

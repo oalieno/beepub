@@ -1,4 +1,5 @@
 import { writable } from "svelte/store";
+import { invalidateAll } from "$app/navigation";
 import { isNative } from "$lib/platform";
 import { apiBase } from "$lib/api/client";
 import type { LoginResponse, UserOut } from "$lib/types";
@@ -69,6 +70,10 @@ function createAuthStore() {
       } catch {
         // Cookie will be cleaned up by hooks.server.ts on next request
       }
+      // Rerun the layout loads: page.data.user is cached load output and
+      // survives client-side navigation, so without this the app chrome
+      // keeps rendering the logged-in shell until a full restart.
+      await invalidateAll();
     },
     setUser: (user: UserOut) => {
       update((s) => ({ ...s, user }));
