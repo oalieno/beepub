@@ -72,6 +72,9 @@ function createAuthStore() {
     },
     setUser: (user: UserOut) => {
       update((s) => ({ ...s, user }));
+      // Keeps the offline-start cache converged on the freshest shape —
+      // a cache written by an older login() would otherwise serve an
+      // incomplete user until the next login.
       cacheUser(user);
     },
   };

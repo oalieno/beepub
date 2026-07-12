@@ -316,6 +316,8 @@ export interface LoginResponse {
   username: string;
   role: UserRole;
   is_active: boolean;
+  can_download: boolean;
+  can_upload: boolean;
   is_demo?: boolean;
   access_token: string;
   refresh_token: string;

@@ -42,6 +42,11 @@ class LoginResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    # Native clients build their whole user object from this response (and
+    # cache it for offline starts) — keep it a superset of what the UI
+    # gates on, or buttons silently vanish on iOS.
+    can_download: bool
+    can_upload: bool
     is_demo: bool = False
     access_token: str
     refresh_token: str

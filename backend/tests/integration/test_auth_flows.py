@@ -61,3 +61,14 @@ async def test_logout_clears_the_session(admin_client):
     assert (await admin_client.get("/api/auth/me")).status_code == 200
     await admin_client.post("/api/auth/logout")
     assert (await admin_client.get("/api/auth/me")).status_code == 401
+
+
+async def test_login_response_carries_permission_flags(user_client):
+    """Native clients build (and cache) their whole user object from the
+    login response — a missing flag silently hides UI gated on it."""
+    async with _fresh_client() as c:
+        response = await c.post("/api/auth/login", data=USER_CREDENTIALS)
+        assert response.status_code == 200
+        body = response.json()
+        assert body["can_download"] is True
+        assert isinstance(body["can_upload"], bool)

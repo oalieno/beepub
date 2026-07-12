@@ -177,6 +177,8 @@ async def login(
         username=user.username,
         role=user.role.value,
         is_active=user.is_active,
+        can_download=user.can_download,
+        can_upload=user.can_upload,
         is_demo=bool(settings.demo_mode and user.username == settings.demo_username),
         access_token=access_token,
         refresh_token=refresh_token,
