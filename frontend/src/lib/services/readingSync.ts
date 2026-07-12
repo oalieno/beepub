@@ -35,6 +35,7 @@ import {
   type LocalBookEntry,
 } from "$lib/services/localLibrary";
 import { getIsOnline, isOnline } from "$lib/services/network";
+import { pushLedger } from "$lib/services/readingLedger";
 import { authStore } from "$lib/stores/auth";
 import type { BookSyncResponse, SyncProgressIn } from "$lib/types";
 
@@ -77,6 +78,9 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
   }
   fullSyncInFlight = (async () => {
     try {
+      // Before the empty-shelf return: the reading-time ledger outlives
+      // its books (read-then-deleted still counts toward the streak).
+      void pushLedger();
       const books = await listLocalBooks();
       if (books.length === 0) return;
       const links = await getLocalBookLinks();

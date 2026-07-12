@@ -277,6 +277,10 @@
         void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
           syncLocalBook(id).catch(() => {}),
         );
+        // The session's reading time is final — ship the ledger window.
+        void import("$lib/services/readingLedger").then(({ pushLedger }) =>
+          pushLedger(),
+        );
         // Closing the book shouldn't wait out the 30s push throttle —
         // the reader's final save has landed by now, ship it.
         if (kind === "kosync") {
@@ -752,6 +756,15 @@
           }}
           onprogress={(p) => {
             percentage = p.percentage;
+          }}
+          onactivity={() => {
+            // beepub-kind saves carry track_activity — the server credits
+            // the 'web' device row itself. Local/kosync books tick the
+            // device ledger instead.
+            if (!isBeepub)
+              void import("$lib/services/readingLedger").then(
+                ({ tickReading }) => tickReading(),
+              );
           }}
           ontoc={(t) => (toc = t)}
           onhrefchange={(href) => (currentHref = href)}

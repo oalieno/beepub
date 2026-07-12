@@ -42,6 +42,7 @@
     isImageBook = false,
     offline = false,
     onprogress,
+    onactivity,
     ontitle,
     ontoc,
     ondirection,
@@ -77,6 +78,9 @@
     isImageBook?: boolean;
     offline?: boolean;
     onprogress?: (detail: { cfi: string; percentage: number | null }) => void;
+    /** Fires on user-driven relocations that count as active reading —
+     *  the same signal the trackActivity save uses. */
+    onactivity?: () => void;
     ontitle?: (title: string) => void;
     ontoc?: (toc: { label: string; href: string; subitems?: any[] }[]) => void;
     ondirection?: (isRtl: boolean) => void;
@@ -774,7 +778,10 @@
       // Exception: while peeking at a highlight the position on screen is a
       // visit, not progress — the UI below still updates, only persistence
       // (server + localStorage) is held.
-      if (!peekSaveHold) debouncedSave();
+      if (!peekSaveHold) {
+        debouncedSave();
+        onactivity?.();
+      }
 
       if (waitingForCanonicalProgress && !locationsGenerated) {
         return;
