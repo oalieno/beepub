@@ -250,6 +250,8 @@
   "book_downloaded_long_press": "Downloaded — long press to remove",
   "book_download_offline": "Download for offline",
   "book_download_epub": "Download EPUB",
+  "book_download_to_library": "Download to this device",
+  "book_in_local_library": "In your local library — manage it in Local Books",
   "book_more_actions": "More actions",
   "book_remove_favorite": "Remove from favorites",
   "book_add_favorite": "Add to favorites",

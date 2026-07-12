@@ -124,7 +124,6 @@
   }
   let showReportModal = $state(false);
   let showMobileActions = $state(false);
-  let showRemoveDownloadDialog = $state(false);
 
   // Work management state
   let showWorkRemoveConfirm = $state(false);
@@ -139,24 +138,11 @@
   const WORK_SEARCH_LIMIT = 20;
   let savingStatus = $state(false);
 
-  // Offline download state (native only)
-  let offlineAvailable = $state(false);
+  // Download-to-library state (native only): a server book "downloaded"
+  // means a digest-linked copy exists in the local library.
+  let inLocalLibrary = $state(false);
   let downloading = $state(false);
   let downloadProgress = $state(0);
-
-  // Long-press handler for removing offline copy
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
-  function startLongPress() {
-    longPressTimer = setTimeout(() => {
-      showRemoveDownloadDialog = true;
-    }, 500);
-  }
-  function cancelLongPress() {
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  }
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
@@ -237,13 +223,13 @@
       ];
       if (isNative()) {
         secondaryFetches.push(
-          import("$lib/services/offline")
-            .then(({ isBookDownloaded }) => isBookDownloaded(bookId))
-            .then((v) => {
-              offlineAvailable = v;
+          import("$lib/services/localLibrary")
+            .then(({ getLocalBookLinks }) => getLocalBookLinks())
+            .then((links) => {
+              inLocalLibrary = Object.values(links).includes(bookId);
             })
             .catch(() => {
-              offlineAvailable = false;
+              inLocalLibrary = false;
             }),
         );
       }
@@ -260,35 +246,38 @@
     downloading = true;
     downloadProgress = 0;
     try {
-      const { downloadBook } = await import("$lib/services/offline");
-      await downloadBook(
-        bookId,
-        book.display_title ?? book.title ?? "Untitled",
-        book.display_authors ?? book.authors ?? [],
-        (loaded, total) => {
-          downloadProgress = total > 0 ? Math.round((loaded / total) * 100) : 0;
+      const [{ downloadEpubToLibrary }, { apiBase, getAuthHeader }] =
+        await Promise.all([
+          import("$lib/services/epubDownload"),
+          import("$lib/api/client"),
+        ]);
+      const entry = await downloadEpubToLibrary({
+        url: `${apiBase()}/books/${bookId}/file`,
+        headers: getAuthHeader(),
+        title: book.display_title ?? book.title ?? "Untitled",
+        onProgress: (pct) => {
+          downloadProgress = pct ?? 0;
         },
+      });
+      inLocalLibrary = true;
+      toastStore.success(m.local_import_success({ title: entry.title }));
+      // Same bytes as the server file — the digest link is guaranteed,
+      // and syncing starts right away.
+      void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
+        linkAndSyncBook(entry),
       );
-      offlineAvailable = true;
-      toastStore.success(m.book_downloaded());
     } catch (e) {
-      toastStore.error(
-        m.book_download_failed({ error: String((e as Error).message) }),
-      );
+      const { DuplicateBookError } = await import("$lib/services/localLibrary");
+      if (e instanceof DuplicateBookError) {
+        inLocalLibrary = true;
+        toastStore.info(m.local_import_duplicate({ title: e.existing.title }));
+      } else {
+        toastStore.error(
+          m.book_download_failed({ error: String((e as Error).message) }),
+        );
+      }
     } finally {
       downloading = false;
-    }
-  }
-
-  async function handleDeleteDownload() {
-    if (!book) return;
-    try {
-      const { deleteLocalBook } = await import("$lib/services/offline");
-      await deleteLocalBook(bookId);
-      offlineAvailable = false;
-      toastStore.success(m.book_offline_removed());
-    } catch (e) {
-      toastStore.error((e as Error).message);
     }
   }
 
@@ -690,13 +679,11 @@
             />
           </button>
           {#if isNative()}
-            {#if offlineAvailable}
+            {#if inLocalLibrary}
               <button
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-primary hover:shadow-md transition-all"
-                onpointerdown={startLongPress}
-                onpointerup={cancelLongPress}
-                onpointerleave={cancelLongPress}
-                title={m.book_downloaded_long_press()}
+                onclick={() => toastStore.info(m.book_in_local_library())}
+                title={m.book_in_local_library()}
               >
                 <Check size={16} />
               </button>
@@ -737,12 +724,12 @@
                   >{downloadProgress}%</span
                 >
               </button>
-            {:else}
+            {:else if $authStore.user?.can_download}
               <button
-                aria-label={m.book_download_epub()}
+                aria-label={m.book_download_to_library()}
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
                 onclick={handleDownload}
-                title={m.book_download_offline()}
+                title={m.book_download_to_library()}
               >
                 <Download size={16} />
               </button>
@@ -1116,13 +1103,11 @@
         />
       </button>
       {#if isNative()}
-        {#if offlineAvailable}
+        {#if inLocalLibrary}
           <button
             class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-primary transition-all"
-            onpointerdown={startLongPress}
-            onpointerup={cancelLongPress}
-            onpointerleave={cancelLongPress}
-            title={m.book_downloaded_long_press()}
+            onclick={() => toastStore.info(m.book_in_local_library())}
+            title={m.book_in_local_library()}
           >
             <Check size={18} />
           </button>
@@ -1162,8 +1147,9 @@
               >{downloadProgress}%</span
             >
           </button>
-        {:else}
+        {:else if $authStore.user?.can_download}
           <button
+            aria-label={m.book_download_to_library()}
             class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
             onclick={handleDownload}
           >
@@ -1565,33 +1551,3 @@
     </div>
   </div>
 {/if}
-
-<!-- Remove Offline Copy Confirmation -->
-<Dialog.Root bind:open={showRemoveDownloadDialog}>
-  <Dialog.Content class="sm:max-w-sm bg-popover">
-    <Dialog.Header>
-      <Dialog.Title>{m.book_remove_offline_title()}</Dialog.Title>
-      <Dialog.Description>
-        {m.book_remove_offline_desc()}
-      </Dialog.Description>
-    </Dialog.Header>
-    <Dialog.Footer>
-      <Button
-        variant="outline"
-        class="rounded-xl"
-        onclick={() => (showRemoveDownloadDialog = false)}
-      >
-        {m.common_cancel()}
-      </Button>
-      <Button
-        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
-        onclick={() => {
-          handleDeleteDownload();
-          showRemoveDownloadDialog = false;
-        }}
-      >
-        {m.common_remove()}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>

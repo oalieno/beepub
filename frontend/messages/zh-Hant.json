@@ -250,6 +250,8 @@
   "book_downloaded_long_press": "已下載 — 長按移除",
   "book_download_offline": "下載供離線閱讀",
   "book_download_epub": "下載 EPUB",
+  "book_download_to_library": "下載到這台裝置",
+  "book_in_local_library": "已在本機書庫，請到「本機書籍」管理",
   "book_more_actions": "更多動作",
   "book_remove_favorite": "移除收藏",
   "book_add_favorite": "加入收藏",
