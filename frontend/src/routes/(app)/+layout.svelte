@@ -1,14 +1,22 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
+  import { isLocalMode } from "$lib/api/client";
   import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
+  import LocalTabBar from "$lib/components/LocalTabBar.svelte";
+  import LocalTopBar from "$lib/components/LocalTopBar.svelte";
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
   import SearchModal from "$lib/components/SearchModal.svelte";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
+
+  // Serverless local mode gets its own chrome below. Entering/leaving the
+  // mode always routes through (auth) pages, so this layout remounts and a
+  // one-time read is enough.
+  const localMode = isLocalMode();
 
   let searchOpen = $state(false);
   let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
@@ -49,6 +57,15 @@
   </main>
 
   <SearchModal bind:open={searchOpen} />
+{:else if localMode}
+  <LocalTopBar />
+  <LocalTabBar />
+
+  <main
+    class="pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"
+  >
+    {@render children()}
+  </main>
 {:else}
   <main>
     {@render children()}

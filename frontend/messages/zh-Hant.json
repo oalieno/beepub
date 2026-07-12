@@ -781,6 +781,9 @@
   "local_connect_server": "連接 BeePub 伺服器",
   "local_linked": "已連結到伺服器書庫，閱讀將自動同步",
   "local_linked_badge": "與伺服器同步中",
+  "local_nav_books": "書庫",
+  "local_nav_settings": "設定",
+  "local_settings_page_title": "設定 - BeePub",
 
   "catalogs_page_title": "OPDS 目錄 - BeePub",
   "catalogs_native_only": "OPDS 目錄功能僅在手機 app 中可用",

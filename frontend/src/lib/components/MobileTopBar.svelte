@@ -20,6 +20,8 @@
     "/gacha": m.nav_gacha(),
     "/admin": m.nav_admin(),
     "/profile": m.nav_profile(),
+    "/local": m.nav_local_books(),
+    "/catalogs": m.nav_catalogs(),
   });
 
   let pageTitle = $derived(() => {

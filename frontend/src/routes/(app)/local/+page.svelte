@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
-  import { isLocalMode } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { Button } from "$lib/components/ui/button";
@@ -13,18 +12,10 @@
     HardDrive,
     Plus,
     Loader2,
-    RefreshCw,
-    Rss,
-    Server,
   } from "@lucide/svelte";
-  import KosyncSettingsDialog from "$lib/components/KosyncSettingsDialog.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
-
-  // In serverless local mode the (app) layout renders no chrome (there is
-  // no authenticated user), so this page provides its own header.
-  const localMode = isLocalMode();
 
   // Cover URIs are re-derived per mount, so keep them beside the entry
   // instead of mutating the manifest shape.
@@ -38,7 +29,6 @@
   let loading = $state(true);
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
-  let kosyncOpen = $state(false);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -144,32 +134,7 @@
   <title>{m.local_page_title()}</title>
 </svelte:head>
 
-<div
-  class="px-6 sm:px-8 py-6"
-  style={localMode
-    ? "padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);"
-    : ""}
->
-  {#if localMode}
-    <div class="flex items-center gap-2 mb-6">
-      <HardDrive size={20} class="text-primary" />
-      <h1 class="text-xl font-bold" style="font-family: var(--font-heading)">
-        {m.nav_local_books()}
-      </h1>
-      <!-- The only entry points to OPDS catalogs and kosync settings in
-           serverless mode (no app chrome). -->
-      <div class="ml-auto flex items-center gap-1">
-        <Button variant="ghost" size="sm" onclick={() => goto("/catalogs")}>
-          <Rss size={16} />
-          {m.nav_catalogs()}
-        </Button>
-        <Button variant="ghost" size="sm" onclick={() => (kosyncOpen = true)}>
-          <RefreshCw size={16} />
-          {m.kosync_title()}
-        </Button>
-      </div>
-    </div>
-  {/if}
+<div class="px-6 sm:px-8 py-6">
   {#if loading}
     <BookGridSkeleton count={6} />
   {:else if !isNative()}
@@ -303,20 +268,5 @@
         {/each}
       </div>
     {/if}
-
-    {#if localMode}
-      <div class="mt-12 pb-8 text-center">
-        <Button
-          variant="outline"
-          class="rounded-xl"
-          onclick={() => goto("/setup")}
-        >
-          <Server size={16} />
-          {m.local_connect_server()}
-        </Button>
-      </div>
-    {/if}
   {/if}
 </div>
-
-<KosyncSettingsDialog bind:open={kosyncOpen} />

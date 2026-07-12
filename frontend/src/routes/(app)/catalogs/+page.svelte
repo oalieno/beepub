@@ -2,7 +2,6 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
-  import { isLocalMode } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { Button } from "$lib/components/ui/button";
@@ -16,14 +15,9 @@
     Trash2,
     Lock,
     ChevronRight,
-    ArrowLeft,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { OpdsCatalog } from "$lib/services/opdsCatalogs";
-
-  // In serverless local mode the (app) layout renders no chrome (there is
-  // no authenticated user), so this page provides its own header.
-  const localMode = isLocalMode();
 
   let catalogs = $state<OpdsCatalog[]>([]);
   let loading = $state(true);
@@ -149,28 +143,7 @@
   <title>{m.catalogs_page_title()}</title>
 </svelte:head>
 
-<div
-  class="px-6 sm:px-8 py-6"
-  style={localMode
-    ? "padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);"
-    : ""}
->
-  {#if localMode}
-    <div class="flex items-center gap-2 mb-6">
-      <button
-        class="p-1 -ml-1 text-muted-foreground hover:text-foreground"
-        style="-webkit-tap-highlight-color: transparent;"
-        title={m.nav_local_books()}
-        onclick={() => goto("/local")}
-      >
-        <ArrowLeft size={20} />
-      </button>
-      <Rss size={20} class="text-primary" />
-      <h1 class="text-xl font-bold" style="font-family: var(--font-heading)">
-        {m.nav_catalogs()}
-      </h1>
-    </div>
-  {/if}
+<div class="px-6 sm:px-8 py-6">
   {#if loading}
     <!-- Preferences read is quick; avoid a skeleton flash. -->
     <div class="py-24"></div>

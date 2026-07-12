@@ -3,7 +3,6 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { isNative } from "$lib/platform";
-  import { isLocalMode } from "$lib/api/client";
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -37,9 +36,6 @@
   import type { OpdsCoverLoader } from "$lib/opds/covers";
   import type { OpdsCatalog } from "$lib/services/opdsCatalogs";
 
-  // In serverless local mode the (app) layout renders no chrome (there is
-  // no authenticated user), so this page provides its own header.
-  const localMode = isLocalMode();
   const catalogId = page.params.id ?? "";
 
   let catalog = $state<OpdsCatalog | null>(null);
@@ -302,12 +298,7 @@
   <title>{catalog ? catalog.name : m.catalogs_page_title()}</title>
 </svelte:head>
 
-<div
-  class="px-6 sm:px-8 py-6"
-  style={localMode
-    ? "padding-top: calc(env(safe-area-inset-top, 0px) + 1.5rem);"
-    : ""}
->
+<div class="px-6 sm:px-8 py-6">
   <div class="mb-4">
     {#if page.url.searchParams.get("feed")}
       <!-- Deeper in the catalog: back walks the feed history. -->
