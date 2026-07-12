@@ -12,6 +12,9 @@
    toolbar could disagree with the page the user just switched to. */
 :root,
 .reader-light {
+  /* Native UI (scrollbars, form controls) must follow the theme, not the
+     OS — otherwise dark mode gets white scrollbars on every overflow row. */
+  color-scheme: light;
   --radius: 0.75rem;
   --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
@@ -50,6 +53,7 @@
 
 .dark,
 .reader-dark {
+  color-scheme: dark;
   --background: #171310;
   --foreground: #ece5da;
   --card: #211c16;
@@ -136,6 +140,19 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/* Scroll containers opt out of (or slim down) the native scrollbar. Both
+   classes were already used in templates but never defined. */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
 }
 
 @layer base {

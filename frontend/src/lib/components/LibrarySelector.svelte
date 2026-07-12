@@ -22,7 +22,7 @@
   }
 </script>
 
-<div class="flex gap-1 overflow-x-auto pb-1">
+<div class="flex gap-1 overflow-x-auto scrollbar-none pb-1">
   <!-- All books pseudo-library -->
   <button
     type="button"
