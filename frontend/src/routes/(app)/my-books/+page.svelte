@@ -1,19 +1,12 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
+  import BackButton from "$lib/components/BackButton.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import type { BookWithInteractionOut, ReadingStatus } from "$lib/types";
-  import {
-    BookOpenCheck,
-    Bookmark,
-    CircleCheck,
-    CircleX,
-    Heart,
-    BookOpen,
-  } from "@lucide/svelte";
+  import { BookOpen } from "@lucide/svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -24,29 +17,15 @@
     | "did_not_finish"
     | "favorites";
 
-  const tabs: {
-    key: TabKey;
-    label: string;
-    icon: typeof BookOpenCheck;
-  }[] = [
-    {
-      key: "currently_reading",
-      label: m.mybooks_tab_reading(),
-      icon: BookOpenCheck,
-    },
-    {
-      key: "want_to_read",
-      label: m.mybooks_tab_want_to_read(),
-      icon: Bookmark,
-    },
-    { key: "read", label: m.mybooks_tab_read(), icon: CircleCheck },
-    {
-      key: "did_not_finish",
-      label: m.mybooks_tab_did_not_finish(),
-      icon: CircleX,
-    },
-    { key: "favorites", label: m.mybooks_tab_favorites(), icon: Heart },
-  ];
+  // System-shelf detail: the bookshelves page pins one card per reading
+  // status (plus favorites) and links here with ?tab=.
+  const shelfNames: Record<TabKey, () => string> = {
+    currently_reading: m.mybooks_tab_reading,
+    want_to_read: m.mybooks_tab_want_to_read,
+    read: m.mybooks_tab_read,
+    did_not_finish: m.mybooks_tab_did_not_finish,
+    favorites: m.mybooks_tab_favorites,
+  };
 
   const PAGE_SIZE = 60;
 
@@ -57,13 +36,11 @@
   let requestSeq = 0;
   let hasMore = $derived(books.length < total);
 
-  // Derive active tab from URL so back/forward navigation works
+  // Derive the active shelf from the URL so back/forward navigation works
   let urlTab = $derived(
     (page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
   );
-  let activeTab = $derived(
-    tabs.some((t) => t.key === urlTab) ? urlTab : "currently_reading",
-  );
+  let activeTab = $derived(urlTab in shelfNames ? urlTab : "currently_reading");
 
   function getTabQuery(tab: TabKey) {
     const isFavoriteTab = tab === "favorites";
@@ -124,31 +101,20 @@
     requestSeq += 1;
     loadFirstPage(tab, requestSeq);
   });
-
-  function switchTab(tab: TabKey) {
-    goto(`/my-books?tab=${tab}`);
-  }
 </script>
 
 <svelte:head>
-  <title>{m.mybooks_page_title()}</title>
+  <title>{m.bookshelf_page_title({ name: shelfNames[activeTab]() })}</title>
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
-  <!-- Tabs -->
-  <div class="flex gap-1 overflow-x-auto pb-1 mb-8 -mx-4 px-4 sm:mx-0 sm:px-0">
-    {#each tabs as tab}
-      <button
-        class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors {activeTab ===
-        tab.key
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:text-foreground hover:bg-muted'}"
-        onclick={() => switchTab(tab.key)}
-      >
-        <tab.icon size={15} />
-        {tab.label}
-      </button>
-    {/each}
+  <div class="mb-6">
+    <div class="mb-1">
+      <BackButton href="/bookshelves" label={m.nav_shelves()} />
+    </div>
+    <h1 class="text-3xl font-bold text-foreground">
+      {shelfNames[activeTab]()}
+    </h1>
   </div>
 
   {#if loading}

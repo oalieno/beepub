@@ -11,6 +11,8 @@
     Bookmark,
     BookOpenCheck,
     CircleCheck,
+    CircleX,
+    Heart,
     Plus,
     ShelvingUnit,
     Trash2,
@@ -18,32 +20,44 @@
   import { CardListSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
 
-  // Goodreads-style exclusive shelves: reading statuses pinned as system
-  // shelves. Purely a display wrapper over /my-books — the backend has no
-  // system-shelf concept.
+  // Goodreads-style exclusive shelves: reading statuses (plus the favorites
+  // flag) pinned as system shelves. Purely a display wrapper over /my-books —
+  // the backend has no system-shelf concept.
   const systemShelves: {
-    status: ReadingStatus;
+    tab: string;
     label: () => string;
     icon: typeof Bookmark;
-    sort: string;
+    query: { status?: ReadingStatus; favorite?: boolean; sort: string };
   }[] = [
     {
-      status: "want_to_read",
+      tab: "want_to_read",
       label: m.mybooks_tab_want_to_read,
       icon: Bookmark,
-      sort: "updated_at",
+      query: { status: "want_to_read", sort: "updated_at" },
     },
     {
-      status: "currently_reading",
+      tab: "currently_reading",
       label: m.mybooks_tab_reading,
       icon: BookOpenCheck,
-      sort: "last_read_at",
+      query: { status: "currently_reading", sort: "last_read_at" },
     },
     {
-      status: "read",
+      tab: "read",
       label: m.mybooks_tab_read,
       icon: CircleCheck,
-      sort: "updated_at",
+      query: { status: "read", sort: "updated_at" },
+    },
+    {
+      tab: "did_not_finish",
+      label: m.mybooks_tab_did_not_finish,
+      icon: CircleX,
+      query: { status: "did_not_finish", sort: "updated_at" },
+    },
+    {
+      tab: "favorites",
+      label: m.mybooks_tab_favorites,
+      icon: Heart,
+      query: { favorite: true, sort: "updated_at" },
     },
   ];
 
@@ -65,12 +79,7 @@
       const [system, shelves] = await Promise.all([
         Promise.all(
           systemShelves.map((s) =>
-            booksApi.getMyBooks({
-              status: s.status,
-              sort: s.sort,
-              limit: 4,
-              offset: 0,
-            }),
+            booksApi.getMyBooks({ ...s.query, limit: 4, offset: 0 }),
           ),
         ),
         bookshelvesApi.list(),
@@ -151,7 +160,7 @@
     <div class="grid grid-cols-1 gap-5 collection-grid">
       {#each systemShelves as shelf, i}
         <CollectionCard
-          href="/my-books?tab={shelf.status}"
+          href="/my-books?tab={shelf.tab}"
           name={shelf.label()}
           previewBookIds={systemData[i]?.previewIds ?? []}
           bookCount={systemData[i]?.count ?? 0}
