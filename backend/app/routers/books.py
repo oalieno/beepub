@@ -994,24 +994,34 @@ async def list_all_books(
     propagated = await get_work_propagated_interactions(
         db, book_ids_list, current_user.id
     )
-    # Direct (non-propagated) user ratings for this page of books.
-    ratings_result = await db.execute(
-        select(UserBookInteraction.book_id, UserBookInteraction.rating).where(
+    # Direct (non-propagated) user interaction for this page of books —
+    # rating, plus progress for the grid's "n%" status line (progress stays
+    # per-edition, so it deliberately does not propagate across works).
+    own_result = await db.execute(
+        select(
+            UserBookInteraction.book_id,
+            UserBookInteraction.rating,
+            UserBookInteraction.reading_progress,
+        ).where(
             UserBookInteraction.user_id == current_user.id,
             UserBookInteraction.book_id.in_(book_ids_list),
-            UserBookInteraction.rating.is_not(None),
         )
     )
-    ratings_map = {row[0]: row[1] for row in ratings_result.all()}
+    own_map = {row[0]: row for row in own_result.all()}
     items = []
     for b in books:
         item = BookWithInteractionOut.model_validate(b)
         item.edition_count = edition_counts.get(b.id)
-        item.user_rating = ratings_map.get(b.id)
         prop = propagated.get(b.id)
         if prop:
             item.reading_status = prop["reading_status"]
             item.is_favorite = prop["is_favorite"]
+        own = own_map.get(b.id)
+        if own:
+            item.user_rating = own.rating
+            own_progress = own.reading_progress or {}
+            item.reading_percentage = own_progress.get("percentage")
+            item.last_read_at = own_progress.get("last_read_at")
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)

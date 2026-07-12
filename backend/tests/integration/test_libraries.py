@@ -101,6 +101,13 @@ async def test_library_listing_carries_own_progress(admin_client):
     assert item["reading_status"] == "currently_reading"
     assert item["reading_percentage"] == 37.5
 
+    # The merged all-libraries browse — the default 書庫 view — hits
+    # /books/all, a separate code path from the per-library listing.
+    all_books = (await admin_client.get("/api/books/all")).json()
+    item = next(i for i in all_books["items"] if i["id"] == book["id"])
+    assert item["reading_status"] == "currently_reading"
+    assert item["reading_percentage"] == 37.5
+
     feed = (await admin_client.get(f"/api/libraries/{library_id}/feed")).json()
     entry = next(
         i
