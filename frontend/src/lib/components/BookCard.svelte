@@ -1,54 +1,27 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import type { BookOut, ReadingStatus } from "$lib/types";
+  import type { BookOut, BookWithInteractionOut } from "$lib/types";
   import {
     TriangleAlert,
     BookOpen,
     Bookmark,
     Check,
     HardDrive,
-    Image,
-    Layers,
   } from "@lucide/svelte";
-  import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { linkedServerBookIds } from "$lib/stores/linkedBooks";
   import * as m from "$lib/paraglide/messages.js";
-  import { toastStore } from "$lib/stores/toast";
 
-  let {
-    book,
-    readingStatus = null,
-    onStatusChange,
-  }: {
-    book: BookOut;
-    readingStatus?: ReadingStatus | null;
-    onStatusChange?: (bookId: string, status: ReadingStatus | null) => void;
-  } = $props();
+  let { book }: { book: BookOut } = $props();
 
-  let loading = $state(false);
-
-  async function toggleWantToRead(e: MouseEvent) {
-    e.stopPropagation();
-    e.preventDefault();
-    if (loading) return;
-
-    const newStatus: ReadingStatus | null =
-      readingStatus === "want_to_read" ? null : "want_to_read";
-
-    loading = true;
-    try {
-      await booksApi.updateReadingStatus(book.id, {
-        reading_status: newStatus,
-      });
-      onStatusChange?.(book.id, newStatus);
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      loading = false;
-    }
-  }
+  // Covers are uncontrolled artwork — nothing gets stacked on them. All
+  // semantic state lives in the info line below, where contrast is ours.
+  // Interaction fields ride inline on list responses when the endpoint
+  // provides them; plain BookOut lists simply render no status line.
+  let interaction = $derived(book as Partial<BookWithInteractionOut>);
+  let status = $derived(interaction.reading_status ?? null);
+  let progress = $derived(interaction.reading_percentage ?? null);
 </script>
 
 <div
@@ -84,80 +57,6 @@
           >
         </div>
       {/if}
-
-      <!-- Image book badge — top-left -->
-      {#if book.is_image_book}
-        <div
-          class="absolute top-2 left-2 p-1 bg-secondary/80 backdrop-blur-sm rounded-full"
-        >
-          <Image size={13} class="text-muted-foreground" />
-        </div>
-      {/if}
-
-      <!-- Issue report badge — top-left, below image badge -->
-      {#if book.has_unresolved_reports}
-        <div
-          class="absolute left-2 p-1 bg-destructive/80 backdrop-blur-sm rounded-full"
-          style:top={book.is_image_book ? "2.25rem" : "0.5rem"}
-        >
-          <TriangleAlert size={13} class="text-destructive-foreground" />
-        </div>
-      {/if}
-
-      <!-- Editions count pill — bottom-left -->
-      {#if book.edition_count && book.edition_count > 1}
-        <div
-          class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm rounded-full text-[11px] px-1.5 py-0.5 text-white font-medium flex items-center gap-0.5"
-        >
-          <Layers size={10} />
-          {book.edition_count}
-        </div>
-      {/if}
-
-      <!-- Local copy badge — bottom-right, the mirror of the local shelf's
-           cloud badge (native only: the set stays empty on web) -->
-      {#if $linkedServerBookIds.has(book.id)}
-        <span
-          class="absolute bottom-2 right-2 bg-black/50 text-white/90 p-1 rounded-full"
-          title={m.book_on_device()}
-        >
-          <HardDrive size={12} />
-        </span>
-      {/if}
-
-      <!-- Status overlay — anchored to cover image -->
-      {#if onStatusChange}
-        {#if readingStatus === "read"}
-          <div class="absolute top-2 right-2 p-1 bg-primary rounded-full">
-            <Check
-              size={13}
-              strokeWidth={3}
-              class="drop-shadow-md text-white"
-            />
-          </div>
-        {:else}
-          <button
-            class="absolute -top-2 right-0 p-1 transition-opacity duration-200
-              {readingStatus === 'want_to_read'
-              ? 'opacity-100'
-              : 'opacity-60 can-hover:opacity-0 can-hover:group-hover:opacity-100'}"
-            style="-webkit-tap-highlight-color: transparent; touch-action: manipulation;"
-            onclick={toggleWantToRead}
-            title={readingStatus === "want_to_read"
-              ? m.book_remove_want_to_read()
-              : m.book_want_to_read()}
-          >
-            <Bookmark
-              size={26}
-              strokeWidth={readingStatus === "want_to_read" ? 0 : 2}
-              class="drop-shadow-md transition-colors {readingStatus ===
-              'want_to_read'
-                ? 'fill-primary text-primary'
-                : 'fill-background/60 text-foreground/70'}"
-            />
-          </button>
-        {/if}
-      {/if}
     </div>
   </div>
 
@@ -168,18 +67,40 @@
     >
       {book.display_title ?? m.common_untitled()}
     </h3>
-    <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
-      {(book.display_authors ?? []).join(", ") || "\u00A0"}
-    </p>
-    {#if book.display_series}
-      <p
-        class="text-muted-foreground/70 text-xs mt-0.5 flex items-baseline min-w-0"
-      >
-        <span class="truncate">{book.display_series}</span
-        >{#if book.display_series_index != null}<span class="shrink-0"
-            >&nbsp;[{book.display_series_index}]</span
-          >{/if}
-      </p>
+    {#if status || book.has_unresolved_reports || $linkedServerBookIds.has(book.id)}
+      <div class="flex items-center gap-1.5 mt-1 text-xs">
+        {#if status === "read"}
+          <span class="inline-flex items-center gap-1 text-primary font-medium">
+            <Check size={12} strokeWidth={3} />{m.mybooks_tab_read()}
+          </span>
+        {:else if status === "currently_reading"}
+          <span class="text-muted-foreground">
+            {#if progress != null && progress > 0}
+              {m.book_progress_read({ percent: String(Math.round(progress)) })}
+            {:else}
+              {m.mybooks_tab_reading()}
+            {/if}
+          </span>
+        {:else if status === "want_to_read"}
+          <span class="inline-flex items-center gap-1 text-muted-foreground">
+            <Bookmark size={12} />{m.mybooks_tab_want_to_read()}
+          </span>
+        {:else if status === "did_not_finish"}
+          <span class="text-muted-foreground"
+            >{m.mybooks_tab_did_not_finish()}</span
+          >
+        {/if}
+        {#if book.has_unresolved_reports}
+          <TriangleAlert size={12} class="text-destructive shrink-0" />
+        {/if}
+        {#if $linkedServerBookIds.has(book.id)}
+          <!-- The mirror of the local shelf's cloud badge (native only:
+               the set stays empty on web) -->
+          <span class="text-muted-foreground" title={m.book_on_device()}>
+            <HardDrive size={12} />
+          </span>
+        {/if}
+      </div>
     {/if}
   </div>
 </div>

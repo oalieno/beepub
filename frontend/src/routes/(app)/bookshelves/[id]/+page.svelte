@@ -22,18 +22,12 @@
   } from "$lib/tiers";
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
-  import type {
-    BookshelfOut,
-    LibraryFeedItem,
-    ReadingStatus,
-  } from "$lib/types";
+  import type { BookshelfOut, LibraryFeedItem } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
 
   let shelf = $state<BookshelfOut | null>(null);
   let items = $state<LibraryFeedItem[]>([]);
-  // Reading status per book id, supplied inline by each book item.
-  let interactions = $state<Record<string, ReadingStatus | null>>({});
   let loading = $state(true);
 
   let viewMode = $state<"grid" | "tier">("grid");
@@ -77,11 +71,6 @@
       ]);
       shelf = s;
       items = list;
-      interactions = Object.fromEntries(
-        list
-          .filter((x) => x.type === "book")
-          .map((x) => [x.book!.id, x.book!.reading_status ?? null]),
-      );
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -92,10 +81,6 @@
   function setTheme(key: string) {
     themeKey = key;
     saveShelfThemeKey(shelfId, key);
-  }
-
-  function handleStatusChange(bookId: string, status: ReadingStatus | null) {
-    interactions[bookId] = status;
   }
 
   async function removeItem(target: LibraryFeedItem) {
@@ -241,11 +226,7 @@
               {#if it.type === "series"}
                 <SeriesCard series={it.series} showRating={false} />
               {:else}
-                <BookCard
-                  book={it.book}
-                  readingStatus={interactions[it.book.id] ?? null}
-                  onStatusChange={handleStatusChange}
-                />
+                <BookCard book={it.book} />
               {/if}
             </div>
           {/each}

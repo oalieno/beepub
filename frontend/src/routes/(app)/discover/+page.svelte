@@ -3,11 +3,7 @@
   import { booksApi } from "$lib/api/books";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import BookCard from "$lib/components/BookCard.svelte";
-  import type {
-    BookWithInteractionOut,
-    ReadingStatus,
-    TagBrowseSection,
-  } from "$lib/types";
+  import type { BookWithInteractionOut, TagBrowseSection } from "$lib/types";
   import { Compass, Sparkles } from "@lucide/svelte";
   import {
     BookGridSkeleton,
@@ -25,19 +21,6 @@
   let loadingRecs = $state(true);
   let loadingBrowse = $state(true);
 
-  // Reading status arrives inline with each book; these maps seed BookGrid /
-  // BookCard (externalMap) and hold optimistic updates from status toggles.
-  let recInteractions = $state<Record<string, ReadingStatus | null>>({});
-  let browseInteractions = $state<Record<string, ReadingStatus | null>>({});
-
-  function statusMap(
-    books: { id: string; reading_status: ReadingStatus | null }[],
-  ): Record<string, ReadingStatus | null> {
-    return Object.fromEntries(
-      books.map((b) => [b.id, b.reading_status ?? null]),
-    );
-  }
-
   onMount(async () => {
     loadRecommendations();
     loadBrowse();
@@ -47,7 +30,6 @@
     loadingRecs = true;
     try {
       recommendations = await booksApi.getRecommendations();
-      recInteractions = statusMap(recommendations);
     } catch (e) {
       toastStore.error(m.discover_recommendations_failed());
     } finally {
@@ -59,7 +41,6 @@
     loadingBrowse = true;
     try {
       browseSections = await booksApi.getBrowseByCategory(activeCategory);
-      browseInteractions = statusMap(browseSections.flatMap((s) => s.books));
     } catch (e) {
       toastStore.error(m.discover_browse_failed());
     } finally {
@@ -72,13 +53,6 @@
   ) {
     activeCategory = cat;
     await loadBrowse();
-  }
-
-  function handleBrowseStatusChange(
-    bookId: string,
-    status: ReadingStatus | null,
-  ) {
-    browseInteractions = { ...browseInteractions, [bookId]: status };
   }
 </script>
 
@@ -116,11 +90,7 @@
         </p>
       </div>
     {:else}
-      <BookGrid
-        books={recommendations}
-        enableInteractions={true}
-        interactionMap={recInteractions}
-      />
+      <BookGrid books={recommendations} />
     {/if}
   </section>
 
@@ -196,11 +166,7 @@
             >
               {#each section.books as book (book.id)}
                 <div class="flex-shrink-0 w-[140px] sm:w-[160px]">
-                  <BookCard
-                    {book}
-                    readingStatus={browseInteractions[book.id] ?? null}
-                    onStatusChange={handleBrowseStatusChange}
-                  />
+                  <BookCard {book} />
                 </div>
               {/each}
             </div>

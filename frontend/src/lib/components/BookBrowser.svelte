@@ -19,7 +19,6 @@
     LibraryFeedItem,
     PaginatedBooksWithInteraction,
     PaginatedFeed,
-    ReadingStatus,
   } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
 
@@ -119,29 +118,8 @@
     collapse: collapsible && initialCollapse,
   };
 
-  function buildInteractionMap(items: BookWithInteractionOut[]) {
-    const map: Record<string, ReadingStatus | null> = {};
-    for (const b of items) map[b.id] = b.reading_status ?? null;
-    return map;
-  }
-
-  function buildFeedInteractionMap(items: LibraryFeedItem[]) {
-    const map: Record<string, ReadingStatus | null> = {};
-    for (const it of items)
-      if (it.type === "book" && it.book)
-        map[it.book.id] = it.book.reading_status ?? null;
-    return map;
-  }
-
   let books = $state<BookWithInteractionOut[]>(init.books);
   let feedItems = $state<LibraryFeedItem[]>(init.feedItems);
-  // Reading status comes inline with each book; BookGrid consumes this map
-  // directly (externalMap), so it never fires a separate batch lookup.
-  let interactionMap = $state<Record<string, ReadingStatus | null>>(
-    init.collapse
-      ? buildFeedInteractionMap(init.feedItems)
-      : buildInteractionMap(init.books),
-  );
   let totalBooks = $state(init.totalBooks);
   let collapse = $state(init.collapse);
   let shownCount = $derived(collapse ? feedItems.length : books.length);
@@ -202,12 +180,10 @@
       if (collapse && fetchFeed) {
         const result = await fetchFeed(queryParams(0));
         feedItems = result.items;
-        interactionMap = buildFeedInteractionMap(result.items);
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(0));
         books = result.items;
-        interactionMap = buildInteractionMap(result.items);
         totalBooks = result.total;
       }
       notifyStateChange();
@@ -225,18 +201,10 @@
       if (collapse && fetchFeed) {
         const result = await fetchFeed(queryParams(feedItems.length));
         feedItems = [...feedItems, ...result.items];
-        interactionMap = {
-          ...interactionMap,
-          ...buildFeedInteractionMap(result.items),
-        };
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(books.length));
         books = [...books, ...result.items];
-        interactionMap = {
-          ...interactionMap,
-          ...buildInteractionMap(result.items),
-        };
         totalBooks = result.total;
       }
       notifyStateChange();
@@ -518,16 +486,12 @@
         {#if item.type === "series"}
           <SeriesCard series={item.series} />
         {:else}
-          <BookCard
-            book={item.book}
-            readingStatus={interactionMap[item.book.id] ?? null}
-            onStatusChange={(id, status) => (interactionMap[id] = status)}
-          />
+          <BookCard book={item.book} />
         {/if}
       {/each}
     </div>
   {:else}
-    <BookGrid {books} enableInteractions {interactionMap} />
+    <BookGrid {books} />
   {/if}
   {#if hasMore}
     <div class="flex justify-center mt-8">

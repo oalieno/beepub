@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { SeriesOut } from "$lib/types";
-  import { BookOpen, Layers } from "@lucide/svelte";
+  import { BookOpen } from "@lucide/svelte";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import StarRating from "./StarRating.svelte";
@@ -57,14 +57,6 @@
           >
         </div>
       {/if}
-
-      <!-- Volume count pill -->
-      <div
-        class="absolute bottom-2 left-2 bg-black/60 backdrop-blur-sm rounded-full text-[11px] px-1.5 py-0.5 text-white font-medium flex items-center gap-0.5"
-      >
-        <Layers size={10} />
-        {series.book_count}
-      </div>
     </div>
   </div>
 

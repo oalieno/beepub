@@ -15,7 +15,6 @@
     BookWithInteractionOut,
     LibraryOut,
     ReadingStats,
-    ReadingStatus,
   } from "$lib/types";
   import { BookOpen, HardDrive, WifiOff } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
@@ -26,8 +25,6 @@
 
   let libraries = $state<LibraryOut[]>([]);
   let recentBooks = $state<BookWithInteractionOut[]>([]);
-  // Reading status comes inline with each book (see librariesApi.getBooks).
-  let recentInteractions = $state<Record<string, ReadingStatus | null>>({});
   let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
   let readingStats = $state<ReadingStats | null>(null);
@@ -102,9 +99,6 @@
         return new Date(bDate).getTime() - new Date(aDate).getTime();
       });
       recentBooks = allBooks.slice(0, 12);
-      recentInteractions = Object.fromEntries(
-        recentBooks.map((b) => [b.id, b.reading_status ?? null]),
-      );
       hasLoadedOnline = true;
       loadFailed = false;
     } catch {
@@ -346,11 +340,7 @@
           </p>
         </div>
       {:else}
-        <BookGrid
-          books={recentBooks}
-          enableInteractions
-          interactionMap={recentInteractions}
-        />
+        <BookGrid books={recentBooks} />
       {/if}
     </section>
   {/if}

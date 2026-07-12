@@ -72,23 +72,6 @@
           <Trash2 size={14} />
         </button>
       {/if}
-
-      <!-- File size badge -->
-      <span
-        class="absolute bottom-1.5 left-1.5 text-[10px] font-medium bg-black/50 text-white/90 px-1.5 py-0.5 rounded-full"
-      >
-        {formatSize(entry.fileSize)}
-      </span>
-
-      {#if entry.linked}
-        <!-- Linked to a server book: reading state syncs -->
-        <span
-          class="absolute bottom-1.5 right-1.5 bg-black/50 text-white/90 p-1 rounded-full"
-          title={m.local_linked_badge()}
-        >
-          <Cloud size={12} />
-        </span>
-      {/if}
     </div>
   </div>
 
@@ -99,10 +82,14 @@
     >
       {entry.title}
     </h3>
-    {#if entry.authors?.length}
-      <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
-        {entry.authors.join(", ")}
-      </p>
-    {/if}
+    <div class="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+      <span>{formatSize(entry.fileSize)}</span>
+      {#if entry.linked}
+        <!-- Linked to a server book: reading state syncs -->
+        <span title={m.local_linked_badge()}>
+          <Cloud size={12} />
+        </span>
+      {/if}
+    </div>
   </div>
 </div>
