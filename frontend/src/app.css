@@ -5,7 +5,13 @@
 @custom-variant dark (&:is(.dark *));
 @custom-variant can-hover (@media (hover: hover));
 
-:root {
+/* .reader-light / .reader-dark re-declare the theme tokens inside the
+   reader, whose light/dark mode is a per-book choice independent of the
+   app theme. Without the scope, semantic utilities (bg-background etc.)
+   inside the reader chrome would follow the global .dark class and the
+   toolbar could disagree with the page the user just switched to. */
+:root,
+.reader-light {
   --radius: 0.75rem;
   --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
   --font-body: "Inter", system-ui, -apple-system, sans-serif;
@@ -42,7 +48,8 @@
   --sidebar-ring: #c4924a;
 }
 
-.dark {
+.dark,
+.reader-dark {
   --background: #171310;
   --foreground: #ece5da;
   --card: #211c16;

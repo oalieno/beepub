@@ -711,8 +711,8 @@
 
 <div
   class="flex flex-col h-[100dvh] min-h-0 {darkMode
-    ? 'bg-ink-900'
-    : 'bg-background'}"
+    ? 'reader-dark bg-ink-900'
+    : 'reader-light bg-background'}"
 >
   <!-- Desktop toolbar -->
   <div class="hidden md:block">
