@@ -771,7 +771,10 @@
 
   "local_page_title": "本地書籍 - BeePub",
   "local_native_only": "本地書庫僅在手機 app 中可用",
-  "local_import": "匯入 EPUB",
+  "local_add": "新增書籍",
+  "local_add_file": "匯入 EPUB 檔案",
+  "local_add_file_desc": "從這台裝置選擇檔案",
+  "local_add_opds_desc": "從線上目錄下載書籍",
   "local_importing": "匯入中…",
   "local_import_success": "已匯入「{title}」",
   "local_import_duplicate": "書庫裡已有這個檔案：「{title}」",

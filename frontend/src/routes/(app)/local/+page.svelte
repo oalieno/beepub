@@ -7,12 +7,16 @@
   import { Button } from "$lib/components/ui/button";
   import {
     BookOpen,
+    ChevronRight,
     Cloud,
+    FileUp,
     Trash2,
     HardDrive,
     Plus,
     Loader2,
+    Rss,
   } from "@lucide/svelte";
+  import BottomSheet from "$lib/components/BottomSheet.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
@@ -29,6 +33,7 @@
   let loading = $state(true);
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let addSheetOpen = $state(false);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -163,13 +168,17 @@
           {formatSize(totalSize)}
         {/if}
       </p>
-      <Button size="sm" disabled={importing} onclick={() => fileInput?.click()}>
+      <Button
+        size="sm"
+        disabled={importing}
+        onclick={() => (addSheetOpen = true)}
+      >
         {#if importing}
           <Loader2 class="animate-spin" size={16} />
           {m.local_importing()}
         {:else}
           <Plus size={16} />
-          {m.local_import()}
+          {m.local_add()}
         {/if}
       </Button>
     </div>
@@ -274,3 +283,49 @@
     {/if}
   {/if}
 </div>
+
+<BottomSheet bind:open={addSheetOpen}>
+  <h2 class="text-base font-semibold px-3 pt-2 pb-3">{m.local_add()}</h2>
+  <div class="pb-2 space-y-1">
+    <button
+      class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
+      style="-webkit-tap-highlight-color: transparent;"
+      onclick={() => {
+        addSheetOpen = false;
+        fileInput?.click();
+      }}
+    >
+      <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
+        <FileUp class="text-primary" size={18} />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-medium text-sm text-foreground">
+          {m.local_add_file()}
+        </h3>
+        <p class="text-muted-foreground text-xs mt-0.5">
+          {m.local_add_file_desc()}
+        </p>
+      </div>
+      <ChevronRight size={16} class="text-muted-foreground shrink-0" />
+    </button>
+    <button
+      class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
+      style="-webkit-tap-highlight-color: transparent;"
+      onclick={() => {
+        addSheetOpen = false;
+        goto("/catalogs");
+      }}
+    >
+      <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
+        <Rss class="text-primary" size={18} />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-medium text-sm text-foreground">{m.nav_catalogs()}</h3>
+        <p class="text-muted-foreground text-xs mt-0.5">
+          {m.local_add_opds_desc()}
+        </p>
+      </div>
+      <ChevronRight size={16} class="text-muted-foreground shrink-0" />
+    </button>
+  </div>
+</BottomSheet>

@@ -771,7 +771,10 @@
 
   "local_page_title": "Local Books - BeePub",
   "local_native_only": "The local library is available in the mobile app",
-  "local_import": "Import EPUB",
+  "local_add": "Add books",
+  "local_add_file": "Import an EPUB file",
+  "local_add_file_desc": "Pick a file on this device",
+  "local_add_opds_desc": "Download books from an online catalog",
   "local_importing": "Importing…",
   "local_import_success": "Imported \"{title}\"",
   "local_import_duplicate": "Already in your library as \"{title}\"",
