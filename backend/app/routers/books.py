@@ -323,15 +323,20 @@ async def get_reading_activity(
         year = date_type.today().year
     from sqlalchemy import extract
 
+    # One row per date: devices each own their rows, the heatmap shows the sum.
     result = await db.execute(
-        select(ReadingActivity)
+        select(
+            ReadingActivity.date,
+            func.sum(ReadingActivity.seconds).label("seconds"),
+        )
         .where(
             ReadingActivity.user_id == current_user.id,
             extract("year", ReadingActivity.date) == year,
         )
+        .group_by(ReadingActivity.date)
         .order_by(ReadingActivity.date)
     )
-    return result.scalars().all()
+    return [{"date": r.date, "seconds": r.seconds} for r in result.all()]
 
 
 @router.get("/reading-stats", response_model=ReadingStatsOut)
@@ -342,13 +347,17 @@ async def get_reading_stats(
     """Get reading streak and goal progress for the current user."""
     today = await _today_in_app_timezone(db)
 
-    # Fetch all reading days ordered by date desc
+    # Fetch all reading days ordered by date desc. Summed across devices —
+    # the streak helpers require DISTINCT dates (a duplicate date would
+    # reset the longest-streak walk).
     result = await db.execute(
-        select(ReadingActivity.date, ReadingActivity.seconds)
-        .where(
-            ReadingActivity.user_id == current_user.id,
-            ReadingActivity.seconds > 0,
+        select(
+            ReadingActivity.date,
+            func.sum(ReadingActivity.seconds).label("seconds"),
         )
+        .where(ReadingActivity.user_id == current_user.id)
+        .group_by(ReadingActivity.date)
+        .having(func.sum(ReadingActivity.seconds) > 0)
         .order_by(ReadingActivity.date.desc())
     )
     rows = result.all()

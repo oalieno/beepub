@@ -95,11 +95,19 @@ class UserSeriesInteraction(Base):
     )
 
 
+# The web reader's live accumulator writes this device row; app devices
+# mint their own ids and REPLACE their rows via /api/activity/sync.
+WEB_DEVICE_ID = "web"
+
+
 class ReadingActivity(Base):
     __tablename__ = "reading_activity"
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    device_id: Mapped[str] = mapped_column(
+        String(64), primary_key=True, default=WEB_DEVICE_ID
     )
     date: Mapped[date] = mapped_column(Date, primary_key=True)
     seconds: Mapped[int] = mapped_column(nullable=False, default=0)

@@ -17,7 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.book import Book
-from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
+from app.models.reading import (
+    WEB_DEVICE_ID,
+    Highlight,
+    ReadingActivity,
+    UserBookInteraction,
+)
 from app.models.user import User
 from app.routers.books import _get_book_with_access, _today_in_app_timezone
 from app.schemas.book import BookReportCreate, BookReportOut
@@ -215,6 +220,7 @@ async def update_progress(
                 result = await db.execute(
                     select(ReadingActivity).where(
                         ReadingActivity.user_id == current_user.id,
+                        ReadingActivity.device_id == WEB_DEVICE_ID,
                         ReadingActivity.date == today,
                     )
                 )
@@ -225,6 +231,7 @@ async def update_progress(
                     db.add(
                         ReadingActivity(
                             user_id=current_user.id,
+                            device_id=WEB_DEVICE_ID,
                             date=today,
                             seconds=delta_seconds,
                         )
