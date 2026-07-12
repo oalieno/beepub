@@ -7,6 +7,7 @@
     Image as ImageIcon,
     Highlighter,
     MoveHorizontal,
+    Pointer,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -23,19 +24,45 @@
   let prevLabel = $derived(isRtl ? m.reader_next_page() : m.reader_prev_page());
   let nextLabel = $derived(isRtl ? m.reader_prev_page() : m.reader_next_page());
 
+  // Touch devices have no mouse or arrow keys — don't teach them.
+  const coarse =
+    typeof window !== "undefined" &&
+    window.matchMedia("(pointer: coarse)").matches;
+
   const tips = [
     { icon: MoveHorizontal, label: m.reader_gesture_swipe },
-    { icon: Keyboard, label: m.reader_gesture_keys },
+    ...(coarse ? [] : [{ icon: Keyboard, label: m.reader_gesture_keys }]),
     { icon: ImageIcon, label: m.reader_gesture_longpress_image },
     { icon: Highlighter, label: m.reader_gesture_tap_highlight },
   ];
+
+  // The reader turns pages on document keyup — while the overlay is up a
+  // key press must not page-turn invisibly underneath it. Swallow both
+  // phases at the window (capture runs before the reader's listener) and
+  // treat the release as "got it".
+  function swallowKeydown(e: KeyboardEvent) {
+    e.stopPropagation();
+  }
+  function swallowKeyup(e: KeyboardEvent) {
+    e.stopPropagation();
+    onclose?.();
+  }
 </script>
 
+<svelte:window
+  onkeydowncapture={swallowKeydown}
+  onkeyupcapture={swallowKeyup}
+/>
+
+<!-- Tapping anywhere dismisses — key handling lives on the window above. -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <div
   class="absolute inset-0 z-40 flex bg-black/70 text-white select-none"
   role="dialog"
   aria-modal="true"
   aria-label={m.reader_gesture_title()}
+  tabindex="-1"
+  onclick={() => onclose?.()}
 >
   <!-- Left tap zone -->
   <div
@@ -50,7 +77,11 @@
   <!-- Center -->
   <div class="flex flex-1 flex-col items-center justify-center gap-6 px-4">
     <div class="flex flex-col items-center gap-2 text-center">
-      <MousePointerClick size={28} class="opacity-80 md:size-9" />
+      {#if coarse}
+        <Pointer size={28} class="opacity-80 md:size-9" />
+      {:else}
+        <MousePointerClick size={28} class="opacity-80 md:size-9" />
+      {/if}
       <span class="text-sm md:text-lg font-medium"
         >{m.reader_gesture_toggle()}</span
       >
