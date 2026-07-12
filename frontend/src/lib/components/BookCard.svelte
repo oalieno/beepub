@@ -6,12 +6,14 @@
     BookOpen,
     Bookmark,
     Check,
+    HardDrive,
     Image,
     Layers,
   } from "@lucide/svelte";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
   import * as m from "$lib/paraglide/messages.js";
   import { toastStore } from "$lib/stores/toast";
 
@@ -110,6 +112,17 @@
           <Layers size={10} />
           {book.edition_count}
         </div>
+      {/if}
+
+      <!-- Local copy badge — bottom-right, the mirror of the local shelf's
+           cloud badge (native only: the set stays empty on web) -->
+      {#if $linkedServerBookIds.has(book.id)}
+        <span
+          class="absolute bottom-2 right-2 bg-black/50 text-white/90 p-1 rounded-full"
+          title={m.book_on_device()}
+        >
+          <HardDrive size={12} />
+        </span>
       {/if}
 
       <!-- Status overlay — anchored to cover image -->

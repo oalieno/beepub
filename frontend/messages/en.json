@@ -243,6 +243,7 @@
   "book_download_epub": "Download EPUB",
   "book_download_to_library": "Download to this device",
   "book_in_local_library": "In your local library — manage it in Local Books",
+  "book_on_device": "Downloaded to this device",
   "book_more_actions": "More actions",
   "book_remove_favorite": "Remove from favorites",
   "book_add_favorite": "Add to favorites",
@@ -756,6 +757,8 @@
   "libraries_page_title": "Libraries - BeePub",
   "libraries_empty": "No libraries available",
   "libraries_empty_subtitle": "Libraries will appear here once they are created by an admin.",
+  "libraries_this_device": "This device",
+  "libraries_device_count": "{count} book(s)",
 
   "library_page_title": "{name} - BeePub",
   "library_calibre_badge": "Calibre",

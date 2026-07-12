@@ -37,6 +37,7 @@ import {
 import { getIsOnline, isOnline } from "$lib/services/network";
 import { pushLedger } from "$lib/services/readingLedger";
 import { authStore } from "$lib/stores/auth";
+import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
 import type { BookSyncResponse, SyncProgressIn } from "$lib/types";
 
 const FULL_SYNC_COOLDOWN_MS = 30_000;
@@ -96,6 +97,7 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
             links[book.id] = match.id;
           }
         }
+        void refreshLinkedBookIds();
       }
       // Sequentially — local shelves are small, and a burst of parallel
       // merges would stampede NAS-class servers for no gain.
@@ -136,6 +138,7 @@ async function resolveLink(localBookId: string): Promise<string | null> {
   const match = matches[entry.digest];
   if (!match) return null;
   await setLocalBookLink(localBookId, match.id);
+  void refreshLinkedBookIds();
   return match.id;
 }
 
@@ -200,6 +203,7 @@ async function doSync(localBookId: string): Promise<void> {
     // re-resolve by digest right away — a deleted-and-re-uploaded book
     // gets a new id, and this heals it in the same call.
     await clearLocalBookLink(localBookId);
+    void refreshLinkedBookIds();
     try {
       const freshId = await resolveLink(localBookId);
       if (!freshId || freshId === serverBookId) return;

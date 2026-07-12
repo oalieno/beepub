@@ -119,6 +119,10 @@
     try {
       const { removeLocalBook } = await import("$lib/services/localLibrary");
       await removeLocalBook(entry.id);
+      // Removal also unlinks — drop the "on this device" badge upstream.
+      void import("$lib/stores/linkedBooks").then(({ refreshLinkedBookIds }) =>
+        refreshLinkedBookIds(),
+      );
       entries = entries.filter((b) => b.id !== entry.id);
       totalSize = entries.reduce((sum, b) => sum + b.fileSize, 0);
       toastStore.success(m.local_deleted());

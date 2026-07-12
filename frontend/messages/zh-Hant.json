@@ -243,6 +243,7 @@
   "book_download_epub": "下載 EPUB",
   "book_download_to_library": "下載到這台裝置",
   "book_in_local_library": "已在本機書庫，請到「本機書籍」管理",
+  "book_on_device": "已下載到這台裝置",
   "book_more_actions": "更多動作",
   "book_remove_favorite": "移除收藏",
   "book_add_favorite": "加入收藏",
@@ -756,6 +757,8 @@
   "libraries_page_title": "書庫 - BeePub",
   "libraries_empty": "沒有可用的書庫",
   "libraries_empty_subtitle": "書庫由管理員建立後會顯示在這裡。",
+  "libraries_this_device": "這台裝置",
+  "libraries_device_count": "{count} 本書",
 
   "library_page_title": "{name} - BeePub",
   "library_calibre_badge": "Calibre",
