@@ -1,0 +1,55 @@
+/**
+ * The single global external-kosync account — serverless local mode only.
+ *
+ * Device-owned like the OPDS catalogs, and deliberately never cleared when a
+ * BeePub server is connected: resolve.ts just stops reading it (connected
+ * means BeePub IS the kosync server), and it revives on disconnect. Only the
+ * md5(password) userkey is stored, never the plaintext — though for kosync
+ * that hash IS the credential, and Preferences offers no secure storage,
+ * same posture as the auth tokens in localStorage.
+ */
+import { Preferences } from "@capacitor/preferences";
+
+const ACCOUNT_KEY = "kosync-account";
+
+export interface KosyncAccount {
+  /** https, trailing slashes stripped — endpoint paths are fixed. */
+  serverUrl: string;
+  username: string;
+  /** md5(password), lowercase hex — sent as x-auth-key verbatim. */
+  userkey: string;
+  /** Minted once, stable across re-logins — suppresses own-echo prompts. */
+  deviceId: string;
+  addedAt: string;
+}
+
+export async function getKosyncAccount(): Promise<KosyncAccount | null> {
+  const { value } = await Preferences.get({ key: ACCOUNT_KEY });
+  if (!value) return null;
+  try {
+    return JSON.parse(value) as KosyncAccount;
+  } catch {
+    return null;
+  }
+}
+
+export async function setKosyncAccount(input: {
+  serverUrl: string;
+  username: string;
+  userkey: string;
+}): Promise<KosyncAccount> {
+  const existing = await getKosyncAccount();
+  const account: KosyncAccount = {
+    serverUrl: input.serverUrl.trim().replace(/\/+$/, ""),
+    username: input.username.trim(),
+    userkey: input.userkey,
+    deviceId: existing?.deviceId ?? crypto.randomUUID(),
+    addedAt: existing?.addedAt ?? new Date().toISOString(),
+  };
+  await Preferences.set({ key: ACCOUNT_KEY, value: JSON.stringify(account) });
+  return account;
+}
+
+export async function clearKosyncAccount(): Promise<void> {
+  await Preferences.remove({ key: ACCOUNT_KEY });
+}
