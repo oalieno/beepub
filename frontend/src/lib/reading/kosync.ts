@@ -121,6 +121,24 @@ async function flush(digest: string): Promise<void> {
   }
 }
 
+/** Push everything pending right now. Called on reader exit and app
+ *  backgrounding — waiting out the throttle window there risks losing the
+ *  final position to a task-switcher kill. */
+export function flushKosyncPushes(): void {
+  for (const digest of slots.keys()) void flush(digest);
+}
+
+let visibilityHooked = false;
+function hookVisibility(): void {
+  if (visibilityHooked || typeof document === "undefined") return;
+  visibilityHooked = true;
+  // iOS fires visibilitychange before suspending JS — the last reliable
+  // moment to get the position out.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushKosyncPushes();
+  });
+}
+
 /** Skips the push when the canonical percentage is unknown (locations not
  *  ready) — a percentage-less record reads as "no progress" to stock
  *  clients and would clobber a good one. */
@@ -159,6 +177,7 @@ export function makeKosyncSync(
   entry: LocalBookEntry,
   account: KosyncAccount,
 ): SyncBackend {
+  hookVisibility();
   // Fired at construction so it overlaps openBook's filesystem read —
   // getProgress is awaited after that. Never rejects.
   const prefetch: Promise<KosyncProgressRecord | null> = get(networkConnected)

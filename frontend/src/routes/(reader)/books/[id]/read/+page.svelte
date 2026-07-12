@@ -270,10 +270,18 @@
       // after the reader's final beacon write (parent/child onDestroy
       // ordering isn't contractual).
       const id = bookId;
+      const kind = sync?.kind;
       setTimeout(() => {
         void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
           syncLocalBook(id).catch(() => {}),
         );
+        // Closing the book shouldn't wait out the 30s push throttle —
+        // the reader's final save has landed by now, ship it.
+        if (kind === "kosync") {
+          void import("$lib/reading/kosync").then(({ flushKosyncPushes }) =>
+            flushKosyncPushes(),
+          );
+        }
       }, 600);
     }
   });
