@@ -2,8 +2,7 @@
  * Device-local book library — EPUBs imported from the file picker, owned by
  * the device rather than any server.
  *
- * Deliberately separate from offline.ts (the per-server download cache):
- * local books have no server identity, so the manifest is unscoped and books
+ * Local books have no server identity, so the manifest is unscoped and books
  * are keyed by client-generated UUIDs. Each entry carries the KOReader
  * partial-md5 digest — the cross-device file identity that later links a
  * local book to server records (sync) and kosync documents, and that makes
@@ -14,7 +13,7 @@ import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
 import { getServerUrl } from "$lib/api/client";
 import { computePartialMd5 } from "$lib/services/partialMd5";
-import { uint8ToBase64 } from "$lib/services/offline";
+import { uint8ToBase64 } from "$lib/services/base64";
 
 const MANIFEST_KEY = "local-library";
 const LINKS_KEY_PREFIX = "local-links";
@@ -92,8 +91,7 @@ export async function getLocalStorageUsage(): Promise<number> {
 //
 // A link ties a local book to a matching server book (same file, by
 // digest). Links are scoped per server URL — a server book id only means
-// anything on its own server — mirroring the offline manifest's scoping.
-// The manifest itself stays server-free.
+// anything on its own server. The manifest itself stays server-free.
 
 function linksKey(): string | null {
   const server = getServerUrl().replace(/\/+$/, "");

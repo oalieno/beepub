@@ -18,7 +18,6 @@
     "/highlights": m.nav_highlights(),
     "/discover": m.nav_discover(),
     "/gacha": m.nav_gacha(),
-    "/downloads": m.nav_downloads(),
     "/admin": m.nav_admin(),
     "/profile": m.nav_profile(),
   });

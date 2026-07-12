@@ -5,12 +5,12 @@
  *
  * Deliberately NOT the global CapacitorHttp fetch patch
  * (plugins.CapacitorHttp.enabled): that would reroute every request in the
- * app and break offline.ts's streaming download reader, among others. Only
+ * app and change auth/streaming semantics everywhere at once. Only
  * this module talks to catalog servers.
  */
 import { CapacitorHttp, type HttpResponse } from "@capacitor/core";
 
-import { uint8ToBase64 } from "$lib/services/offline";
+import { uint8ToBase64 } from "$lib/services/base64";
 
 import {
   parseOpdsFeed,

@@ -15,7 +15,6 @@
     Compass,
     Search as SearchIcon,
     Dices,
-    Download,
     HardDrive,
     PanelLeftClose,
     PanelLeftOpen,
@@ -79,13 +78,6 @@
     },
     ...(isNative()
       ? [
-          {
-            href: "/downloads",
-            label: m.nav_downloads(),
-            icon: Download,
-            active: page.url.pathname.startsWith("/downloads"),
-            requiresOnline: false,
-          },
           {
             href: "/local",
             label: m.nav_local_books(),

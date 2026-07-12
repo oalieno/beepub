@@ -84,7 +84,7 @@
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
     aria-label={m.reader_go_back()}
     onclick={() =>
-      goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/downloads"), {
+      goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
         replaceState: true,
       })}
   >

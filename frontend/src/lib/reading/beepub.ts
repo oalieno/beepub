@@ -6,8 +6,6 @@
  */
 import { booksApi } from "$lib/api/books";
 import { apiBase, getAuthHeader } from "$lib/api/client";
-import { isNative } from "$lib/platform";
-import { isBookDownloaded, readLocalBook } from "$lib/services/offline";
 
 import { cfiOf, locatorFromCfi } from "./locator";
 import type { BookPayload, BookSource } from "./source";
@@ -23,19 +21,8 @@ class BeepubBookSource implements BookSource {
   readonly kind = "beepub" as const;
 
   async openBook(bookId: string): Promise<BookPayload> {
-    // Downloaded copy first (native only). The offline manifest is scoped
-    // to this server, so the download cache is part of this source's
-    // identity — not a separate wrapper source.
-    if (isNative()) {
-      try {
-        if (await isBookDownloaded(bookId)) {
-          const data = await readLocalBook(bookId);
-          if (data) return { kind: "bytes", data };
-        }
-      } catch {
-        // Fall through to streaming.
-      }
-    }
+    // Always streams: downloaded copies live in the local library and
+    // resolve to the local source before this one is ever consulted.
     const hasAuth = Object.keys(getAuthHeader()).length > 0;
     return {
       kind: "stream",

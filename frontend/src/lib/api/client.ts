@@ -75,8 +75,8 @@ export function setServerUrl(url: string): void {
 }
 
 /** Forget the configured server (switching to serverless local mode).
- *  Per-server state like download manifests is keyed by URL and survives
- *  untouched — reconnecting the same server brings it back. */
+ *  Per-server state like the local-book link map is keyed by URL and
+ *  survives untouched — reconnecting the same server brings it back. */
 export function clearServerUrl(): void {
   localStorage.removeItem(SERVER_URL_KEY);
 }

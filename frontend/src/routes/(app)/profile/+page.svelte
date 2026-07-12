@@ -13,7 +13,6 @@
     ShelvingUnit,
     Highlighter,
     Settings,
-    Download,
     HardDrive,
     Rss,
     Dices,
@@ -164,12 +163,6 @@
     },
     ...(isNative()
       ? [
-          {
-            href: "/downloads",
-            label: m.nav_downloads(),
-            icon: Download,
-            requiresOnline: false,
-          } satisfies ProfileLink,
           {
             href: "/local",
             label: m.nav_local_books(),

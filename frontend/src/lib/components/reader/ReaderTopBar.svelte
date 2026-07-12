@@ -32,7 +32,7 @@
         ? 'text-ink-400 hover:bg-ink-800'
         : 'text-muted-foreground hover:bg-secondary'}"
       onclick={() =>
-        goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/downloads"), {
+        goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
           replaceState: true,
         })}
       aria-label={m.reader_back_to_detail()}
