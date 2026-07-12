@@ -282,6 +282,7 @@ async def list_library_books(
 
     # Enrich with edition_count + work-propagated reading status. The page is
     # bounded by `limit` (<=200), so propagation runs only over the current page.
+    from app.models.reading import UserBookInteraction
     from app.services.work_propagation import (
         get_edition_count_map,
         get_work_propagated_interactions,
@@ -292,6 +293,15 @@ async def list_library_books(
     propagated = await get_work_propagated_interactions(
         db, book_ids_list, current_user.id
     )
+    # Progress stays per-edition (pagination differs across editions), so it
+    # comes from the user's own interaction rather than work propagation.
+    progress_rows = await db.execute(
+        select(UserBookInteraction.book_id, UserBookInteraction.reading_progress).where(
+            UserBookInteraction.user_id == current_user.id,
+            UserBookInteraction.book_id.in_(book_ids_list),
+        )
+    )
+    progress_map = {row[0]: row[1] or {} for row in progress_rows.all()}
     items = []
     for b in books:
         item = BookWithInteractionOut.model_validate(b)
@@ -300,6 +310,9 @@ async def list_library_books(
         if prop:
             item.reading_status = prop["reading_status"]
             item.is_favorite = prop["is_favorite"]
+        own_progress = progress_map.get(b.id, {})
+        item.reading_percentage = own_progress.get("percentage")
+        item.last_read_at = own_progress.get("last_read_at")
         items.append(item)
 
     return PaginatedBooksWithInteraction(items=items, total=total)

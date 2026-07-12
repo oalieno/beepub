@@ -78,3 +78,34 @@ async def test_delete_library_deletes_its_books(admin_client):
     assert (await admin_client.get(f"/api/books/{book['id']}")).status_code == 404
     listing = (await admin_client.get("/api/books/all")).json()
     assert listing["total"] == 0
+
+
+async def test_library_listing_carries_own_progress(admin_client):
+    """The browse grid shows "n% read" — both the flat book listing and the
+    collapsed feed must carry the user's own reading_percentage inline."""
+    library_id = await create_library(admin_client, "Progress")
+    book = await upload_epub(admin_client, library_id)
+
+    await admin_client.put(
+        f"/api/books/{book['id']}/reading-status",
+        json={"reading_status": "currently_reading"},
+    )
+    response = await admin_client.put(
+        f"/api/books/{book['id']}/progress",
+        json={"cfi": "epubcfi(/6/4!/4/2/1:1)", "percentage": 37.5},
+    )
+    assert response.status_code == 200, response.text
+
+    listing = (await admin_client.get(f"/api/libraries/{library_id}/books")).json()
+    item = next(i for i in listing["items"] if i["id"] == book["id"])
+    assert item["reading_status"] == "currently_reading"
+    assert item["reading_percentage"] == 37.5
+
+    feed = (await admin_client.get(f"/api/libraries/{library_id}/feed")).json()
+    entry = next(
+        i
+        for i in feed["items"]
+        if i["type"] == "book" and i["book"]["id"] == book["id"]
+    )
+    assert entry["book"]["reading_status"] == "currently_reading"
+    assert entry["book"]["reading_percentage"] == 37.5

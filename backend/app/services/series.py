@@ -408,23 +408,32 @@ async def _hydrate_feed_books(db: AsyncSession, user: User, book_ids: list) -> d
     )
     edition_counts = await get_edition_count_map(db, book_ids)
     propagated = await get_work_propagated_interactions(db, book_ids, user.id)
-    ratings_result = await db.execute(
-        select(UserBookInteraction.book_id, UserBookInteraction.rating).where(
+    own_result = await db.execute(
+        select(
+            UserBookInteraction.book_id,
+            UserBookInteraction.rating,
+            UserBookInteraction.reading_progress,
+        ).where(
             UserBookInteraction.user_id == user.id,
             UserBookInteraction.book_id.in_(book_ids),
-            UserBookInteraction.rating.is_not(None),
         )
     )
-    ratings_map = {row[0]: row[1] for row in ratings_result.all()}
+    own_map = {row[0]: row for row in own_result.all()}
 
     result: dict = {}
     for b in books:
         item = BookWithInteractionOut.model_validate(b)
         item.edition_count = edition_counts.get(b.id)
-        item.user_rating = ratings_map.get(b.id)
         prop = propagated.get(b.id)
         if prop:
             item.reading_status = prop["reading_status"]
             item.is_favorite = prop["is_favorite"]
+        own = own_map.get(b.id)
+        if own:
+            item.user_rating = own.rating
+            # Progress stays per-edition — own interaction, not propagation.
+            own_progress = own.reading_progress or {}
+            item.reading_percentage = own_progress.get("percentage")
+            item.last_read_at = own_progress.get("last_read_at")
         result[b.id] = item
     return result
