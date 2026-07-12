@@ -13,9 +13,11 @@
     HardDrive,
     Plus,
     Loader2,
+    RefreshCw,
     Rss,
     Server,
   } from "@lucide/svelte";
+  import KosyncSettingsDialog from "$lib/components/KosyncSettingsDialog.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
@@ -36,6 +38,7 @@
   let loading = $state(true);
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
+  let kosyncOpen = $state(false);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -153,17 +156,18 @@
       <h1 class="text-xl font-bold" style="font-family: var(--font-heading)">
         {m.nav_local_books()}
       </h1>
-      <!-- The only entry point to OPDS catalogs in serverless mode (no
-           app chrome). -->
-      <Button
-        variant="ghost"
-        size="sm"
-        class="ml-auto"
-        onclick={() => goto("/catalogs")}
-      >
-        <Rss size={16} />
-        {m.nav_catalogs()}
-      </Button>
+      <!-- The only entry points to OPDS catalogs and kosync settings in
+           serverless mode (no app chrome). -->
+      <div class="ml-auto flex items-center gap-1">
+        <Button variant="ghost" size="sm" onclick={() => goto("/catalogs")}>
+          <Rss size={16} />
+          {m.nav_catalogs()}
+        </Button>
+        <Button variant="ghost" size="sm" onclick={() => (kosyncOpen = true)}>
+          <RefreshCw size={16} />
+          {m.kosync_title()}
+        </Button>
+      </div>
     </div>
   {/if}
   {#if loading}
@@ -314,3 +318,5 @@
     {/if}
   {/if}
 </div>
+
+<KosyncSettingsDialog bind:open={kosyncOpen} />
