@@ -62,6 +62,14 @@
     return (err as Error).message;
   }
 
+  async function attempt(
+    kind: "login" | "register",
+    creds: KosyncCredentials,
+  ): Promise<void> {
+    if (kind === "register") await registerAccount(creds);
+    await verifyAuth(creds);
+  }
+
   async function submit(kind: "login" | "register") {
     formError = "";
     const url = formUrl.trim();
@@ -80,15 +88,30 @@
     if (!username || !formPassword) return;
     busy = kind;
     try {
-      const creds: KosyncCredentials = {
+      let creds: KosyncCredentials = {
         serverUrl: url.replace(/\/+$/, ""),
         username,
         // The kosync convention: md5(password) is the credential on the
         // wire, for registration too — the plaintext never leaves this form.
         userkey: SparkMD5.hash(formPassword),
       };
-      if (kind === "register") await registerAccount(creds);
-      await verifyAuth(creds);
+      try {
+        await attempt(kind, creds);
+      } catch (err) {
+        // A bare origin often means a BeePub server whose kosync lives at
+        // /kosync (same footgun as OPDS at /opds) — probe it once. Auth and
+        // conflict answers are real kosync responses, so don't second-guess
+        // those; when the probe fails too, its error is the meaningful one
+        // (e.g. BeePub's "use your BeePub credentials" refusal).
+        const pathless = parsed.pathname === "/" || parsed.pathname === "";
+        const probeable =
+          err instanceof KosyncError &&
+          (err.kind === "http" || err.kind === "parse");
+        if (!pathless || !probeable) throw err;
+        creds = { ...creds, serverUrl: `${parsed.origin}/kosync` };
+        await attempt(kind, creds);
+        formUrl = creds.serverUrl;
+      }
       const { setKosyncAccount } = await import("$lib/services/kosyncAccount");
       account = await setKosyncAccount(creds);
       formPassword = "";

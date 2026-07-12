@@ -133,6 +133,11 @@ export async function verifyAuth(creds: KosyncCredentials): Promise<void> {
   if (res.status === 401) throw new KosyncError("auth", 401, messageOf(res));
   if (res.status >= 400)
     throw new KosyncError("http", res.status, messageOf(res));
+  // Status alone can lie: a non-kosync URL behind a login redirect answers
+  // 200 with HTML (CapacitorHttp follows the 302). Require the protocol's
+  // actual success body so a bad URL can't save a silently-broken account.
+  if (bodyOf(res)["authorized"] !== "OK")
+    throw new KosyncError("parse", res.status);
 }
 
 /**
@@ -147,7 +152,9 @@ export async function registerAccount(creds: KosyncCredentials): Promise<void> {
     url: `${creds.serverUrl}/users/create`,
     data: { username: creds.username, password: creds.userkey },
   });
-  if (res.status === 201) return;
+  // Canonical servers answer 201; tolerate 200 from reimplementations —
+  // the verifyAuth that always follows catches false positives.
+  if (res.status === 200 || res.status === 201) return;
   if (res.status === 402)
     throw new KosyncError("conflict", 402, messageOf(res));
   throw new KosyncError("http", res.status, messageOf(res));
