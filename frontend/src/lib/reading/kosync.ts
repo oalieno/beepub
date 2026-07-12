@@ -46,6 +46,9 @@ interface PushSlot {
   lastPushedKey: string | null;
   timer: ReturnType<typeof setTimeout> | null;
   pending: { account: KosyncAccount; payload: KosyncPushPayload } | null;
+  /** Latest buildable position regardless of throttle/dedupe/auto-sync —
+   *  what the manual push button ships. */
+  lastPayload: { account: KosyncAccount; payload: KosyncPushPayload } | null;
   inFlight: boolean;
 }
 
@@ -59,6 +62,7 @@ function slotFor(digest: string): PushSlot {
       lastPushedKey: null,
       timer: null,
       pending: null,
+      lastPayload: null,
       inFlight: false,
     };
     slots.set(digest, slot);
@@ -128,6 +132,46 @@ export function flushKosyncPushes(): void {
   for (const digest of slots.keys()) void flush(digest);
 }
 
+/**
+ * The manual push button: ship the latest position immediately, bypassing
+ * throttle AND dedupe — its point is forcing this device's position to win
+ * over another device's record. Returns false when there is nothing
+ * pushable yet (no save since open, or locations not ready). Throws
+ * KosyncError so the caller can toast the failure — manual actions get
+ * visible errors, unlike the silent auto path.
+ */
+export async function manualKosyncPush(digest: string): Promise<boolean> {
+  const slot = slots.get(digest);
+  const entry = slot?.pending ?? slot?.lastPayload;
+  if (!slot || !entry) return false;
+  if (slot.timer) {
+    clearTimeout(slot.timer);
+    slot.timer = null;
+  }
+  slot.pending = null;
+  slot.lastPushAt = Date.now();
+  await pushProgress(entry.account, entry.payload);
+  slot.lastPushedKey = pushKey(entry.payload);
+  return true;
+}
+
+export type ManualPullResult =
+  | { kind: "position"; position: DevicePosition }
+  | { kind: "own" }
+  | { kind: "none" };
+
+/** The manual pull button. Throws KosyncError on transport failure. */
+export async function manualKosyncPull(
+  account: KosyncAccount,
+  digest: string,
+): Promise<ManualPullResult> {
+  const remote = await fetchProgress(account, digest);
+  if (!remote) return { kind: "none" };
+  if (remote.deviceId && remote.deviceId === account.deviceId)
+    return { kind: "own" };
+  return { kind: "position", position: toDevicePosition(remote) };
+}
+
 let visibilityHooked = false;
 function hookVisibility(): void {
   if (visibilityHooked || typeof document === "undefined") return;
@@ -178,11 +222,14 @@ export function makeKosyncSync(
   account: KosyncAccount,
 ): SyncBackend {
   hookVisibility();
+  const auto = account.autoSync !== false;
   // Fired at construction so it overlaps openBook's filesystem read —
-  // getProgress is awaited after that. Never rejects.
-  const prefetch: Promise<KosyncProgressRecord | null> = get(networkConnected)
-    ? fetchProgress(account, entry.digest).catch(() => null)
-    : Promise.resolve(null);
+  // getProgress is awaited after that. Never rejects. Manual mode never
+  // pulls on its own — the reader's pull button is the only trigger.
+  const prefetch: Promise<KosyncProgressRecord | null> =
+    auto && get(networkConnected)
+      ? fetchProgress(account, entry.digest).catch(() => null)
+      : Promise.resolve(null);
 
   return {
     kind: "kosync",
@@ -221,13 +268,18 @@ export function makeKosyncSync(
     async saveProgress(bookId: string, state: ProgressSave): Promise<void> {
       await localSync.saveProgress(bookId, state);
       const payload = payloadFrom(entry, account, state);
-      if (payload) schedulePush(entry.digest, account, payload);
+      if (!payload) return;
+      // Tracked even in manual mode — it's what the push button ships.
+      slotFor(entry.digest).lastPayload = { account, payload };
+      if (auto) schedulePush(entry.digest, account, payload);
     },
 
     saveProgressBeacon(bookId: string, state: ProgressSave): void {
       localSync.saveProgressBeacon(bookId, state);
       const payload = payloadFrom(entry, account, state);
-      if (payload)
+      if (!payload) return;
+      slotFor(entry.digest).lastPayload = { account, payload };
+      if (auto)
         schedulePush(entry.digest, account, payload, { immediate: true });
     },
 

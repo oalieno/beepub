@@ -1550,6 +1550,13 @@
     } catch {}
   }
 
+  /** Parent-triggered save (the manual sync buttons): cancel the debounce
+   *  and persist the current position through the backend right now. */
+  export async function flushProgress(): Promise<void> {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    await saveProgress(false);
+  }
+
   function doUpdateOverlays() {
     updateIllustrationOverlays(rendition, illustrations, onillustrationclick);
   }

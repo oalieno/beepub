@@ -51,6 +51,8 @@
   let sync = $state<SyncBackend | null>(null);
   let localEntry = $state<LocalBookEntry | null>(null);
   let isBeepub = $derived(sync?.kind === "beepub");
+  let isKosync = $derived(sync?.kind === "kosync");
+  let kosyncBusy = $state<"pull" | "push" | null>(null);
 
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);
@@ -429,6 +431,66 @@
         detail.sectionIndex,
         detail.xpointer,
       );
+  }
+
+  function kosyncErrorToast(err: unknown) {
+    // Manual actions get visible errors, unlike the silent auto path.
+    void import("$lib/kosync/client").then(({ KosyncError }) => {
+      toastStore.error(
+        err instanceof KosyncError && err.kind === "auth"
+          ? m.kosync_error_auth()
+          : m.kosync_error_network(),
+      );
+    });
+  }
+
+  async function handleKosyncPull() {
+    const entry = localEntry;
+    if (!entry || kosyncBusy) return;
+    kosyncBusy = "pull";
+    try {
+      const { getKosyncAccount } = await import("$lib/services/kosyncAccount");
+      const account = await getKosyncAccount();
+      if (!account) return;
+      const { manualKosyncPull } = await import("$lib/reading/kosync");
+      const result = await manualKosyncPull(account, entry.digest);
+      if (result.kind === "none") {
+        toastStore.info(m.kosync_pull_none());
+      } else if (result.kind === "own") {
+        toastStore.info(m.kosync_pull_own());
+      } else {
+        showSettings = false;
+        await handleKosyncPosition({
+          percentage: result.position.percentage ?? 0,
+          device: result.position.device,
+          sectionIndex: result.position.sectionIndex,
+          xpointer: result.position.xpointer,
+          autoJumped: false,
+        });
+      }
+    } catch (err) {
+      kosyncErrorToast(err);
+    } finally {
+      kosyncBusy = null;
+    }
+  }
+
+  async function handleKosyncPush() {
+    const entry = localEntry;
+    if (!entry || kosyncBusy) return;
+    kosyncBusy = "push";
+    try {
+      // Land the current position in the backend first, then force it out.
+      await reader?.flushProgress();
+      const { manualKosyncPush } = await import("$lib/reading/kosync");
+      const pushed = await manualKosyncPush(entry.digest);
+      if (pushed) toastStore.success(m.kosync_pushed());
+      else toastStore.info(m.kosync_push_not_ready());
+    } catch (err) {
+      kosyncErrorToast(err);
+    } finally {
+      kosyncBusy = null;
+    }
   }
 
   let reachedEnd = $state(false);
@@ -961,6 +1023,8 @@
     {pageMargin}
     {darkMode}
     {isImageBook}
+    showSync={isKosync}
+    syncBusy={kosyncBusy}
     onfontToggle={handleFontToggle}
     onfontIncrease={handleFontIncrease}
     onfontDecrease={handleFontDecrease}
@@ -968,6 +1032,8 @@
     onlineHeightChange={handleLineHeightChange}
     onmarginChange={handleMarginChange}
     onhelp={() => (showGestureHint = true)}
+    onsyncpull={handleKosyncPull}
+    onsyncpush={handleKosyncPush}
   />
 
   {#if showIllustrationModal}

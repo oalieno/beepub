@@ -1,5 +1,14 @@
 <script lang="ts">
-  import { Minus, Plus, Sun, Moon, CircleHelp } from "@lucide/svelte";
+  import {
+    Minus,
+    Plus,
+    Sun,
+    Moon,
+    CircleHelp,
+    CloudDownload,
+    CloudUpload,
+    Loader2,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
@@ -10,6 +19,8 @@
     pageMargin = 32,
     darkMode = false,
     isImageBook = false,
+    showSync = false,
+    syncBusy = null,
     onfontToggle,
     onfontIncrease,
     onfontDecrease,
@@ -17,6 +28,8 @@
     onlineHeightChange,
     onmarginChange,
     onhelp,
+    onsyncpull,
+    onsyncpush,
   }: {
     open?: boolean;
     fontFamily?: string;
@@ -25,6 +38,9 @@
     pageMargin?: number;
     darkMode?: boolean;
     isImageBook?: boolean;
+    /** Kosync-backed books get manual pull/push controls. */
+    showSync?: boolean;
+    syncBusy?: "pull" | "push" | null;
     onfontToggle?: () => void;
     onfontIncrease?: () => void;
     onfontDecrease?: () => void;
@@ -32,6 +48,8 @@
     onlineHeightChange?: (value: number) => void;
     onmarginChange?: (value: number) => void;
     onhelp?: () => void;
+    onsyncpull?: () => void;
+    onsyncpush?: () => void;
   } = $props();
 
   function close() {
@@ -220,6 +238,39 @@
             </button>
           </div>
         </div>
+
+        {#if showSync}
+          <!-- Manual kosync sync -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm {labelClass}">{m.kosync_title()}</span>
+            <div class="flex gap-1">
+              <button
+                class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
+                disabled={syncBusy !== null}
+                onclick={() => onsyncpull?.()}
+              >
+                {#if syncBusy === "pull"}
+                  <Loader2 size={14} class="animate-spin" />
+                {:else}
+                  <CloudDownload size={14} />
+                {/if}
+                {m.kosync_pull()}
+              </button>
+              <button
+                class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
+                disabled={syncBusy !== null}
+                onclick={() => onsyncpush?.()}
+              >
+                {#if syncBusy === "push"}
+                  <Loader2 size={14} class="animate-spin" />
+                {:else}
+                  <CloudUpload size={14} />
+                {/if}
+                {m.kosync_push()}
+              </button>
+            </div>
+          </div>
+        {/if}
 
         <!-- Gesture help -->
         <button

@@ -127,6 +127,12 @@
     }
   }
 
+  async function setAutoSync(on: boolean) {
+    if (!account || account.autoSync === on) return;
+    const { setKosyncAutoSync } = await import("$lib/services/kosyncAccount");
+    account = await setKosyncAutoSync(on);
+  }
+
   async function handleLogout() {
     const current = account;
     if (!current) return;
@@ -158,6 +164,30 @@
           username: account.username,
           host: hostOf(account.serverUrl),
         })}
+      </p>
+      <div class="flex items-center justify-between">
+        <Label>{m.kosync_auto_sync()}</Label>
+        <div class="flex gap-1">
+          <Button
+            size="sm"
+            class="rounded-xl"
+            variant={account.autoSync ? "default" : "outline"}
+            onclick={() => setAutoSync(true)}
+          >
+            {m.kosync_auto_on()}
+          </Button>
+          <Button
+            size="sm"
+            class="rounded-xl"
+            variant={account.autoSync ? "outline" : "default"}
+            onclick={() => setAutoSync(false)}
+          >
+            {m.kosync_auto_off()}
+          </Button>
+        </div>
+      </div>
+      <p class="text-xs text-muted-foreground">
+        {account.autoSync ? m.kosync_auto_on_hint() : m.kosync_auto_off_hint()}
       </p>
       <Dialog.Footer>
         <Button
