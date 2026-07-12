@@ -76,7 +76,7 @@
         {:else if status === "currently_reading"}
           <span class="text-muted-foreground">
             {#if progress != null && progress > 0}
-              {m.book_progress_read({ percent: String(Math.round(progress)) })}
+              {Math.round(progress)}%
             {:else}
               {m.mybooks_tab_reading()}
             {/if}

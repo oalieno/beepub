@@ -654,9 +654,7 @@
                 style="width: {Math.min(pct, 100)}%"
               ></div>
             </div>
-            <span class="text-sm text-muted-foreground shrink-0">
-              {m.book_progress_read({ percent: String(pct) })}
-            </span>
+            <span class="text-sm text-muted-foreground shrink-0">{pct}%</span>
           </div>
         {/if}
 
