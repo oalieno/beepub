@@ -53,6 +53,13 @@
   let isBeepub = $derived(sync?.kind === "beepub");
   let isKosync = $derived(sync?.kind === "kosync");
   let kosyncBusy = $state<"pull" | "push" | null>(null);
+  // Digest-linked server identity of a local book — lets AI features keep
+  // working on downloaded/imported copies while online.
+  let serverBookId = $state<string | null>(null);
+  let aiEnabled = $derived(
+    isBeepub || (!!localEntry && $isOnline && !!serverBookId),
+  );
+  let aiBookId = $derived(isBeepub ? bookId : serverBookId);
 
   // Auto reading status
   let interaction: InteractionOut | null = $state(null);
@@ -230,19 +237,31 @@
           syncLocalBook(bookId).catch(() => {}),
           new Promise((resolve) => setTimeout(resolve, 2500)),
         ]);
+        // Linked local books keep their AI features, addressed by the
+        // server book id. Cache-only read — the sync above just populated
+        // the link for anything linkable (losing the 2.5s race on a
+        // first-ever link only costs AI for this session).
+        const { getLocalBookLinks } =
+          await import("$lib/services/localLibrary");
+        serverBookId = (await getLocalBookLinks())[bookId] ?? null;
       }
     }
     ready = true;
 
-    // Server-side extras — reading status, AI features, display metadata —
-    // only exist for books the BeePub server knows about.
-    if (resolved.sync.kind !== "beepub") return;
+    // AI status is account-level, not book-level — fetch it whenever AI
+    // could be shown (beepub books, or a linked local book).
+    if (resolved.sync.kind === "beepub" || serverBookId) {
+      aiApi
+        .getStatus()
+        .then((s) => (aiStatus = s))
+        .catch(() => {});
+    }
 
-    // Fetch AI feature status
-    aiApi
-      .getStatus()
-      .then((s) => (aiStatus = s))
-      .catch(() => {});
+    // Server-side extras — reading status, display metadata — only exist
+    // for books the reader addresses by their server id. Local books keep
+    // status/interaction on the sync path (a second writer here would
+    // fight the LWW merge).
+    if (resolved.sync.kind !== "beepub") return;
 
     // Fetch current interaction and start reading timer
     fetchInteractionAndStartTimer();
@@ -590,7 +609,7 @@
     // Load style prompts if not cached
     if (stylePrompts.length === 0) {
       try {
-        stylePrompts = await booksApi.getStylePrompts(bookId);
+        stylePrompts = await booksApi.getStylePrompts(aiBookId ?? bookId);
       } catch {
         /* ignore */
       }
@@ -606,7 +625,7 @@
     showIllustrationModal = false;
 
     try {
-      const ill = await booksApi.createIllustration(bookId, {
+      const ill = await booksApi.createIllustration(aiBookId ?? bookId, {
         cfi_range: illustrationModalCfi,
         text: illustrationModalText,
         ...detail,
@@ -626,7 +645,10 @@
       if (destroyed) return;
 
       try {
-        const ill = await booksApi.getIllustration(bookId, illustrationId);
+        const ill = await booksApi.getIllustration(
+          aiBookId ?? bookId,
+          illustrationId,
+        );
         if (ill.status === "completed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           reader?.addIllustrationAnnotation(ill);
@@ -656,7 +678,7 @@
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
     try {
-      await booksApi.deleteIllustration(bookId, ill.id);
+      await booksApi.deleteIllustration(aiBookId ?? bookId, ill.id);
       illustrations = illustrations.filter((x) => x.id !== ill.id);
       reader?.removeIllustrationAnnotation(ill.cfi_range);
       toastStore.success(m.illustration_deleted());
@@ -706,7 +728,7 @@
       illustrationCount={illustrations.length}
       offline={!$isOnline}
       backHref={localEntry ? "/local" : null}
-      showAi={isBeepub}
+      showAi={aiEnabled}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
       onthemeToggle={handleThemeToggle}
@@ -741,6 +763,7 @@
         <EpubReader
           bind:this={reader}
           {bookId}
+          aiBookId={aiEnabled ? aiBookId : null}
           {source}
           {sync}
           {initialCfi}
@@ -948,7 +971,7 @@
       <HighlightSidebar
         {highlights}
         {illustrations}
-        {bookId}
+        bookId={aiBookId ?? bookId}
         {darkMode}
         brokenIds={brokenHighlightIds}
         onselect={(hl) => {
@@ -984,7 +1007,7 @@
 
     {#if activeSidebar === "companion" && !isImageBook}
       <CompanionSidebar
-        {bookId}
+        bookId={aiBookId ?? bookId}
         {darkMode}
         {aiStatus}
         isAdmin={$authStore.user?.role === UserRole.Admin}
@@ -1009,7 +1032,7 @@
       {isImageBook}
       highlightCount={highlights.length}
       offline={!$isOnline}
-      showAi={isBeepub}
+      showAi={aiEnabled}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
       ontoc={() => toggleSidebar("toc")}
@@ -1054,7 +1077,7 @@
       text={illustrationModalText}
       styles={stylePrompts}
       {darkMode}
-      {bookId}
+      bookId={aiBookId ?? bookId}
       {aiStatus}
       isAdmin={$authStore.user?.role === UserRole.Admin}
       completedIllustrations={illustrations.filter(
@@ -1068,7 +1091,7 @@
   {#if viewingIllustration}
     <IllustrationViewer
       illustration={viewingIllustration}
-      {bookId}
+      bookId={aiBookId ?? bookId}
       {darkMode}
       onclose={() => (viewingIllustration = null)}
     />

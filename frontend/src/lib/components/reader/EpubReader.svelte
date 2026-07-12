@@ -41,6 +41,7 @@
     darkMode = false,
     isImageBook = false,
     offline = false,
+    aiBookId = null,
     onprogress,
     onactivity,
     ontitle,
@@ -65,6 +66,10 @@
     onpeekchange,
   }: {
     bookId: string;
+    /** Server identity for AI features (illustrations, companion) — the
+     *  linked server id for local books, bookId itself for beepub books,
+     *  null when AI is unavailable. */
+    aiBookId?: string | null;
     /** Where the book's bytes come from (beepub server, later local/OPDS). */
     source: BookSource;
     /** Where the user's progress and highlights live. */
@@ -1220,10 +1225,11 @@
     }
 
     // Load illustrations — a BeePub-exclusive AI feature, deliberately not
-    // part of SyncBackend; other backends simply never have them.
-    if (sync.kind === "beepub") {
+    // part of SyncBackend; aiBookId carries the server identity (linked
+    // local books included) or null when AI is off.
+    if (aiBookId) {
       try {
-        illustrations = await booksApi.getIllustrations(bookId);
+        illustrations = await booksApi.getIllustrations(aiBookId);
         onillustrationschange?.(illustrations);
       } catch {
         // ignore
@@ -2086,7 +2092,7 @@
       <HighlightMenu
         hasExisting={!!existingHighlight}
         {offline}
-        showAi={sync.kind === "beepub"}
+        showAi={aiBookId != null}
         onhighlight={handleHighlight}
         onnote={handleNote}
         onremove={handleRemoveHighlight}
