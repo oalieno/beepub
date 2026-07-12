@@ -131,9 +131,7 @@ async def test_by_digest_validates_shape(admin_client):
 
 
 async def test_by_digest_requires_auth(client):
-    response = await client.post(
-        "/api/books/by-digest", json={"digests": ["a" * 32]}
-    )
+    response = await client.post("/api/books/by-digest", json={"digests": ["a" * 32]})
     assert response.status_code == 401
 
 
@@ -211,9 +209,7 @@ async def test_sync_progress_kosync_marker_ordering(admin_client, book_id):
     document = await _document_digest(admin_client, book_id)
     kosync_headers = {
         "x-auth-user": ADMIN_CREDENTIALS["username"],
-        "x-auth-key": hashlib.md5(
-            ADMIN_CREDENTIALS["password"].encode()
-        ).hexdigest(),
+        "x-auth-key": hashlib.md5(ADMIN_CREDENTIALS["password"].encode()).hexdigest(),
     }
     push = await admin_client.put(
         "/kosync/syncs/progress",
@@ -351,9 +347,7 @@ async def test_sync_highlight_tombstone_union(admin_client, book_id):
 
     # ...but a newer edit revives it.
     revive = {**tombstone, "deleted_at": None, "updated_at": _stamp(7200)}
-    await admin_client.post(
-        f"/api/books/{book_id}/sync", json={"highlights": [revive]}
-    )
+    await admin_client.post(f"/api/books/{book_id}/sync", json={"highlights": [revive]})
     listing = (await admin_client.get(f"/api/books/{book_id}/highlights")).json()
     assert [h["id"] for h in listing] == [server_hl["id"]]
 
@@ -401,9 +395,7 @@ async def test_sync_highlight_batch_cap(admin_client, book_id):
 
 
 async def test_sync_unknown_book_is_404(admin_client):
-    response = await admin_client.post(
-        f"/api/books/{uuid.uuid4()}/sync", json={}
-    )
+    response = await admin_client.post(f"/api/books/{uuid.uuid4()}/sync", json={})
     assert response.status_code == 404
 
 

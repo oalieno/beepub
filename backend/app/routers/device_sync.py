@@ -226,7 +226,11 @@ async def sync_reading_state(
 
     await db.commit()
 
-    if client_won and body.progress is not None and body.progress.section_index is not None:
+    if (
+        client_won
+        and body.progress is not None
+        and body.progress.section_index is not None
+    ):
         from app.tasks.summarize import summarize_chunks
 
         extract_book_text.delay(str(book_id))
@@ -237,9 +241,7 @@ async def sync_reading_state(
         .where(Highlight.user_id == current_user.id, Highlight.book_id == book_id)
         .order_by(Highlight.created_at.asc())
     )
-    highlights = [
-        HighlightSyncOut.model_validate(h) for h in result.scalars().all()
-    ]
+    highlights = [HighlightSyncOut.model_validate(h) for h in result.scalars().all()]
 
     interaction_result = await db.execute(
         select(UserBookInteraction).where(
