@@ -2,6 +2,7 @@
   import { Flame, Check, Pencil, Target, Minus, Plus } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import type { ReadingStats } from "$lib/types";
 
   let {
@@ -30,7 +31,9 @@
   );
   let goalMet = $derived(progressPercent != null && progressPercent >= 100);
 
-  const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+  const weekdayFormat = new Intl.DateTimeFormat(getLocale(), {
+    weekday: "narrow",
+  });
 
   let weekDays = $derived.by(() => {
     const activityMap = new Map<string, number>();
@@ -51,7 +54,7 @@
       d.setDate(today.getDate() - todayDow + i);
       const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       days.push({
-        label: DAY_LABELS[i],
+        label: weekdayFormat.format(d),
         date: dateStr,
         hasReading: (activityMap.get(dateStr) ?? 0) > 0,
         isToday: dateStr === todayStr,
@@ -96,18 +99,27 @@
 
   function formatGoalDisplay(mins: number): string {
     if (mins >= 60) {
-      const h = Math.floor(mins / 60);
-      const m = mins % 60;
-      return m > 0 ? `${h}h ${m}m` : `${h}h`;
+      const hours = Math.floor(mins / 60);
+      const rest = mins % 60;
+      return rest > 0
+        ? m.time_hours_minutes({
+            hours: String(hours),
+            minutes: String(rest),
+          })
+        : m.time_hours({ hours: String(hours) });
     }
-    return `${mins}m`;
+    return m.time_minutes({ minutes: String(mins) });
   }
 
   function formatTime(seconds: number): string {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0)
+      return m.time_hours_minutes({
+        hours: String(hours),
+        minutes: String(minutes),
+      });
+    return m.time_minutes({ minutes: String(minutes) });
   }
 </script>
 
@@ -151,7 +163,7 @@
                   {...props}
                   class="text-xs text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5 cursor-pointer rounded px-1 -mx-1 hover:bg-muted"
                 >
-                  / {goalMinutes}m
+                  / {formatGoalDisplay(goalMinutes)}
                   <Pencil
                     size={10}
                     class="can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-opacity"
@@ -249,7 +261,9 @@
       {#each weekDays as day}
         <div
           class="flex flex-col items-center gap-1"
-          title="{day.date}: {day.hasReading ? 'Read' : 'No reading'}"
+          title="{day.date}: {day.hasReading
+            ? m.streak_day_read()
+            : m.heatmap_no_reading()}"
         >
           <span
             class="text-[10px] leading-none {day.isToday

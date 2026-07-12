@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { localizedTagLabel } from "$lib/tags";
   import type { BookOut, SeriesNeighborsOut } from "$lib/types";
 
@@ -13,6 +14,18 @@
     seriesNeighbors: SeriesNeighborsOut | null;
     onfilter: (param: string, value: string) => void;
   } = $props();
+
+  // EPUBs carry BCP-47 codes ("zh-TW") — show the human name instead.
+  function languageName(code: string): string {
+    try {
+      return (
+        new Intl.DisplayNames([getLocale()], { type: "language" }).of(code) ??
+        code
+      );
+    } catch {
+      return code;
+    }
+  }
 
   function formatSeriesIndex(idx: number | null | undefined): string {
     return idx == null ? "" : String(idx);
@@ -231,7 +244,9 @@
         <span class="text-muted-foreground block text-xs mb-0.5"
           >{m.metadata_label_language()}</span
         >
-        <span class="text-foreground font-medium">{book.epub_language}</span>
+        <span class="text-foreground font-medium"
+          >{languageName(book.epub_language)}</span
+        >
       </div>
     {/if}
     {#if book.epub_isbn}

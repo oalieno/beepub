@@ -566,7 +566,6 @@
     <div class="mb-6 -ml-1">
       <BackButton
         href={book.library_id ? `/libraries/${book.library_id}` : "/"}
-        label="Back"
         onclick={hasInternalHistory ? () => history.back() : undefined}
       />
     </div>

@@ -506,10 +506,7 @@
   </div>
 {:else}
   <p class="text-muted-foreground text-sm mb-4">
-    {m.browser_showing({
-      count: String(shownCount),
-      total: String(totalBooks),
-    })}
+    {m.browser_showing({ total: String(totalBooks) })}
   </p>
   {#if collapse}
     <!-- One grid, mixing whole-series cards and standalone book cards -->

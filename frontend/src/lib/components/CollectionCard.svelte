@@ -2,6 +2,7 @@
   import { BookOpen } from "@lucide/svelte";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
+  import * as m from "$lib/paraglide/messages.js";
   import type { Snippet } from "svelte";
 
   interface Props {
@@ -88,8 +89,7 @@
           </span>
         {/if}
         <span class="text-xs text-muted-foreground">
-          {bookCount}
-          {bookCount === 1 ? "book" : "books"}
+          {m.collection_book_count({ count: String(bookCount) })}
         </span>
       </div>
     </div>

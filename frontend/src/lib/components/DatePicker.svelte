@@ -3,11 +3,13 @@
   import { CalendarIcon } from "@lucide/svelte";
   import { Calendar } from "$lib/components/ui/calendar";
   import * as Popover from "$lib/components/ui/popover";
+  import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
 
   let {
     value = $bindable<string | null>(null),
     onchange,
-    placeholder = "Pick a date",
+    placeholder = m.datepicker_pick_date(),
     variant = "pill",
   }: {
     value?: string | null;
@@ -64,6 +66,7 @@
       value={calendarValue}
       onValueChange={handleSelect}
       captionLayout="dropdown"
+      locale={getLocale()}
     />
   </Popover.Content>
 </Popover.Root>

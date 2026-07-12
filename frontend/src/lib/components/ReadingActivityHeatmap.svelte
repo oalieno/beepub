@@ -68,7 +68,10 @@
     if (seconds === 0) return `${date}: ${m.heatmap_no_reading()}`;
     const h = Math.floor(seconds / 3600);
     const min = Math.floor((seconds % 3600) / 60);
-    const timeStr = h > 0 ? `${h}h ${min}m` : `${min}m`;
+    const timeStr =
+      h > 0
+        ? m.time_hours_minutes({ hours: String(h), minutes: String(min) })
+        : m.time_minutes({ minutes: String(min) });
     return `${date}: ${timeStr}`;
   }
 </script>

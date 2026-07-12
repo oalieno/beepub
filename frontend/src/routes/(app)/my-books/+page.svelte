@@ -171,10 +171,7 @@
     </div>
   {:else}
     <p class="text-sm text-muted-foreground mb-4">
-      {m.browser_showing({
-        count: String(books.length),
-        total: String(total),
-      })}
+      {m.browser_showing({ total: String(total) })}
     </p>
     <BookGrid {books} />
     {#if hasMore}
