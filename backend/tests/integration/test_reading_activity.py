@@ -118,3 +118,79 @@ async def test_web_accumulator_lands_in_web_row(admin_client):
     assert len(rows) == 1
     assert rows[0].device_id == "web"
     assert rows[0].seconds >= 0
+
+
+def _entry(day, seconds: int) -> dict:
+    return {"date": day.isoformat(), "seconds": seconds}
+
+
+async def test_activity_sync_replaces_not_accumulates(admin_client):
+    today = _app_today()
+    first = await admin_client.post(
+        "/api/activity/sync",
+        json={"device_id": "device-a", "entries": [_entry(today, 900)]},
+    )
+    assert first.status_code == 200
+    assert first.json() == {"days": 1}
+
+    # Re-pushing the same day sets its value — idempotent under replays.
+    second = await admin_client.post(
+        "/api/activity/sync",
+        json={"device_id": "device-a", "entries": [_entry(today, 1200)]},
+    )
+    assert second.status_code == 200
+
+    activity = (await admin_client.get("/api/books/reading-activity")).json()
+    entries = [e for e in activity if e["date"] == today.isoformat()]
+    assert entries == [{"date": today.isoformat(), "seconds": 1200}]
+
+
+async def test_activity_sync_rejects_web_device(admin_client):
+    today = _app_today()
+    for device_id in ("web", "WEB", " web "):
+        response = await admin_client.post(
+            "/api/activity/sync",
+            json={"device_id": device_id, "entries": [_entry(today, 60)]},
+        )
+        assert response.status_code == 422
+
+
+async def test_activity_sync_merges_with_web_rows(admin_client):
+    today = _app_today()
+    yesterday = today - timedelta(days=1)
+    await _seed_activity("admin", [("web", today, 300)])
+    response = await admin_client.post(
+        "/api/activity/sync",
+        json={
+            "device_id": "device-a",
+            "entries": [_entry(today, 600), _entry(yesterday, 60)],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json() == {"days": 2}
+
+    stats = (await admin_client.get("/api/books/reading-stats")).json()
+    assert stats["today_seconds"] == 900
+    assert stats["current_streak"] == 2
+
+
+async def test_activity_sync_requires_auth(client):
+    response = await client.post(
+        "/api/activity/sync", json={"device_id": "device-a", "entries": []}
+    )
+    assert response.status_code == 401
+
+
+async def test_activity_sync_validates_bounds(admin_client):
+    today = _app_today()
+    over_cap = await admin_client.post(
+        "/api/activity/sync",
+        json={"device_id": "device-a", "entries": [_entry(today, 90000)]},
+    )
+    assert over_cap.status_code == 422
+
+    empty = await admin_client.post(
+        "/api/activity/sync", json={"device_id": "device-a", "entries": []}
+    )
+    assert empty.status_code == 200
+    assert empty.json() == {"days": 0}

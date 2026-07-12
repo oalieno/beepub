@@ -12,14 +12,20 @@ server stamps every timestamp — sync endpoints treat the client as the
 authority on when its writes happened; the merge is last-write-wins with
 the server winning ties. That contract difference is why they live in
 their own module.
+
+Reading activity rides a separate ledger: /api/books/{id}/sync never
+records activity (replayed state would double-count an accumulator), but
+devices measure their own reading time and REPLACE their per-day rows via
+/api/activity/sync.
 """
 
 import uuid
+from datetime import date as date_type
 from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,7 +33,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.book import Book
-from app.models.reading import Highlight, UserBookInteraction
+from app.models.reading import (
+    WEB_DEVICE_ID,
+    Highlight,
+    ReadingActivity,
+    UserBookInteraction,
+)
 from app.models.user import User
 from app.routers.books import _get_book_with_access
 from app.routers.interactions import _get_or_create_interaction
@@ -254,3 +265,66 @@ async def sync_reading_state(
         progress=final.reading_progress if final else None,
         highlights=highlights,
     )
+
+
+activity_router = APIRouter(prefix="/api/activity", tags=["device-sync"])
+
+
+class ActivityEntryIn(BaseModel):
+    date: date_type
+    seconds: int = Field(ge=0, le=86400)
+
+
+class ActivitySyncRequest(BaseModel):
+    device_id: str = Field(min_length=1, max_length=64)
+    # ~2 months of daily entries; clients push a rolling window.
+    entries: list[ActivityEntryIn] = Field(default_factory=list, max_length=62)
+
+    @field_validator("device_id")
+    @classmethod
+    def reject_web_device(cls, v: str) -> str:
+        if v.strip().lower() == WEB_DEVICE_ID:
+            raise ValueError("device_id 'web' is reserved for the web reader")
+        return v
+
+
+class ActivitySyncResponse(BaseModel):
+    days: int
+
+
+@activity_router.post("/sync", response_model=ActivitySyncResponse)
+async def sync_reading_activity(
+    body: ActivitySyncRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Replace-not-accumulate: the device owns its ledger, so re-uploading
+    a day sets its seconds rather than adding them — idempotent under sync
+    replays. A fresh install mints a new device_id, so a regressed ledger
+    can't shrink another install's history."""
+    # Same statement may not touch one row twice — Postgres rejects it.
+    by_date: dict[date_type, int] = {}
+    for entry in body.entries:
+        by_date[entry.date] = entry.seconds
+    if not by_date:
+        return ActivitySyncResponse(days=0)
+
+    stmt = pg_insert(ReadingActivity).values(
+        [
+            {
+                "user_id": current_user.id,
+                "device_id": body.device_id,
+                "date": day,
+                "seconds": seconds,
+            }
+            for day, seconds in by_date.items()
+        ]
+    )
+    await db.execute(
+        stmt.on_conflict_do_update(
+            index_elements=["user_id", "device_id", "date"],
+            set_={"seconds": stmt.excluded.seconds},
+        )
+    )
+    await db.commit()
+    return ActivitySyncResponse(days=len(by_date))
