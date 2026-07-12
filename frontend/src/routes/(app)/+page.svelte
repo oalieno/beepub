@@ -19,6 +19,9 @@
   } from "$lib/types";
   import { BookOpen, HardDrive, WifiOff } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
+  import LocalBookCard, {
+    type LocalShelfEntry,
+  } from "$lib/components/LocalBookCard.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
@@ -33,6 +36,31 @@
   let loading = $state(true);
   let hasLoadedOnline = $state(false);
   let loadFailed = $state(false);
+  let localShelf = $state<LocalShelfEntry[]>([]);
+
+  // The offline view shows the local shelf inline — books should be one
+  // tap away, not hidden behind a navigation hop.
+  async function loadLocalShelf() {
+    try {
+      const { listLocalBooks, getLocalBookLinks, getLocalCoverSrc } =
+        await import("$lib/services/localLibrary");
+      const books = await listLocalBooks();
+      const links = await getLocalBookLinks();
+      localShelf = await Promise.all(
+        books.map(async (b) => ({
+          ...b,
+          coverSrc: await getLocalCoverSrc(b),
+          linked: b.id in links,
+        })),
+      );
+    } catch {
+      // the manage link below still gets the user there
+    }
+  }
+
+  $effect(() => {
+    if (offline) void loadLocalShelf();
+  });
 
   async function loadOnlineData() {
     try {
@@ -148,19 +176,45 @@
       </div>
     </section>
 
-    <!-- Books on the device live in the local library. -->
-    <a
-      href="/local"
-      class="block bg-card card-soft rounded-2xl p-12 text-center hover:shadow-md transition-all"
-    >
-      <HardDrive class="mx-auto text-primary/50 mb-4" size={48} />
-      <p class="text-foreground text-lg font-medium">
-        {m.nav_local_books()}
-      </p>
-      <p class="text-muted-foreground/70 text-sm mt-1">
-        {m.home_offline_local_subtitle()}
-      </p>
-    </a>
+    {#if localShelf.length > 0}
+      <!-- The local shelf, right here — management (delete etc.) lives
+           on /local behind the see-all link. -->
+      <section>
+        <div class="flex items-end justify-between mb-6">
+          <h2 class="text-2xl font-bold text-foreground">
+            {m.nav_local_books()}
+          </h2>
+          <a
+            href="/local"
+            class="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
+          >
+            {m.home_see_all()}
+          </a>
+        </div>
+        <div
+          class="grid gap-4"
+          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
+        >
+          {#each localShelf as entry (entry.id)}
+            <LocalBookCard {entry} />
+          {/each}
+        </div>
+      </section>
+    {:else}
+      <!-- Books on the device live in the local library. -->
+      <a
+        href="/local"
+        class="block bg-card card-soft rounded-2xl p-12 text-center hover:shadow-md transition-all"
+      >
+        <HardDrive class="mx-auto text-primary/50 mb-4" size={48} />
+        <p class="text-foreground text-lg font-medium">
+          {m.nav_local_books()}
+        </p>
+        <p class="text-muted-foreground/70 text-sm mt-1">
+          {m.home_offline_local_subtitle()}
+        </p>
+      </a>
+    {/if}
   {:else}
     <!-- Continue Reading -->
     {#if continueReadingBooks.length > 0}
