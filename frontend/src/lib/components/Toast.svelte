@@ -11,11 +11,22 @@
     warning: TriangleAlert,
   } as const;
 
+  // Success is brand-colored (a green card was the only green in the app);
+  // the semantic types keep their hue but follow the theme.
   const colors: Record<ToastType, string> = {
-    success: "bg-emerald-50 border-emerald-200 text-emerald-800",
-    error: "bg-red-50 border-red-200 text-red-800",
-    info: "bg-blue-50 border-blue-200 text-blue-800",
-    warning: "bg-amber-50 border-amber-200 text-amber-800",
+    success: "bg-card border-primary/40 text-foreground",
+    error:
+      "bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-900 dark:text-red-200",
+    info: "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-200",
+    warning:
+      "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200",
+  };
+
+  const iconColors: Record<ToastType, string> = {
+    success: "text-primary",
+    error: "",
+    info: "",
+    warning: "",
   };
 </script>
 
@@ -29,7 +40,10 @@
         toast.type
       ]}"
     >
-      <IconComponent size={18} class="flex-shrink-0 mt-0.5" />
+      <IconComponent
+        size={18}
+        class="flex-shrink-0 mt-0.5 {iconColors[toast.type]}"
+      />
       <span class="text-sm flex-1 min-w-0 break-words">{toast.message}</span>
       {#if toast.action}
         <button

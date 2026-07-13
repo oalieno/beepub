@@ -69,9 +69,12 @@
       ? "border-ink-700 text-ink-300 hover:bg-ink-800"
       : "border-border text-foreground hover:bg-secondary",
   );
+  // The sheet sits inside the reader root, so bg-primary resolves to the
+  // .reader-dark gold — a solid selected state to match the light theme's,
+  // instead of the one-step-of-gray that was hard to spot.
   const activeBtnClass = $derived(
     darkMode
-      ? "bg-ink-700 text-ink-100 border-ink-600"
+      ? "bg-primary text-primary-foreground border-primary"
       : "bg-foreground text-background border-foreground",
   );
   const inactiveBtnClass = $derived(

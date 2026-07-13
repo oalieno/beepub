@@ -24,8 +24,10 @@
   --card-foreground: #1a1510;
   --popover: #ffffff;
   --popover-foreground: #1a1510;
+  /* Dark ink on the honey gold, matching the dark theme: white on
+     #c4924a is 2.8:1 and fails contrast on every primary button. */
   --primary: #c4924a;
-  --primary-foreground: #ffffff;
+  --primary-foreground: #1a1510;
   --secondary: #f0ebe3;
   --secondary-foreground: #3d3529;
   --muted: #f0ebe3;
@@ -44,7 +46,7 @@
   --sidebar: #f5f0e8;
   --sidebar-foreground: #1a1510;
   --sidebar-primary: #c4924a;
-  --sidebar-primary-foreground: #ffffff;
+  --sidebar-primary-foreground: #1a1510;
   --sidebar-accent: #f0ebe3;
   --sidebar-accent-foreground: #3d3529;
   --sidebar-border: #e8e0d4;
