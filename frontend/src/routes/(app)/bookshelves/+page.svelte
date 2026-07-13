@@ -6,13 +6,16 @@
   import { confirmDialog } from "$lib/stores/confirm";
   import Modal from "$lib/components/Modal.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { BookshelfOut, ReadingStatus } from "$lib/types";
   import {
     Bookmark,
     BookOpenCheck,
     CircleCheck,
     CircleX,
+    EllipsisVertical,
     Heart,
+    Pencil,
     Plus,
     ShelvingUnit,
     Trash2,
@@ -119,6 +122,37 @@
     }
   }
 
+  let editingShelf = $state<BookshelfOut | null>(null);
+  let editName = $state("");
+  let editDesc = $state("");
+  let saving = $state(false);
+
+  function openEdit(shelf: BookshelfOut) {
+    editingShelf = shelf;
+    editName = shelf.name;
+    editDesc = shelf.description ?? "";
+  }
+
+  async function handleEditSave() {
+    if (!editingShelf || !editName) return;
+    saving = true;
+    try {
+      const updated = await bookshelvesApi.update(editingShelf.id, {
+        name: editName,
+        description: editDesc,
+      });
+      bookshelves = bookshelves.map((s) =>
+        s.id === updated.id ? { ...s, ...updated } : s,
+      );
+      editingShelf = null;
+      toastStore.success(m.shelves_updated());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      saving = false;
+    }
+  }
+
   async function handleDelete(id: string, name: string) {
     if (
       !(await confirmDialog({
@@ -181,13 +215,30 @@
             <ShelvingUnit class="text-muted-foreground/50 shrink-0" size={16} />
           {/snippet}
           {#snippet overlay()}
-            <button
-              aria-label={m.common_delete()}
-              class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-red-500/80 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-all"
-              onclick={() => handleDelete(shelf.id, shelf.name)}
-            >
-              <Trash2 size={13} />
-            </button>
+            <!-- Destructive action demoted into a menu — a bare trash can
+                 as the card's only visible action invites misclicks. -->
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger
+                aria-label={m.book_more_actions()}
+                class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/40 can-hover:opacity-0 can-hover:group-hover:opacity-100 transition-all"
+              >
+                <EllipsisVertical size={14} />
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.Item onclick={() => openEdit(shelf)}>
+                  <Pencil size={14} />
+                  {m.shelves_edit_title()}
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item
+                  variant="destructive"
+                  onclick={() => handleDelete(shelf.id, shelf.name)}
+                >
+                  <Trash2 size={14} />
+                  {m.common_delete()}
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
           {/snippet}
         </CollectionCard>
       {/each}
@@ -234,6 +285,52 @@
         onclick={handleCreate}
       >
         {creating ? m.shelves_creating() : m.shelves_create()}
+      </button>
+    </div>
+  </div>
+</Modal>
+
+<Modal
+  title={m.shelves_edit_title()}
+  open={editingShelf != null}
+  onclose={() => (editingShelf = null)}
+>
+  <div class="space-y-4">
+    <div class="space-y-1">
+      <label
+        class="block text-sm font-medium text-foreground"
+        for="shelf-edit-name">{m.shelves_name()}</label
+      >
+      <input
+        id="shelf-edit-name"
+        bind:value={editName}
+        placeholder={m.shelves_name_placeholder()}
+        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+      />
+    </div>
+    <div class="space-y-1">
+      <label
+        class="block text-sm font-medium text-foreground"
+        for="shelf-edit-desc">{m.shelves_description()}</label
+      >
+      <input
+        id="shelf-edit-desc"
+        bind:value={editDesc}
+        placeholder={m.shelves_description_placeholder()}
+        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+      />
+    </div>
+    <div class="flex justify-end gap-2 pt-2">
+      <button
+        class="px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+        onclick={() => (editingShelf = null)}>{m.common_cancel()}</button
+      >
+      <button
+        disabled={!editName || saving}
+        class="px-5 py-2.5 text-sm bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground font-semibold rounded-xl"
+        onclick={handleEditSave}
+      >
+        {m.common_save()}
       </button>
     </div>
   </div>

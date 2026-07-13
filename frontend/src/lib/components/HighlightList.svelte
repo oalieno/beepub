@@ -53,7 +53,7 @@
   <div class="flex flex-col gap-1">
     {#each highlights as hl (hl.id)}
       <div
-        class="w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start cursor-pointer {darkMode
+        class="group/hl w-full text-left px-3 py-2.5 rounded-lg transition-colors flex gap-2.5 items-start cursor-pointer {darkMode
           ? 'hover:bg-ink-800'
           : 'hover:bg-accent'}"
         role="button"
@@ -126,10 +126,13 @@
             </button>
           {/if}
           {#if ondelete}
+            <!-- Demoted below share: hover-revealed on pointer devices,
+                 fainter on touch. Deleting is confirmed downstream, but it
+                 still shouldn't sit at equal weight with sharing. -->
             <button
-              class="p-2 rounded-md transition-all cursor-pointer {darkMode
-                ? 'text-ink-500 hover:text-red-400 hover:bg-ink-800 active:bg-red-900/30'
-                : 'text-muted-foreground hover:text-destructive hover:bg-accent active:bg-destructive/10'}"
+              class="p-2 rounded-md transition-all cursor-pointer can-hover:opacity-0 can-hover:group-hover/hl:opacity-100 focus-visible:opacity-100 {darkMode
+                ? 'text-ink-600 hover:text-red-400 hover:bg-ink-800 active:bg-red-900/30'
+                : 'text-muted-foreground/60 hover:text-destructive hover:bg-accent active:bg-destructive/10'}"
               title={m.highlight_action_delete()}
               onclick={(e) => {
                 e.stopPropagation();

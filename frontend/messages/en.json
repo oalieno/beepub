@@ -195,6 +195,8 @@
   "shelves_confirm_delete": "Delete \"{name}\"?",
   "shelves_creating": "Creating...",
   "shelves_create": "Create",
+  "shelves_edit_title": "Edit shelf",
+  "shelves_updated": "Shelf updated",
 
   "gacha_page_title": "BeePub - Gacha",
   "gacha_subtitle": "Randomly pull a book from your library",

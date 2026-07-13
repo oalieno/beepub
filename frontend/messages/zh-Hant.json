@@ -195,6 +195,8 @@
   "shelves_confirm_delete": "刪除「{name}」？",
   "shelves_creating": "建立中...",
   "shelves_create": "建立",
+  "shelves_edit_title": "編輯書架",
+  "shelves_updated": "書架已更新",
 
   "gacha_page_title": "BeePub - 抽書",
   "gacha_subtitle": "從你的書庫中隨機抽出一本書",
