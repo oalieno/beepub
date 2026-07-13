@@ -220,7 +220,7 @@
             <DropdownMenu.Root>
               <DropdownMenu.Trigger
                 aria-label={m.book_more_actions()}
-                class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/40 can-hover:data-[state=closed]:opacity-0 can-hover:group-hover:opacity-100 transition-all"
+                class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/70 hover:text-white hover:bg-black/40 can-hover:opacity-0 can-hover:group-hover:opacity-100 data-[state=open]:opacity-100 transition-all"
               >
                 <EllipsisVertical size={14} />
               </DropdownMenu.Trigger>
