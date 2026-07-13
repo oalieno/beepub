@@ -625,6 +625,9 @@
   "illustration_style_light_novel": "輕小說",
 
   "highlight_action_highlight": "畫線",
+  "highlight_style_fill": "螢光",
+  "highlight_style_underline": "底線",
+  "highlight_style_squiggly": "波浪線",
   "highlight_action_copy": "複製",
   "highlight_action_share": "分享為卡片",
   "highlight_action_illustrate": "AI 插圖",

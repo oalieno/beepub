@@ -50,6 +50,90 @@ Highlight.prototype.filteredRanges = function () {
   return nonEmpty.filter((_r, idx) => !discard.has(idx));
 };
 
+// House extension: underline / squiggly highlight styles, routed via
+// data.beepubStyle from annotations.highlight(). marks-pane's own Underline
+// hardcodes a 1px black horizontal line — wrong for colored lines and for
+// vertical-rl books, where the side line belongs on the right edge of the
+// column. The transparent rect keeps the whole text run clickable
+// (pointer-events: visiblePainted ignores fill="none" but hits
+// fill="transparent").
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function beepubLinePath(vertical, squiggly, x, y, w, h) {
+  if (!squiggly) {
+    return vertical
+      ? `M ${x + w - 1.5} ${y} L ${x + w - 1.5} ${y + h}`
+      : `M ${x} ${y + h - 1.5} L ${x + w} ${y + h - 1.5}`;
+  }
+  const period = 6;
+  const amp = 2;
+  if (vertical) {
+    const bx = x + w - 2.5;
+    let d = `M ${bx} ${y}`;
+    for (let py = 0; py < h; py += period) {
+      d += ` q ${amp} ${period / 4} 0 ${period / 2} q ${-amp} ${period / 4} 0 ${period / 2}`;
+    }
+    return d;
+  }
+  const by = y + h - 2.5;
+  let d = `M ${x} ${by}`;
+  for (let px = 0; px < w; px += period) {
+    d += ` q ${period / 4} ${-amp} ${period / 2} 0 q ${period / 4} ${amp} ${period / 2} 0`;
+  }
+  return d;
+}
+
+class BeepubLineMark extends Highlight {
+  render() {
+    while (this.element.firstChild) {
+      this.element.removeChild(this.element.firstChild);
+    }
+    const doc = this.element.ownerDocument;
+    const docFrag = doc.createDocumentFragment();
+    const filtered = this.filteredRanges();
+    const offset = this.element.getBoundingClientRect();
+    const container = this.container.getBoundingClientRect();
+    const squiggly = this.data.beepubStyle === "squiggly";
+    const stroke = this.attributes.stroke || "#eab308";
+
+    const el = this.range.startContainer?.parentElement;
+    const win = el?.ownerDocument?.defaultView;
+    const vertical =
+      !!win && /^vertical/.test(win.getComputedStyle(el).writingMode || "");
+
+    for (let i = 0, len = filtered.length; i < len; i++) {
+      const r = filtered[i];
+      const x = r.left - offset.left + container.left;
+      const y = r.top - offset.top + container.top;
+
+      const rect = doc.createElementNS(SVG_NS, "rect");
+      rect.setAttribute("x", x);
+      rect.setAttribute("y", y);
+      rect.setAttribute("width", r.width);
+      rect.setAttribute("height", r.height);
+      rect.setAttribute("fill", "transparent");
+      // The group-level attributes (bind() applies stroke etc. there)
+      // must not leak onto the hit rect as an outline.
+      rect.setAttribute("stroke", "none");
+      docFrag.appendChild(rect);
+
+      const path = doc.createElementNS(SVG_NS, "path");
+      path.setAttribute(
+        "d",
+        beepubLinePath(vertical, squiggly, x, y, r.width, r.height),
+      );
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", stroke);
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-opacity", "0.85");
+      path.setAttribute("stroke-linecap", "round");
+      docFrag.appendChild(path);
+    }
+
+    this.element.appendChild(docFrag);
+  }
+}
+
 class IframeView {
   constructor(section, options) {
     this.settings = extend(
@@ -704,7 +788,8 @@ class IframeView {
       this.pane = new Pane(this.iframe, this.element);
     }
 
-    let m = new Highlight(range, className, data, attributes);
+    const MarkClass = data.beepubStyle ? BeepubLineMark : Highlight;
+    let m = new MarkClass(range, className, data, attributes);
     let h = this.pane.addMark(m);
 
     this.highlights[cfiRange] = {

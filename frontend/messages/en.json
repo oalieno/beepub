@@ -625,6 +625,9 @@
   "illustration_style_light_novel": "Light Novel",
 
   "highlight_action_highlight": "Highlight",
+  "highlight_style_fill": "Highlight",
+  "highlight_style_underline": "Underline",
+  "highlight_style_squiggly": "Squiggly",
   "highlight_action_copy": "Copy",
   "highlight_action_share": "Share as card",
   "highlight_action_illustrate": "AI Illustration",

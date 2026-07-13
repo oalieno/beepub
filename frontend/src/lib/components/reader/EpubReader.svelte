@@ -19,6 +19,11 @@
   import { findActiveTocHref, findTocLabelForHref } from "./toc-utils";
   import { snapRangeToWordBounds } from "./word-snap";
   import {
+    HIGHLIGHT_COLORS,
+    HIGHLIGHT_LINE_COLORS,
+    parseHighlightColor,
+  } from "./highlight-style";
+  import {
     sectionIndexFromCfi,
     verifyHighlightAnchors,
   } from "./highlight-anchor";
@@ -288,13 +293,35 @@
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let handleVisibility: (() => void) | null = null;
 
-  const HIGHLIGHT_COLORS: Record<string, string> = {
-    yellow: "#fef08a",
-    green: "#bbf7d0",
-    blue: "#bfdbfe",
-    pink: "#fbcfe8",
-    orange: "#fed7aa",
-  };
+  // The raw color string may carry a style suffix ("yellow:underline") —
+  // see highlight-style.ts. This resolves it to annotation arguments: the
+  // classic pastel fill, or a data.beepubStyle routed line mark (drawn by
+  // BeepubLineMark in the epubjs fork's iframe.js).
+  function highlightAnnotationArgs(raw: string): {
+    data: Record<string, string>;
+    styles: Record<string, string>;
+  } {
+    const { color, style } = parseHighlightColor(raw);
+    if (style === "highlight") {
+      return {
+        data: {},
+        styles: {
+          fill: HIGHLIGHT_COLORS[color] ?? HIGHLIGHT_COLORS.yellow,
+          "fill-opacity": "0.5",
+        },
+      };
+    }
+    return {
+      data: { beepubStyle: style },
+      styles: {
+        stroke: HIGHLIGHT_LINE_COLORS[color] ?? HIGHLIGHT_LINE_COLORS.yellow,
+        fill: "none",
+        // The view merges in mix-blend-mode: multiply by default — fine
+        // for pastel fills, but it erases a colored line on a dark page.
+        "mix-blend-mode": "normal",
+      },
+    };
+  }
 
   const SERIF_FONTS =
     '"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif';
@@ -760,6 +787,10 @@
       currentCfi = location.start.cfi;
       currentSectionIndex = location.start.index ?? 0;
       currentSectionPage = location.start.displayed?.page ?? 1;
+      // Chapter tracking is pure UI — emit before the restore/locations
+      // early-returns below, or the first rendered page never gets a
+      // chapter label until the next relocation (e.g. a window resize).
+      onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
       void updateCurrentXpointer(currentCfi);
       const progress = calculateProgress(location);
       currentPage = progress.currentPage;
@@ -800,7 +831,6 @@
 
       currentPercentage = progress.percentage;
       emitProgress();
-      onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
       doUpdateOverlays();
       doPrefetch();
 
@@ -1442,6 +1472,11 @@
         (nav: { toc: { label: string; href: string; subitems?: any[] }[] }) => {
           tocData = nav.toc;
           ontoc?.(nav.toc);
+          // The first relocated usually beats the TOC load and resolves to
+          // an empty href; re-emit now that labels can resolve.
+          if (lastLocation) {
+            onhrefchange?.(doFindActiveTocHref(currentSectionIndex));
+          }
         },
       )
       .catch(() => {});
@@ -1646,11 +1681,7 @@
   function applyAllHighlights() {
     if (!rendition) return;
     for (const h of highlights) {
-      const color = HIGHLIGHT_COLORS[h.color] ?? HIGHLIGHT_COLORS.yellow;
-      rendition.annotations.highlight(h.cfi_range, {}, () => {}, "hl", {
-        fill: color,
-        "fill-opacity": "0.5",
-      });
+      addHighlightAnnotation(h.cfi_range, h.color);
     }
   }
 
@@ -1912,11 +1943,8 @@
     cfiRange: string,
     color: string = "yellow",
   ) {
-    const fill = HIGHLIGHT_COLORS[color] ?? HIGHLIGHT_COLORS.yellow;
-    rendition?.annotations.highlight(cfiRange, {}, () => {}, "hl", {
-      fill,
-      "fill-opacity": "0.5",
-    });
+    const { data, styles } = highlightAnnotationArgs(color);
+    rendition?.annotations.highlight(cfiRange, data, () => {}, "hl", styles);
   }
 
   export function removeHighlightAnnotation(cfiRange: string) {
@@ -1993,31 +2021,66 @@
     }
   });
 
-  async function handleHighlight(): Promise<HighlightOut | null> {
+  // Last-used color+style (raw encoded, e.g. "blue:underline") — the plain
+  // highlighter button repeats it, the picker row overrides it.
+  const HIGHLIGHT_STYLE_KEY = "reader-highlight-style";
+  let lastHighlightRaw = $state(
+    typeof localStorage !== "undefined"
+      ? (localStorage.getItem(HIGHLIGHT_STYLE_KEY) ?? "yellow")
+      : "yellow",
+  );
+
+  function rememberHighlightRaw(raw: string) {
+    lastHighlightRaw = raw;
+    try {
+      localStorage.setItem(HIGHLIGHT_STYLE_KEY, raw);
+    } catch {
+      // private mode etc. — losing the preference is fine
+    }
+  }
+
+  async function handleHighlight(raw?: string): Promise<HighlightOut | null> {
     dismissMenu();
     if (!selectedCfi || !selectedText) return null;
+    const colorRaw = raw ?? lastHighlightRaw;
+    rememberHighlightRaw(colorRaw);
 
     try {
       const created = await sync.createHighlight(bookId, {
         cfi_range: selectedCfi,
         text: selectedText,
-        color: "yellow",
+        color: colorRaw,
         prefix: selectedPrefix || null,
         suffix: selectedSuffix || null,
         section_index: sectionIndexFromCfi(selectedCfi) ?? currentSectionIndex,
       });
       highlights = [...highlights, created];
 
-      rendition?.annotations.highlight(selectedCfi, {}, () => {}, "hl", {
-        fill: HIGHLIGHT_COLORS.yellow,
-        "fill-opacity": "0.5",
-      });
+      addHighlightAnnotation(selectedCfi, colorRaw);
       onhighlightschange?.(highlights);
       toastStore.success(m.highlight_saved());
       return created;
     } catch (e) {
       toastStore.error((e as Error).message);
       return null;
+    }
+  }
+
+  /** Change color/style of the existing highlight under the menu. */
+  async function handleRestyle(raw: string) {
+    const target = existingHighlight;
+    dismissMenu();
+    if (!target || target.color === raw) return;
+    rememberHighlightRaw(raw);
+    try {
+      await sync.updateHighlight(bookId, target.id, { color: raw });
+      target.color = raw;
+      highlights = [...highlights];
+      removeHighlightAnnotation(target.cfi_range);
+      addHighlightAnnotation(target.cfi_range, raw);
+      onhighlightschange?.(highlights);
+    } catch (e) {
+      toastStore.error((e as Error).message);
     }
   }
 
@@ -2128,9 +2191,11 @@
     >
       <HighlightMenu
         hasExisting={!!existingHighlight}
+        activeRaw={existingHighlight?.color ?? lastHighlightRaw}
         {offline}
         showAi={aiBookId != null}
         onhighlight={handleHighlight}
+        onrestyle={handleRestyle}
         onnote={handleNote}
         onremove={handleRemoveHighlight}
         onillustrate={handleIllustrate}
