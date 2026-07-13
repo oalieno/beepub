@@ -295,6 +295,9 @@
           initialSort={page.url.searchParams.get("sort") || "added_at:desc"}
           initialCollapse={page.url.searchParams.get("collapse") === "1"}
           emptyMessage={m.browser_no_books()}
+          searchPlaceholder={selectedLibrary
+            ? m.browser_search_in_library({ name: selectedLibrary.name })
+            : m.browser_search_all()}
           onStateChange={handleStateChange}
         />
       {/key}

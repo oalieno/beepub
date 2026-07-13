@@ -21,6 +21,7 @@
     PaginatedFeed,
   } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
+  import { openSearchModal } from "$lib/stores/search";
 
   // series_index sort is meaningless once series collapse into one card, so it
   // is dropped from the menu while collapsed.
@@ -69,6 +70,7 @@
     initialSort = "added_at:desc",
     initialCollapse = false,
     emptyMessage = "",
+    searchPlaceholder = "",
     restoreData,
     onStateChange,
   }: {
@@ -82,6 +84,7 @@
     initialSort?: string;
     initialCollapse?: boolean;
     emptyMessage?: string;
+    searchPlaceholder?: string;
     restoreData?: BookBrowserState | null;
     onStateChange?: (state: BookBrowserState) => void;
   } = $props();
@@ -295,7 +298,7 @@
       type="text"
       bind:value={searchQuery}
       oninput={handleSearchInput}
-      placeholder={m.browser_search_placeholder()}
+      placeholder={searchPlaceholder || m.browser_search_all()}
       class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
     />
     {#if searchQuery}
@@ -477,6 +480,14 @@
     <p class="text-foreground text-lg font-medium">
       {emptyMessage || m.browser_no_books()}
     </p>
+    {#if searchQuery.trim()}
+      <button
+        class="mt-3 text-sm text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
+        onclick={() => openSearchModal(searchQuery.trim())}
+      >
+        {m.browser_search_everywhere()}
+      </button>
+    {/if}
   </div>
 {:else}
   {#if collapse}

@@ -9,6 +9,7 @@
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
   import SearchModal from "$lib/components/SearchModal.svelte";
+  import { searchModalOpen } from "$lib/stores/search";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
@@ -18,7 +19,6 @@
   // one-time read is enough.
   const localMode = isLocalMode();
 
-  let searchOpen = $state(false);
   let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
   let isBookDetail = $derived(/^\/books\/[^/]+$/.test(page.url.pathname));
 </script>
@@ -27,7 +27,7 @@
   onkeydown={(e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
       e.preventDefault();
-      searchOpen = !searchOpen;
+      searchModalOpen.update((v) => !v);
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "b") {
       e.preventDefault();
@@ -50,11 +50,11 @@
   </main>
 {:else if isAuthenticated}
   <!-- Desktop: sidebar -->
-  <DesktopSidebar onSearchOpen={() => (searchOpen = true)} />
+  <DesktopSidebar onSearchOpen={() => searchModalOpen.set(true)} />
 
   <!-- Mobile: top bar + bottom tab bar -->
   {#if !isBookDetail}
-    <MobileTopBar onSearchOpen={() => (searchOpen = true)} />
+    <MobileTopBar onSearchOpen={() => searchModalOpen.set(true)} />
     <MobileTabBar />
   {/if}
 
@@ -68,7 +68,7 @@
     {@render children()}
   </main>
 
-  <SearchModal bind:open={searchOpen} />
+  <SearchModal bind:open={$searchModalOpen} />
 {:else}
   <main>
     {@render children()}

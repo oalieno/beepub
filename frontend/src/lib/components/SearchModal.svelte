@@ -9,6 +9,8 @@
     type KeywordSearchResult,
   } from "$lib/api/search";
   import type { BookOut } from "$lib/types";
+  import { searchModalQuery } from "$lib/stores/search";
+  import { get } from "svelte/store";
   import * as m from "$lib/paraglide/messages.js";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
@@ -32,10 +34,13 @@
     total: number;
     loading: boolean;
     error: string;
+    // Query the current results answer — lets Enter distinguish
+    // "open the first result" from "this query hasn't run yet".
+    forQuery: string;
   };
 
   function createSearchState<T>(): SearchState<T> {
-    return { results: [], total: 0, loading: false, error: "" };
+    return { results: [], total: 0, loading: false, error: "", forQuery: "" };
   }
 
   let books = $state<SearchState<BookSearchResult>>(createSearchState());
@@ -44,7 +49,7 @@
 
   let selectedIndex = $state(-1);
 
-  function doBookSearch() {
+  function doBookSearch(openFirst = false) {
     const q = query.trim();
     if (!q) {
       books = createSearchState();
@@ -56,7 +61,11 @@
       .then((resp) => {
         books.results = resp.items;
         books.total = resp.total;
+        books.forQuery = q;
         selectedIndex = -1;
+        if (openFirst && query.trim() === q && resp.items[0]) {
+          selectBookResult(resp.items[0]);
+        }
       })
       .catch(() => {
         books.results = [];
@@ -79,12 +88,15 @@
       .semantic(q)
       .then((resp) => {
         content.results = resp.results;
+        content.forQuery = q;
         selectedIndex = -1;
       })
       .catch((err) => {
         content.results = [];
+        // The api client localizes error messages, so match on the 503
+        // the backend sends for "not configured" rather than the text.
         content.error =
-          err.message === "Semantic search is not configured"
+          (err as { status?: number }).status === 503
             ? m.search_content_not_configured()
             : m.search_unavailable();
       })
@@ -106,6 +118,7 @@
       .then((resp) => {
         keyword.results = resp.results;
         keyword.total = resp.total;
+        keyword.forQuery = q;
         selectedIndex = -1;
       })
       .catch(() => {
@@ -124,14 +137,6 @@
       debounceTimer = setTimeout(doBookSearch, 300);
     }
     // Content tab: search on Enter only (embedding is expensive)
-  }
-
-  function handleSearchSubmit() {
-    if (activeTab === "content") {
-      doContentSearch();
-    } else if (activeTab === "keyword") {
-      doKeywordSearch();
-    }
   }
 
   function selectBookResult(result: BookSearchResult) {
@@ -181,19 +186,47 @@
         selectContentResult(keyword.results[selectedIndex]);
       }
     } else if (e.key === "Enter" && selectedIndex < 0) {
-      handleSearchSubmit();
+      // No explicit selection: open the first result if the current
+      // query has already been searched, otherwise run the search.
+      const q = query.trim();
+      if (!q) return;
+      e.preventDefault();
+      if (activeTab === "books") {
+        clearTimeout(debounceTimer);
+        if (books.forQuery === q) {
+          if (books.results[0]) selectBookResult(books.results[0]);
+        } else {
+          doBookSearch(true);
+        }
+      } else if (activeTab === "content") {
+        if (content.forQuery === q && content.results[0]) {
+          selectContentResult(content.results[0]);
+        } else {
+          doContentSearch();
+        }
+      } else {
+        if (keyword.forQuery === q && keyword.results[0]) {
+          selectContentResult(keyword.results[0]);
+        } else {
+          doKeywordSearch();
+        }
+      }
     }
     // Escape is handled by the dialog primitive.
   }
 
   $effect(() => {
     if (open) {
-      query = "";
+      // A page can prefill the query via the store (no-results bridge).
+      const prefill = get(searchModalQuery).trim();
+      searchModalQuery.set("");
+      query = prefill;
       books = createSearchState();
       content = createSearchState();
       keyword = createSearchState();
       selectedIndex = -1;
       activeTab = "books";
+      if (prefill) doBookSearch();
       setTimeout(() => inputEl?.focus(), 50);
     }
   });
@@ -282,7 +315,7 @@
         {/if}
         <kbd
           class="hidden sm:inline text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded"
-          >{activeTab === "books" ? "esc" : "↵"}</kbd
+          >↵</kbd
         >
       </div>
 
