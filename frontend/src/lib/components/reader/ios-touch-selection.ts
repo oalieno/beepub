@@ -8,6 +8,8 @@
  * State transitions: IDLE → WAITING → SELECTING | SWIPING
  */
 
+import { snapRangeToWordBounds } from "./word-snap";
+
 export interface IOSTouchCallbacks {
   /** Called when a word/range is selected or extended via drag */
   onselect: (range: Range, text: string) => void;
@@ -148,7 +150,7 @@ export function setupIOSTouchSelection(
       doc.body.classList.remove("beepub-selecting");
       return;
     }
-    const range = doc.createRange();
+    let range = doc.createRange();
     const focusNode = caretRange.startContainer;
     const focusOffset = caretRange.startOffset;
     const cmp = anchorNode.compareDocumentPosition(focusNode);
@@ -162,6 +164,10 @@ export function setupIOSTouchSelection(
       range.setStart(anchorNode, anchorOffset);
       range.setEnd(focusNode, focusOffset);
     }
+    // Live Kindle-style snap: the drag edge lands mid-word constantly;
+    // grow to the word boundary so the overlay shows what will be saved.
+    // Safe here because each move rebuilds the range from anchor + caret.
+    range = snapRangeToWordBounds(range);
     sel.removeAllRanges();
     sel.addRange(range);
     currentRange = range.cloneRange();

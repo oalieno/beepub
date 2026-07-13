@@ -44,12 +44,14 @@
   class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2"
 >
   {#if !hasExisting}
+    <!-- The one action people came for gets a labeled primary pill — as a
+         same-weight icon it was mistaken for the Highlights panel. -->
     <button
-      class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
-      title={m.highlight_action_highlight()}
+      class="flex items-center gap-1.5 bg-primary text-primary-foreground rounded-md px-2.5 py-1 text-xs font-medium hover:bg-primary/90 transition-colors whitespace-nowrap"
       onclick={() => onhighlight?.()}
     >
-      <Highlighter size={14} />
+      <Highlighter size={13} />
+      {m.highlight_action_highlight()}
     </button>
     <div class="w-px h-4 bg-border"></div>
   {/if}

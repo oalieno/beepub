@@ -17,6 +17,7 @@
   import { updateIllustrationOverlays } from "./illustration-overlays";
   import { prefetchSections } from "./image-prefetch";
   import { findActiveTocHref, findTocLabelForHref } from "./toc-utils";
+  import { snapRangeToWordBounds } from "./word-snap";
   import {
     sectionIndexFromCfi,
     verifyHighlightAnchors,
@@ -1012,20 +1013,24 @@
         doc.body.style.cursor = overHighlight ? "pointer" : "";
       });
 
-      // Helper: show highlight menu from current selection
+      // Helper: show highlight menu from current selection. The range is
+      // word-snapped silently (the native selection is left alone —
+      // mutating it mid-drag corrupts the browser's drag anchor); the
+      // saved highlight and its drawn annotation carry the full words.
       function tryShowMenuFromSelection() {
         if (showHighlightMenu) return;
         const sel = contents.window?.getSelection();
         if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+        const snapped = snapRangeToWordBounds(sel.getRangeAt(0));
         const cfiRange = rendition?.manager
           ?.getContents?.()?.[0]
-          ?.cfiFromRange?.(sel.getRangeAt(0));
+          ?.cfiFromRange?.(snapped);
         if (!cfiRange) return;
-        const text = sel.toString().trim();
+        const text = snapped.toString().trim();
         const existing =
           highlights.find((h: HighlightOut) => h.cfi_range === cfiRange) ??
           null;
-        showMenuAtRange(sel.getRangeAt(0), text, cfiRange, existing);
+        showMenuAtRange(snapped, text, cfiRange, existing);
       }
 
       if (isIOSDevice) {
@@ -1121,10 +1126,16 @@
 
         const selection = contents.window.getSelection();
         if (!selection || selection.toString().trim() === "") return;
-        const text = selection.toString().trim();
+        // Word-snap and recompute the CFI; fall back to epub.js's own
+        // cfiRange if the snapped range can't be converted.
+        const snapped = snapRangeToWordBounds(selection.getRangeAt(0));
+        const snappedCfi =
+          rendition?.manager?.getContents?.()?.[0]?.cfiFromRange?.(snapped) ??
+          cfiRange;
+        const text = snapped.toString().trim();
         const existing =
-          highlights.find((h) => h.cfi_range === cfiRange) ?? null;
-        showMenuAtRange(selection.getRangeAt(0), text, cfiRange, existing);
+          highlights.find((h) => h.cfi_range === snappedCfi) ?? null;
+        showMenuAtRange(snapped, text, snappedCfi, existing);
       },
     );
 
