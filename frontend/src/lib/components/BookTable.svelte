@@ -1,15 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { BookWithInteractionOut } from "$lib/types";
-  import {
-    ArrowDown,
-    ArrowUp,
-    Bookmark,
-    BookOpen,
-    Check,
-  } from "@lucide/svelte";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
+  import { ArrowDown, ArrowUp, Bookmark, Check } from "@lucide/svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -79,7 +71,6 @@
       <tr
         class="border-b border-border text-left text-xs text-muted-foreground"
       >
-        <th class="w-12 px-3 py-2.5"></th>
         <th class="px-3 py-2.5 font-medium">
           {@render sortableHeader("display_title", m.browser_col_title())}
         </th>
@@ -105,36 +96,20 @@
           onclick={() => open(book.id)}
           onkeydown={(e) => e.key === "Enter" && open(book.id)}
         >
-          <td class="px-3 py-2">
-            <div
-              class="w-8 h-12 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
-            >
-              {#if book.cover_path}
-                <img
-                  use:authedSrc={coverUrl(book.id, book.updated_at)}
-                  alt=""
-                  class="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              {:else}
-                <BookOpen size={14} class="text-muted-foreground/30" />
-              {/if}
-            </div>
-          </td>
-          <td class="px-3 py-2 font-medium text-foreground">
+          <td class="px-3 py-2.5 font-medium text-foreground">
             {book.display_title ?? m.common_untitled()}
           </td>
-          <td class="px-3 py-2 text-muted-foreground">
+          <td class="px-3 py-2.5 text-muted-foreground">
             {(book.display_authors ?? []).join(", ")}
           </td>
-          <td class="px-3 py-2 text-muted-foreground">
+          <td class="px-3 py-2.5 text-muted-foreground">
             {#if book.display_series}
               {book.display_series}{book.display_series_index != null
                 ? ` #${book.display_series_index}`
                 : ""}
             {/if}
           </td>
-          <td class="px-3 py-2 whitespace-nowrap">
+          <td class="px-3 py-2.5 whitespace-nowrap">
             {#if book.reading_status === "read"}
               <span
                 class="inline-flex items-center gap-1 text-primary font-medium"
@@ -161,10 +136,10 @@
               </span>
             {/if}
           </td>
-          <td class="px-3 py-2 text-muted-foreground whitespace-nowrap">
+          <td class="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
             {formatSize(book.file_size)}
           </td>
-          <td class="px-3 py-2 text-muted-foreground whitespace-nowrap">
+          <td class="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
             {formatAdded(book)}
           </td>
         </tr>
