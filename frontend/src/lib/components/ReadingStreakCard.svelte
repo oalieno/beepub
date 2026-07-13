@@ -236,7 +236,14 @@
         </Popover.Root>
       </div>
       {#if goalMinutes != null && progressPercent != null}
-        <div class="flex items-center gap-2 mt-1">
+        <!-- The whole row opens the goal editor — the pencil alone is a
+             sub-20pt tap target. -->
+        <button
+          class="flex items-center gap-2 mt-1 cursor-pointer rounded px-1 -mx-1 hover:bg-muted transition-colors"
+          aria-label={m.streak_daily_goal()}
+          onclick={() => (goalOpen = true)}
+        >
+          <span class="text-xs text-muted-foreground">{m.streak_today()}</span>
           <div
             class="h-1.5 w-20 rounded-full bg-muted-foreground/15 overflow-hidden"
           >
@@ -248,7 +255,7 @@
             ></div>
           </div>
           <span class="text-xs text-muted-foreground">{progressPercent}%</span>
-        </div>
+        </button>
       {:else if goalMinutes == null}
         <p class="text-xs text-muted-foreground mt-0.5">{m.streak_today()}</p>
       {/if}

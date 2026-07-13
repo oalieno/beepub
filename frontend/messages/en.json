@@ -129,6 +129,8 @@
   "heatmap_no_reading": "No reading",
   "heatmap_total_time": "{hours}h {minutes}m total",
   "heatmap_total_minutes": "{minutes}m total",
+  "heatmap_show_year": "Show full year",
+  "heatmap_show_recent": "Show last {count} weeks",
   "time_hours_minutes": "{hours}h {minutes}m",
   "time_hours": "{hours}h",
   "time_minutes": "{minutes}m",

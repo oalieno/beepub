@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
@@ -8,6 +9,29 @@
     data: { date: string; seconds: number }[];
     year: number;
   } = $props();
+
+  // On phones the 53-column year grid is ~750px wide — it either clips or
+  // buries "now" behind a scroll hunt. Default to the trailing weeks there,
+  // with a toggle to expand to the full year.
+  const COMPACT_WEEKS = 16;
+  let isNarrow = $state(false);
+  let expanded = $state(false);
+  let scrollEl: HTMLDivElement | undefined = $state();
+
+  onMount(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    isNarrow = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => (isNarrow = e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  });
+
+  let compact = $derived(isNarrow && !expanded);
+
+  $effect(() => {
+    // Expanding reveals the whole year; jump to its recent end.
+    if (expanded && scrollEl) scrollEl.scrollLeft = scrollEl.scrollWidth;
+  });
 
   const LEVELS = [
     "var(--hm-1)",
@@ -59,6 +83,15 @@
     return result;
   });
 
+  let visibleWeeks = $derived.by(() => {
+    if (!compact) return weeks;
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    let end = weeks.findIndex((w) => w.some((c) => c.date === todayStr));
+    if (end === -1) end = weeks.length - 1; // past year: show its tail
+    return weeks.slice(Math.max(0, end - (COMPACT_WEEKS - 1)), end + 1);
+  });
+
   let totalSeconds = $derived(data.reduce((sum, d) => sum + d.seconds, 0));
   let totalHours = $derived(Math.floor(totalSeconds / 3600));
   let remainingMinutes = $derived(Math.floor((totalSeconds % 3600) / 60));
@@ -101,13 +134,16 @@
     </span>
   </div>
 
-  <div class="max-w-full overflow-x-auto pb-2">
+  <div
+    class="max-w-full overflow-x-auto scrollbar-thin pb-2"
+    bind:this={scrollEl}
+  >
     <div
       class="grid w-full min-w-max gap-[3px]"
-      style="grid-template-columns: repeat({weeks.length}, minmax(11px, 1fr)); grid-template-rows: repeat(7, minmax(11px, 1fr));"
+      style="grid-template-columns: repeat({visibleWeeks.length}, minmax(11px, 1fr)); grid-template-rows: repeat(7, minmax(11px, 1fr));"
     >
       {#each { length: 7 } as _, dayIndex}
-        {#each weeks as week}
+        {#each visibleWeeks as week}
           {@const cell = week[dayIndex]}
           {#if cell.seconds === -1}
             <div class="w-full aspect-square"></div>
@@ -125,16 +161,33 @@
   </div>
 
   <div
-    class="mt-1 flex flex-wrap items-center justify-end gap-1.5 text-xs text-muted-foreground"
+    class="mt-1 flex flex-wrap items-center justify-between gap-1.5 text-xs text-muted-foreground"
   >
-    <span>{m.heatmap_less()}</span>
-    <div
-      class="size-[11px] rounded-[2px]"
-      style="background: var(--muted)"
-    ></div>
-    {#each LEVELS as color}
-      <div class="size-[11px] rounded-[2px]" style="background: {color}"></div>
-    {/each}
-    <span>{m.heatmap_more()}</span>
+    {#if isNarrow}
+      <button
+        class="text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
+        onclick={() => (expanded = !expanded)}
+      >
+        {expanded
+          ? m.heatmap_show_recent({ count: String(COMPACT_WEEKS) })
+          : m.heatmap_show_year()}
+      </button>
+    {:else}
+      <span></span>
+    {/if}
+    <div class="flex items-center gap-1.5">
+      <span>{m.heatmap_less()}</span>
+      <div
+        class="size-[11px] rounded-[2px]"
+        style="background: var(--muted)"
+      ></div>
+      {#each LEVELS as color}
+        <div
+          class="size-[11px] rounded-[2px]"
+          style="background: {color}"
+        ></div>
+      {/each}
+      <span>{m.heatmap_more()}</span>
+    </div>
   </div>
 </div>

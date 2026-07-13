@@ -129,6 +129,8 @@
   "heatmap_no_reading": "無閱讀紀錄",
   "heatmap_total_time": "共 {hours} 小時 {minutes} 分鐘",
   "heatmap_total_minutes": "共 {minutes} 分鐘",
+  "heatmap_show_year": "顯示全年",
+  "heatmap_show_recent": "顯示最近 {count} 週",
   "time_hours_minutes": "{hours} 小時 {minutes} 分鐘",
   "time_hours": "{hours} 小時",
   "time_minutes": "{minutes} 分鐘",
