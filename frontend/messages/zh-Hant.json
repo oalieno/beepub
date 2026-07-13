@@ -200,6 +200,7 @@
 
   "gacha_page_title": "BeePub - 抽書",
   "gacha_subtitle": "從你的書庫中隨機抽出一本書",
+  "gacha_pull": "抽一本",
   "gacha_empty": "還沒有書可以抽",
   "gacha_empty_subtitle": "先在書庫加入一些書再來吧。",
   "gacha_load_failed": "抽書載入失敗",

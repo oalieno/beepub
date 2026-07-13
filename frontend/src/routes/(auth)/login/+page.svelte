@@ -5,7 +5,7 @@
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { BookOpen, Eye, EyeOff, Settings } from "@lucide/svelte";
+  import { Eye, EyeOff, Settings } from "@lucide/svelte";
   import { isNative } from "$lib/platform";
   import { getServerUrl } from "$lib/api/client";
   import { Button } from "$lib/components/ui/button";
@@ -153,10 +153,12 @@
   <div class="w-full max-w-sm">
     <!-- Logo -->
     <div class="text-center mb-8">
+      <!-- The bee mascot, not a generic book — the first screen should
+           already look like BeePub. -->
       <div
         class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-4"
       >
-        <BookOpen size={28} class="text-primary" />
+        <img src="/logo.png" alt="" class="w-10 h-auto" draggable="false" />
       </div>
       <h1 class="text-3xl font-bold" style="font-family: var(--font-heading)">
         BeePub

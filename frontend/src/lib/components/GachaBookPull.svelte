@@ -5,7 +5,7 @@
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import type { BookOut } from "$lib/types";
-  import { BookOpen, RotateCcw } from "@lucide/svelte";
+  import { BookOpen, RotateCcw, Sparkles } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   type Phase = "idle" | "tearing" | "revealed";
@@ -143,12 +143,14 @@
         </button>
       </div>
     {:else if phase === "idle"}
-      <!-- Card pack using bookpack.png -->
+      <!-- Card pack using bookpack.png. The float animation lives on the
+           img and the hover scale on the button so the transforms don't
+           fight each other. -->
       <button class="w-full pack-idle cursor-pointer" onclick={pull}>
         <img
           src="/bookpack.png"
           alt="BeePub Book Pack"
-          class="w-full h-auto drop-shadow-xl"
+          class="w-full h-auto drop-shadow-xl pack-float"
           draggable="false"
         />
       </button>
@@ -292,8 +294,20 @@
   <!-- Buttons -->
   <div class="flex items-center gap-3">
     {#if phase === "idle" && !unavailable}
-      <div class="text-muted-foreground/50 text-sm">
-        {m.gacha_subtitle()}
+      <!-- Explicit CTA — a static pack image alone doesn't announce that
+           it's tappable. -->
+      <div class="flex flex-col items-center gap-3">
+        <button
+          onclick={pull}
+          disabled={pulling}
+          class="px-8 py-3 bg-primary text-primary-foreground rounded-xl font-medium text-sm hover:bg-primary/90 transition-all duration-200 flex items-center gap-2 active:scale-95 disabled:opacity-60"
+        >
+          <Sparkles size={18} />
+          {m.gacha_pull()}
+        </button>
+        <div class="text-muted-foreground text-sm">
+          {m.gacha_subtitle()}
+        </div>
       </div>
     {:else if phase === "tearing"}
       <div
@@ -330,6 +344,27 @@
   }
   .pack-idle:active {
     transform: scale(0.97);
+  }
+
+  /* Gentle idle bob so the pack reads as alive/tappable */
+  .pack-float {
+    animation: pack-float 3.2s ease-in-out infinite;
+  }
+
+  @keyframes pack-float {
+    0%,
+    100% {
+      transform: translateY(0) rotate(0deg);
+    }
+    50% {
+      transform: translateY(-7px) rotate(-1deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pack-float {
+      animation: none;
+    }
   }
 
   /* Tear — top strip peels up and away */
