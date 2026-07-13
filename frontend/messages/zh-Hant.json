@@ -78,6 +78,7 @@
   "home_offline_message": "你目前離線。下載的書籍可在下方閱讀。",
   "home_offline_retry": "重新檢查連線",
   "home_offline_local_subtitle": "匯入與下載的書都可以離線閱讀。",
+  "home_go_local": "前往本機書籍",
   "home_offline_checking": "檢查中…",
   "home_greeting": "享受閱讀",
   "home_libraries": "書庫",

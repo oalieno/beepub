@@ -16,7 +16,7 @@
     LibraryOut,
     ReadingStats,
   } from "$lib/types";
-  import { BookOpen, HardDrive, WifiOff } from "@lucide/svelte";
+  import { BookOpen, ChevronRight, HardDrive, WifiOff } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
   import LocalBookCard, {
     type LocalShelfEntry,
@@ -207,6 +207,15 @@
         <p class="text-muted-foreground/70 text-sm mt-1">
           {m.home_offline_local_subtitle()}
         </p>
+        <!-- Button-shaped affordance — the bare card didn't read as
+             tappable (UIUX audit L). The anchor is the whole card; this
+             span just gives it a visible handle. -->
+        <span
+          class="mt-5 inline-flex items-center gap-1 rounded-xl px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground"
+        >
+          {m.home_go_local()}
+          <ChevronRight size={14} />
+        </span>
       </a>
     {/if}
   {:else}

@@ -77,6 +77,7 @@
   "home_page_title": "BeePub - Home",
   "home_offline_message": "You're offline. Your downloaded books are available below.",
   "home_offline_retry": "Check connection",
+  "home_go_local": "Browse local books",
   "home_offline_local_subtitle": "Your imported and downloaded books are ready to read offline.",
   "home_offline_checking": "Checking…",
   "home_greeting": "Happy reading",
