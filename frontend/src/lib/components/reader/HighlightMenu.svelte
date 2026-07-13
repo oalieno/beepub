@@ -70,11 +70,13 @@
   };
 </script>
 
-<div
-  class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex flex-col gap-2"
->
+<!-- Two detached floating pills (picker above, actions below) — one fused
+     card read as a single crowded toolbar. -->
+<div class="flex flex-col items-center gap-2">
   <!-- Color + style picker -->
-  <div class="flex items-center gap-2">
+  <div
+    class="bg-card border border-border rounded-full shadow-xl px-3 py-1.5 flex items-center gap-2"
+  >
     {#each Object.keys(HIGHLIGHT_COLORS) as color}
       <button
         class="w-5 h-5 rounded-full transition-transform hover:scale-110 {active.color ===
@@ -122,7 +124,9 @@
   </div>
 
   <!-- Actions -->
-  <div class="flex items-center gap-2">
+  <div
+    class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2"
+  >
     <button
       class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
       title={m.highlight_action_copy()}
@@ -202,7 +206,6 @@
       </button>
     {/if}
 
-    <div class="ml-auto"></div>
     <div class="w-px h-4 bg-border"></div>
     <button
       aria-label={m.common_close()}

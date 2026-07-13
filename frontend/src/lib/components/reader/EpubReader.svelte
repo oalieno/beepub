@@ -148,7 +148,8 @@
   let highlightMenuShownAt = 0;
   let highlightMenuEl: HTMLDivElement | undefined = $state();
   let longPressFired = false;
-  const MENU_H = 44;
+  // Fallback before first render — two floating rows (picker + actions).
+  const MENU_H = 96;
 
   function setClampedMenuPosition(x: number, y: number) {
     const cw = container?.clientWidth ?? window.innerWidth;
@@ -161,7 +162,8 @@
       highlightMenuX = x;
     }
     // If above viewport, show below selection
-    highlightMenuY = y < MENU_H + 8 ? y + MENU_H + 16 : y;
+    const menuH = highlightMenuEl?.offsetHeight || MENU_H;
+    highlightMenuY = y < menuH + 8 ? y + menuH + 16 : y;
   }
 
   /** Dismiss highlight menu and clear iOS selection overlay */
