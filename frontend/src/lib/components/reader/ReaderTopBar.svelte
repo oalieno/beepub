@@ -8,12 +8,14 @@
     bookId = "",
     title = "",
     percentage = null,
+    chapterLabel = null,
     darkMode = false,
     backHref = null,
   }: {
     bookId?: string;
     title?: string;
     percentage?: number | null;
+    chapterLabel?: string | null;
     darkMode?: boolean;
     /** Overrides the back target (local books return to their shelf). */
     backHref?: string | null;
@@ -26,7 +28,7 @@
     : 'bg-background border-b border-border/50'}"
   style="padding-top: env(safe-area-inset-top, 0px);"
 >
-  <div class="flex items-center gap-3 px-3 h-11" role="banner">
+  <div class="flex items-center gap-3 px-3 min-h-11 py-1.5" role="banner">
     <button
       class="p-1.5 -ml-1 rounded-md transition-colors {darkMode
         ? 'text-ink-400 hover:bg-ink-800'
@@ -47,6 +49,17 @@
       >
         {title || m.common_loading()}
       </p>
+      <!-- In a long book the chapter beats a bare percentage as "where
+           am I" (think 第三十四回, not 34%). -->
+      {#if chapterLabel}
+        <p
+          class="text-[11px] leading-tight truncate {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'}"
+        >
+          {chapterLabel}
+        </p>
+      {/if}
     </div>
     {#if percentage != null}
       <span

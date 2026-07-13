@@ -1777,6 +1777,32 @@
     return true;
   }
 
+  /** TOC label for the chapter a seek to `pct` would land in (scrub
+   *  bubble). Skips the DOM refinement in findActiveTocHref by passing a
+   *  null rendition — it can only inspect the currently rendered section,
+   *  not the seek target. */
+  export function chapterAtPercentage(pct: number): string | null {
+    if (!epubBook) return null;
+    const fraction = Math.min(100, Math.max(0, pct)) / 100;
+    let index: number | null;
+    if (isImageBook) {
+      const items = epubBook?.spine?.spineItems ?? [];
+      if (!items.length) return null;
+      index = Math.min(
+        items.length - 1,
+        Math.round(fraction * (items.length - 1)),
+      );
+    } else {
+      if (!locationsGenerated || !epubBook?.locations) return null;
+      const cfi = epubBook.locations.cfiFromPercentage(fraction);
+      if (!cfi) return null;
+      index = sectionIndexFromCfi(cfi);
+    }
+    if (index == null || index < 0) return null;
+    const href = findActiveTocHref(epubBook, null, tocData, index);
+    return href ? findTocLabelForHref(tocData, href) : null;
+  }
+
   export function displayCfi(cfi: string) {
     restoringProgress = false;
     userNavigated = true;

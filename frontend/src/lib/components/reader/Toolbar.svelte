@@ -21,6 +21,7 @@
     bookId = "",
     title = "",
     percentage = null,
+    chapterLabel = null,
     darkMode = false,
     toc = [],
     isRtl = false,
@@ -44,6 +45,7 @@
     bookId?: string;
     title?: string;
     percentage?: number | null;
+    chapterLabel?: string | null;
     darkMode?: boolean;
     toc?: { label: string; href: string; subitems?: any[] }[];
     isRtl?: boolean;
@@ -82,6 +84,7 @@
 >
   <button
     class="p-1.5 rounded-md {btnClass(darkMode)} transition-colors"
+    title={m.reader_go_back()}
     aria-label={m.reader_go_back()}
     onclick={() =>
       goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
@@ -112,18 +115,22 @@
 
     <!-- Highlights button -->
     <button
-      class="p-1.5 rounded-md transition-colors relative {btnClass(darkMode)}"
+      class="p-1.5 rounded-md transition-colors inline-flex items-center gap-1 {btnClass(
+        darkMode,
+      )}"
       title={m.reader_highlights()}
       onclick={() => onhighlights?.()}
     >
       <Highlighter size={18} />
+      <!-- Inline muted count — a floating bubble reads as an unread-
+           notification badge, which a highlight tally is not. -->
       {#if highlightCount > 0}
         <span
-          class="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full text-[9px] font-bold flex items-center justify-center {darkMode
-            ? 'bg-amber-500 text-ink-900'
-            : 'bg-primary text-primary-foreground'}"
+          class="text-[10px] tabular-nums {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'}"
         >
-          {highlightCount > 99 ? "99" : highlightCount}
+          {highlightCount > 99 ? "99+" : highlightCount}
         </span>
       {/if}
     </button>
@@ -153,13 +160,21 @@
     class="flex-1 basis-full sm:basis-auto min-w-0 order-last sm:order-none text-center sm:text-left"
   >
     <p class="text-sm font-medium truncate">{title}</p>
-    {#if percentage != null}
+    {#if percentage != null || chapterLabel}
       <p
         class="hidden sm:flex text-xs {darkMode
           ? 'text-ink-500'
-          : 'text-muted-foreground'} items-center gap-1.5"
+          : 'text-muted-foreground'} items-center gap-1.5 min-w-0"
       >
-        {percentage}%
+        {#if percentage != null}
+          <span class="shrink-0">{percentage}%</span>
+        {/if}
+        {#if percentage != null && chapterLabel}
+          <span class="opacity-50 shrink-0">·</span>
+        {/if}
+        {#if chapterLabel}
+          <span class="truncate">{chapterLabel}</span>
+        {/if}
       </p>
     {/if}
   </div>
@@ -198,6 +213,7 @@
   <div class="flex items-center gap-1">
     <button
       class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+      title={isRtl ? m.reader_next_page() : m.reader_prev_page()}
       aria-label={isRtl ? m.reader_next_page() : m.reader_prev_page()}
       onclick={() => (isRtl ? onnext?.() : onprev?.())}
     >
@@ -205,6 +221,7 @@
     </button>
     <button
       class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+      title={isRtl ? m.reader_prev_page() : m.reader_next_page()}
       aria-label={isRtl ? m.reader_prev_page() : m.reader_next_page()}
       onclick={() => (isRtl ? onprev?.() : onnext?.())}
     >

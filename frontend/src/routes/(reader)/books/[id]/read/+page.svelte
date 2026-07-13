@@ -29,6 +29,7 @@
   import Spinner from "$lib/components/Spinner.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
+  import { findTocLabelForHref } from "$lib/components/reader/toc-utils";
   import { BookX, Check, Undo2 } from "@lucide/svelte";
   import { UserRole } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
@@ -93,6 +94,9 @@
   let percentage = $state<number | null>(null);
   let toc = $state<{ label: string; href: string; subitems?: any[] }[]>([]);
   let currentHref = $state("");
+  let chapterLabel = $derived(
+    currentHref ? findTocLabelForHref(toc, currentHref) : null,
+  );
   let reader: EpubReader = $state(null as any);
   let ready = $state(false);
   let loadError = $state(false);
@@ -735,6 +739,7 @@
       {bookId}
       {title}
       {percentage}
+      {chapterLabel}
       {darkMode}
       {toc}
       {isRtl}
@@ -766,6 +771,7 @@
     {bookId}
     {title}
     {percentage}
+    {chapterLabel}
     {darkMode}
     backHref={localEntry ? "/local" : null}
   />
@@ -930,16 +936,21 @@
                 {darkMode}
                 {isRtl}
                 ariaLabel={m.reader_progress()}
+                getlabel={(p) => reader?.chapterAtPercentage(p) ?? null}
                 onseek={(p) => reader?.displayPercentage(p)}
               />
             </div>
           {/if}
           <div
-            class="flex items-center gap-2.5 text-sm {darkMode
+            class="flex items-center gap-2.5 text-sm min-w-0 max-w-xl {darkMode
               ? 'text-ink-400'
               : 'text-muted-foreground'}"
           >
-            <span>{percentage}%</span>
+            <span class="shrink-0">{percentage}%</span>
+            {#if chapterLabel}
+              <span class="opacity-50 shrink-0">·</span>
+              <span class="truncate">{chapterLabel}</span>
+            {/if}
             {#if peekLabel}
               <span class="opacity-50">·</span>
               <button
@@ -1041,6 +1052,7 @@
       {peekLabel}
       onpeekreturn={() => reader?.returnFromPeek()}
       canSeek={canScrub}
+      getSeekLabel={(p) => reader?.chapterAtPercentage(p) ?? null}
       onseek={(p) => reader?.displayPercentage(p)}
       {darkMode}
       {isRtl}

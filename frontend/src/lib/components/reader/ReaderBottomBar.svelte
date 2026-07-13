@@ -23,6 +23,7 @@
     offline = false,
     showAi = true,
     canSeek = false,
+    getSeekLabel,
     onpeekreturn,
     onseek,
     onprev,
@@ -43,6 +44,8 @@
     /** AI actions are BeePub-server features; hidden for other backends. */
     showAi?: boolean;
     canSeek?: boolean;
+    /** Chapter label for the scrubber's drag bubble. */
+    getSeekLabel?: (percentage: number) => string | null;
     onpeekreturn?: () => void;
     onseek?: (percentage: number) => void;
     onprev?: () => void;
@@ -104,6 +107,7 @@
           {darkMode}
           {isRtl}
           ariaLabel={m.reader_progress()}
+          getlabel={getSeekLabel}
           {onseek}
         />
       </div>
@@ -154,23 +158,20 @@
       </button>
 
       <button
-        class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors relative {actionBtnClass}"
+        class="flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg transition-colors {actionBtnClass}"
         onclick={() => onhighlights?.()}
         aria-label="{m.reader_highlights()}{highlightCount > 0
           ? ` (${highlightCount})`
           : ''}"
       >
         <Highlighter size={20} />
-        <span class="text-[10px]">{m.reader_highlights()}</span>
-        {#if highlightCount > 0}
-          <span
-            class="absolute -top-0.5 right-0.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-1 {darkMode
-              ? 'bg-amber-500/30 text-amber-400'
-              : 'bg-primary text-primary-foreground'}"
-          >
-            {highlightCount > 99 ? "99+" : highlightCount}
-          </span>
-        {/if}
+        <!-- Count lives in the label — a bubble over the icon reads as an
+             unread-notification badge, which a highlight tally is not. -->
+        <span class="text-[10px] tabular-nums">
+          {m.reader_highlights()}{highlightCount > 0
+            ? ` ${highlightCount > 99 ? "99+" : highlightCount}`
+            : ""}
+        </span>
       </button>
 
       {#if showAi}
