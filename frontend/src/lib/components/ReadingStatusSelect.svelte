@@ -42,6 +42,14 @@
 
   const CLEAR_STATUS_VALUE = "__clear_status__";
 
+  // Shown inline after 正在閱讀 — owner's call: plain text beats a
+  // separate progress bar on the detail page.
+  let progressPct = $derived.by(() => {
+    if (interaction?.reading_status !== "currently_reading") return null;
+    const pct = interaction?.reading_progress?.percentage;
+    return pct != null && pct > 0 ? Math.min(Math.round(pct), 100) : null;
+  });
+
   function handleChange(value: string) {
     if (value === CLEAR_STATUS_VALUE) {
       onstatuschange(null);
@@ -76,6 +84,9 @@
               : ""}
           />
           {current.label}
+          {#if progressPct != null}
+            <span class="text-muted-foreground">{progressPct}%</span>
+          {/if}
         {/if}
       {:else}
         {m.status_set()}
