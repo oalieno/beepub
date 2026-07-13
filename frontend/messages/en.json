@@ -778,6 +778,7 @@
   "libraries_page_title": "Libraries - BeePub",
   "libraries_empty": "No libraries available",
   "libraries_empty_subtitle": "Libraries will appear here once they are created by an admin.",
+  "libraries_cloud_books": "Cloud books",
   "libraries_this_device": "This device",
 
   "library_page_title": "{name} - BeePub",

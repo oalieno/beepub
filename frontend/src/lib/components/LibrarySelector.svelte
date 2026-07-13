@@ -1,13 +1,14 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { HardDrive } from "@lucide/svelte";
+  import { Cloud, HardDrive } from "@lucide/svelte";
   import type { LibraryOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
   // "all" is the special pseudo-library spanning every accessible library.
-  // Text-only segmented control: libraries are user-named, so no icons —
-  // except the device tab, whose icon marks it as the odd one out (it
-  // navigates to the local library instead of filtering this page).
+  // Text-only segmented control: libraries are user-named, so no icons.
+  // On native the device tab sits beside it, so the pair reads as
+  // cloud vs. device — 雲端書籍 with a cloud icon there; the web has no
+  // device tab and keeps plain 所有書籍.
   let {
     libraries,
     selected,
@@ -34,11 +35,16 @@
     type="button"
     onclick={() => onSelect("all")}
     aria-pressed={selected === "all"}
-    class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors {segClass(
+    class="shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors inline-flex items-center gap-1.5 {segClass(
       selected === 'all',
     )}"
   >
-    {m.allbooks_heading()}
+    {#if showDevice}
+      <Cloud size={14} />
+      {m.libraries_cloud_books()}
+    {:else}
+      {m.allbooks_heading()}
+    {/if}
   </button>
 
   <!-- The local library, kept beside "all books" so it never scrolls out

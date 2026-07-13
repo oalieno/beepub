@@ -779,6 +779,7 @@
   "libraries_empty": "沒有可用的書庫",
   "libraries_empty_subtitle": "書庫由管理員建立後會顯示在這裡。",
   "libraries_this_device": "這台裝置",
+  "libraries_cloud_books": "雲端書籍",
 
   "library_page_title": "{name} - BeePub",
   "library_calibre_badge": "Calibre",
