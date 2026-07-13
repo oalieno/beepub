@@ -6,10 +6,13 @@
     SlidersHorizontal,
     Layers,
     BookX,
+    LayoutGrid,
+    List,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as m from "$lib/paraglide/messages.js";
   import BookGrid from "$lib/components/BookGrid.svelte";
+  import BookTable from "$lib/components/BookTable.svelte";
   import BookCard from "$lib/components/BookCard.svelte";
   import SeriesCard from "$lib/components/SeriesCard.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -101,6 +104,28 @@
     collapse: boolean;
   }
 
+  // Desktop-only table view (calibre-style, #70) — carries the metadata
+  // the cover cards deliberately dropped. The preference persists per
+  // browser; phones always render the grid.
+  const VIEW_KEY = "library-view";
+  let viewMode = $state<"grid" | "table">(
+    typeof localStorage !== "undefined" &&
+      localStorage.getItem(VIEW_KEY) === "table"
+      ? "table"
+      : "grid",
+  );
+  let isDesktop = $state(false);
+
+  $effect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    isDesktop = mq.matches;
+    const onChange = (e: MediaQueryListEvent) => (isDesktop = e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  });
+
+  let tableView = $derived(viewMode === "table" && isDesktop);
+
   // Compute all initial values once from restoreData or initial* props.
   // These props are intentionally captured once at creation time.
   // svelte-ignore state_referenced_locally
@@ -118,7 +143,9 @@
       initialSeries && initialSort === "added_at:desc"
         ? "series_index:asc"
         : initialSort,
-    collapse: collapsible && initialCollapse,
+    // The table is flat — series live in their own column.
+    // svelte-ignore state_referenced_locally
+    collapse: collapsible && initialCollapse && viewMode !== "table",
   };
 
   let books = $state<BookWithInteractionOut[]>(init.books);
@@ -225,6 +252,16 @@
       sortValue = "added_at:desc";
     }
     handleImmediateChange();
+  }
+
+  function setViewMode(mode: "grid" | "table") {
+    if (mode === viewMode) return;
+    viewMode = mode;
+    localStorage.setItem(VIEW_KEY, mode);
+    if (mode === "table" && collapse) {
+      collapse = false;
+      handleImmediateChange();
+    }
   }
 
   function handleSearchInput() {
@@ -351,7 +388,7 @@
       {m.browser_filters()}
     </button>
 
-    {#if collapsible}
+    {#if collapsible && !tableView}
       <button
         class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full font-medium transition-colors {collapse
           ? 'bg-primary/15 text-primary'
@@ -392,11 +429,41 @@
       </button>
     {/if}
 
-    {#if !loading && shownCount > 0}
-      <span class="ml-auto shrink-0 text-xs text-muted-foreground">
-        {m.browser_showing({ total: String(totalBooks) })}
-      </span>
-    {/if}
+    <div class="ml-auto flex items-center gap-2">
+      {#if !loading && shownCount > 0}
+        <span class="shrink-0 text-xs text-muted-foreground">
+          {m.browser_showing({ total: String(totalBooks) })}
+        </span>
+      {/if}
+      <div
+        class="hidden md:flex items-center rounded-full bg-secondary p-0.5"
+        role="group"
+        aria-label={m.browser_view_label()}
+      >
+        <button
+          class="p-1.5 rounded-full transition-colors {viewMode === 'grid'
+            ? 'bg-card text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          title={m.browser_view_grid()}
+          aria-label={m.browser_view_grid()}
+          aria-pressed={viewMode === "grid"}
+          onclick={() => setViewMode("grid")}
+        >
+          <LayoutGrid size={14} />
+        </button>
+        <button
+          class="p-1.5 rounded-full transition-colors {viewMode === 'table'
+            ? 'bg-card text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          title={m.browser_view_table()}
+          aria-label={m.browser_view_table()}
+          aria-pressed={viewMode === "table"}
+          onclick={() => setViewMode("table")}
+        >
+          <List size={14} />
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Filter panel -->
@@ -458,18 +525,26 @@
 </div>
 
 {#if loading}
-  <div
-    class="grid gap-4 items-start book-grid"
-    style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
-  >
-    {#each Array(12) as _}
-      <div class="animate-pulse">
-        <div class="aspect-[2/3] bg-muted rounded-xl"></div>
-        <div class="mt-2 h-3 bg-muted rounded w-3/4"></div>
-        <div class="mt-1 h-2.5 bg-muted rounded w-1/2"></div>
-      </div>
-    {/each}
-  </div>
+  {#if tableView}
+    <div class="space-y-1.5">
+      {#each Array(10) as _}
+        <div class="h-14 bg-muted rounded-lg animate-pulse"></div>
+      {/each}
+    </div>
+  {:else}
+    <div
+      class="grid gap-4 items-start book-grid"
+      style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
+    >
+      {#each Array(12) as _}
+        <div class="animate-pulse">
+          <div class="aspect-[2/3] bg-muted rounded-xl"></div>
+          <div class="mt-2 h-3 bg-muted rounded w-3/4"></div>
+          <div class="mt-1 h-2.5 bg-muted rounded w-1/2"></div>
+        </div>
+      {/each}
+    </div>
+  {/if}
 {:else if shownCount === 0}
   <div class="flex flex-col items-center justify-center text-center py-20">
     <div
@@ -490,7 +565,16 @@
     {/if}
   </div>
 {:else}
-  {#if collapse}
+  {#if tableView}
+    <BookTable
+      {books}
+      {sortValue}
+      onSort={(v) => {
+        sortValue = v;
+        handleImmediateChange();
+      }}
+    />
+  {:else if collapse}
     <!-- One grid, mixing whole-series cards and standalone book cards -->
     <div
       class="grid gap-4 items-start book-grid"
