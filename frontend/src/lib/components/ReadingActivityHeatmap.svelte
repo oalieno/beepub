@@ -29,8 +29,16 @@
   let compact = $derived(isNarrow && !expanded);
 
   $effect(() => {
-    // Expanding reveals the whole year; jump to its recent end.
-    if (expanded && scrollEl) scrollEl.scrollLeft = scrollEl.scrollWidth;
+    // Expanding reveals the whole year; bring the week containing today
+    // to the right edge. scrollWidth would land on the year's empty
+    // future tail instead of "now".
+    if (expanded && scrollEl) {
+      const frac = (endWeekIndex + 1) / weeks.length;
+      scrollEl.scrollLeft = Math.max(
+        0,
+        scrollEl.scrollWidth * frac - scrollEl.clientWidth,
+      );
+    }
   });
 
   const LEVELS = [
@@ -83,13 +91,21 @@
     return result;
   });
 
-  let visibleWeeks = $derived.by(() => {
-    if (!compact) return weeks;
+  // The week containing today; falls back to the year's last week when
+  // viewing a past year.
+  let endWeekIndex = $derived.by(() => {
     const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    let end = weeks.findIndex((w) => w.some((c) => c.date === todayStr));
-    if (end === -1) end = weeks.length - 1; // past year: show its tail
-    return weeks.slice(Math.max(0, end - (COMPACT_WEEKS - 1)), end + 1);
+    const idx = weeks.findIndex((w) => w.some((c) => c.date === todayStr));
+    return idx === -1 ? weeks.length - 1 : idx;
+  });
+
+  let visibleWeeks = $derived.by(() => {
+    if (!compact) return weeks;
+    return weeks.slice(
+      Math.max(0, endWeekIndex - (COMPACT_WEEKS - 1)),
+      endWeekIndex + 1,
+    );
   });
 
   let totalSeconds = $derived(data.reduce((sum, d) => sum + d.seconds, 0));

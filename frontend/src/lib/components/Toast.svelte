@@ -14,7 +14,8 @@
   // Success is brand-colored (a green card was the only green in the app);
   // the semantic types keep their hue but follow the theme.
   const colors: Record<ToastType, string> = {
-    success: "bg-card border-primary/40 text-foreground",
+    success:
+      "bg-[color-mix(in_srgb,var(--primary)_12%,var(--card))] border-primary/40 text-foreground",
     error:
       "bg-red-50 border-red-200 text-red-800 dark:bg-red-950 dark:border-red-900 dark:text-red-200",
     info: "bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-950 dark:border-blue-900 dark:text-blue-200",
