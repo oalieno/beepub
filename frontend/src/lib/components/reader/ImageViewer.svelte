@@ -165,7 +165,12 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") onclose?.();
+    // preventDefault marks the Escape as consumed so the reader page's
+    // global handler doesn't also react to it.
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onclose?.();
+    }
   }
 
   // Use pointerup instead of click for backdrop close.

@@ -44,7 +44,12 @@
   }
 
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") close();
+    // preventDefault marks the Escape as consumed so the reader page's
+    // global handler doesn't also close the overlay under this modal.
+    if (e.key === "Escape" && open) {
+      e.preventDefault();
+      close();
+    }
   }
 
   async function captureCard(): Promise<Blob | null> {

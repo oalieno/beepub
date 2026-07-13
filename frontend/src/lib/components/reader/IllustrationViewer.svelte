@@ -52,7 +52,12 @@
       ? 'bg-ink-900'
       : 'bg-card'}"
     onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => {
+      // Handle Escape here: stopPropagation keeps reader shortcuts out
+      // of the panel but would also hide Escape from the page handler.
+      if (e.key === "Escape") onclose?.();
+      e.stopPropagation();
+    }}
   >
     <!-- Close button -->
     <button

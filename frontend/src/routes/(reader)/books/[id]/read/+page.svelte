@@ -149,6 +149,19 @@
     if (activeSidebar) showMobileBottomBar = false;
   }
 
+  // Escape closes the topmost reader overlay. Sidebars sit under a
+  // full-screen backdrop, so at most one page-level overlay can stack
+  // above them at a time. The settings sheet, share modal, gesture hint,
+  // image viewer, and footnote popup own their Escape handling.
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (showSettings || shareModalOpen || showGestureHint) return;
+    if (viewingIllustration) viewingIllustration = null;
+    else if (showIllustrationModal) showIllustrationModal = false;
+    else if (showEndOverlay) showEndOverlay = false;
+    else if (activeSidebar) activeSidebar = null;
+  }
+
   function handleReaderTap() {
     if (activeSidebar) return;
     showMobileBottomBar = !showMobileBottomBar;
@@ -708,6 +721,8 @@
 <svelte:head>
   <title>{m.reader_page_title({ title: title || "Reading" })}</title>
 </svelte:head>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <div
   class="flex flex-col h-[100dvh] min-h-0 {darkMode

@@ -49,6 +49,15 @@
   }
 </script>
 
+<!-- The popup renders inside the reader, so the page-level Escape
+     handler doesn't know about it — close it from a window listener
+     (the component only exists while open). -->
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key === "Escape") onclose();
+  }}
+/>
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="absolute inset-0 z-50 flex items-center justify-center"
@@ -68,7 +77,10 @@
       e.stopPropagation();
       await handleContentClick(e);
     }}
-    onkeydown={(e) => e.stopPropagation()}
+    onkeydown={(e) => {
+      if (e.key === "Escape") onclose();
+      e.stopPropagation();
+    }}
   >
     {@html sanitizeHtml(content)}
   </div>
