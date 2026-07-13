@@ -148,10 +148,12 @@
   let highlightMenuShownAt = 0;
   let highlightMenuEl: HTMLDivElement | undefined = $state();
   let longPressFired = false;
-  // Fallback before first render — two floating rows (picker + actions).
-  const MENU_H = 96;
+  // Height fallbacks before first render: single action bar vs. the
+  // two-pill stack (picker + actions) shown on an existing highlight.
+  const MENU_H = 44;
+  const MENU_H_STACKED = 96;
 
-  function setClampedMenuPosition(x: number, y: number) {
+  function setClampedMenuPosition(x: number, y: number, fallbackH = MENU_H) {
     const cw = container?.clientWidth ?? window.innerWidth;
     const menuW = highlightMenuEl?.offsetWidth ?? 0;
     if (menuW > 0) {
@@ -161,8 +163,9 @@
       // Menu not yet rendered, use unclamped — will be corrected on next call
       highlightMenuX = x;
     }
-    // If above viewport, show below selection
-    const menuH = highlightMenuEl?.offsetHeight || MENU_H;
+    // If above viewport, show below selection. The menu remounts on every
+    // open, so the measured height is only available on repositions.
+    const menuH = highlightMenuEl?.offsetHeight || fallbackH;
     highlightMenuY = y < menuH + 8 ? y + menuH + 16 : y;
   }
 
@@ -218,6 +221,7 @@
     setClampedMenuPosition(
       rect.left - scrollLeft + rect.width / 2,
       rect.top - scrollTop - 8,
+      existing ? MENU_H_STACKED : MENU_H,
     );
     showHighlightMenu = true;
     highlightMenuShownAt = Date.now();
@@ -2204,7 +2208,6 @@
         oncompanion={handleCompanion}
         oncopy={handleCopy}
         onshare={handleShare}
-        onclose={dismissMenu}
       />
     </div>
   {/if}

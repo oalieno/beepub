@@ -1,7 +1,6 @@
 <script lang="ts">
   import {
     Trash2,
-    X,
     Sparkles,
     Copy,
     Share2,
@@ -34,7 +33,6 @@
     oncompanion,
     oncopy,
     onshare,
-    onclose,
   }: {
     hasExisting?: boolean;
     /** Current color+style: the existing highlight's, or the last used. */
@@ -50,17 +48,14 @@
     oncompanion?: () => void;
     oncopy?: () => void;
     onshare?: () => void;
-    onclose?: () => void;
   } = $props();
 
   let active = $derived(parseHighlightColor(activeRaw));
 
-  // Creation applies immediately (one tap, Apple Books-style); on an
-  // existing highlight the same controls restyle it in place.
+  // The picker only shows on an existing highlight (owner's call: create
+  // first with the plain highlighter, restyle after), so pick = restyle.
   function pick(color: string, style: HighlightStyle) {
-    const raw = encodeHighlightColor(color, style);
-    if (hasExisting) onrestyle?.(raw);
-    else onhighlight?.(raw);
+    onrestyle?.(encodeHighlightColor(color, style));
   }
 
   const STYLE_TITLES: Record<HighlightStyle, () => string> = {
@@ -73,60 +68,72 @@
 <!-- Two detached floating pills (picker above, actions below) — one fused
      card read as a single crowded toolbar. -->
 <div class="flex flex-col items-center gap-2">
-  <!-- Color + style picker -->
-  <div
-    class="bg-card border border-border rounded-full shadow-xl px-3 py-1.5 flex items-center gap-2"
-  >
-    {#each Object.keys(HIGHLIGHT_COLORS) as color}
-      <button
-        class="w-5 h-5 rounded-full transition-transform hover:scale-110 {active.color ===
-        color
-          ? 'ring-2 ring-offset-1 ring-foreground/50 ring-offset-card'
-          : ''}"
-        style="background: {HIGHLIGHT_COLORS[
+  <!-- Color + style picker (restyle an existing highlight) -->
+  {#if hasExisting}
+    <div
+      class="bg-card border border-border rounded-full shadow-xl px-3 py-1.5 flex items-center gap-2"
+    >
+      {#each Object.keys(HIGHLIGHT_COLORS) as color}
+        <button
+          class="w-5 h-5 rounded-full transition-transform hover:scale-110 {active.color ===
           color
-        ]}; border: 1px solid {HIGHLIGHT_LINE_COLORS[color]};"
-        title={m.highlight_action_highlight()}
-        aria-label={color}
-        onclick={() => pick(color, active.style)}
-      ></button>
-    {/each}
+            ? 'ring-2 ring-offset-1 ring-foreground/50 ring-offset-card'
+            : ''}"
+          style="background: {HIGHLIGHT_COLORS[
+            color
+          ]}; border: 1px solid {HIGHLIGHT_LINE_COLORS[color]};"
+          title={m.highlight_action_highlight()}
+          aria-label={color}
+          onclick={() => pick(color, active.style)}
+        ></button>
+      {/each}
 
-    <div class="w-px h-4 bg-border"></div>
+      <div class="w-px h-4 bg-border"></div>
 
-    {#each HIGHLIGHT_STYLES as style}
-      <button
-        class="p-1 rounded transition-colors {active.style === style
-          ? 'bg-secondary text-foreground'
-          : 'text-muted-foreground hover:text-foreground'}"
-        title={STYLE_TITLES[style]()}
-        onclick={() => pick(active.color, style)}
-      >
-        {#if style === "highlight"}
-          <Highlighter size={14} />
-        {:else if style === "underline"}
-          <Underline size={14} />
-        {:else}
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          >
-            <path d="M2 12 q 2.5 -5 5 0 t 5 0 t 5 0 t 5 0" />
-          </svg>
-        {/if}
-      </button>
-    {/each}
-  </div>
+      {#each HIGHLIGHT_STYLES as style}
+        <button
+          class="p-1 rounded-full transition-colors {active.style === style
+            ? 'bg-secondary text-foreground'
+            : 'text-muted-foreground hover:text-foreground'}"
+          title={STYLE_TITLES[style]()}
+          onclick={() => pick(active.color, style)}
+        >
+          {#if style === "highlight"}
+            <Highlighter size={14} />
+          {:else if style === "underline"}
+            <Underline size={14} />
+          {:else}
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            >
+              <path d="M2 12 q 2.5 -5 5 0 t 5 0 t 5 0 t 5 0" />
+            </svg>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 
   <!-- Actions -->
   <div
-    class="bg-card border border-border rounded-lg shadow-xl px-3 py-2 flex items-center gap-2"
+    class="bg-card border border-border rounded-full shadow-xl px-4 py-2 flex items-center gap-2"
   >
+    {#if !hasExisting}
+      <button
+        class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
+        title={m.highlight_action_highlight()}
+        onclick={() => onhighlight?.()}
+      >
+        <Highlighter size={14} />
+      </button>
+      <div class="w-px h-4 bg-border"></div>
+    {/if}
     <button
       class="p-0.5 transition-colors hover:scale-110 transform text-muted-foreground hover:text-foreground"
       title={m.highlight_action_copy()}
@@ -205,14 +212,5 @@
         <Trash2 size={14} />
       </button>
     {/if}
-
-    <div class="w-px h-4 bg-border"></div>
-    <button
-      aria-label={m.common_close()}
-      class="text-muted-foreground hover:text-foreground transition-colors p-0.5"
-      onclick={() => onclose?.()}
-    >
-      <X size={14} />
-    </button>
   </div>
 </div>
