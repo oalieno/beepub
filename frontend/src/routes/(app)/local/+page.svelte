@@ -250,7 +250,22 @@
     }
   }
 
-  onMount(loadEntries);
+  onMount(async () => {
+    await loadEntries();
+    // A shelf visit is a natural refresh point: the full sync heals stale
+    // links (server copy deleted → 404 → unlink) and pulls fresh status,
+    // then the cards re-read the records. Rate-limited inside, so rapid
+    // revisits don't hammer the server.
+    if (isNative() && entries.length > 0) {
+      try {
+        const { linkAndSyncAll } = await import("$lib/services/readingSync");
+        await linkAndSyncAll();
+        await loadEntries();
+      } catch {
+        // Offline/serverless — the cached view stands.
+      }
+    }
+  });
 </script>
 
 <svelte:head>
