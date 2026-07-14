@@ -4,9 +4,9 @@
  * A local book links to a server book by file digest (partial md5); once
  * linked, its reading state merges bidirectionally: highlights by per-id
  * updated_at last-write-wins with tombstone union, progress by a single
- * last_read_at winner. The server is the merge authority — this module
- * pushes the full local state, then folds the post-merge response back
- * into the local records.
+ * last_read_at winner, and the reading-status group by its own LWW stamp.
+ * The server is the merge authority — this module pushes the full local
+ * state, then folds the post-merge response back into the local records.
  *
  * Known edge: the local store is single-user (records are not scoped per
  * account), so two accounts on the same server sharing one device would
@@ -20,10 +20,13 @@ import { hasServerUrl } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import {
   readLocalHighlightRecords,
+  readLocalInteraction,
   readLocalProgress,
   writeLocalHighlightRecords,
+  writeLocalInteraction,
   writeLocalProgress,
   type LocalHighlightRecord,
+  type LocalInteractionRecord,
   type LocalProgressRecord,
 } from "$lib/reading/local";
 import {
@@ -38,7 +41,11 @@ import { getIsOnline, isOnline } from "$lib/services/network";
 import { pushLedger } from "$lib/services/readingLedger";
 import { authStore } from "$lib/stores/auth";
 import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
-import type { BookSyncResponse, SyncProgressIn } from "$lib/types";
+import type {
+  BookSyncResponse,
+  SyncInteractionIn,
+  SyncProgressIn,
+} from "$lib/types";
 
 const FULL_SYNC_COOLDOWN_MS = 30_000;
 
@@ -185,9 +192,20 @@ async function doSync(localBookId: string): Promise<void> {
 
   const progress = await readLocalProgress(localBookId);
   const highlights = await readLocalHighlightRecords(localBookId);
+  const interaction = await readLocalInteraction(localBookId);
   const body = {
     progress: progress && progress.cfi ? toSyncProgress(progress) : null,
     highlights,
+    // Only a device-edited status group (stamp present) is pushed; the
+    // response snapshot still folds web edits back either way.
+    interaction: interaction?.status_updated_at
+      ? ({
+          reading_status: interaction.reading_status,
+          started_at: interaction.started_at,
+          finished_at: interaction.finished_at,
+          status_updated_at: interaction.status_updated_at,
+        } satisfies SyncInteractionIn)
+      : null,
   };
 
   let response: BookSyncResponse;
@@ -215,6 +233,31 @@ async function doSync(localBookId: string): Promise<void> {
 
   await applyHighlights(localBookId, response);
   await applyProgress(localBookId, response);
+  await applyInteraction(localBookId, response);
+}
+
+async function applyInteraction(
+  localBookId: string,
+  response: BookSyncResponse,
+): Promise<void> {
+  const remote = response.interaction;
+  if (!remote?.status_updated_at) return;
+  const fresh = await readLocalInteraction(localBookId);
+  // Strictly newer only: an in-flight local edit (stamp past the echo)
+  // must survive to be pushed next time. Ties are our own echo anyway.
+  if (
+    fresh?.status_updated_at &&
+    Date.parse(fresh.status_updated_at) >= Date.parse(remote.status_updated_at)
+  ) {
+    return;
+  }
+  const record: LocalInteractionRecord = {
+    reading_status: remote.reading_status,
+    started_at: remote.started_at,
+    finished_at: remote.finished_at,
+    status_updated_at: remote.status_updated_at,
+  };
+  await writeLocalInteraction(localBookId, record);
 }
 
 async function applyHighlights(

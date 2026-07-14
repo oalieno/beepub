@@ -56,6 +56,8 @@ export class InvalidEpubError extends Error {
 export const localProgressKey = (bookId: string) => `local-progress:${bookId}`;
 export const localHighlightsKey = (bookId: string) =>
   `local-highlights:${bookId}`;
+export const localInteractionKey = (bookId: string) =>
+  `local-interaction:${bookId}`;
 
 async function getManifest(): Promise<LocalBookEntry[]> {
   const { value } = await Preferences.get({ key: MANIFEST_KEY });
@@ -340,6 +342,7 @@ export async function removeLocalBook(bookId: string): Promise<void> {
   await saveManifest(manifest.filter((e) => e.id !== bookId));
   await Preferences.remove({ key: localProgressKey(bookId) });
   await Preferences.remove({ key: localHighlightsKey(bookId) });
+  await Preferences.remove({ key: localInteractionKey(bookId) });
   await clearLinksEverywhere(bookId);
 }
 

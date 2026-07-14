@@ -277,9 +277,35 @@ export interface SyncProgressIn {
   last_read_at: string;
 }
 
+/** Manually-edited interaction fields, each group under its own LWW
+ *  stamp. A group is only merged when its stamp is present — send just
+ *  the groups the user actually touched on-device. */
+export interface SyncInteractionIn {
+  reading_status?: ReadingStatus | null;
+  started_at?: string | null;
+  finished_at?: string | null;
+  status_updated_at?: string | null;
+  rating?: number | null;
+  rating_updated_at?: string | null;
+  is_favorite?: boolean | null;
+  favorite_updated_at?: string | null;
+}
+
+export interface SyncInteractionOut {
+  reading_status: ReadingStatus | null;
+  started_at: string | null;
+  finished_at: string | null;
+  status_updated_at: string | null;
+  rating: number | null;
+  rating_updated_at: string | null;
+  is_favorite: boolean;
+  favorite_updated_at: string | null;
+}
+
 export interface BookSyncRequest {
   progress: SyncProgressIn | null;
   highlights: HighlightSyncOut[];
+  interaction?: SyncInteractionIn | null;
 }
 
 export interface BookSyncResponse {
@@ -287,6 +313,8 @@ export interface BookSyncResponse {
    *  device marker when the server side won). */
   progress: (ProgressOut & { xpointer?: string }) | null;
   highlights: HighlightSyncOut[];
+  /** Null only when the user never interacted with the book. */
+  interaction: SyncInteractionOut | null;
 }
 
 export type ReadingStatus =

@@ -12,6 +12,12 @@
   import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
   import { booksApi } from "$lib/api/books";
   import { resolveReading } from "$lib/reading/resolve";
+  import {
+    emptyLocalInteraction,
+    readLocalInteraction,
+    setLocalReadingStatus,
+    type LocalInteractionRecord,
+  } from "$lib/reading/local";
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
@@ -62,8 +68,11 @@
   );
   let aiBookId = $derived(isBeepub ? bookId : serverBookId);
 
-  // Auto reading status
+  // Auto reading status. Beepub books track it on the server interaction;
+  // local books keep a device record that LWW-syncs once linked (and just
+  // accumulates while serverless).
   let interaction: InteractionOut | null = $state(null);
+  let localInteraction = $state<LocalInteractionRecord | null>(null);
   let readingTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
   const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
@@ -276,9 +285,18 @@
 
     // Server-side extras — reading status, display metadata — only exist
     // for books the reader addresses by their server id. Local books keep
-    // status/interaction on the sync path (a second writer here would
-    // fight the LWW merge).
-    if (resolved.sync.kind !== "beepub") return;
+    // status on the device record + sync path (a beepub API write here
+    // would be a second writer fighting the LWW merge).
+    if (resolved.sync.kind !== "beepub") {
+      if (localEntry) {
+        // Read after the opening sync above, so a fresher web-set status
+        // is already folded into the record.
+        localInteraction =
+          (await readLocalInteraction(bookId)) ?? emptyLocalInteraction();
+        startLocalReadingTimer();
+      }
+      return;
+    }
 
     // Fetch current interaction and start reading timer
     fetchInteractionAndStartTimer();
@@ -372,11 +390,61 @@
     }
   }
 
+  // Fire-and-forget push of a local status edit; serverless/unlinked is a
+  // silent no-op inside syncLocalBook and the stamped record ships on the
+  // next sync opportunity instead.
+  function pushLocalInteraction() {
+    void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+      syncLocalBook(bookId).catch(() => {}),
+    );
+  }
+
+  function startLocalReadingTimer() {
+    // Same rule as the beepub timer: only escalate none/want_to_read.
+    const status = localInteraction?.reading_status;
+    if (status && status !== "want_to_read") return;
+    readingTimer = setTimeout(async () => {
+      const prev = localInteraction ?? emptyLocalInteraction();
+      const today = new Date().toISOString().slice(0, 10);
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        "currently_reading",
+        today,
+        null,
+      );
+      pushLocalInteraction();
+      toastStore.info(m.reader_auto_marked_reading(), {
+        duration: 6000,
+        action: {
+          label: m.common_undo(),
+          onclick: () =>
+            revertStatus(
+              prev.reading_status,
+              prev.started_at,
+              prev.finished_at,
+            ),
+        },
+      });
+    }, READING_DEBOUNCE_MS);
+  }
+
   async function revertStatus(
     status: InteractionOut["reading_status"],
     startedAt: string | null,
     finishedAt: string | null,
   ) {
+    if (localEntry) {
+      // The undo is itself a device edit — it gets a fresh stamp and
+      // propagates like any other.
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        status,
+        startedAt,
+        finishedAt,
+      );
+      pushLocalInteraction();
+      return;
+    }
     try {
       await booksApi.updateReadingStatus(bookId, {
         reading_status: status,
@@ -394,34 +462,47 @@
   }
 
   async function autoMarkAsRead() {
-    if (!interaction) return;
+    const current = localEntry ? localInteraction : interaction;
+    if (!current) return;
     if (
-      interaction.reading_status === "read" ||
-      interaction.reading_status === "did_not_finish"
+      current.reading_status === "read" ||
+      current.reading_status === "did_not_finish"
     )
       return;
-    const prevStatus = interaction.reading_status;
-    const prevStartedAt = interaction.started_at ?? null;
-    const prevFinishedAt = interaction.finished_at ?? null;
+    const prevStatus = current.reading_status;
+    const prevStartedAt = current.started_at ?? null;
+    const prevFinishedAt = current.finished_at ?? null;
     const today = new Date().toISOString().slice(0, 10);
-    try {
-      await booksApi.updateReadingStatus(bookId, {
-        reading_status: "read",
-        started_at: interaction.started_at || today,
-        finished_at: today,
-      });
-      interaction.reading_status = "read";
-      interaction.finished_at = today;
-      // No toast — the book-end overlay surfaces this with an undo.
-      autoReadUndo = {
-        status: prevStatus,
-        startedAt: prevStartedAt,
-        finishedAt: prevFinishedAt,
-      };
-      autoReadReverted = false;
-    } catch {
-      /* ignore */
+    if (localEntry) {
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        "read",
+        current.started_at || today,
+        today,
+      );
+      pushLocalInteraction();
+    } else {
+      try {
+        await booksApi.updateReadingStatus(bookId, {
+          reading_status: "read",
+          started_at: current.started_at || today,
+          finished_at: today,
+        });
+        if (interaction) {
+          interaction.reading_status = "read";
+          interaction.finished_at = today;
+        }
+      } catch {
+        return;
+      }
     }
+    // No toast — the book-end overlay surfaces this with an undo.
+    autoReadUndo = {
+      status: prevStatus,
+      startedAt: prevStartedAt,
+      finishedAt: prevFinishedAt,
+    };
+    autoReadReverted = false;
   }
 
   function undoAutoRead() {
@@ -544,7 +625,7 @@
       ((percentage != null && percentage >= 99) || reachedEnd) &&
       !autoReadTriggered &&
       !autoReadSuppressed &&
-      interaction
+      (localEntry ? localInteraction : interaction)
     ) {
       autoReadTriggered = true;
       if (readingTimer) {

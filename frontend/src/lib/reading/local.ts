@@ -10,10 +10,11 @@ import { Preferences } from "@capacitor/preferences";
 
 import {
   localHighlightsKey,
+  localInteractionKey,
   localProgressKey,
   readLocalBookBytes,
 } from "$lib/services/localLibrary";
-import type { HighlightOut } from "$lib/types";
+import type { HighlightOut, ReadingStatus } from "$lib/types";
 
 import { cfiOf, locatorFromCfi } from "./locator";
 import type { BookPayload, BookSource } from "./source";
@@ -67,6 +68,26 @@ export type LocalHighlightRecord = HighlightOut & {
   deleted_at: string | null;
 };
 
+/** Manually-set reading status for a local book, wire-shaped like the
+ *  server's status group. status_updated_at is the group's LWW stamp: set
+ *  only once the device actually edited it (a fresh record must not beat
+ *  server state it never saw), and compared against the server's on sync. */
+export interface LocalInteractionRecord {
+  reading_status: ReadingStatus | null;
+  started_at: string | null;
+  finished_at: string | null;
+  status_updated_at: string | null;
+}
+
+export function emptyLocalInteraction(): LocalInteractionRecord {
+  return {
+    reading_status: null,
+    started_at: null,
+    finished_at: null,
+    status_updated_at: null,
+  };
+}
+
 async function readJson<T>(key: string): Promise<T | null> {
   const { value } = await Preferences.get({ key });
   if (!value) return null;
@@ -94,6 +115,37 @@ export async function writeLocalProgress(
   record: LocalProgressRecord,
 ): Promise<void> {
   await writeJson(localProgressKey(bookId), record);
+}
+
+export async function readLocalInteraction(
+  bookId: string,
+): Promise<LocalInteractionRecord | null> {
+  return readJson<LocalInteractionRecord>(localInteractionKey(bookId));
+}
+
+export async function writeLocalInteraction(
+  bookId: string,
+  record: LocalInteractionRecord,
+): Promise<void> {
+  await writeJson(localInteractionKey(bookId), record);
+}
+
+/** Set the status group as a device edit: stamps now, so the change wins
+ *  LWW against anything older and syncs once the book is linked. */
+export async function setLocalReadingStatus(
+  bookId: string,
+  status: ReadingStatus | null,
+  startedAt: string | null,
+  finishedAt: string | null,
+): Promise<LocalInteractionRecord> {
+  const record: LocalInteractionRecord = {
+    reading_status: status,
+    started_at: startedAt,
+    finished_at: finishedAt,
+    status_updated_at: new Date().toISOString(),
+  };
+  await writeLocalInteraction(bookId, record);
+  return record;
 }
 
 export async function readLocalHighlightRecords(
