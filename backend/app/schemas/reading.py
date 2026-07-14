@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from pydantic import AwareDatetime, BaseModel, Field
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 
 class RatingUpdate(BaseModel):
@@ -191,10 +191,68 @@ class SyncProgressIn(BaseModel):
     last_read_at: AwareDatetime
 
 
+class SyncInteractionIn(BaseModel):
+    """Manually-edited interaction fields, each group under its own LWW
+    anchor. A group is only considered when its stamp is present — clients
+    send just the groups the user actually touched on-device. Status,
+    started_at and finished_at travel as one group because they always
+    change together (mirroring PUT /reading-status)."""
+
+    reading_status: str | None = None
+    started_at: date | None = None
+    finished_at: date | None = None
+    status_updated_at: AwareDatetime | None = None
+    rating: float | None = None
+    rating_updated_at: AwareDatetime | None = None
+    is_favorite: bool | None = None
+    favorite_updated_at: AwareDatetime | None = None
+
+    @field_validator("reading_status")
+    @classmethod
+    def validate_reading_status(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from app.models.reading import ReadingStatus
+
+        valid = {s.value for s in ReadingStatus}
+        if v not in valid:
+            raise ValueError(f"must be one of: {', '.join(sorted(valid))}")
+        return v
+
+    @field_validator("rating")
+    @classmethod
+    def validate_rating(cls, v: float | None) -> float | None:
+        if v is not None and not (0.5 <= v <= 5 and (v * 2).is_integer()):
+            raise ValueError("must be 0.5-5 in 0.5 steps")
+        return v
+
+    @model_validator(mode="after")
+    def favorite_needs_value(self) -> "SyncInteractionIn":
+        if self.favorite_updated_at is not None and self.is_favorite is None:
+            raise ValueError("is_favorite is required with favorite_updated_at")
+        return self
+
+
+class SyncInteractionOut(BaseModel):
+    reading_status: str | None
+    started_at: date | None
+    finished_at: date | None
+    status_updated_at: datetime | None
+    rating: float | None
+    rating_updated_at: datetime | None
+    is_favorite: bool
+    favorite_updated_at: datetime | None
+
+    model_config = {"from_attributes": True}
+
+
 class BookSyncRequest(BaseModel):
     # progress None = pull-only (the device has nothing saved yet).
     progress: SyncProgressIn | None = None
     highlights: list[SyncHighlightIn] = Field(default_factory=list, max_length=5000)
+    # interaction None = pull-only; the response always carries the
+    # server's snapshot so devices can fold web edits back.
+    interaction: SyncInteractionIn | None = None
 
 
 class HighlightSyncOut(HighlightOut):
@@ -208,3 +266,5 @@ class BookSyncResponse(BaseModel):
     # which must round-trip for paragraph-level e-reader landings.
     progress: dict | None
     highlights: list[HighlightSyncOut]
+    # None only when the user has never interacted with the book.
+    interaction: SyncInteractionOut | None = None

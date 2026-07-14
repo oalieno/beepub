@@ -48,6 +48,21 @@ class UserBookInteraction(Base):
     started_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     finished_at: Mapped[date | None] = mapped_column(Date, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Per-field-group LWW anchors for device sync. The row-level updated_at
+    # is useless as a merge anchor — every progress write bumps it — so each
+    # manually-edited group carries its own stamp. Web mutations stamp
+    # server-now; sync clients supply their own (client-authority contract).
+    # status_updated_at covers reading_status + started_at + finished_at,
+    # which always change together.
+    status_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    rating_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    favorite_updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

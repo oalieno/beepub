@@ -41,12 +41,17 @@ from app.models.reading import (
 )
 from app.models.user import User
 from app.routers.books import _get_book_with_access
-from app.routers.interactions import _get_or_create_interaction
+from app.routers.interactions import (
+    _get_or_create_interaction,
+    _sync_sibling_interactions,
+)
 from app.routers.libraries import accessible_book_ids_select
 from app.schemas.reading import (
     BookSyncRequest,
     BookSyncResponse,
     HighlightSyncOut,
+    SyncInteractionIn,
+    SyncInteractionOut,
     SyncProgressIn,
 )
 from app.tasks.text_extract import extract_book_text
@@ -167,6 +172,53 @@ async def _merge_highlights(
     )
 
 
+def _merge_interaction_fields(
+    interaction: UserBookInteraction, body: SyncInteractionIn
+) -> dict:
+    """Per-group LWW for the manually-edited interaction fields.
+
+    A group merges only when the client sent its stamp, and wins only when
+    strictly newer than the server's (ties → server, matching the highlight
+    rule). A NULL server stamp loses — it means the field was never set (or
+    predates the stamps, where the migration backfilled from updated_at).
+    Returns the changed columns for sibling propagation; rating stays
+    per-edition there, mirroring the web PUTs.
+    """
+    propagate: dict = {}
+    if body.status_updated_at is not None and (
+        interaction.status_updated_at is None
+        or body.status_updated_at > interaction.status_updated_at
+    ):
+        interaction.reading_status = body.reading_status
+        interaction.started_at = body.started_at
+        interaction.finished_at = body.finished_at
+        interaction.status_updated_at = body.status_updated_at
+        propagate.update(
+            reading_status=body.reading_status,
+            started_at=body.started_at,
+            finished_at=body.finished_at,
+            status_updated_at=body.status_updated_at,
+        )
+    if body.rating_updated_at is not None and (
+        interaction.rating_updated_at is None
+        or body.rating_updated_at > interaction.rating_updated_at
+    ):
+        interaction.rating = body.rating
+        interaction.rating_updated_at = body.rating_updated_at
+    if body.favorite_updated_at is not None and (
+        interaction.favorite_updated_at is None
+        or body.favorite_updated_at > interaction.favorite_updated_at
+    ):
+        # The schema guarantees is_favorite accompanies the stamp.
+        interaction.is_favorite = bool(body.is_favorite)
+        interaction.favorite_updated_at = body.favorite_updated_at
+        propagate.update(
+            is_favorite=bool(body.is_favorite),
+            favorite_updated_at=body.favorite_updated_at,
+        )
+    return propagate
+
+
 def _stored_last_read(progress: dict | None) -> datetime | None:
     if not progress or not progress.get("last_read_at"):
         return None
@@ -217,23 +269,36 @@ async def sync_reading_state(
     Highlights: per-row LWW by updated_at with tombstone union; the
     response is the full post-merge set INCLUDING tombstones, so the
     device can apply remote deletions. Progress: single winner by
-    last_read_at (ties → server). Synced progress never records reading
-    activity — streaks stay a live-reading signal.
+    last_read_at (ties → server). Interaction fields (status/rating/
+    favorite): per-group LWW by their own stamps. Synced progress never
+    records reading activity — streaks stay a live-reading signal.
     """
-    await _get_book_with_access(book_id, current_user, db)
+    book = await _get_book_with_access(book_id, current_user, db)
 
     if body.highlights:
         await _merge_highlights(db, current_user.id, book_id, body.highlights)
 
+    interaction = None
+    if body.progress is not None or body.interaction is not None:
+        interaction = await _get_or_create_interaction(current_user.id, book_id, db)
+
     client_won = False
     if body.progress is not None:
-        interaction = await _get_or_create_interaction(current_user.id, book_id, db)
         server_last = _stored_last_read(interaction.reading_progress)
         if server_last is None or body.progress.last_read_at > server_last:
             interaction.reading_progress = _rebuilt_progress(
                 body.progress, interaction.reading_progress
             )
             client_won = True
+
+    if body.interaction is not None:
+        propagate = _merge_interaction_fields(interaction, body.interaction)
+        # Same propagation the web PUTs do — editions of one Work share
+        # status and favorite.
+        if propagate and book.work_id:
+            await _sync_sibling_interactions(
+                current_user.id, book.work_id, book_id, propagate, db
+            )
 
     await db.commit()
 
@@ -264,6 +329,7 @@ async def sync_reading_state(
     return BookSyncResponse(
         progress=final.reading_progress if final else None,
         highlights=highlights,
+        interaction=SyncInteractionOut.model_validate(final) if final else None,
     )
 
 

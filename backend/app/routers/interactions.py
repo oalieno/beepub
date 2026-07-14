@@ -86,6 +86,7 @@ async def update_rating(
         raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.rating = body.rating
+    interaction.rating_updated_at = datetime.now(UTC)
     await db.commit()
     return {"status": "updated"}
 
@@ -100,6 +101,7 @@ async def update_favorite(
     book = await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.is_favorite = body.is_favorite
+    interaction.favorite_updated_at = datetime.now(UTC)
 
     # Sync to all sibling editions in the same Work
     if book.work_id:
@@ -107,7 +109,10 @@ async def update_favorite(
             current_user.id,
             book.work_id,
             book_id,
-            {"is_favorite": body.is_favorite},
+            {
+                "is_favorite": body.is_favorite,
+                "favorite_updated_at": interaction.favorite_updated_at,
+            },
             db,
         )
 
@@ -136,6 +141,7 @@ async def update_reading_status(
     interaction.reading_status = body.reading_status
     interaction.started_at = body.started_at
     interaction.finished_at = body.finished_at
+    interaction.status_updated_at = datetime.now(UTC)
 
     # Sync to all sibling editions in the same Work
     if book.work_id:
@@ -147,6 +153,7 @@ async def update_reading_status(
                 "reading_status": body.reading_status,
                 "started_at": body.started_at,
                 "finished_at": body.finished_at,
+                "status_updated_at": interaction.status_updated_at,
             },
             db,
         )

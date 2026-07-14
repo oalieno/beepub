@@ -409,3 +409,173 @@ async def test_sync_respects_book_access(admin_client, user_client):
     )
     response = await user_client.post(f"/api/books/{book['id']}/sync", json={})
     assert response.status_code == 403
+
+
+# --- interaction field sync ---
+
+
+def _sync_status(status: str = "currently_reading", **overrides) -> dict:
+    payload = {
+        "reading_status": status,
+        "started_at": "2026-07-14",
+        "finished_at": None,
+        "status_updated_at": _stamp(),
+    }
+    payload.update(overrides)
+    return payload
+
+
+async def test_sync_interaction_client_wins_when_server_empty(admin_client, book_id):
+    stamp = _stamp()
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status_updated_at=stamp)},
+    )
+    assert response.status_code == 200
+    snapshot = response.json()["interaction"]
+    assert snapshot["reading_status"] == "currently_reading"
+    assert snapshot["started_at"] == "2026-07-14"
+    # Client stamp preserved verbatim, same contract as progress.
+    assert datetime.fromisoformat(snapshot["status_updated_at"]) == (
+        datetime.fromisoformat(stamp)
+    )
+
+    fetched = (await admin_client.get(f"/api/books/{book_id}/interaction")).json()
+    assert fetched["reading_status"] == "currently_reading"
+
+
+async def test_sync_interaction_older_stamp_loses_to_web_edit(admin_client, book_id):
+    # Web PUT stamps server-now.
+    assert (
+        await admin_client.put(
+            f"/api/books/{book_id}/reading-status", json={"reading_status": "read"}
+        )
+    ).status_code == 200
+
+    # A device pushing an edit made BEFORE the web edit must lose.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status_updated_at=_stamp(-3600))},
+    )
+    assert response.json()["interaction"]["reading_status"] == "read"
+
+    # And one made after it wins.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status_updated_at=_stamp(3600))},
+    )
+    assert response.json()["interaction"]["reading_status"] == "currently_reading"
+
+
+async def test_sync_interaction_pull_only_returns_snapshot(admin_client, book_id):
+    await admin_client.put(f"/api/books/{book_id}/rating", json={"rating": 4.5})
+    response = await admin_client.post(f"/api/books/{book_id}/sync", json={})
+    snapshot = response.json()["interaction"]
+    assert snapshot["rating"] == 4.5
+    assert snapshot["rating_updated_at"] is not None
+    assert snapshot["reading_status"] is None
+
+
+async def test_sync_interaction_groups_merge_independently(admin_client, book_id):
+    await admin_client.post(
+        f"/api/books/{book_id}/sync", json={"interaction": _sync_status()}
+    )
+    # A rating-only push must not disturb the status group.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"rating": 3.0, "rating_updated_at": _stamp()}},
+    )
+    snapshot = response.json()["interaction"]
+    assert snapshot["rating"] == 3.0
+    assert snapshot["reading_status"] == "currently_reading"
+
+
+async def test_sync_interaction_progress_writes_do_not_shield_status(
+    admin_client, book_id
+):
+    """The reason stamps are per-field: the web bumps the row's updated_at
+    on every page turn, which must not outrank a device's status edit."""
+    await admin_client.put(
+        f"/api/books/{book_id}/reading-status", json={"reading_status": "want_to_read"}
+    )
+    # Web reading bumps row updated_at well past the device stamp below...
+    await admin_client.put(
+        f"/api/books/{book_id}/progress",
+        json={"cfi": "epubcfi(/6/4!/4/2:0)", "percentage": 10.0},
+    )
+    # ...but the device edit is newer than the status stamp, so it wins.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status_updated_at=_stamp(60))},
+    )
+    snapshot = response.json()["interaction"]
+    assert snapshot["reading_status"] == "currently_reading"
+
+
+async def test_sync_interaction_favorite_group(admin_client, book_id):
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"is_favorite": True, "favorite_updated_at": _stamp()}},
+    )
+    assert response.json()["interaction"]["is_favorite"] is True
+
+    # Stale un-favorite loses.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={
+            "interaction": {
+                "is_favorite": False,
+                "favorite_updated_at": _stamp(-3600),
+            }
+        },
+    )
+    assert response.json()["interaction"]["is_favorite"] is True
+
+
+async def test_sync_interaction_validates(admin_client, book_id):
+    # Unknown status → 422.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status="reading-hard")},
+    )
+    assert response.status_code == 422
+    # Rating off the 0.5 grid → 422.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"rating": 3.3, "rating_updated_at": _stamp()}},
+    )
+    assert response.status_code == 422
+    # Favorite stamp without a value → 422.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"favorite_updated_at": _stamp()}},
+    )
+    assert response.status_code == 422
+    # Naive stamp → 422 (same AwareDatetime contract as the other groups).
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": _sync_status(status_updated_at="2026-07-14T10:00:00")},
+    )
+    assert response.status_code == 422
+
+
+async def test_sync_interaction_stamp_without_status_clears(admin_client, book_id):
+    """The status group travels whole: a stamped push carrying null status
+    is a deliberate clear, mirroring PUT /reading-status with null."""
+    await admin_client.post(
+        f"/api/books/{book_id}/sync", json={"interaction": _sync_status()}
+    )
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={
+            "interaction": {
+                "reading_status": None,
+                "started_at": None,
+                "finished_at": None,
+                "status_updated_at": _stamp(60),
+            }
+        },
+    )
+    snapshot = response.json()["interaction"]
+    assert snapshot["reading_status"] is None
+    assert snapshot["started_at"] is None
