@@ -55,16 +55,26 @@
   }
 
   // Cover URIs are re-derived per mount, so keep them beside the entry
-  // instead of mutating the manifest shape.
+  // instead of mutating the manifest shape. Progress/status ride along
+  // from the device reading records.
   async function withCover(
     entry: LocalBookEntry,
     links: Record<string, string>,
   ): Promise<LocalShelfEntry> {
     const { getLocalCoverSrc } = await import("$lib/services/localLibrary");
+    const { readLocalProgress, readLocalInteraction } =
+      await import("$lib/reading/local");
+    const [coverSrc, progress, interaction] = await Promise.all([
+      getLocalCoverSrc(entry),
+      readLocalProgress(entry.id),
+      readLocalInteraction(entry.id),
+    ]);
     return {
       ...entry,
-      coverSrc: await getLocalCoverSrc(entry),
+      coverSrc,
       linked: entry.id in links,
+      progressPct: progress?.percentage ?? null,
+      readingStatus: interaction?.reading_status ?? null,
     };
   }
 

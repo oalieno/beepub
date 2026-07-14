@@ -1,17 +1,24 @@
 <script lang="ts" module>
   import type { LocalBookEntry } from "$lib/services/localLibrary";
+  import type { ReadingStatus } from "$lib/types";
 
   /** A shelf entry with its per-mount presentation state resolved. */
   export type LocalShelfEntry = LocalBookEntry & {
     coverSrc: string | null;
     linked: boolean;
+    /** From the device reading records; absent on shelves that skip the
+     *  extra Preferences reads. */
+    progressPct?: number | null;
+    readingStatus?: ReadingStatus | null;
   };
 </script>
 
 <script lang="ts">
   import { goto } from "$app/navigation";
   import {
+    Bookmark,
     BookOpen,
+    Check,
     Cloud,
     CloudUpload,
     EllipsisVertical,
@@ -128,6 +135,27 @@
       {entry.title}
     </h3>
     <div class="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground">
+      <!-- Status line mirrors BookCard's semantics: reading → percentage,
+           read → check; all in the info row (covers carry no badges). -->
+      {#if entry.readingStatus === "read"}
+        <span class="inline-flex items-center gap-1 text-primary font-medium">
+          <Check size={12} strokeWidth={3} />{m.mybooks_tab_read()}
+        </span>
+      {:else if entry.readingStatus === "currently_reading"}
+        <span>
+          {#if entry.progressPct != null && entry.progressPct > 0}
+            {Math.round(entry.progressPct)}%
+          {:else}
+            {m.mybooks_tab_reading()}
+          {/if}
+        </span>
+      {:else if entry.readingStatus === "want_to_read"}
+        <span class="inline-flex items-center gap-1">
+          <Bookmark size={12} />{m.mybooks_tab_want_to_read()}
+        </span>
+      {:else if entry.readingStatus === "did_not_finish"}
+        <span>{m.mybooks_tab_did_not_finish()}</span>
+      {/if}
       <span>{formatSize(entry.fileSize)}</span>
       {#if entry.linked}
         <!-- Linked to a server book: reading state syncs -->

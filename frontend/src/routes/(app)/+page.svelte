@@ -41,6 +41,8 @@
     try {
       const { listLocalBooks, getLocalBookLinks, getLocalCoverSrc } =
         await import("$lib/services/localLibrary");
+      const { readLocalProgress, readLocalInteraction } =
+        await import("$lib/reading/local");
       const books = await listLocalBooks();
       const links = await getLocalBookLinks();
       localShelf = await Promise.all(
@@ -48,6 +50,9 @@
           ...b,
           coverSrc: await getLocalCoverSrc(b),
           linked: b.id in links,
+          progressPct: (await readLocalProgress(b.id))?.percentage ?? null,
+          readingStatus:
+            (await readLocalInteraction(b.id))?.reading_status ?? null,
         })),
       );
     } catch {
