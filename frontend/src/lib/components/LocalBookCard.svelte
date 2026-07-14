@@ -82,48 +82,6 @@
           >
         </div>
       {/if}
-
-      {#if uploading}
-        <div
-          class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white/80"
-        >
-          <Loader2 size={14} class="animate-spin" />
-        </div>
-      {:else if ondelete || showUpload}
-        <!-- Actions collapsed into a menu — a bare trash can as the card's
-             only visible action invites misclicks (audit J). Stop both
-             events so the trigger doesn't also open the book. -->
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger
-            aria-label={m.book_more_actions()}
-            onclick={(e) => e.stopPropagation()}
-            onkeydown={(e) => e.stopPropagation()}
-            class="absolute top-2 right-2 z-10 w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white/80 hover:text-white hover:bg-black/70 can-hover:opacity-0 can-hover:group-hover:opacity-100 data-[state=open]:opacity-100 transition-all"
-          >
-            <EllipsisVertical size={14} />
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content align="end">
-            {#if showUpload}
-              <DropdownMenu.Item onclick={() => onupload?.(entry)}>
-                <CloudUpload size={14} />
-                {m.local_upload()}
-              </DropdownMenu.Item>
-            {/if}
-            {#if ondelete}
-              {#if showUpload}
-                <DropdownMenu.Separator />
-              {/if}
-              <DropdownMenu.Item
-                variant="destructive"
-                onclick={(e) => ondelete(e, entry)}
-              >
-                <Trash2 size={14} />
-                {m.local_delete()}
-              </DropdownMenu.Item>
-            {/if}
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
-      {/if}
     </div>
   </div>
 
@@ -162,6 +120,46 @@
         <span title={m.local_linked_badge()}>
           <Cloud size={12} />
         </span>
+      {/if}
+      <!-- Actions live at the row's end, off the cover (owner's call) and
+           collapsed into a menu — a bare trash can invites misclicks
+           (audit J). Stop both events so the trigger doesn't open the
+           book. -->
+      {#if uploading}
+        <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
+          <Loader2 size={14} class="animate-spin" />
+        </span>
+      {:else if ondelete || showUpload}
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger
+            aria-label={m.book_more_actions()}
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={(e) => e.stopPropagation()}
+            class="ml-auto -my-1 w-6 h-6 flex items-center justify-center rounded-full hover:bg-secondary hover:text-foreground can-hover:opacity-0 can-hover:group-hover:opacity-100 data-[state=open]:opacity-100 transition-all"
+          >
+            <EllipsisVertical size={14} />
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content align="end">
+            {#if showUpload}
+              <DropdownMenu.Item onclick={() => onupload?.(entry)}>
+                <CloudUpload size={14} />
+                {m.local_upload()}
+              </DropdownMenu.Item>
+            {/if}
+            {#if ondelete}
+              {#if showUpload}
+                <DropdownMenu.Separator />
+              {/if}
+              <DropdownMenu.Item
+                variant="destructive"
+                onclick={(e) => ondelete(e, entry)}
+              >
+                <Trash2 size={14} />
+                {m.local_delete()}
+              </DropdownMenu.Item>
+            {/if}
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       {/if}
     </div>
   </div>
