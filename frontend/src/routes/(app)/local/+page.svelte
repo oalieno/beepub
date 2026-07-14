@@ -2,11 +2,15 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
+  import { hasServerUrl } from "$lib/api/client";
+  import { isOnline } from "$lib/services/network";
+  import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { Button } from "$lib/components/ui/button";
   import {
     ChevronRight,
+    CloudUpload,
     FileUp,
     HardDrive,
     Plus,
@@ -19,6 +23,7 @@
   } from "$lib/components/LocalBookCard.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
+  import { UserRole, type LibraryOut } from "$lib/types";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
 
   let entries = $state<LocalShelfEntry[]>([]);
@@ -27,6 +32,22 @@
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   let addSheetOpen = $state(false);
+
+  // Upload-to-cloud: offered per unlinked card when a server is connected
+  // and the account may upload. Calibre libraries can't take uploads, so
+  // eligibility is decided against the fetched library list.
+  let canUploadToCloud = $derived(
+    isNative() &&
+      hasServerUrl() &&
+      $isOnline &&
+      ($authStore.user?.role === UserRole.Admin ||
+        !!$authStore.user?.can_upload),
+  );
+  let uploadingId = $state<string | null>(null);
+  let pickerEntry = $state<LocalShelfEntry | null>(null);
+  let pickerLibraries = $state<LibraryOut[]>([]);
+  let pickerOpen = $state(false);
+  const UPLOAD_LIB_KEY = "upload-library";
 
   function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -103,6 +124,94 @@
       importing = false;
       // Re-picking the same file must fire change again.
       input.value = "";
+    }
+  }
+
+  function markLinked(id: string) {
+    entries = entries.map((b) => (b.id === id ? { ...b, linked: true } : b));
+    void import("$lib/stores/linkedBooks").then(({ refreshLinkedBookIds }) =>
+      refreshLinkedBookIds(),
+    );
+  }
+
+  async function startUpload(entry: LocalShelfEntry) {
+    if (uploadingId) return;
+    try {
+      const { booksApi } = await import("$lib/api/books");
+      // Already on the server (upload has no digest dedup — a re-upload
+      // would mint a duplicate book)? Then this is a link, not an upload.
+      const { matches } = await booksApi.lookupByDigest([entry.digest]);
+      const match = matches[entry.digest];
+      if (match) {
+        const { setLocalBookLink } = await import("$lib/services/localLibrary");
+        await setLocalBookLink(entry.id, match.id);
+        markLinked(entry.id);
+        toastStore.info(m.local_linked());
+        void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+          syncLocalBook(entry.id).catch(() => {}),
+        );
+        return;
+      }
+      const { librariesApi } = await import("$lib/api/libraries");
+      const libs = (await librariesApi.list()).filter((l) => !l.calibre_path);
+      if (libs.length === 0) {
+        toastStore.error(m.local_upload_no_library());
+        return;
+      }
+      if (libs.length === 1) {
+        await doUpload(entry, libs[0].id);
+        return;
+      }
+      // Picker, with the last-used library sorted first.
+      let last: string | null = null;
+      try {
+        last = localStorage.getItem(UPLOAD_LIB_KEY);
+      } catch {
+        /* ignore */
+      }
+      pickerLibraries = last
+        ? [...libs].sort(
+            (a, b) => Number(b.id === last) - Number(a.id === last),
+          )
+        : libs;
+      pickerEntry = entry;
+      pickerOpen = true;
+    } catch (err) {
+      toastStore.error((err as Error).message);
+    }
+  }
+
+  async function doUpload(entry: LocalShelfEntry, libraryId: string) {
+    pickerOpen = false;
+    pickerEntry = null;
+    uploadingId = entry.id;
+    try {
+      try {
+        localStorage.setItem(UPLOAD_LIB_KEY, libraryId);
+      } catch {
+        /* ignore */
+      }
+      const { readLocalBookBytes, setLocalBookLink } =
+        await import("$lib/services/localLibrary");
+      const bytes = await readLocalBookBytes(entry.id);
+      if (!bytes) throw new Error(`Local book file missing: ${entry.id}`);
+      const { sanitizeFilename } = await import("$lib/services/epubDownload");
+      const { booksApi } = await import("$lib/api/books");
+      const file = new File([bytes], `${sanitizeFilename(entry.title)}.epub`, {
+        type: "application/epub+zip",
+      });
+      const book = await booksApi.upload(file, libraryId);
+      await setLocalBookLink(entry.id, book.id);
+      markLinked(entry.id);
+      toastStore.success(m.local_upload_success({ title: entry.title }));
+      // Ship the accumulated reading state to the fresh server book.
+      void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+        syncLocalBook(entry.id).catch(() => {}),
+      );
+    } catch (err) {
+      toastStore.error((err as Error).message);
+    } finally {
+      uploadingId = null;
     }
   }
 
@@ -196,7 +305,12 @@
         style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
       >
         {#each entries as entry (entry.id)}
-          <LocalBookCard {entry} ondelete={handleDelete} />
+          <LocalBookCard
+            {entry}
+            ondelete={handleDelete}
+            onupload={canUploadToCloud ? startUpload : undefined}
+            uploading={uploadingId === entry.id}
+          />
         {/each}
       </div>
     {/if}
@@ -246,5 +360,30 @@
       </div>
       <ChevronRight size={16} class="text-muted-foreground shrink-0" />
     </button>
+  </div>
+</BottomSheet>
+
+<!-- Target-library picker: only shown when more than one library accepts
+     uploads (single-target uploads go straight through). -->
+<BottomSheet bind:open={pickerOpen}>
+  <h2 class="text-base font-semibold px-3 pt-2 pb-3">
+    {m.local_upload_pick_library()}
+  </h2>
+  <div class="pb-2 space-y-1">
+    {#each pickerLibraries as lib (lib.id)}
+      <button
+        class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
+        style="-webkit-tap-highlight-color: transparent;"
+        onclick={() => pickerEntry && doUpload(pickerEntry, lib.id)}
+      >
+        <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
+          <CloudUpload class="text-primary" size={18} />
+        </div>
+        <h3 class="flex-1 min-w-0 font-medium text-sm text-foreground truncate">
+          {lib.name}
+        </h3>
+        <ChevronRight size={16} class="text-muted-foreground shrink-0" />
+      </button>
+    {/each}
   </div>
 </BottomSheet>
