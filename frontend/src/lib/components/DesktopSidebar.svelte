@@ -15,7 +15,6 @@
     Compass,
     Search as SearchIcon,
     Dices,
-    HardDrive,
     PanelLeftClose,
     PanelLeftOpen,
     Rss,
@@ -55,9 +54,10 @@
       href: $activeLibraryHref,
       label: m.nav_libraries(),
       icon: Library,
-      active: page.url.pathname.startsWith("/libraries"),
-      // The device shelf works offline. On /local the dedicated
-      // local-books entry below lights up instead of this one.
+      active:
+        page.url.pathname.startsWith("/libraries") ||
+        page.url.pathname.startsWith("/local"),
+      // The device shelf works offline.
       requiresOnline: $activeLibraryHref !== "/local",
     },
     {
@@ -76,13 +76,6 @@
     },
     ...(isNative()
       ? [
-          {
-            href: "/local",
-            label: m.nav_local_books(),
-            icon: HardDrive,
-            active: page.url.pathname.startsWith("/local"),
-            requiresOnline: false,
-          },
           {
             href: "/catalogs",
             label: m.nav_catalogs(),
