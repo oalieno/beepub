@@ -29,11 +29,6 @@
   }
 
   const links: AdminLink[] = [
-    {
-      href: "/admin/libraries",
-      label: () => m.admin_link_libraries(),
-      icon: Library,
-    },
     { href: "/admin/users", label: () => m.admin_link_users(), icon: Users },
     {
       href: "/admin/calibre",
