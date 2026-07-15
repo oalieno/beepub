@@ -86,6 +86,25 @@ export function setupIOSTouchSelection(
     }
   }
 
+  // After a long-press selection the browser still synthesizes a click on
+  // release (WebKit does this even for long holds). That click reaches
+  // epub.js's document listener and its dismiss logic closes the menu we
+  // just opened — the programmatic selection collapses under
+  // user-select:none, so the "is text still selected" check can't save
+  // it — and the menu then reopens on the next emit, which reads as a
+  // flicker. Swallow exactly that gesture-residue click.
+  let suppressClickUntil = 0;
+  doc.addEventListener(
+    "click",
+    (e: MouseEvent) => {
+      if (Date.now() < suppressClickUntil) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
+    },
+    { capture: true },
+  );
+
   // Touch state machine
   type TouchState = "idle" | "waiting" | "selecting" | "swiping";
   let touchState: TouchState = "idle";
@@ -133,6 +152,13 @@ export function setupIOSTouchSelection(
     currentRange = caretRange.cloneRange();
     currentRangeText = sel?.toString().trim() ?? "";
     doc.body.classList.remove("beepub-selecting");
+    // Whitespace under the finger: nothing selectable — don't draw a
+    // ghost overlay for a menu that will never open.
+    if (!currentRangeText) {
+      sel?.removeAllRanges();
+      currentRange = null;
+      return null;
+    }
     updateSelectionOverlay(caretRange);
     return caretRange;
   }
@@ -247,6 +273,9 @@ export function setupIOSTouchSelection(
       const dx = endX - startX;
 
       if (touchState === "selecting") {
+        // WKWebView can delay the synthesized click well past touchend
+        // (up to ~350ms in iframes without a viewport meta).
+        suppressClickUntil = Date.now() + 700;
         if (didDragSelect) emitCurrentRange();
       } else if (touchState === "swiping") {
         if (Math.abs(dx) > SWIPE_THRESHOLD) {
