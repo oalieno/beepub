@@ -770,6 +770,7 @@
   "library_uploading": "Uploading...",
   "library_uploaded": "Uploaded {count} book(s)",
   "library_new": "New Library",
+  "library_switch": "Switch library",
   "library_create_title": "Create Library",
   "library_edit_title": "Edit library",
   "library_name": "Name",

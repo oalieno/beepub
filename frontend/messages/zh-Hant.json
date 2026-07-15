@@ -770,6 +770,7 @@
   "library_uploading": "上傳中...",
   "library_uploaded": "已上傳 {count} 本書",
   "library_new": "新增書庫",
+  "library_switch": "切換書庫",
   "library_create_title": "建立書庫",
   "library_edit_title": "編輯書庫",
   "library_name": "名稱",

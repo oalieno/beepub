@@ -8,10 +8,10 @@
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { setActiveLibrary } from "$lib/stores/activeLibrary";
-  import BackButton from "$lib/components/BackButton.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import {
+    ArrowLeftRight,
     ArrowUpDown,
     ChevronRight,
     CloudUpload,
@@ -326,9 +326,18 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
+  <!-- Not a back button: the nav entry can jump straight in here, so
+       "back" would read as random. An explicit switcher says where it
+       goes. Serverless has no other libraries, hence no switcher. -->
   {#if !localMode}
     <div class="mb-4">
-      <BackButton href="/libraries" label={m.nav_libraries()} />
+      <a
+        href="/libraries"
+        class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 hover:text-foreground transition-colors"
+      >
+        <ArrowLeftRight size={12} />
+        {m.library_switch()}
+      </a>
     </div>
   {/if}
 

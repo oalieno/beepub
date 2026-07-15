@@ -10,13 +10,12 @@
   import { setActiveLibrary } from "$lib/stores/activeLibrary";
   import BookBrowser from "$lib/components/BookBrowser.svelte";
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { LibraryDetailSkeleton } from "$lib/components/skeletons";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { Upload, HardDrive } from "@lucide/svelte";
+  import { ArrowLeftRight, Upload, HardDrive } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
@@ -200,8 +199,16 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
+  <!-- Not a back button: the nav entry jumps straight in here, so "back"
+       would read as random. An explicit switcher says where it goes. -->
   <div class="mb-4">
-    <BackButton href="/libraries" label={m.nav_libraries()} />
+    <a
+      href="/libraries"
+      class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 hover:text-foreground transition-colors"
+    >
+      <ArrowLeftRight size={12} />
+      {m.library_switch()}
+    </a>
   </div>
 
   {#if loading}
