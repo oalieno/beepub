@@ -12,7 +12,6 @@
     BookOpen,
     Highlighter,
     Settings,
-    HardDrive,
     Rss,
     Dices,
     LogOut,
@@ -133,12 +132,6 @@
     },
     ...(isNative()
       ? [
-          {
-            href: "/local",
-            label: m.nav_local_books(),
-            icon: HardDrive,
-            requiresOnline: false,
-          } satisfies ProfileLink,
           {
             href: "/catalogs",
             label: m.nav_catalogs(),
