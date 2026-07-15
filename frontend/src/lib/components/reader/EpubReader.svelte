@@ -1083,7 +1083,16 @@
           },
           onswipeleft: () => (isRtl ? _doPrev() : _doNext()),
           onswiperight: () => (isRtl ? _doNext() : _doPrev()),
-          ontapdismiss: dismissMenu,
+          ontapdismiss: () => {
+            // Tapping an existing highlight opens the menu on touchstart
+            // (the fork's marks emit markClicked for touchstart AND the
+            // synthesized click), so by the time the SAME tap's touchend
+            // reaches us the menu is already visible — without this guard
+            // it reads as a dismissal tap and the menu blinks
+            // open -> closed -> open (the click reopens it).
+            if (Date.now() - highlightMenuShownAt < 500) return;
+            dismissMenu();
+          },
           isMenuVisible: () => showHighlightMenu,
         });
       } else {
