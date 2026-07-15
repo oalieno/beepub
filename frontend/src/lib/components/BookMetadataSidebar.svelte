@@ -31,6 +31,28 @@
     return idx == null ? "" : String(idx);
   }
 
+  // dc:date precision varies ("2014", "2014-05", "2014-05-25T00:00:00Z") —
+  // format only the parts that exist, in UTC so midnight-UTC stamps don't
+  // slip back a day in western timezones.
+  function formatPublishedDate(raw: string): string {
+    const match = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(raw.trim());
+    if (!match) return raw;
+    const [, year, month, day] = match;
+    if (!month) return year;
+    // Date.UTC silently rolls over out-of-range parts — reject them instead.
+    if (Number(month) < 1 || Number(month) > 12) return raw;
+    if (day && (Number(day) < 1 || Number(day) > 31)) return raw;
+    const date = new Date(
+      Date.UTC(Number(year), Number(month) - 1, day ? Number(day) : 1),
+    );
+    return new Intl.DateTimeFormat(getLocale(), {
+      year: "numeric",
+      month: "long",
+      ...(day ? { day: "numeric" } : {}),
+      timeZone: "UTC",
+    }).format(date);
+  }
+
   function seriesDisplayTotal(
     progress: SeriesNeighborsOut["progress"] | undefined,
   ): number | null {
@@ -235,7 +257,9 @@
           >{m.metadata_label_published()}</span
         >
         <span class="text-foreground font-medium"
-          >{book.published_date ?? book.epub_published_date}</span
+          >{formatPublishedDate(
+            (book.published_date ?? book.epub_published_date)!,
+          )}</span
         >
       </div>
     {/if}
