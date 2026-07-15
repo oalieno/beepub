@@ -8,7 +8,9 @@
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { Button } from "$lib/components/ui/button";
+  import * as Select from "$lib/components/ui/select";
   import {
+    ArrowUpDown,
     ChevronRight,
     CloudUpload,
     FileUp,
@@ -16,6 +18,8 @@
     Plus,
     Loader2,
     Rss,
+    Search,
+    X,
   } from "@lucide/svelte";
   import BottomSheet from "$lib/components/BottomSheet.svelte";
   import LocalBookCard, {
@@ -29,6 +33,46 @@
   let entries = $state<LocalShelfEntry[]>([]);
   let totalSize = $state(0);
   let loading = $state(true);
+
+  // Client-side search/sort — the shelf is small enough to filter in memory.
+  const SORT_OPTIONS = [
+    { value: "importedAt:desc", label: () => m.browser_sort_newest() },
+    { value: "importedAt:asc", label: () => m.browser_sort_oldest() },
+    { value: "title:asc", label: () => m.browser_sort_title_asc() },
+    { value: "title:desc", label: () => m.browser_sort_title_desc() },
+  ];
+  let searchQuery = $state("");
+  let sortValue = $state("importedAt:desc");
+  let sortLabel = $derived(
+    (
+      SORT_OPTIONS.find((o) => o.value === sortValue) ?? SORT_OPTIONS[0]
+    ).label(),
+  );
+  let visibleEntries = $derived.by(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const filtered = q
+      ? entries.filter(
+          (e) =>
+            e.title.toLowerCase().includes(q) ||
+            e.authors.join(" ").toLowerCase().includes(q),
+        )
+      : entries;
+    const sorted = [...filtered];
+    switch (sortValue) {
+      case "importedAt:asc":
+        sorted.sort((a, b) => a.importedAt.localeCompare(b.importedAt));
+        break;
+      case "title:asc":
+        sorted.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case "title:desc":
+        sorted.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      default:
+        sorted.sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+    }
+    return sorted;
+  });
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   let addSheetOpen = $state(false);
@@ -325,19 +369,71 @@
         </p>
       </div>
     {:else}
-      <div
-        class="grid gap-4"
-        style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
-      >
-        {#each entries as entry (entry.id)}
-          <LocalBookCard
-            {entry}
-            ondelete={handleDelete}
-            onupload={canUploadToCloud ? startUpload : undefined}
-            uploading={uploadingId === entry.id}
+      <!-- Search & sort, mirroring the cloud library browser's controls -->
+      <div class="mb-6 space-y-4">
+        <div class="relative">
+          <Search
+            class="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+            size={16}
           />
-        {/each}
+          <input
+            type="text"
+            bind:value={searchQuery}
+            placeholder={m.local_search_placeholder()}
+            class="w-full bg-card card-soft rounded-xl pl-10 pr-10 py-3 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          {#if searchQuery}
+            <button
+              aria-label={m.common_clear()}
+              class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              onclick={() => (searchQuery = "")}
+            >
+              <X size={16} />
+            </button>
+          {/if}
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <Select.Root
+            type="single"
+            value={sortValue}
+            onValueChange={(v) => {
+              if (v) sortValue = v;
+            }}
+          >
+            <Select.Trigger
+              class="!h-8 inline-flex items-center gap-1.5 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 transition-colors border-none shadow-none"
+            >
+              <ArrowUpDown size={12} />
+              {sortLabel}
+            </Select.Trigger>
+            <Select.Content>
+              {#each SORT_OPTIONS as opt (opt.value)}
+                <Select.Item value={opt.value}>{opt.label()}</Select.Item>
+              {/each}
+            </Select.Content>
+          </Select.Root>
+        </div>
       </div>
+
+      {#if visibleEntries.length === 0}
+        <p class="text-muted-foreground text-sm text-center py-16">
+          {m.browser_no_books()}
+        </p>
+      {:else}
+        <div
+          class="grid gap-4 items-start book-grid"
+          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
+        >
+          {#each visibleEntries as entry (entry.id)}
+            <LocalBookCard
+              {entry}
+              ondelete={handleDelete}
+              onupload={canUploadToCloud ? startUpload : undefined}
+              uploading={uploadingId === entry.id}
+            />
+          {/each}
+        </div>
+      {/if}
     {/if}
   {/if}
 </div>
