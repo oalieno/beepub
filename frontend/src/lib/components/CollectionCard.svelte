@@ -8,7 +8,9 @@
   interface Props {
     href: string;
     name: string;
-    previewBookIds: string[];
+    previewBookIds?: string[];
+    // Plain <img src> URLs (e.g. local file URIs) — bypasses coverUrl/authedSrc.
+    previewSrcs?: string[];
     bookCount: number;
     badgeLabel?: string;
     badgeClass?: string;
@@ -19,13 +21,17 @@
   let {
     href,
     name,
-    previewBookIds,
+    previewBookIds = [],
+    previewSrcs,
     bookCount,
     badgeLabel,
     badgeClass,
     icon,
     overlay,
   }: Props = $props();
+
+  let previews = $derived(previewSrcs ?? previewBookIds);
+  let usePlainSrc = $derived(!!previewSrcs);
 </script>
 
 <div
@@ -38,27 +44,45 @@
   <a {href} class="flex flex-col">
     <!-- Hero cover area -->
     <div class="relative h-60 overflow-hidden bg-secondary">
-      {#if previewBookIds.length > 0}
+      {#if previews.length > 0}
         <!-- Blurred background from first cover -->
-        <img
-          use:authedSrc={coverUrl(previewBookIds[0])}
-          alt=""
-          class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60"
-        />
+        {#if usePlainSrc}
+          <img
+            src={previews[0]}
+            alt=""
+            class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60"
+          />
+        {:else}
+          <img
+            use:authedSrc={coverUrl(previews[0])}
+            alt=""
+            class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60"
+          />
+        {/if}
         <div class="absolute inset-0 bg-black/10"></div>
 
         <!-- Fanned book covers -->
         <div class="relative h-full flex items-center justify-center">
-          {#each previewBookIds.slice(0, 4) as bookId, i}
-            {@const count = Math.min(previewBookIds.length, 4)}
+          {#each previews.slice(0, 4) as preview, i}
+            {@const count = Math.min(previews.length, 4)}
             {@const rotation = (i - (count - 1) / 2) * 6}
             {@const translateX = (i - (count - 1) / 2) * 60}
-            <img
-              use:authedSrc={coverUrl(bookId)}
-              alt=""
-              class="h-40 w-auto object-cover rounded-xs absolute"
-              style="transform: rotate({rotation}deg) translateX({translateX}px); z-index: {i}; box-shadow: -10px 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3); border-right: 2px solid rgba(255, 255, 255, 0.5)"
-            />
+            {@const coverStyle = `transform: rotate(${rotation}deg) translateX(${translateX}px); z-index: ${i}; box-shadow: -10px 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3); border-right: 2px solid rgba(255, 255, 255, 0.5)`}
+            {#if usePlainSrc}
+              <img
+                src={preview}
+                alt=""
+                class="h-40 w-auto object-cover rounded-xs absolute"
+                style={coverStyle}
+              />
+            {:else}
+              <img
+                use:authedSrc={coverUrl(preview)}
+                alt=""
+                class="h-40 w-auto object-cover rounded-xs absolute"
+                style={coverStyle}
+              />
+            {/if}
           {/each}
         </div>
       {:else}

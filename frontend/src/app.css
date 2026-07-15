@@ -279,3 +279,11 @@
   color: var(--color-foreground);
   font-weight: 600;
 }
+
+/* Card grid shared by the shelves and libraries landing pages
+   (and their skeletons): 1 column on phones, 360px auto-fill above. */
+@media (min-width: 640px) {
+  .collection-grid {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}

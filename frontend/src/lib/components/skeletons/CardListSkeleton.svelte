@@ -27,11 +27,3 @@
     </div>
   {/each}
 </div>
-
-<style>
-  @media (min-width: 640px) {
-    .collection-grid {
-      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    }
-  }
-</style>
