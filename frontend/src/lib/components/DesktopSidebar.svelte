@@ -52,9 +52,7 @@
       href: "/libraries",
       label: m.nav_libraries(),
       icon: Library,
-      active:
-        page.url.pathname.startsWith("/libraries") ||
-        page.url.pathname.startsWith("/all-books"),
+      active: page.url.pathname.startsWith("/libraries"),
       requiresOnline: true,
     },
     {

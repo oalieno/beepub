@@ -29,8 +29,7 @@
       href: "/libraries",
       label: m.nav_libraries(),
       icon: BookCopy,
-      match: (p: string) =>
-        p.startsWith("/libraries") || p.startsWith("/all-books"),
+      match: (p: string) => p.startsWith("/libraries"),
       requiresOnline: true,
     },
     {

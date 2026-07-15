@@ -155,7 +155,7 @@
                 {localizedTagLabel(section.tag, section.label)}
               </h3>
               <a
-                href="/all-books?tag={encodeURIComponent(section.tag)}"
+                href="/libraries/all?tag={encodeURIComponent(section.tag)}"
                 class="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
               >
                 {m.discover_see_all()}

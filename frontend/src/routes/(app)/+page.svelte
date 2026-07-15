@@ -328,7 +328,7 @@
         </div>
         {#if libraries.length > 0}
           <a
-            href="/all-books"
+            href="/libraries/all"
             class="text-primary hover:text-primary/80 text-sm font-medium"
             >{m.home_browse_all()}</a
           >
