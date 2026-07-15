@@ -14,7 +14,8 @@ test.use({ storageState: ADMIN_STATE });
 
 test("upload a book, open it, and read it", async ({ page }) => {
   await page.goto("/libraries");
-  await page.getByRole("button", { name: LIBRARY_NAME }).first().click();
+  await page.getByRole("link", { name: LIBRARY_NAME }).first().click();
+  await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+$/);
 
   await page.getByRole("button", { name: "Upload Books" }).click();
   await page.locator('input[type="file"]').setInputFiles(FIXTURE);
