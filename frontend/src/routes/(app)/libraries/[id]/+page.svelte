@@ -15,7 +15,7 @@
   import { LibraryDetailSkeleton } from "$lib/components/skeletons";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { ArrowLeftRight, Upload, HardDrive } from "@lucide/svelte";
+  import { ArrowLeftRight, Upload } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
@@ -199,18 +199,6 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
-  <!-- Not a back button: the nav entry jumps straight in here, so "back"
-       would read as random. An explicit switcher says where it goes. -->
-  <div class="mb-4">
-    <a
-      href="/libraries"
-      class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 hover:text-foreground transition-colors"
-    >
-      <ArrowLeftRight size={12} />
-      {m.library_switch()}
-    </a>
-  </div>
-
   {#if loading}
     <LibraryDetailSkeleton />
   {:else}
@@ -218,19 +206,24 @@
       class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"
     >
       <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <h1 class="text-2xl font-bold text-foreground truncate">
+        <!-- Calibre-style: the library name IS the switcher — tapping it
+             goes up to the cards page to pick another library. -->
+        <a
+          href="/libraries"
+          class="group inline-flex items-center gap-2 max-w-full"
+          title={m.library_switch()}
+          aria-label={m.library_switch()}
+        >
+          <h1
+            class="text-2xl font-bold text-foreground truncate group-hover:text-primary transition-colors"
+          >
             {heading}
           </h1>
-          {#if isCalibre}
-            <span
-              class="shrink-0 text-xs px-2.5 py-1 rounded-full font-medium bg-amber-500/15 text-amber-600 inline-flex items-center gap-1"
-            >
-              <HardDrive size={12} />
-              {m.library_calibre_badge()}
-            </span>
-          {/if}
-        </div>
+          <ArrowLeftRight
+            size={18}
+            class="shrink-0 text-muted-foreground/60 group-hover:text-primary transition-colors"
+          />
+        </a>
         {#if library?.description}
           <p class="text-muted-foreground text-sm mt-1">
             {library.description}

@@ -326,17 +326,26 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
-  <!-- Not a back button: the nav entry can jump straight in here, so
-       "back" would read as random. An explicit switcher says where it
-       goes. Serverless has no other libraries, hence no switcher. -->
+  <!-- Calibre-style: the library name IS the switcher — tapping it goes
+       up to the cards page. Serverless has no other libraries, hence no
+       heading (its top bar already titles the page). -->
   {#if !localMode}
     <div class="mb-4">
       <a
         href="/libraries"
-        class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full bg-secondary text-muted-foreground font-medium hover:bg-secondary/80 hover:text-foreground transition-colors"
+        class="group inline-flex items-center gap-2 max-w-full"
+        title={m.library_switch()}
+        aria-label={m.library_switch()}
       >
-        <ArrowLeftRight size={12} />
-        {m.library_switch()}
+        <h1
+          class="text-2xl font-bold text-foreground truncate group-hover:text-primary transition-colors"
+        >
+          {m.libraries_this_device()}
+        </h1>
+        <ArrowLeftRight
+          size={18}
+          class="shrink-0 text-muted-foreground/60 group-hover:text-primary transition-colors"
+        />
       </a>
     </div>
   {/if}
