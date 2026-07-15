@@ -2,11 +2,13 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
-  import { hasServerUrl } from "$lib/api/client";
+  import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { isOnline } from "$lib/services/network";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
+  import { setActiveLibrary } from "$lib/stores/activeLibrary";
+  import BackButton from "$lib/components/BackButton.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import {
@@ -29,6 +31,10 @@
   import * as m from "$lib/paraglide/messages.js";
   import { UserRole, type LibraryOut } from "$lib/types";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
+
+  // Serverless local mode: this page is a root tab, so no back navigation.
+  // Connected mode reaches it through the libraries cards page instead.
+  const localMode = isLocalMode();
 
   let entries = $state<LocalShelfEntry[]>([]);
   let totalSize = $state(0);
@@ -295,6 +301,9 @@
   }
 
   onMount(async () => {
+    // The device shelf is a library like any other — visiting it makes it
+    // the active one the 書庫 nav entry jumps back to.
+    if (isNative()) setActiveLibrary("device");
     await loadEntries();
     // A shelf visit is a natural refresh point: the full sync heals stale
     // links (server copy deleted → 404 → unlink) and pulls fresh status,
@@ -317,6 +326,12 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
+  {#if !localMode}
+    <div class="mb-4">
+      <BackButton href="/libraries" label={m.nav_libraries()} />
+    </div>
+  {/if}
+
   {#if loading}
     <BookGridSkeleton count={6} />
   {:else if !isNative()}

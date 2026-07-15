@@ -4,6 +4,7 @@
   import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import { isNative } from "$lib/platform";
   import { isOnline } from "$lib/services/network";
+  import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import {
@@ -49,11 +50,15 @@
       requiresOnline: true,
     },
     {
-      href: "/libraries",
+      // Calibre-style: jump straight into the active library; the cards
+      // page one level up (via its back button) is the switcher.
+      href: $activeLibraryHref,
       label: m.nav_libraries(),
       icon: Library,
       active: page.url.pathname.startsWith("/libraries"),
-      requiresOnline: true,
+      // The device shelf works offline. On /local the dedicated
+      // local-books entry below lights up instead of this one.
+      requiresOnline: $activeLibraryHref !== "/local",
     },
     {
       href: "/highlights",

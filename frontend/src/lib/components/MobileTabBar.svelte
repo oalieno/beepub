@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { isOnline } from "$lib/services/network";
+  import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import { Home, ShelvingUnit, BookCopy, Compass, User } from "@lucide/svelte";
@@ -26,11 +27,15 @@
       requiresOnline: true,
     },
     {
-      href: "/libraries",
+      // Calibre-style: jump straight into the active library; the cards
+      // page one level up (via its back button) is the switcher.
+      href: $activeLibraryHref,
       label: m.nav_libraries(),
       icon: BookCopy,
-      match: (p: string) => p.startsWith("/libraries"),
-      requiresOnline: true,
+      match: (p: string) =>
+        p.startsWith("/libraries") || p.startsWith("/local"),
+      // The device shelf works offline.
+      requiresOnline: $activeLibraryHref !== "/local",
     },
     {
       href: "/discover",

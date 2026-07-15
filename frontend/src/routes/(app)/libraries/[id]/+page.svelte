@@ -7,6 +7,7 @@
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
+  import { setActiveLibrary } from "$lib/stores/activeLibrary";
   import BookBrowser from "$lib/components/BookBrowser.svelte";
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
   import BackButton from "$lib/components/BackButton.svelte";
@@ -98,6 +99,7 @@
     restoreData = null;
     library = null;
     if (id === ALL) {
+      setActiveLibrary(ALL);
       loading = false;
       return;
     }
@@ -106,9 +108,13 @@
       library = await librariesApi.get(id);
     } catch (e) {
       toastStore.error((e as Error).message);
+      // Don't leave the active library pointing at a dead id — the nav
+      // entry would bounce through this error on every tap.
+      setActiveLibrary(ALL);
       goto("/libraries", { replaceState: true });
       return;
     }
+    setActiveLibrary(id);
     loading = false;
   });
 

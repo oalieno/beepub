@@ -179,6 +179,18 @@
     <CardListSkeleton count={4} />
   {:else}
     <div class="grid grid-cols-1 gap-5 collection-grid">
+      {#if device}
+        <CollectionCard
+          href="/local"
+          name={m.libraries_this_device()}
+          previewSrcs={device.previewSrcs}
+          bookCount={device.count}
+        >
+          {#snippet icon()}
+            <HardDrive class="text-muted-foreground/50 shrink-0" size={16} />
+          {/snippet}
+        </CollectionCard>
+      {/if}
       {#if libraries.length > 0}
         <CollectionCard
           href="/libraries/all"
@@ -195,18 +207,6 @@
           {/snippet}
         </CollectionCard>
       {/if}
-      {#if device}
-        <CollectionCard
-          href="/local"
-          name={m.libraries_this_device()}
-          previewSrcs={device.previewSrcs}
-          bookCount={device.count}
-        >
-          {#snippet icon()}
-            <HardDrive class="text-muted-foreground/50 shrink-0" size={16} />
-          {/snippet}
-        </CollectionCard>
-      {/if}
       {#each libraries as lib (lib.id)}
         <CollectionCard
           href="/libraries/{lib.id}"
@@ -217,7 +217,13 @@
           badgeClass="bg-amber-500/15 text-amber-600"
         >
           {#snippet icon()}
-            <Library class="text-muted-foreground/50 shrink-0" size={16} />
+            <!-- On native the page contrasts cloud vs device, so every
+                 server library carries the cloud mark. -->
+            {#if isNative()}
+              <Cloud class="text-muted-foreground/50 shrink-0" size={16} />
+            {:else}
+              <Library class="text-muted-foreground/50 shrink-0" size={16} />
+            {/if}
           {/snippet}
           {#snippet overlay()}
             {#if isAdmin}
