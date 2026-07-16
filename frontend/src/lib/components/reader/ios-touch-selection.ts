@@ -65,6 +65,39 @@ export function setupIOSTouchSelection(
   // Selection overlay: draw theme-tinted rectangles over selected text
   let overlayContainer: HTMLDivElement | null = null;
 
+  // getClientRects() on a multi-element range also returns the border box
+  // of every fully-covered element — a solid slab over whole paragraphs
+  // (spanning columns in vertical text), unlike the per-line fragments
+  // native selection painting shows. Collect rects from the range's text
+  // nodes only.
+  function lineRectsForRange(range: Range): DOMRect[] {
+    const rects: DOMRect[] = [];
+    const addTextRects = (node: Node) => {
+      const sub = doc.createRange();
+      sub.selectNodeContents(node);
+      if (node === range.startContainer) sub.setStart(node, range.startOffset);
+      if (node === range.endContainer) sub.setEnd(node, range.endOffset);
+      const list = sub.getClientRects();
+      for (let i = 0; i < list.length; i++) {
+        const r = list[i];
+        if (r.width > 0 && r.height > 0) rects.push(r);
+      }
+    };
+    const root = range.commonAncestorContainer;
+    if (root.nodeType === Node.TEXT_NODE) {
+      addTextRects(root);
+      return rects;
+    }
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) =>
+        range.intersectsNode(node)
+          ? NodeFilter.FILTER_ACCEPT
+          : NodeFilter.FILTER_REJECT,
+    });
+    while (walker.nextNode()) addTextRects(walker.currentNode);
+    return rects;
+  }
+
   function updateSelectionOverlay(range: Range | null) {
     let overlay: HTMLDivElement;
     if (!overlayContainer) {
@@ -80,12 +113,11 @@ export function setupIOSTouchSelection(
     overlay.innerHTML = "";
     if (!range) return;
     const tint = callbacks.getSelectionTint();
-    // Solid children under one group opacity: getClientRects() returns
-    // overlapping rects (duplicate rects for fully-covered elements,
-    // crossing line boxes in vertical text), and per-rect alpha would
-    // stack darker wherever they overlap.
+    // Solid children under one group opacity: line boxes can still
+    // overlap slightly (crossing line boxes in vertical text), and
+    // per-rect alpha would stack darker wherever they do.
     overlay.style.opacity = String(tint.opacity);
-    const rects = range.getClientRects();
+    const rects = lineRectsForRange(range);
     const scrollX = win.scrollX || 0;
     const scrollY = win.scrollY || 0;
     for (let i = 0; i < rects.length; i++) {

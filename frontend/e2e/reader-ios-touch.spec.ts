@@ -253,6 +253,68 @@ test("tapping an existing highlight opens the menu once, without a blink", async
   await expect(page.getByTestId("highlight-menu")).toBeVisible();
 });
 
+test("drag selection paints line fragments, not paragraph slabs", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId);
+
+  // Drag from the chapter heading into the middle of the second
+  // paragraph, so the whole first paragraph ends up inside the range.
+  // getClientRects() would then include that paragraph's border box — a
+  // slab as tall as the paragraph — which native selection painting
+  // never shows; the overlay must stick to per-line fragments.
+  const from = await pointOnWord(page, "Chapter", 0);
+  const to = await pointOnWord(page, "whispering", 1);
+  expect(from).toBeTruthy();
+  expect(to).toBeTruthy();
+
+  const cdp = await context.newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: from!.x, y: from!.y }],
+  });
+  await page.waitForTimeout(450);
+  for (const f of [0.25, 0.5, 0.75, 1]) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        {
+          x: from!.x + (to!.x - from!.x) * f,
+          y: from!.y + (to!.y - from!.y) * f,
+        },
+      ],
+    });
+    await page.waitForTimeout(50);
+  }
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await page.waitForTimeout(500);
+
+  const overlay = await page.evaluate(() => {
+    const doc = (document.querySelector("iframe") as HTMLIFrameElement)
+      .contentDocument!;
+    const el = doc.getElementById("beepub-sel-overlay");
+    if (!el) return null;
+    return {
+      heights: [...el.children].map((c) => c.getBoundingClientRect().height),
+      paragraphHeight: doc
+        .querySelector("p")!
+        .getBoundingClientRect().height,
+    };
+  });
+  expect(overlay).toBeTruthy();
+  // Several lines' worth of fragments (an empty overlay must not pass) …
+  expect(overlay!.heights.length).toBeGreaterThan(3);
+  // … and none of them anywhere near paragraph-sized.
+  for (const h of overlay!.heights) {
+    expect(h).toBeLessThan(overlay!.paragraphHeight / 2);
+  }
+});
+
 // Not a regression test of a past bug but the watcher's proof of life:
 // dismissal produces the HIDE transition the two tests above assert never
 // happens, so a broken watcher can't make them pass vacuously. It also
