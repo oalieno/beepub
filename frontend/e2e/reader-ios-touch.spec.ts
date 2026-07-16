@@ -299,21 +299,31 @@ test("drag selection paints line fragments, not paragraph slabs", async ({
       .contentDocument!;
     const el = doc.getElementById("beepub-sel-overlay");
     if (!el) return null;
-    const p = doc.querySelector("p")!.getBoundingClientRect();
+    const pEl = doc.querySelector("p")!;
+    const p = pEl.getBoundingClientRect();
     return {
       rects: [...el.children].map((c) => {
         const r = c.getBoundingClientRect();
         return { top: r.top, bottom: r.bottom, height: r.height };
       }),
       paragraph: { top: p.top, bottom: p.bottom, height: p.height },
+      linePitch: parseFloat(
+        (doc.defaultView ?? window).getComputedStyle(pEl).lineHeight,
+      ),
     };
   });
   expect(overlay).toBeTruthy();
   // Several lines' worth of fragments (an empty overlay must not pass) …
   expect(overlay!.rects.length).toBeGreaterThan(3);
-  // … and none of them anywhere near paragraph-sized.
+  // … and none as tall as the whole paragraph's border box (the pre-fix
+  // slab). Chromium sometimes merges adjacent full lines into one client
+  // rect, and how many lines the paragraph wraps into depends on the
+  // machine's fonts — so the bound is "at least a line short of the
+  // paragraph", not a fixed fraction of it.
   for (const r of overlay!.rects) {
-    expect(r.height).toBeLessThan(overlay!.paragraph.height / 2);
+    expect(r.height).toBeLessThan(
+      overlay!.paragraph.height - overlay!.linePitch / 2,
+    );
   }
   // Within the fully-covered paragraph the fragments must tile the way
   // native selection paints — full line boxes, no gap line-to-line

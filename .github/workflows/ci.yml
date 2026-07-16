@@ -65,6 +65,10 @@ jobs:
         working-directory: frontend
       - run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
+      # CJK fonts so vertical-rl books actually fragment into pages —
+      # without them the vertical pagination grid test skips itself.
+      - name: Install CJK fonts
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
       - name: Wait for the stack
         run: |
           for i in $(seq 1 60); do
