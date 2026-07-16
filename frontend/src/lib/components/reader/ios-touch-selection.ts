@@ -73,6 +73,21 @@ export function setupIOSTouchSelection(
   function lineRectsForRange(range: Range): DOMRect[] {
     const rects: DOMRect[] = [];
     const addTextRects = (node: Node) => {
+      // Native selection paints the full line box, not the glyph em box:
+      // consecutive lines connect into one contiguous region, slightly
+      // fatter than highlight marks (which do hug the glyphs) — that
+      // contrast is what tells an in-progress selection apart from a
+      // saved highlight. Expand each fragment to the line pitch along
+      // the block direction.
+      let pitch = 0;
+      let vertical = false;
+      const parent = node.parentElement;
+      if (parent) {
+        const cs = win.getComputedStyle(parent);
+        vertical = cs.writingMode.startsWith("vertical");
+        pitch = parseFloat(cs.lineHeight);
+        if (!Number.isFinite(pitch)) pitch = 1.2 * parseFloat(cs.fontSize);
+      }
       const sub = doc.createRange();
       sub.selectNodeContents(node);
       if (node === range.startContainer) sub.setStart(node, range.startOffset);
@@ -80,7 +95,16 @@ export function setupIOSTouchSelection(
       const list = sub.getClientRects();
       for (let i = 0; i < list.length; i++) {
         const r = list[i];
-        if (r.width > 0 && r.height > 0) rects.push(r);
+        if (r.width <= 0 || r.height <= 0) continue;
+        let { left, top, width, height } = r;
+        if (vertical && pitch > width) {
+          left -= (pitch - width) / 2;
+          width = pitch;
+        } else if (!vertical && pitch > height) {
+          top -= (pitch - height) / 2;
+          height = pitch;
+        }
+        rects.push(new DOMRect(left, top, width, height));
       }
     };
     const root = range.commonAncestorContainer;
@@ -123,7 +147,9 @@ export function setupIOSTouchSelection(
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i];
       const div = doc.createElement("div");
-      div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgb(${tint.rgb});border-radius:2px;`;
+      // No border-radius: the tiles connect line-to-line, and rounded
+      // corners would open pinholes at the seams (native paints square).
+      div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgb(${tint.rgb});`;
       overlay.appendChild(div);
     }
   }

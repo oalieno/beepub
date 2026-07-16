@@ -299,19 +299,37 @@ test("drag selection paints line fragments, not paragraph slabs", async ({
       .contentDocument!;
     const el = doc.getElementById("beepub-sel-overlay");
     if (!el) return null;
+    const p = doc.querySelector("p")!.getBoundingClientRect();
     return {
-      heights: [...el.children].map((c) => c.getBoundingClientRect().height),
-      paragraphHeight: doc
-        .querySelector("p")!
-        .getBoundingClientRect().height,
+      rects: [...el.children].map((c) => {
+        const r = c.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, height: r.height };
+      }),
+      paragraph: { top: p.top, bottom: p.bottom, height: p.height },
     };
   });
   expect(overlay).toBeTruthy();
   // Several lines' worth of fragments (an empty overlay must not pass) …
-  expect(overlay!.heights.length).toBeGreaterThan(3);
+  expect(overlay!.rects.length).toBeGreaterThan(3);
   // … and none of them anywhere near paragraph-sized.
-  for (const h of overlay!.heights) {
-    expect(h).toBeLessThan(overlay!.paragraphHeight / 2);
+  for (const r of overlay!.rects) {
+    expect(r.height).toBeLessThan(overlay!.paragraph.height / 2);
+  }
+  // Within the fully-covered paragraph the fragments must tile the way
+  // native selection paints — full line boxes, no gap line-to-line
+  // (highlight marks hug the glyphs instead; the contrast is deliberate).
+  const inParagraph = overlay!.rects
+    .filter(
+      (r) =>
+        r.top >= overlay!.paragraph.top - 2 &&
+        r.bottom <= overlay!.paragraph.bottom + 2,
+    )
+    .sort((a, b) => a.top - b.top);
+  expect(inParagraph.length).toBeGreaterThan(2);
+  for (let i = 1; i < inParagraph.length; i++) {
+    expect(inParagraph[i].top - inParagraph[i - 1].bottom).toBeLessThanOrEqual(
+      1,
+    );
   }
 });
 
