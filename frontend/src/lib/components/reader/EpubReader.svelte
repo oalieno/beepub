@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
   import {
     getCachedLocations,
@@ -218,13 +218,22 @@
     selectedPrefix = ctx.prefix;
     selectedSuffix = ctx.suffix;
     existingHighlight = existing;
-    setClampedMenuPosition(
-      rect.left - scrollLeft + rect.width / 2,
-      rect.top - scrollTop - 8,
-      existing ? MENU_H_STACKED : MENU_H,
-    );
+    const menuX = rect.left - scrollLeft + rect.width / 2;
+    const menuY = rect.top - scrollTop - 8;
+    const fallbackH = existing ? MENU_H_STACKED : MENU_H;
+    setClampedMenuPosition(menuX, menuY, fallbackH);
     showHighlightMenu = true;
     highlightMenuShownAt = Date.now();
+    // The clamp needs the menu's measured size, and the menu remounts on
+    // every open — at this point the element doesn't exist yet, so the
+    // position set above is unclamped. tick() resolves after the mount
+    // but before the browser paints: reclamping here lands in the same
+    // frame, so an edge-of-screen menu never flashes at the overflowing
+    // position (and single-shot openers like a desktop mark click, which
+    // get no second call to correct it, are clamped at all).
+    void tick().then(() => {
+      if (showHighlightMenu) setClampedMenuPosition(menuX, menuY, fallbackH);
+    });
   }
 
   // Image zoom viewer

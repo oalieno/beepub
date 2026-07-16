@@ -333,6 +333,67 @@ test("drag selection paints line fragments, not paragraph slabs", async ({
   }
 });
 
+test("menu opened near the screen edge is clamped from the first frame", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId);
+
+  // Sample the menu every animation frame — rAF runs just before paint,
+  // so the first sample is the first position actually shown. The menu
+  // used to paint one frame at the unclamped (overflowing) spot before a
+  // second markClicked corrected it — and stayed there forever on paths
+  // that only fire once.
+  await page.evaluate(() => {
+    const w = window as unknown as {
+      __menuFrames: { left: string; l: number; r: number }[];
+    };
+    w.__menuFrames = [];
+    const sample = () => {
+      const el = document.querySelector(
+        '[data-testid="highlight-menu"]',
+      ) as HTMLElement | null;
+      if (el) {
+        const box = el.getBoundingClientRect();
+        w.__menuFrames.push({ left: el.style.left, l: box.left, r: box.right });
+      }
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+
+  const cdp = await context.newCDPSession(page);
+  const yLine = (await pointOnWord(page, "whispering", 1))!.y;
+  const vw = await page.evaluate(() => window.innerWidth);
+  // Long-press close to the right edge, so the centered menu would
+  // overflow unclamped. Step left when the press lands on whitespace
+  // (which selects nothing), staying clear of the parent document's
+  // 48px tap-nav strip that swallows touches.
+  let shown = false;
+  for (let x = vw - 56; x > vw - 120 && !shown; x -= 12) {
+    await touchTap(cdp, { x, y: yLine }, 500);
+    await page.waitForTimeout(400);
+    shown = await page.getByTestId("highlight-menu").isVisible();
+  }
+  expect(shown).toBe(true);
+  await page.waitForTimeout(600);
+
+  const frames = await page.evaluate(
+    () =>
+      (window as unknown as { __menuFrames: { left: string; l: number; r: number }[] })
+        .__menuFrames,
+  );
+  expect(frames.length).toBeGreaterThan(0);
+  // Painted at a single position — no overflow-then-jump …
+  expect(new Set(frames.map((f) => f.left)).size).toBe(1);
+  // … and that position is fully on-screen.
+  for (const f of frames) {
+    expect(f.l).toBeGreaterThanOrEqual(0);
+    expect(f.r).toBeLessThanOrEqual(vw);
+  }
+});
+
 // Not a regression test of a past bug but the watcher's proof of life:
 // dismissal produces the HIDE transition the two tests above assert never
 // happens, so a broken watcher can't make them pass vacuously. It also
@@ -354,19 +415,21 @@ test("a later tap elsewhere dismisses the menu", async ({
   await page.waitForTimeout(1200);
   await expect(page.getByTestId("highlight-menu")).toBeVisible();
 
-  // Quick-tap mid-page. The window's width, not the iframe's: in
-  // paginated mode the iframe spans every column of the chapter, so its
-  // horizontal center sits far off-screen. Vertically the iframe rect is
-  // real — 60% down is below the selection and the menu anchored above
-  // it, and clear of the parent document's bottom bar. A quick tap never
-  // selects, so it lands on the ontapdismiss path.
-  const midPage = await page.evaluate(() => {
-    const io = (
-      document.querySelector("iframe") as HTMLIFrameElement
-    ).getBoundingClientRect();
-    return { x: window.innerWidth / 2, y: io.top + io.height * 0.6 };
+  // Quick-tap safely below the menu, derived from its actual rect (a
+  // fixed page point is brittle: the clamp is allowed to move the menu
+  // and once shifted it right over the hardcoded spot, swallowing the
+  // tap). The window's width for x, not the iframe's — in paginated mode
+  // the iframe spans every column of the chapter, so its horizontal
+  // center sits far off-screen. A quick tap never selects, so it lands
+  // on the ontapdismiss path.
+  const belowMenu = await page.evaluate(() => {
+    const menu = document.querySelector('[data-testid="highlight-menu"]')!;
+    return {
+      x: window.innerWidth / 2,
+      y: menu.getBoundingClientRect().bottom + 50,
+    };
   });
-  await touchTap(cdp, midPage, 60);
+  await touchTap(cdp, belowMenu, 60);
 
   await page.waitForTimeout(800);
   expect(await menuTimeline(page)).toEqual([
