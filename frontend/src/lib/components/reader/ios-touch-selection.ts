@@ -20,6 +20,11 @@ export interface IOSTouchCallbacks {
   ontapdismiss: () => void;
   /** Whether the highlight menu is currently shown */
   isMenuVisible: () => boolean;
+  /**
+   * Current theme's selection tint (rgb channels + alpha), read on every
+   * overlay repaint so a mid-chapter theme switch takes effect.
+   */
+  getSelectionTint: () => { rgb: string; opacity: number };
 }
 
 const isCJK = (ch: string) =>
@@ -48,7 +53,6 @@ export function setupIOSTouchSelection(
     "* { -webkit-touch-callout: none !important; }",
     "body { -webkit-user-select: none !important; user-select: none !important; touch-action: pan-x pan-y; }",
     "body.beepub-selecting { -webkit-user-select: text !important; user-select: text !important; }",
-    "::selection { background: rgba(59, 130, 246, 0.35) !important; }",
   ].join("\n");
   doc.head.appendChild(style);
 
@@ -58,7 +62,7 @@ export function setupIOSTouchSelection(
   cspMeta.setAttribute("content", "script-src 'none'");
   doc.head.insertBefore(cspMeta, doc.head.firstChild);
 
-  // Selection overlay: draw blue rectangles over selected text
+  // Selection overlay: draw theme-tinted rectangles over selected text
   let overlayContainer: HTMLDivElement | null = null;
 
   function updateSelectionOverlay(range: Range | null) {
@@ -75,13 +79,19 @@ export function setupIOSTouchSelection(
     }
     overlay.innerHTML = "";
     if (!range) return;
+    const tint = callbacks.getSelectionTint();
+    // Solid children under one group opacity: getClientRects() returns
+    // overlapping rects (duplicate rects for fully-covered elements,
+    // crossing line boxes in vertical text), and per-rect alpha would
+    // stack darker wherever they overlap.
+    overlay.style.opacity = String(tint.opacity);
     const rects = range.getClientRects();
     const scrollX = win.scrollX || 0;
     const scrollY = win.scrollY || 0;
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i];
       const div = doc.createElement("div");
-      div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgba(59,130,246,0.3);border-radius:2px;`;
+      div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgb(${tint.rgb});border-radius:2px;`;
       overlay.appendChild(div);
     }
   }

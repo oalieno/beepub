@@ -1094,6 +1094,7 @@
             dismissMenu();
           },
           isMenuVisible: () => showHighlightMenu,
+          getSelectionTint: selectionTint,
         });
       } else {
         // === Non-iOS: use selectionchange + touchend fallback ===
@@ -1635,8 +1636,18 @@
     updateIllustrationOverlays(rendition, illustrations, onillustrationclick);
   }
 
+  // Single source for the selection tint: the theme's ::selection rule and
+  // the iOS touch-selection overlay (which paints its own rects because
+  // native selection is disabled there) must stay the same color.
+  function selectionTint() {
+    return darkMode
+      ? { rgb: "245, 158, 11", opacity: 0.4 }
+      : { rgb: "196, 146, 74", opacity: 0.3 };
+  }
+
   function applyTheme() {
     if (!rendition) return;
+    const selTint = selectionTint();
     rendition.themes.default({
       // Set the size on the root too, not just body: a book whose own CSS
       // targets `p { font-size: 1rem }` would otherwise win over the value
@@ -1685,9 +1696,7 @@
         padding: `${pageMargin}px !important`,
       },
       "::selection": {
-        background: darkMode
-          ? "rgba(245, 158, 11, 0.4)"
-          : "rgba(196, 146, 74, 0.3)",
+        background: `rgba(${selTint.rgb}, ${selTint.opacity})`,
       },
     });
     rendition.themes.select("default");
