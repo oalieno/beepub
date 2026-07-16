@@ -397,16 +397,18 @@ class DefaultViewManager {
     }
 
     if (this.settings.axis === "vertical") {
-      const bounds =
-        this.container && this.container.getBoundingClientRect
-          ? this.container.getBoundingClientRect()
-          : null;
-
+      // The page tile pitch derives from layout.height (body height,
+      // padding and column-gap are all built from it, and expand() rounds
+      // the view to its multiples), so layout.height IS the grid — by
+      // construction, even mid-relayout. Measuring the container instead
+      // reads the same box through different rounding (fractional
+      // getBoundingClientRect vs the integer clientHeight the stage
+      // used), and a floored fraction of a pixel per page accumulates
+      // into visibly sheared pages deep into a chapter.
       const raw =
-        (bounds && bounds.height) ||
+        this.layout.height ||
         (this.container && this.container.clientHeight) ||
         (this.container && this.container.offsetHeight) ||
-        this.layout.height ||
         0;
 
       // Floor to integer to prevent floating-point drift when multiplying

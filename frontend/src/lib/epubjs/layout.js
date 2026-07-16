@@ -106,9 +106,14 @@ class Layout {
     var gap = _gap || 0;
 
     //-- Check the width and create even width columns
-    // var fullWidth = Math.floor(_width);
-    var width = _width;
-    var height = _height;
+    // Integer stage size: the page tile pitch derives from these (body
+    // size, padding, column-gap), while scroll steps use floor(container
+    // height). A fractional stage (browser zoom, flex sub-pixels) makes
+    // the tile pitch differ from the floored step by <1px, which
+    // accumulates one page at a time until pages visibly shear — the
+    // page-N drift this codebase has chased before (871 → 851 era).
+    var width = Math.floor(_width);
+    var height = Math.floor(_height);
 
     var section = Math.floor(width / 12);
 
