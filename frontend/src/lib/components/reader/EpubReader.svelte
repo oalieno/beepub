@@ -2210,6 +2210,7 @@
   {#if showHighlightMenu}
     <div
       bind:this={highlightMenuEl}
+      data-testid="highlight-menu"
       class="absolute z-20 transform -translate-x-1/2 -translate-y-full"
       style="left: {highlightMenuX}px; top: {highlightMenuY}px;"
     >
