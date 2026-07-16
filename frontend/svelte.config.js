@@ -10,6 +10,9 @@ const config = {
     adapter: isCapacitor
       ? adapterStatic({ fallback: "index.html" })
       : adapterNode(),
+    // Overridable so a second dev instance on the same working tree (the
+    // e2e dev stack) doesn't fight the lab dev container over .svelte-kit.
+    outDir: process.env.SVELTE_KIT_OUTDIR || ".svelte-kit",
   },
 };
 export default config;

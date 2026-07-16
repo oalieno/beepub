@@ -140,6 +140,7 @@ dist
 
 # SvelteKit build / generate output
 .svelte-kit
+.svelte-kit-e2e
 
 ### Svelte ###
 # gitignore template for the SvelteKit, frontend web component framework

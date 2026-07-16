@@ -1,0 +1,7 @@
+# e2e-dev deltas on top of docker-compose.dev.yml: this stack shares the
+# working tree with the lab dev container, so generated output that lives
+# in the bind mount must not collide.
+services:
+  frontend:
+    environment:
+      SVELTE_KIT_OUTDIR: .svelte-kit-e2e

@@ -8,7 +8,9 @@ these are for interactive diagnosis against a disposable stack.
 ## Setup
 
 ```sh
-./e2e/stack.sh up                     # disposable stack (project beepub-e2e)
+./e2e/stack.sh dev                    # working-tree mounts + vite dev — edits
+                                      # apply in ~2s, ideal for probe loops
+./e2e/stack.sh up                     # built image (run the e2e SUITE against this)
 ./e2e/stack.sh restart nginx          # after container recreation (stale upstream 502)
 ```
 
