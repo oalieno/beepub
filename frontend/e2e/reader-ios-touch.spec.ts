@@ -394,6 +394,88 @@ test("menu opened near the screen edge is clamped from the first frame", async (
   }
 });
 
+test("changing the page margin realigns highlights and resizes tap zones", async ({
+  page,
+}) => {
+  const bookId = await seedBook(page.request);
+  const highlights = await (
+    await page.request.get(`/api/books/${bookId}/highlights`)
+  ).json();
+  if (
+    !highlights.some(
+      (h: { cfi_range: string }) => h.cfi_range === HIGHLIGHT_CFI,
+    )
+  ) {
+    const created = await page.request.post(
+      `/api/books/${bookId}/highlights`,
+      { data: { cfi_range: HIGHLIGHT_CFI, text: "librarian", color: "yellow" } },
+    );
+    expect(created.ok()).toBeTruthy();
+  }
+  await openBook(page, bookId);
+
+  // Offset between the drawn highlight mark and the live position of its
+  // word. Margins used to be theme CSS: changing them reflowed the text
+  // without resizing the content, so the annotation pane never
+  // re-measured its ranges and the marks drifted off the words.
+  const alignment = () =>
+    page.evaluate(() => {
+      const ifr = document.querySelector("iframe") as HTMLIFrameElement;
+      const doc = ifr.contentDocument!;
+      const mark =
+        document.querySelector('[ref="hl"]') ?? doc.querySelector('[ref="hl"]');
+      if (!mark) return null;
+      const markRect = (
+        mark.querySelector("rect,path") ?? mark
+      ).getBoundingClientRect();
+      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const n = walker.currentNode;
+        const idx = (n.textContent ?? "").indexOf("librarian");
+        if (idx < 0) continue;
+        const r = doc.createRange();
+        r.setStart(n, idx);
+        r.setEnd(n, idx + 9);
+        const wr = r.getBoundingClientRect();
+        const io = ifr.getBoundingClientRect();
+        return {
+          dx: markRect.left - (io.left + wr.left),
+          dy: markRect.top - (io.top + wr.top),
+          pad: doc.body.style.getPropertyValue("padding-left"),
+        };
+      }
+      return null;
+    });
+
+  const before = await alignment();
+  expect(before).toBeTruthy();
+  expect(Math.abs(before!.dx)).toBeLessThan(1.5);
+  expect(Math.abs(before!.dy)).toBeLessThan(1.5);
+  expect(before!.pad).toBe("32px");
+
+  // Change the margin through the real settings UI (tap to reveal the
+  // bottom bar first).
+  await page.mouse.click(195, 500);
+  await page.getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("button", { name: "Narrow", exact: true }).click();
+  await page.waitForTimeout(1500);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(800);
+
+  const after = await alignment();
+  expect(after).toBeTruthy();
+  expect(Math.abs(after!.dx)).toBeLessThan(1.5);
+  expect(Math.abs(after!.dy)).toBeLessThan(1.5);
+  expect(after!.pad).toBe("16px");
+
+  // Tap-to-turn zones must shrink with the margin, or they'd cover the
+  // first and last line of every page.
+  const zone = await page
+    .getByRole("button", { name: "Previous page" })
+    .boundingBox();
+  expect(zone?.width).toBe(16);
+});
+
 // Not a regression test of a past bug but the watcher's proof of life:
 // dismissal produces the HIDE transition the two tests above assert never
 // happens, so a broken watcher can't make them pass vacuously. It also

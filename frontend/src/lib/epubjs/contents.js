@@ -1268,18 +1268,23 @@ class Contents {
               el.children[0].tagName.toLowerCase() === "svg"));
       }
     }
+    // Both axes take gap/2 so the reader's margin setting (gap = 2 x
+    // margin) controls every page edge. The main-axis value is baked
+    // into the pagination math (content box + gap = page pitch) and must
+    // never be overridden; the cross axis is important too so book CSS
+    // can't shift the page box.
     let mainPad = isImageOnly ? "20px" : gap / 2 + "px";
-    let crossPad = "20px";
+    let crossPad = isImageOnly ? "20px" : gap / 2 + "px";
 
     if (axis === "vertical") {
       this.css("padding-top", mainPad, true);
       this.css("padding-bottom", mainPad, true);
-      this.css("padding-left", crossPad);
-      this.css("padding-right", crossPad);
+      this.css("padding-left", crossPad, true);
+      this.css("padding-right", crossPad, true);
       this.css(COLUMN_AXIS, "vertical");
     } else {
-      this.css("padding-top", crossPad);
-      this.css("padding-bottom", crossPad);
+      this.css("padding-top", crossPad, true);
+      this.css("padding-bottom", crossPad, true);
       this.css("padding-left", mainPad, true);
       this.css("padding-right", mainPad, true);
       this.css(COLUMN_AXIS, "horizontal");

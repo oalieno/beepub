@@ -791,6 +791,11 @@
       height: "100%",
       spread: "none",
       allowScriptedContent: true,
+      // Page margins ride the layout gap (margin = gap/2 per side): the
+      // pagination math bakes the side padding into the page pitch, so
+      // margins set any other way (e.g. theme CSS) shear the pages and
+      // leave drawn highlights behind after a reflow.
+      gap: pageMargin * 2,
     });
 
     // Apply theme
@@ -1695,15 +1700,9 @@
             },
           }
         : {}),
-      // Reading gutter only on reflowable pages. Fixed-layout pages
-      // (marked beepub-pre-paginated by epub.js fit()) need the full
-      // viewport box for the scaled body, otherwise the padding overflows
-      // the column and clips the bottom/right. Pinned in px so it stays
-      // constant now that the root font-size (and thus rem) tracks the
-      // user's setting.
-      "body:not(.beepub-pre-paginated)": {
-        padding: `${pageMargin}px !important`,
-      },
+      // No padding here: page margins belong to the layout gap (see
+      // renderTo) — epub.js pins them as inline !important styles that
+      // a theme rule couldn't override on the pagination axis anyway.
       "::selection": {
         background: `rgba(${selTint.rgb}, ${selTint.opacity})`,
       },
@@ -2047,12 +2046,40 @@
     fontFamily;
     fontSize;
     lineHeight;
-    pageMargin;
     darkMode;
     if (rendition) {
       applyTheme();
+      // A theme change can reflow the text without changing the content's
+      // size — no reframe, so the annotation panes never re-measure their
+      // ranges and the drawn highlights drift off the words. Repaint them
+      // once the reflow has settled.
+      requestAnimationFrame(() => {
+        rendition?.manager?.views?.forEach(
+          (v: { pane?: { render: () => void } }) => v.pane?.render(),
+        );
+      });
     }
   });
+
+  $effect(() => {
+    pageMargin;
+    applyPageMargin();
+  });
+
+  function applyPageMargin() {
+    const mgr = rendition?.manager;
+    if (!mgr?.settings) return;
+    const gap = pageMargin * 2;
+    if (mgr.settings.gap === gap) return;
+    mgr.settings.gap = gap;
+    dismissMenu();
+    // resize() bails out when the stage size is unchanged — a margin
+    // change relayouts at the same size, so drop the cached size first.
+    // The resize clears and re-renders the views at the current location,
+    // which also re-anchors every highlight annotation.
+    mgr._stageSize = undefined;
+    rendition.resize();
+  }
 
   // Last-used color+style (raw encoded, e.g. "blue:underline") — the plain
   // highlighter button repeats it, the picker row overrides it.
@@ -2203,15 +2230,20 @@
     class="w-full h-full overflow-hidden {darkMode ? 'bg-ink-900' : 'bg-white'}"
   ></div>
 
+  <!-- Tap-to-turn zones sized to the page margin so they never cover
+       text: at narrow margins a 48px zone would swallow the first line's
+       taps (and long-presses) on each edge. -->
   <button
     type="button"
-    class="absolute inset-y-0 left-0 z-10 w-12"
+    class="absolute inset-y-0 left-0 z-10"
+    style="width: {Math.min(48, pageMargin)}px"
     aria-label={m.reader_prev_page()}
     onclick={handleLeftTapNav}
   ></button>
   <button
     type="button"
-    class="absolute inset-y-0 right-0 z-10 w-12"
+    class="absolute inset-y-0 right-0 z-10"
+    style="width: {Math.min(48, pageMargin)}px"
     aria-label={m.reader_next_page()}
     onclick={handleRightTapNav}
   ></button>
