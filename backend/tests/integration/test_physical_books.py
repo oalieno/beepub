@@ -141,8 +141,8 @@ async def test_cover_url_host_allowlist(admin_client):
 async def test_isbn_lookup_returns_per_source_results(admin_client, monkeypatch):
     from app.plugins.metadata import BookRecord
 
-    async def fake_lookup_all(isbn: str, settings: dict):
-        assert isbn == "9789571234567"
+    async def fake_lookup_all(query, settings: dict, *, resolver=None):
+        assert query.isbn == "9789571234567"
         return [
             (
                 "google_books",
@@ -172,8 +172,8 @@ async def test_isbn_lookup_returns_per_source_results(admin_client, monkeypatch)
             ),
         ]
 
-    monkeypatch.setattr("app.routers.books.lookup_isbn_all", fake_lookup_all)
-    response = await admin_client.get("/api/books/isbn-lookup?isbn=9789571234567")
+    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+    response = await admin_client.get("/api/books/metadata-lookup?isbn=9789571234567")
     assert response.status_code == 200, response.text
     data = response.json()
 
@@ -187,11 +187,40 @@ async def test_isbn_lookup_returns_per_source_results(admin_client, monkeypatch)
     ]
 
 
-async def test_isbn_lookup_empty_is_still_200(admin_client, monkeypatch):
-    async def fake_lookup_all(isbn: str, settings: dict):
+async def test_lookup_empty_is_still_200_and_no_clues_is_422(admin_client, monkeypatch):
+    async def fake_lookup_all(query, settings: dict, *, resolver=None):
         return []
 
-    monkeypatch.setattr("app.routers.books.lookup_isbn_all", fake_lookup_all)
-    response = await admin_client.get("/api/books/isbn-lookup?isbn=0000000000")
+    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+    response = await admin_client.get("/api/books/metadata-lookup?isbn=0000000000")
     assert response.status_code == 200
     assert response.json() == {"results": [], "covers": []}
+
+    response = await admin_client.get("/api/books/metadata-lookup")
+    assert response.status_code == 422
+
+
+async def test_lookup_accepts_title_and_url_clues(admin_client, monkeypatch):
+    from app.plugins.metadata import BookRecord
+
+    seen_queries = []
+
+    async def fake_lookup_all(query, settings: dict, *, resolver=None):
+        seen_queries.append(query)
+        return [("readmoo", BookRecord(title="神", description="全文"))]
+
+    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+
+    response = await admin_client.get(
+        "/api/books/metadata-lookup?title=%E7%A5%9E&author=%E8%91%A3%E5%95%9F%E7%AB%A0"
+    )
+    assert response.status_code == 200
+    assert response.json()["results"][0]["source"] == "readmoo"
+    assert seen_queries[-1].title == "神"
+    assert seen_queries[-1].authors == ["董啟章"]
+
+    response = await admin_client.get(
+        "/api/books/metadata-lookup?url=https://readmoo.com/book/210071675000101"
+    )
+    assert response.status_code == 200
+    assert seen_queries[-1].url == "https://readmoo.com/book/210071675000101"

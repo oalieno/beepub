@@ -90,6 +90,9 @@ plugin can't know the global scale anyway.
 
 - **HTTP**: use `self._client(headers)` — timeout, redirect following,
   and 429 → `RateLimitError` are built in.
+- **Caching**: the framework caches found resolve() results by
+  (source, most-precise clue) for 24h — repeated questions never hit
+  your upstream twice. Don't build your own cache.
 - **Rate limiting**: raise/propagate `RateLimitError`; the job runner
   records the cooldown in Redis using your `ratelimit_cooldown`. No
   Redis, no `sleep`, no retry loops in plugin code.

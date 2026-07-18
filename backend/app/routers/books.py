@@ -33,8 +33,9 @@ from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
+from app.plugins.metadata import BookQuery
 from app.plugins.metadata import registry as metadata_registry
-from app.plugins.metadata.service import lookup_isbn_all
+from app.plugins.metadata.service import lookup_all
 from app.rate_limit import limiter
 from app.schemas.book import (
     BookLibraryUpdate,
@@ -63,6 +64,7 @@ from app.schemas.reading import (
 )
 from app.schemas.series import PaginatedFeed
 from app.services.epub_parser import extract_cover, parse_epub_metadata
+from app.services.metadata_fetch import cached_resolve
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
@@ -1133,24 +1135,38 @@ async def list_all_books_feed(
     return PaginatedFeed(items=items, total=total)
 
 
-@router.get("/isbn-lookup", response_model=IsbnLookupOut)
+@router.get("/metadata-lookup", response_model=IsbnLookupOut)
 @limiter.limit("10/minute")
-async def isbn_lookup(
+async def metadata_lookup(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    isbn: str = Query(min_length=5, max_length=20),
+    isbn: str | None = Query(None, min_length=5, max_length=20),
+    title: str | None = Query(None, min_length=1, max_length=500),
+    author: str | None = Query(None, max_length=255),
+    url: str | None = Query(None, max_length=1000),
 ):
-    """Fan the ISBN out to every capable enabled plugin and return the
-    per-source results with provenance. Always 200 — empty lists mean
-    nothing was found anywhere."""
+    """Fan the clues out to every capable enabled plugin (a pasted URL
+    dispatches to its owning plugin instead) and return per-source
+    results with provenance. Always 200 — empty lists mean nothing was
+    found anywhere."""
     _require_upload_permission(current_user)
+    if not (isbn or title or url):
+        raise HTTPException(
+            status_code=422, detail="Provide an isbn, a title, or a url"
+        )
     app_settings = await get_all_settings(db)
+    query = BookQuery(
+        isbn=isbn,
+        title=title,
+        authors=[author] if author else [],
+        url=url,
+    )
 
     results: list[IsbnSourceResult] = []
     covers: list[IsbnCoverCandidate] = []
     seen_cover_urls: set[str] = set()
-    for name, record in await lookup_isbn_all(isbn, app_settings):
+    for name, record in await lookup_all(query, app_settings, resolver=cached_resolve):
         plugin_cls = metadata_registry.get_plugin_class(name)
         label = plugin_cls.label if plugin_cls else name
         # Records without a title (cover-only degradations) still feed

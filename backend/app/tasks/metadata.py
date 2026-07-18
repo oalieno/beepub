@@ -84,6 +84,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
+        cached_resolve,
         fetch_book_info,
         init_metadata_plugins,
         run_tag_mapping,
@@ -144,12 +145,15 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
                     # HTTP scraping runs with NO session open — the task
                     # engine pool is tiny and these calls take seconds each.
-                    record = await plugin.resolve(
+                    # cached_resolve: an interactive lookup moments earlier
+                    # (the add-physical prefill) already warmed the cache.
+                    record = await cached_resolve(
+                        plugin,
                         BookQuery(
                             title=display_title,
                             authors=display_authors,
                             isbn=isbn,
-                        )
+                        ),
                     )
 
                     async with session_factory() as db:

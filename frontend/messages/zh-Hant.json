@@ -690,6 +690,7 @@
   "physical_add": "新增實體書",
   "physical_add_hint": "紀錄一本紙本書——狀態、進度、筆記，不需要檔案。",
   "physical_isbn_placeholder": "ISBN",
+  "physical_lookup_label": "ISBN／書名／網址",
   "physical_lookup_source": "資料來源",
   "physical_cover_pick": "封面",
   "physical_cover_from": "封面來源：{source}",

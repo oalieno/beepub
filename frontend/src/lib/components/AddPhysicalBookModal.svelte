@@ -25,6 +25,7 @@
     oncreated: () => void;
   } = $props();
 
+  let lookupQuery = $state("");
   let isbn = $state("");
   let title = $state("");
   let authors = $state("");
@@ -40,6 +41,7 @@
   let saving = $state(false);
 
   function reset() {
+    lookupQuery = "";
     isbn = "";
     title = "";
     authors = "";
@@ -82,11 +84,31 @@
   }
 
   async function handleLookup() {
-    const query = isbn.trim();
-    if (!query || lookingUp) return;
+    const raw = lookupQuery.trim();
+    if (!raw || lookingUp) return;
+
+    // One input, three clue kinds: URL, ISBN (10/13 digits, dashes
+    // tolerated), or a title (the authors field joins as a hint).
+    let params: {
+      isbn?: string;
+      title?: string;
+      author?: string;
+      url?: string;
+    };
+    const compact = raw.replace(/[-\s]/g, "");
+    if (/^https?:\/\//i.test(raw)) {
+      params = { url: raw };
+    } else if (/^(\d{13}|\d{9}[\dXx])$/.test(compact)) {
+      params = { isbn: compact };
+      isbn = compact;
+    } else {
+      const author = authors.split(",")[0]?.trim();
+      params = { title: raw, ...(author ? { author } : {}) };
+    }
+
     lookingUp = true;
     try {
-      const info = await booksApi.isbnLookup(query);
+      const info = await booksApi.metadataLookup(params);
       results = info.results;
       covers = info.covers;
       selectedSource = null;
@@ -149,13 +171,12 @@
 
     <div class="flex items-end gap-2">
       <div class="flex-1 space-y-1.5">
-        <Label for="physical-isbn" class="text-sm font-medium">
-          {m.physical_isbn_placeholder()}
+        <Label for="physical-lookup" class="text-sm font-medium">
+          {m.physical_lookup_label()}
         </Label>
         <Input
-          id="physical-isbn"
-          bind:value={isbn}
-          inputmode="numeric"
+          id="physical-lookup"
+          bind:value={lookupQuery}
           autocomplete="off"
           spellcheck={false}
           onkeydown={(e) => {
@@ -170,7 +191,7 @@
         type="button"
         variant="outline"
         class="shrink-0"
-        disabled={lookingUp || !isbn.trim()}
+        disabled={lookingUp || !lookupQuery.trim()}
         onclick={handleLookup}
       >
         {#if lookingUp}
@@ -272,6 +293,18 @@
           {m.metadata_field_published_date()}
         </Label>
         <Input id="physical-date" bind:value={publishedDate} />
+      </div>
+      <div class="space-y-1.5">
+        <Label for="physical-isbn" class="text-sm font-medium">
+          {m.metadata_label_isbn()}
+        </Label>
+        <Input
+          id="physical-isbn"
+          bind:value={isbn}
+          inputmode="numeric"
+          autocomplete="off"
+          spellcheck={false}
+        />
       </div>
     </div>
 

@@ -57,10 +57,19 @@ export const booksApi = {
     cover_url?: string | null;
   }) => post("/books/physical", payload) as Promise<BookOut>,
 
-  isbnLookup: (isbn: string) =>
-    get(
-      `/books/isbn-lookup?isbn=${encodeURIComponent(isbn)}`,
-    ) as Promise<IsbnLookupOut>,
+  metadataLookup: (params: {
+    isbn?: string;
+    title?: string;
+    author?: string;
+    url?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.isbn) qs.set("isbn", params.isbn);
+    if (params.title) qs.set("title", params.title);
+    if (params.author) qs.set("author", params.author);
+    if (params.url) qs.set("url", params.url);
+    return get(`/books/metadata-lookup?${qs}`) as Promise<IsbnLookupOut>;
+  },
 
   moveToLibrary: (bookId: string, libraryId: string) =>
     put(`/books/${bookId}/library`, { library_id: libraryId }) as Promise<{

@@ -6,15 +6,19 @@ and BookRecord <-> external_metadata row serialization."""
 
 from __future__ import annotations
 
+import dataclasses
+import hashlib
 import json
 import logging
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import redis.asyncio as aioredis
 from sqlalchemy import text
 
-from app.plugins.metadata import BookRecord, registry
+from app.config import settings as app_config
+from app.plugins.metadata import BookQuery, BookRecord, registry
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -127,6 +131,65 @@ async def upsert_external_metadata(
         },
     )
     await db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Resolve cache — framework infrastructure, like rate limiting: plugins
+# know nothing about it. Keyed (source, most-precise clue), so the same
+# question never hits an upstream twice within the TTL — an interactive
+# lookup warms the cache and the background job right after gets free
+# hits. Only FOUND records are cached: a not-found from a clue-poor
+# query (isbn-only lookup) must not shadow a richer query (the job also
+# has title/authors, and its empty markers are permanent). Errors raise
+# and are never cached; any cache failure degrades to a live resolve.
+# ---------------------------------------------------------------------------
+
+RESOLVE_CACHE_TTL = 24 * 3600
+_RESOLVE_CACHE_PREFIX = "beepub:resolve"
+
+
+def _clue_fingerprint(query: BookQuery) -> str:
+    """Most-precise-clue precedence, mirroring how plugins locate: a URL
+    or ISBN identifies the same book regardless of which title/author
+    clues ride along — so an isbn-only interactive lookup and the
+    richer background-job query share cache entries."""
+    if query.url:
+        raw = f"url={query.url}"
+    elif query.isbn:
+        raw = f"isbn={query.isbn}"
+    else:
+        authors = ",".join(a.strip().lower() for a in query.authors)
+        raw = f"title={(query.title or '').strip().lower()}|authors={authors}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+
+
+async def cached_resolve(plugin: MetadataPlugin, query: BookQuery) -> BookRecord | None:
+    key = f"{_RESOLVE_CACHE_PREFIX}:{plugin.name}:{_clue_fingerprint(query)}"
+    client = None
+    try:
+        try:
+            client = aioredis.from_url(app_config.redis_url)
+            payload = await client.get(key)
+            if payload is not None:
+                return BookRecord(**json.loads(payload))
+        except Exception as e:
+            logger.debug(f"resolve cache read failed: {e}")
+
+        record = await plugin.resolve(query)
+
+        if record is not None and client is not None:
+            try:
+                await client.set(
+                    key,
+                    json.dumps(dataclasses.asdict(record)),
+                    ex=RESOLVE_CACHE_TTL,
+                )
+            except Exception as e:
+                logger.debug(f"resolve cache write failed: {e}")
+        return record
+    finally:
+        if client is not None:
+            await client.aclose()
 
 
 async def run_tag_mapping(session_factory: async_sessionmaker, book_id: str) -> None:
