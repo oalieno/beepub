@@ -30,8 +30,23 @@ class ReadmooPlugin(MetadataPlugin):
     label = "Readmoo 讀墨"
     kind = "scraper"
     locale = "zh-TW"
-    accepts = frozenset({Clue.TITLE, Clue.URL})
-    provides = frozenset({"rating", "rating_count", "reviews", "tags"})
+    # The keyword search matches print ISBNs too (verified live), which
+    # makes readmoo the zh-TW description source for TW editions —
+    # books.com.tw blocks its product pages and Google's TW records are
+    # usually metadata-only.
+    accepts = frozenset({Clue.ISBN, Clue.TITLE, Clue.URL})
+    provides = frozenset(
+        {
+            "title",
+            "authors",
+            "publisher",
+            "description",
+            "rating",
+            "rating_count",
+            "reviews",
+            "tags",
+        }
+    )
     url_prefix = "https://readmoo.com/book/"
     id_pattern = r"^\d+$"
     id_hint = "e.g. 210227953000101"
@@ -101,10 +116,32 @@ class ReadmooPlugin(MetadataPlugin):
         return links
 
     async def _search(self, query: BookQuery) -> list[SearchCandidate]:
-        if not query.title:
-            return []
-
         candidates: list[SearchCandidate] = []
+
+        # ISBN first: a 13-digit hit in the keyword search is effectively
+        # an exact match.
+        if query.isbn:
+            try:
+                async with self._client(HEADERS) as client:
+                    resp = await client.get(
+                        SEARCH_URL, params={"q": query.isbn, "src": "search"}
+                    )
+                    if resp.status_code == 200:
+                        soup = BeautifulSoup(resp.text, "html.parser")
+                        candidates = [
+                            SearchCandidate(url=full_url, title=text, exact=True)
+                            for full_url, text in self._extract_book_links(
+                                soup, limit=3
+                            )
+                        ]
+            except RateLimitError:
+                raise
+            except Exception as e:
+                logger.warning(f"Readmoo ISBN search failed: {e}")
+
+        if candidates or not query.title:
+            return candidates
+
         try:
             queries = self._build_queries(query.title, query.authors)
             async with self._client(HEADERS) as client:
@@ -129,6 +166,20 @@ class ReadmooPlugin(MetadataPlugin):
             logger.warning(f"Readmoo search failed: {e}")
         return candidates
 
+    @staticmethod
+    def _parse_description(soup: BeautifulSoup) -> str | None:
+        """Full intro lives in #book-detail-description (an h2 「詳細資訊」
+        heading followed by the text); the meta descriptions are 50-char
+        truncations."""
+        container = soup.select_one("#book-detail-description")
+        if container is None:
+            meta = soup.select_one("meta[property='og:description']")
+            return meta.get("content") if meta else None
+        for heading in container.find_all(["h1", "h2", "h3"]):
+            heading.extract()
+        text = container.get_text("\n", strip=True)
+        return text or None
+
     async def _fetch(self, url: str) -> BookRecord:
         try:
             async with self._client(HEADERS) as client:
@@ -137,6 +188,20 @@ class ReadmooPlugin(MetadataPlugin):
                     return BookRecord(source_url=url)
 
                 soup = BeautifulSoup(resp.text, "html.parser")
+
+                title_el = soup.select_one("h1.book-detail-title") or soup.select_one(
+                    "h1"
+                )
+                title = title_el.get_text(strip=True) if title_el else None
+
+                authors: list[str] = []
+                for author_el in soup.select("[itemprop='author']"):
+                    author = author_el.get_text(strip=True)
+                    if author and author not in authors:
+                        authors.append(author)
+
+                publisher_el = soup.select_one("[itemprop='publisher']")
+                publisher = publisher_el.get_text(strip=True) if publisher_el else None
 
                 rating = None
                 rating_count = None
@@ -224,6 +289,10 @@ class ReadmooPlugin(MetadataPlugin):
 
                 return BookRecord(
                     source_url=url,
+                    title=title,
+                    authors=authors,
+                    publisher=publisher,
+                    description=self._parse_description(soup),
                     rating=rating,
                     rating_count=rating_count,
                     reviews=reviews if reviews else None,

@@ -23,7 +23,13 @@ class FakeAsyncClient:
         query = (params or {}).get("q", "")
         self.__class__.requests.append((url, query))
 
-        if query == "極限返航（電影書衣典藏版） 安迪．威爾（Andy Weir）":
+        if query == "9789570849523":
+            html = """
+            <html><body>
+              <h4><a class='product-link' href='/book/210071675000101'>神</a></h4>
+            </body></html>
+            """
+        elif query == "極限返航（電影書衣典藏版） 安迪．威爾（Andy Weir）":
             html = "<html><body><div>No results</div></body></html>"
         elif query == "極限返航（電影書衣典藏版）":
             html = "<html><body><div>No results</div></body></html>"
@@ -58,9 +64,15 @@ class FakeFetchClient:
     async def get(self, url: str, params: dict | None = None):
         html = """
         <html><body>
+          <h1 class='book-detail-title'>神</h1>
+          <a href='/contributor/x'><span itemprop='author'>董啟章</span></a>
           <div class='quick-btn-star'>
             <div itemprop='ratingValue' content='4.7'></div>
             共 <span itemprop='ratingCount'>237</span> 人評分
+          </div>
+          <div class='my-3 border-bottom' itemprop='text' id='book-detail-description'>
+            <h2><i class='mo mo-bookinfo'></i> 詳細資訊</h2>
+            <p>香港知名作家董啟章出道以來，尺度最大<br/><br/>《心》姊妹篇，長篇情慾小說</p>
           </div>
         </body></html>
         """
@@ -140,7 +152,25 @@ def test_search_falls_back_to_normalized_query(monkeypatch):
     ]
 
 
-def test_fetch_parses_itemprop_rating_and_count(monkeypatch):
+def test_isbn_search_is_exact_and_skips_title_queries(monkeypatch):
+    FakeAsyncClient.requests = []
+    monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeAsyncClient)
+
+    plugin = ReadmooPlugin()
+    candidates = asyncio.run(
+        plugin._search(BookQuery(title="神", isbn="9789570849523"))
+    )
+
+    assert len(candidates) == 1
+    assert candidates[0].exact
+    assert candidates[0].url == "https://readmoo.com/book/210071675000101"
+    # ISBN hit means no title-query fallback requests.
+    assert FakeAsyncClient.requests == [
+        ("https://readmoo.com/search/keyword", "9789570849523"),
+    ]
+
+
+def test_fetch_parses_bibliographic_fields_and_rating(monkeypatch):
     monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeFetchClient)
 
     plugin = ReadmooPlugin()
@@ -148,3 +178,10 @@ def test_fetch_parses_itemprop_rating_and_count(monkeypatch):
 
     assert record.rating == 4.7
     assert record.rating_count == 237
+    assert record.title == "神"
+    assert record.authors == ["董啟章"]
+    # The 詳細資訊 heading is stripped; the paragraph text survives.
+    assert record.description is not None
+    assert "詳細資訊" not in record.description
+    assert record.description.startswith("香港知名作家董啟章")
+    assert "《心》姊妹篇" in record.description
