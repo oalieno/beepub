@@ -7,26 +7,18 @@ import httpx
 from fastapi import HTTPException, UploadFile, status
 
 from app.config import settings
+from app.plugins.metadata import registry as metadata_registry
 
 # Hard cap for any uploaded file. Image-heavy manga epubs are legitimately
 # large, so this is set generously. Must match nginx `client_max_body_size`.
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
 
-# Server-side cover fetches (add-physical-book flow) only ever target the
-# metadata providers we prefill from — an allowlist, not a validation,
-# because the URL is user-supplied and the request originates from the
-# backend (SSRF surface).
-COVER_URL_ALLOWED_HOSTS = {
-    "books.google.com",
-    "books.googleusercontent.com",
-    # Volume-detail image links are sometimes served from Google's generic
-    # image CDN rather than the books hosts.
-    "lh3.googleusercontent.com",
-    "covers.openlibrary.org",
-    # books.com.tw covers (TW editions) via their open image proxy.
-    "im1.book.com.tw",
-    "im2.book.com.tw",
-}
+# Server-side cover fetches only ever target hosts the metadata plugins
+# declare (cover_hosts) — an allowlist, not a validation, because the
+# URL is user-supplied and the request originates from the backend
+# (SSRF surface). Derived from the registry so drop-in plugins extend
+# it without touching this file.
+COVER_URL_ALLOWED_HOSTS = frozenset(metadata_registry.cover_allowed_hosts())
 MAX_COVER_DOWNLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
 
 

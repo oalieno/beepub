@@ -43,10 +43,23 @@ def test_declarations_are_honest():
             assert not any(linking), f"{cls.name} has linking data without URL clue"
 
 
-def test_cover_hosts_union_matches_storage_allowlist():
+def test_cover_hosts_union_covers_the_known_hosts():
+    # storage.COVER_URL_ALLOWED_HOSTS derives from this union — a plugin
+    # silently losing a host declaration would shrink the SSRF allowlist.
+    assert registry.cover_allowed_hosts() == frozenset(
+        {
+            "books.google.com",
+            "books.googleusercontent.com",
+            "lh3.googleusercontent.com",
+            "covers.openlibrary.org",
+            "im1.book.com.tw",
+            "im2.book.com.tw",
+        }
+    )
+
     from app.services.storage import COVER_URL_ALLOWED_HOSTS
 
-    assert registry.cover_allowed_hosts() == frozenset(COVER_URL_ALLOWED_HOSTS)
+    assert COVER_URL_ALLOWED_HOSTS == registry.cover_allowed_hosts()
 
 
 def test_enabled_defaults_to_true_and_respects_toggle():
