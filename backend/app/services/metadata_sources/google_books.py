@@ -18,6 +18,47 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://www.googleapis.com/books/v1/volumes"
 
 
+async def lookup_isbn(isbn: str, api_key: str = "") -> dict | None:
+    """One-shot volumeInfo lookup used to prefill the add-physical-book
+    form. Returns display-ready fields (not a FetchResult — that shape is
+    ratings/reviews-oriented and drops publisher/cover)."""
+    params: dict[str, str | int] = {"q": f"isbn:{isbn}", "maxResults": 1}
+    if api_key:
+        params["key"] = api_key
+    try:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
+            resp = await client.get(API_BASE, params=params)
+            if resp.status_code == 429:
+                raise RateLimitError("google_books")
+            if resp.status_code != 200:
+                return None
+            items = resp.json().get("items") or []
+            if not items:
+                return None
+            vi = items[0].get("volumeInfo", {})
+            image_links = vi.get("imageLinks") or {}
+            cover = image_links.get("thumbnail") or image_links.get("smallThumbnail")
+            if cover and cover.startswith("http://"):
+                cover = "https://" + cover[len("http://") :]
+            title = vi.get("title")
+            if vi.get("subtitle"):
+                title = f"{title}: {vi['subtitle']}" if title else vi["subtitle"]
+            return {
+                "title": title,
+                "authors": vi.get("authors", []),
+                "publisher": vi.get("publisher"),
+                "description": vi.get("description"),
+                "published_date": vi.get("publishedDate"),
+                "language": vi.get("language"),
+                "cover_url": cover,
+            }
+    except RateLimitError:
+        raise
+    except Exception as e:
+        logger.warning(f"Google Books ISBN lookup failed: {e}")
+        return None
+
+
 class GoogleBooksSource(AbstractMetadataSource):
     source_name = "google_books"
 

@@ -33,6 +33,7 @@ from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
+from app.rate_limit import limiter
 from app.schemas.book import (
     BookLibraryUpdate,
     BookLocationsIn,
@@ -43,8 +44,10 @@ from app.schemas.book import (
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
+    IsbnLookupOut,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
+    PhysicalBookCreate,
     SeriesBookBrief,
     SeriesNeighborsOut,
     SeriesProgress,
@@ -56,10 +59,13 @@ from app.schemas.reading import (
 )
 from app.schemas.series import PaginatedFeed
 from app.services.epub_parser import extract_cover, parse_epub_metadata
+from app.services.isbn_lookup import lookup_isbn
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_setting
 from app.services.storage import (
+    cover_url_allowed,
     delete_file,
+    download_cover,
     get_book_path,
     get_cover_path,
     save_upload_file,
@@ -132,6 +138,14 @@ def book_search_conditions(q: str) -> list:
         Book.epub_series.ilike(pattern),
         Book.epub_isbn.ilike(pattern),
     ]
+
+
+def _require_book_file(book: Book) -> None:
+    # Physical books (format="physical") have no file behind them.
+    if book.file_path is None:
+        raise HTTPException(
+            status_code=409, detail="This is a physical book — it has no file"
+        )
 
 
 def _require_upload_permission(user: User) -> None:
@@ -246,6 +260,61 @@ async def upload_books_bulk(
         extract_book_text.delay(str(book.id))
         fetch_book_metadata.delay(str(book.id))
     return books
+
+
+@router.post("/physical", response_model=BookOut, status_code=status.HTTP_201_CREATED)
+async def create_physical_book(
+    body: PhysicalBookCreate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Track a paper copy: a Book row with no file behind it."""
+    _require_upload_permission(current_user)
+    lib_id = await _validate_upload_library(str(body.library_id), current_user, db)
+
+    book_id = uuid.uuid4()
+    cover_path = None
+    if body.cover_url:
+        if not cover_url_allowed(body.cover_url):
+            raise HTTPException(status_code=422, detail="cover_url host is not allowed")
+        dest = get_cover_path(book_id)
+        if await download_cover(body.cover_url, dest):
+            cover_path = dest
+
+    book = Book(
+        id=book_id,
+        file_path=None,
+        file_size=None,
+        format="physical",
+        cover_path=cover_path,
+        # "" is the established no-digest marker — non-NULL so the digest
+        # backfill scan never picks the book up.
+        partial_md5="",
+        # False (not NULL) keeps the text-extraction scan from queueing it.
+        is_image_book=False,
+        added_by=current_user.id,
+        # Physical books have no EPUB source metadata; everything lives in
+        # the manual-override columns (which win in display anyway).
+        title=body.title,
+        authors=body.authors or None,
+        publisher=body.publisher,
+        description=body.description,
+        published_date=body.published_date,
+        series=body.series,
+        series_index=body.series_index,
+        epub_isbn=body.isbn,
+        epub_language=body.language,
+    )
+    db.add(book)
+    await db.flush()
+    db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=current_user.id))
+    await db.commit()
+    await db.refresh(book)
+
+    # External ratings/reviews and auto-tagging work from metadata alone;
+    # text extraction is meaningless without a file and is not queued.
+    fetch_book_metadata.delay(str(book.id))
+    return book
 
 
 @router.put("/{book_id}/library")
@@ -1058,6 +1127,24 @@ async def list_all_books_feed(
     return PaginatedFeed(items=items, total=total)
 
 
+@router.get("/isbn-lookup", response_model=IsbnLookupOut)
+@limiter.limit("10/minute")
+async def isbn_lookup(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    isbn: str = Query(min_length=5, max_length=20),
+):
+    """Metadata prefill for the add-physical-book form (Google Books with
+    an Open Library fallback — keyless Google 429s aggressively)."""
+    _require_upload_permission(current_user)
+    api_key = await get_setting(db, "google_books_api_key") or ""
+    info = await lookup_isbn(isbn, google_api_key=api_key)
+    if info is None:
+        raise HTTPException(status_code=404, detail="No metadata found for this ISBN")
+    return info
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,
@@ -1116,7 +1203,8 @@ async def put_book_locations(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    book = await _get_book_with_access(book_id, current_user, db)
+    _require_book_file(book)
     row = (
         await db.execute(select(BookLocations).where(BookLocations.book_id == book_id))
     ).scalar_one_or_none()
@@ -1236,7 +1324,7 @@ async def delete_book(
     # a read-only mount). Files are removed AFTER the commit — if the commit
     # fails, a row pointing at a deleted file would be unrecoverable.
     paths = []
-    if book.calibre_id is None:
+    if book.calibre_id is None and book.file_path:
         paths.append(book.file_path)
     if book.cover_path:
         paths.append(book.cover_path)
@@ -1263,6 +1351,7 @@ async def get_book_file(
             detail="Download permission required",
         )
     book = await _get_book_with_access(book_id, current_user, db)
+    _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
     # Set filename for browser download
@@ -1285,6 +1374,7 @@ async def get_book_content(
 ):
     """Serve individual files from within the EPUB zip (for epubjs reader)."""
     book = await _get_book_with_access(book_id, current_user, db)
+    _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
 
@@ -1344,6 +1434,7 @@ async def list_epub_images(
 ):
     """List all images embedded in the EPUB file."""
     book = await _get_book_with_access(book_id, current_user, db)
+    _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
     image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}

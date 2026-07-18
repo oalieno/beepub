@@ -212,26 +212,30 @@ def _missing_filters(job_type: str):
     blocked_where is None if the job type has no "blocked" concept.
     """
     not_image = Book.is_image_book.isnot(True)
+    # Physical books (file_path NULL) can never run file-based jobs; without
+    # this filter they'd sit in the missing/blocked counts forever. auto_tag
+    # and metadata_backfill work from metadata alone, so they stay open.
+    has_file = Book.file_path.isnot(None)
 
     if job_type == "text_extraction":
-        return [Book.is_image_book.is_(None)], None
+        return [Book.is_image_book.is_(None), has_file], None
 
     elif job_type == "embedding":
         return (
             [Book.has_text.is_(True), Book.has_embedding.is_(False), not_image],
-            [Book.has_text.is_(False), not_image],
+            [Book.has_text.is_(False), not_image, has_file],
         )
 
     elif job_type == "summarize":
         return (
             [Book.has_text.is_(True), Book.is_summarized.is_(False), not_image],
-            [Book.has_text.is_(False), not_image],
+            [Book.has_text.is_(False), not_image, has_file],
         )
 
     elif job_type == "book_embedding":
         return (
             [Book.is_summarized.is_(True), Book.has_embedding.is_(False), not_image],
-            [Book.is_summarized.is_(False), not_image],
+            [Book.is_summarized.is_(False), not_image, has_file],
         )
 
     elif job_type == "auto_tag":
@@ -243,7 +247,7 @@ def _missing_filters(job_type: str):
     elif job_type == "digest":
         # "" marks a file that could not be read (kept out of the missing
         # count); calibre sync recomputes it when the file comes back.
-        return [Book.partial_md5.is_(None)], None
+        return [Book.partial_md5.is_(None), has_file], None
 
     return None, None
 
@@ -336,7 +340,11 @@ async def get_missing_book_ids(db: AsyncSession, job_type: str) -> list:
     if job_type == "summarize":
         no_text_result = await db.execute(
             select(Book.id)
-            .where(Book.has_text.is_(False), Book.is_image_book.isnot(True))
+            .where(
+                Book.has_text.is_(False),
+                Book.is_image_book.isnot(True),
+                Book.file_path.isnot(None),
+            )
             .order_by(Book.created_at)
         )
         no_text_ids = [row[0] for row in no_text_result.all()]

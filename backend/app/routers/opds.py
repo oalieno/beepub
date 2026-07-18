@@ -191,7 +191,12 @@ def _nav_entry(feed: ET.Element, title: str, entry_id: str, href: str, content: 
 
 
 def _accessible_books_query(user: User):
-    return select(Book).where(Book.id.in_(accessible_book_ids_select(user)))
+    # Physical (file-less) books are excluded outright: an OPDS entry
+    # without an acquisition link is useless to every client.
+    return select(Book).where(
+        Book.id.in_(accessible_book_ids_select(user)),
+        Book.file_path.isnot(None),
+    )
 
 
 async def _acquisition_feed(

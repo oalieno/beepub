@@ -48,8 +48,11 @@ class Book(Base, TimestampMixin):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    file_path: Mapped[str] = mapped_column(String(500), nullable=False)
-    file_size: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # NULL file_path = physical book (format="physical"): a paper copy
+    # tracked for status/rating/notes only. Everything that opens the file
+    # must gate on file_path being present.
+    file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    file_size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     format: Mapped[str] = mapped_column(String(10), nullable=False, default="epub")
     cover_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # KOReader's kosync document digest of file_path (services/partial_md5).

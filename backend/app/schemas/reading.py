@@ -111,6 +111,13 @@ class NotesUpdate(BaseModel):
     notes: str | None = None  # markdown
 
 
+class ManualProgressUpdate(BaseModel):
+    """Hand-entered progress for physical (file-less) books, same 0..100
+    scale the reader stores (beepub.ts: totalProgression * 100)."""
+
+    percentage: float = Field(ge=0, le=100)
+
+
 class ReadingActivityOut(BaseModel):
     date: date
     seconds: int

@@ -23,7 +23,7 @@ class BookTagNested(BaseModel):
 
 class BookOut(BaseModel):
     id: uuid.UUID
-    file_size: int
+    file_size: int | None  # None = physical book (no file)
     format: str
     cover_path: str | None
     epub_title: str | None
@@ -115,6 +115,35 @@ class BookMetadataUpdate(BaseModel):
     series: str | None = None
     series_index: float | None = None
     tags: list[str] | None = None
+
+
+class PhysicalBookCreate(BaseModel):
+    """A file-less Book row tracking a paper copy."""
+
+    library_id: uuid.UUID
+    title: str = Field(min_length=1, max_length=500)
+    authors: list[str] = Field(default_factory=list)
+    publisher: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    published_date: str | None = Field(default=None, max_length=50)
+    isbn: str | None = Field(default=None, max_length=20)
+    language: str | None = Field(default=None, max_length=10)
+    series: str | None = Field(default=None, max_length=500)
+    series_index: float | None = None
+    # Cover image fetched server-side; restricted to known metadata hosts.
+    cover_url: str | None = Field(default=None, max_length=1000)
+
+
+class IsbnLookupOut(BaseModel):
+    """Best-effort metadata prefill for the add-physical-book form."""
+
+    title: str | None = None
+    authors: list[str] = []
+    publisher: str | None = None
+    description: str | None = None
+    published_date: str | None = None
+    language: str | None = None
+    cover_url: str | None = None
 
 
 class SeriesBookBrief(BaseModel):
