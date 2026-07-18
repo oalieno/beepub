@@ -58,7 +58,7 @@
   import { isNative } from "$lib/platform";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { marked } from "marked";
-  import { sanitizeHtml } from "$lib/sanitize";
+  import { sanitizeDescription } from "$lib/sanitize";
   import ExternalRatings from "$lib/components/ExternalRatings.svelte";
   import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
   import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
@@ -887,7 +887,9 @@
             {m.book_description()}
           </h2>
           <div class="text-muted-foreground leading-relaxed prose-description">
-            {@html sanitizeHtml(book.description ?? book.epub_description)}
+            {@html sanitizeDescription(
+              book.description ?? book.epub_description,
+            )}
           </div>
         </div>
       {/if}

@@ -63,3 +63,26 @@ export function sanitizeHtml(html: string | null | undefined): string {
     ALLOW_DATA_ATTR: false,
   });
 }
+
+function escapeText(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+// Book descriptions come in two shapes: HTML from EPUB metadata, and
+// plain text from the metadata plugins (paragraphs separated by blank
+// lines). Rendering plain text as HTML collapses its newlines into
+// spaces, so paragraph structure has to be rebuilt first.
+export function sanitizeDescription(text: string | null | undefined): string {
+  if (!text) return "";
+  if (/<[a-z][^>]*>/i.test(text)) return sanitizeHtml(text);
+  const html = text
+    .split(/\n{2,}/)
+    .map(
+      (paragraph) => `<p>${escapeText(paragraph).replace(/\n/g, "<br>")}</p>`,
+    )
+    .join("");
+  return sanitizeHtml(html);
+}
