@@ -96,47 +96,9 @@
 
   let book = $state<BookOut | null>(null);
   let interaction = $state<InteractionOut | null>(null);
-  // Physical books have no file: no reader, no download — progress is a
-  // hand-entered percentage instead.
+  // Physical books have no file: no reader, no download — tracking is
+  // status/rating/notes only (a percentage is meaningless for paper).
   let isPhysical = $derived(book?.format === "physical");
-  let physicalPctEdit = $state<number | null>(null);
-  let physicalPct = $derived(
-    physicalPctEdit ??
-      Math.round(interaction?.reading_progress?.percentage ?? 0),
-  );
-  let savingPhysicalPct = $state(false);
-
-  async function saveManualProgress() {
-    if (physicalPctEdit == null || savingPhysicalPct || !book) return;
-    savingPhysicalPct = true;
-    try {
-      await booksApi.updateManualProgress(book.id, physicalPctEdit);
-      const emptyProgress = {
-        cfi: null,
-        percentage: null,
-        current_page: null,
-        font_size: null,
-        section_index: null,
-        section_page: null,
-        section_page_counts: null,
-        total_pages: null,
-        last_read_at: null,
-        kosync: null,
-      };
-      interaction = {
-        ...(interaction ?? newInteraction()),
-        reading_progress: {
-          ...(interaction?.reading_progress ?? emptyProgress),
-          percentage: physicalPctEdit,
-        },
-      };
-      physicalPctEdit = null;
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      savingPhysicalPct = false;
-    }
-  }
   let externalMeta = $state<ExternalMetadataOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
@@ -697,30 +659,6 @@
           ondatechange={handleDateChange}
         />
 
-        {#if isPhysical}
-          <!-- No reader to report progress — the percentage is hand-set. -->
-          <div class="mt-4 max-w-xs">
-            <div class="flex items-center justify-between mb-1.5">
-              <span class="text-sm font-medium">{m.physical_progress()}</span>
-              <span class="text-sm text-muted-foreground tabular-nums"
-                >{physicalPct}%</span
-              >
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={physicalPct}
-              disabled={savingPhysicalPct}
-              oninput={(e) => (physicalPctEdit = Number(e.currentTarget.value))}
-              onchange={saveManualProgress}
-              class="w-full accent-primary"
-              aria-label={m.physical_progress()}
-            />
-          </div>
-        {/if}
-
         <!-- Action Buttons (desktop) -->
         <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
           {#if !isPhysical}
@@ -1168,7 +1106,7 @@
           class="h-12 flex-1 flex items-center justify-center gap-2 bg-card card-soft rounded-full text-muted-foreground text-sm"
         >
           <BookCopy size={16} />
-          {m.physical_badge()} · {physicalPct}%
+          {m.physical_badge()}
         </span>
       {/if}
       <button

@@ -341,6 +341,7 @@
 <AddPhysicalBookModal
   open={showPhysicalModal}
   libraryId={id}
+  libraryName={library?.name ?? ""}
   onclose={() => (showPhysicalModal = false)}
   oncreated={() => {
     showPhysicalModal = false;

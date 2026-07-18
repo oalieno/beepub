@@ -13,11 +13,13 @@
   let {
     open,
     libraryId,
+    libraryName = "",
     onclose,
     oncreated,
   }: {
     open: boolean;
     libraryId: string;
+    libraryName?: string;
     onclose: () => void;
     oncreated: () => void;
   } = $props();
@@ -97,7 +99,12 @@
       handleSubmit();
     }}
   >
-    <p class="text-sm text-muted-foreground">{m.physical_add_hint()}</p>
+    <p class="text-sm text-muted-foreground">
+      {m.physical_add_hint()}
+      {#if libraryName}
+        {m.physical_add_to_library({ name: libraryName })}
+      {/if}
+    </p>
 
     <div class="flex items-end gap-2">
       <div class="flex-1 space-y-1.5">
@@ -136,10 +143,13 @@
 
     <div class="flex gap-4">
       {#if coverUrl}
+        <!-- The by-ISBN Open Library cover URL 404s when no cover exists;
+             drop the preview instead of showing a broken image. -->
         <img
           src={coverUrl}
           alt=""
           class="w-20 self-start rounded-sm book-shadow shrink-0"
+          onerror={() => (coverUrl = null)}
         />
       {/if}
       <div class="flex-1 space-y-4 min-w-0">

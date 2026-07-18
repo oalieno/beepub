@@ -32,7 +32,6 @@ from app.schemas.reading import (
     HighlightOut,
     HighlightUpdate,
     InteractionOut,
-    ManualProgressUpdate,
     NotesUpdate,
     ProgressOut,
     ProgressUpdate,
@@ -280,30 +279,6 @@ async def update_progress(
         extract_book_text.delay(str(book_id))
         summarize_chunks.delay(str(book_id), body.section_index)
 
-    return {"status": "updated"}
-
-
-@router.put("/{book_id}/manual-progress")
-async def update_manual_progress(
-    book_id: uuid.UUID,
-    body: ManualProgressUpdate,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """Hand-entered progress for physical books. Books with a file get
-    their progress from the reader — a manual write would fight it."""
-    book = await _get_book_with_access(book_id, current_user, db)
-    if book.file_path is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="Manual progress is only available for physical books",
-        )
-    interaction = await _get_or_create_interaction(current_user.id, book_id, db)
-    progress = dict(interaction.reading_progress or {})
-    progress["percentage"] = body.percentage
-    progress["last_read_at"] = datetime.now(UTC).isoformat()
-    interaction.reading_progress = progress
-    await db.commit()
     return {"status": "updated"}
 
 

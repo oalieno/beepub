@@ -43,7 +43,9 @@ test("upload a book, open it, and read it", async ({ page }) => {
   ).toBeVisible({ timeout: 30_000 });
 });
 
-test("add a physical book and track manual progress", async ({ page }) => {
+test("add a physical book and find it via the format filter", async ({
+  page,
+}) => {
   await page.goto("/libraries");
   await page.getByRole("link", { name: LIBRARY_NAME }).first().click();
   await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+$/);
@@ -62,12 +64,6 @@ test("add a physical book and track manual progress", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Start Reading|Continue Reading/ }),
   ).toHaveCount(0);
-
-  // Hand-set progress persists across a reload.
-  await page.locator('input[type="range"]').fill("42");
-  await expect(page.getByText("42%").first()).toBeVisible();
-  await page.reload();
-  await expect(page.getByText("42%").first()).toBeVisible();
 
   // The chip filters the library down to physical books.
   await page.getByRole("button", { name: "Physical book" }).first().click();

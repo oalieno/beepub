@@ -45,10 +45,13 @@ async def _openlibrary_lookup(isbn: str) -> dict | None:
                 # Open Library language codes are MARC (eng/jpn); leave the
                 # field to the user rather than guessing a mapping.
                 "language": None,
+                # No cover_i in the search doc ≠ no cover: edition records
+                # sometimes carry one reachable by ISBN. default=false makes
+                # a miss a clean 404 instead of a blank placeholder image.
                 "cover_url": (
                     f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
                     if cover_id
-                    else None
+                    else f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
                 ),
             }
     except Exception as e:

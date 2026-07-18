@@ -62,9 +62,6 @@ export const booksApi = {
       `/books/isbn-lookup?isbn=${encodeURIComponent(isbn)}`,
     ) as Promise<IsbnLookupOut>,
 
-  updateManualProgress: (bookId: string, percentage: number) =>
-    put(`/books/${bookId}/manual-progress`, { percentage }),
-
   moveToLibrary: (bookId: string, libraryId: string) =>
     put(`/books/${bookId}/library`, { library_id: libraryId }) as Promise<{
       status: "moved" | "unchanged";

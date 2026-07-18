@@ -681,7 +681,7 @@
   "physical_creating": "建立中...",
   "physical_created": "已建立實體書紀錄",
   "physical_badge": "實體書",
-  "physical_progress": "閱讀進度",
+  "physical_add_to_library": "將新增到「{name}」書庫。",
 
   "metadata_label_series": "系列",
   "metadata_label_library": "書庫",

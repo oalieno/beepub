@@ -681,7 +681,7 @@
   "physical_creating": "Adding...",
   "physical_created": "Physical book added",
   "physical_badge": "Physical book",
-  "physical_progress": "Reading progress",
+  "physical_add_to_library": "It will be added to \u201c{name}\u201d.",
 
   "metadata_label_series": "Series",
   "metadata_label_library": "Library",

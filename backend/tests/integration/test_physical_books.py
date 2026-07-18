@@ -1,5 +1,5 @@
-"""Physical (file-less) books: creation, file-endpoint gating, manual
-progress, OPDS exclusion, and the ISBN prefill lookup."""
+"""Physical (file-less) books: creation, file-endpoint gating, OPDS
+exclusion, format filtering, and the ISBN prefill lookup."""
 
 import pytest
 
@@ -81,30 +81,9 @@ async def test_interactions_work_without_a_file(admin_client):
     )
     assert notes_resp.status_code == 200
 
-    progress_resp = await admin_client.put(
-        f"/api/books/{book_id}/manual-progress", json={"percentage": 42}
-    )
-    assert progress_resp.status_code == 200
-
-    reject = await admin_client.put(
-        f"/api/books/{book_id}/manual-progress", json={"percentage": 101}
-    )
-    assert reject.status_code == 422
-
     interaction = (await admin_client.get(f"/api/books/{book_id}/interaction")).json()
     assert interaction["reading_status"] == "currently_reading"
     assert interaction["notes"] == "第三章看完了"
-    assert interaction["reading_progress"]["percentage"] == 42
-
-
-async def test_manual_progress_rejected_for_file_books(admin_client):
-    library_id = await create_library(admin_client)
-    book = await upload_epub(admin_client, library_id)
-
-    response = await admin_client.put(
-        f"/api/books/{book['id']}/manual-progress", json={"percentage": 0.5}
-    )
-    assert response.status_code == 409
 
 
 async def test_opds_excludes_physical_books(admin_client):
