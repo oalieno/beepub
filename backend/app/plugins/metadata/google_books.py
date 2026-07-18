@@ -97,6 +97,21 @@ class GoogleBooksPlugin(MetadataPlugin):
     async def _search(self, query: BookQuery) -> list[SearchCandidate]:
         candidates: list[SearchCandidate] = []
         params: dict[str, str | int] = {"maxResults": 5, **self._key_params()}
+        # Search-response volumeInfo per volume id, merged in _fetch: the
+        # two endpoints omit fields in BOTH directions (see _fetch).
+        self._search_vi: dict[str, dict] = {}
+
+        def collect(item: dict, *, exact: bool) -> None:
+            vi = item.get("volumeInfo", {})
+            self._search_vi[item["id"]] = vi
+            candidates.append(
+                SearchCandidate(
+                    url=item["id"],
+                    title=vi.get("title", ""),
+                    authors=vi.get("authors", []),
+                    exact=exact,
+                )
+            )
 
         try:
             async with self._client() as client:
@@ -106,15 +121,7 @@ class GoogleBooksPlugin(MetadataPlugin):
                     resp = await client.get(API_BASE, params=params)
                     if resp.status_code == 200:
                         for item in resp.json().get("items", []):
-                            vi = item.get("volumeInfo", {})
-                            candidates.append(
-                                SearchCandidate(
-                                    url=item["id"],
-                                    title=vi.get("title", ""),
-                                    authors=vi.get("authors", []),
-                                    exact=True,
-                                )
-                            )
+                            collect(item, exact=True)
                     if candidates:
                         return candidates
 
@@ -132,14 +139,7 @@ class GoogleBooksPlugin(MetadataPlugin):
                     return []
 
                 for item in resp.json().get("items", []):
-                    vi = item.get("volumeInfo", {})
-                    candidates.append(
-                        SearchCandidate(
-                            url=item["id"],
-                            title=vi.get("title", ""),
-                            authors=vi.get("authors", []),
-                        )
-                    )
+                    collect(item, exact=False)
         except RateLimitError:
             raise
         except Exception as e:
@@ -157,7 +157,15 @@ class GoogleBooksPlugin(MetadataPlugin):
                 if resp.status_code != 200:
                     return BookRecord(source_url=volume_id)
 
-                vi = resp.json().get("volumeInfo", {})
+                dvi = resp.json().get("volumeInfo", {})
+                svi = getattr(self, "_search_vi", {}).get(volume_id, {})
+                # The two endpoints omit fields in BOTH directions: search
+                # hits often lack imageLinks, while the detail record drops
+                # description for TW no-preview volumes. Merge search-first
+                # (the pre-plugin behavior), except covers — detail serves
+                # the real sizes, search caps at a 128px thumbnail.
+                vi = {**dvi, **{k: v for k, v in svi.items() if v}}
+                vi["imageLinks"] = dvi.get("imageLinks") or svi.get("imageLinks") or {}
 
                 title = vi.get("title")
                 if vi.get("subtitle"):
