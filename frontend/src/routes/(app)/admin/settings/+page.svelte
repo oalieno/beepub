@@ -42,10 +42,6 @@
   let embeddingApiUrl = $state("");
   let embeddingApiKey = $state("");
 
-  // External metadata API keys
-  let googleBooksApiKey = $state("");
-  let hardcoverApiToken = $state("");
-
   // Password visibility toggles
   let visibleFields = $state<Record<string, boolean>>({});
 
@@ -224,8 +220,6 @@
       embeddingModel = settings.embedding_model || "";
       embeddingApiUrl = settings.embedding_api_url || "";
       embeddingApiKey = settings.embedding_api_key || "";
-      googleBooksApiKey = settings.google_books_api_key || "";
-      hardcoverApiToken = settings.hardcover_api_token || "";
 
       // Fetch model lists for configured providers
       const fetches: Promise<void>[] = [];
@@ -283,8 +277,6 @@
         embedding_model: embeddingModel,
         embedding_api_url: embeddingApiUrl,
         embedding_api_key: embeddingApiKey,
-        google_books_api_key: googleBooksApiKey,
-        hardcover_api_token: hardcoverApiToken,
       });
       toastStore.success(m.admin_settings_saved());
     } catch (e) {
@@ -519,47 +511,6 @@
             <p class="text-xs text-muted-foreground">
               {m.admin_settings_calibre_path_help()}
             </p>
-          </div>
-        </Card.Content>
-      </Card.Root>
-
-      <!-- External Metadata APIs -->
-      <Card.Root>
-        <Card.Header>
-          <Card.Title>{m.admin_settings_external_apis()}</Card.Title>
-          <Card.Description>
-            {m.admin_settings_external_apis_desc()}
-          </Card.Description>
-        </Card.Header>
-        <Card.Content class="space-y-5">
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
-            <div class="space-y-1.5">
-              <Label for="google-books-key"
-                >{m.admin_settings_google_books()}</Label
-              >
-              {@render passwordInput(
-                "google-books-key",
-                "AIza...",
-                googleBooksApiKey,
-                (v) => (googleBooksApiKey = v),
-              )}
-              <p class="text-xs text-muted-foreground">
-                {m.admin_settings_google_books_help()}
-              </p>
-            </div>
-            <div class="space-y-1.5">
-              <Label for="hardcover-token">{m.admin_settings_hardcover()}</Label
-              >
-              {@render passwordInput(
-                "hardcover-token",
-                m.admin_settings_hardcover_placeholder(),
-                hardcoverApiToken,
-                (v) => (hardcoverApiToken = v),
-              )}
-              <p class="text-xs text-muted-foreground">
-                {m.admin_settings_hardcover_help()}
-              </p>
-            </div>
           </div>
         </Card.Content>
       </Card.Root>

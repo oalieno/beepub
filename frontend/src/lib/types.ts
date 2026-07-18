@@ -449,8 +449,9 @@ export interface AdminSettings {
   embedding_model: string;
   embedding_api_url: string;
   embedding_api_key: string;
-  google_books_api_key: string;
-  hardcover_api_token: string;
+  // Metadata plugins contribute their own keys (enabled toggles,
+  // credentials, the job source list) — the registry defines them.
+  [key: string]: string;
 }
 
 export interface AiStatus {

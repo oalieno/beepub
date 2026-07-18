@@ -14,6 +14,7 @@
     Activity,
     Flag,
     Copy,
+    Plug,
   } from "@lucide/svelte";
   import { DashboardSkeleton } from "$lib/components/skeletons";
   import BackButton from "$lib/components/BackButton.svelte";
@@ -46,6 +47,11 @@
       href: "/admin/duplicates",
       label: () => m.admin_link_duplicates(),
       icon: Copy,
+    },
+    {
+      href: "/admin/metadata",
+      label: () => m.admin_link_metadata(),
+      icon: Plug,
     },
     {
       href: "/admin/settings",
