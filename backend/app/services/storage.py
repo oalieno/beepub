@@ -23,6 +23,9 @@ COVER_URL_ALLOWED_HOSTS = {
     # image CDN rather than the books hosts.
     "lh3.googleusercontent.com",
     "covers.openlibrary.org",
+    # books.com.tw covers (TW editions) via their open image proxy.
+    "im1.book.com.tw",
+    "im2.book.com.tw",
 }
 MAX_COVER_DOWNLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
 
@@ -37,27 +40,42 @@ def cover_url_allowed(url: str) -> bool:
 
 async def download_cover(url: str, dest_path: str) -> bool:
     """Fetch a cover image from an allowlisted metadata host. Best-effort:
-    any failure returns False and leaves no file behind."""
+    any failure returns False and leaves no file behind. The bytes are
+    re-encoded through Pillow — sources serve mixed formats (webp/png)
+    while cover_path is served as JPEG, and a decode doubles as proof the
+    payload really is an image."""
     if not cover_url_allowed(url):
         return False
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=20,
+            follow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; BeePub/1.0)"},
+        ) as client:
             async with client.stream("GET", url) as resp:
                 if resp.status_code != 200:
                     return False
                 content_type = resp.headers.get("content-type", "")
                 if not content_type.startswith("image/"):
                     return False
-                os.makedirs(os.path.dirname(dest_path), exist_ok=True)
                 size = 0
-                with open(dest_path, "wb") as f:
-                    async for chunk in resp.aiter_bytes(64 * 1024):
-                        size += len(chunk)
-                        if size > MAX_COVER_DOWNLOAD_SIZE:
-                            delete_file(dest_path)
-                            return False
-                        f.write(chunk)
-        return size > 0
+                chunks: list[bytes] = []
+                async for chunk in resp.aiter_bytes(64 * 1024):
+                    size += len(chunk)
+                    if size > MAX_COVER_DOWNLOAD_SIZE:
+                        return False
+                    chunks.append(chunk)
+        if size == 0:
+            return False
+
+        import io
+
+        from PIL import Image
+
+        with Image.open(io.BytesIO(b"".join(chunks))) as img:
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            img.convert("RGB").save(dest_path, "JPEG", quality=88)
+        return True
     except Exception:
         delete_file(dest_path)
         return False
