@@ -2,8 +2,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.settings import AppSetting
+from app.plugins.metadata import registry as metadata_registry
 
-DEFAULTS = {
+_STATIC_DEFAULTS = {
     "registration_enabled": "false",
     "timezone": "Asia/Taipei",
     "calibre_base_dir": "/calibre",
@@ -27,10 +28,15 @@ DEFAULTS = {
     # Similar books — semantic similarity blend
     "similar_books_semantic_weight": "10.0",
     "similar_books_semantic_limit": "50",
-    # External metadata API keys
-    "google_books_api_key": "",
-    "hardcover_api_token": "",
+    # Background metadata job: which sources it fetches
+    # (comma-separated plugin names; empty = all enabled)
+    metadata_registry.JOB_SOURCES_KEY: "",
 }
+
+# Metadata plugins contribute their own keys (one enabled-toggle each,
+# plus declared credentials like google_books_api_key) — a drop-in
+# plugin needs no edit here.
+DEFAULTS = {**_STATIC_DEFAULTS, **metadata_registry.plugin_setting_defaults()}
 
 
 # Settings whose values are credentials. The admin GET endpoint masks
@@ -39,9 +45,7 @@ SECRET_SETTINGS = {
     "gemini_api_key",
     "openai_api_key",
     "embedding_api_key",
-    "google_books_api_key",
-    "hardcover_api_token",
-}
+} | metadata_registry.plugin_secret_keys()
 
 MASK_PREFIX = "****"
 

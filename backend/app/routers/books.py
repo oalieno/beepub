@@ -1732,6 +1732,14 @@ async def update_external_metadata_url(
         )
     validated_source = plugin_cls.name
 
+    enabled_value = await get_setting(
+        db, metadata_registry.enabled_key(validated_source)
+    )
+    if enabled_value == "false":
+        raise HTTPException(
+            status_code=409, detail=f"{validated_source} is disabled"
+        )
+
     # Validate source URL format from the plugin's linking declaration
     if body.source_url is not None:
         if not plugin_cls.url_prefix:

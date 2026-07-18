@@ -205,11 +205,16 @@ async def reset_pending(job_type: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _missing_filters(job_type: str):
+def _missing_filters(job_type: str, *, metadata_target: int | None = None):
     """Return (missing_where, blocked_where) filter clauses for a job type.
 
     Each is a list of SQLAlchemy WHERE conditions to apply on Book columns.
     blocked_where is None if the job type has no "blocked" concept.
+
+    `metadata_target` is the metadata_backfill completion threshold —
+    the number of sources the job actually fetches (enabled ∩ job
+    source list); callers compute it from settings. Without it the
+    static full-registry count is used.
     """
     not_image = Book.is_image_book.isnot(True)
     # Physical books (file_path NULL) can never run file-based jobs; without
@@ -242,7 +247,12 @@ def _missing_filters(job_type: str):
         return [Book.has_tags.is_(False)], None
 
     elif job_type == "metadata_backfill":
-        return [Book.metadata_count < len(registry.all_plugins())], None
+        target = (
+            metadata_target
+            if metadata_target is not None
+            else len(registry.all_plugins())
+        )
+        return [Book.metadata_count < target], None
 
     elif job_type == "digest":
         # "" marks a file that could not be read (kept out of the missing
@@ -250,6 +260,12 @@ def _missing_filters(job_type: str):
         return [Book.partial_md5.is_(None), has_file], None
 
     return None, None
+
+
+async def _metadata_target(db: AsyncSession) -> int:
+    from app.services.settings import get_all_settings
+
+    return registry.job_source_count(await get_all_settings(db))
 
 
 @dataclass
@@ -269,13 +285,16 @@ async def count_all_job_stats(db: AsyncSession) -> JobQueueStats:
     """
     from sqlalchemy import and_
 
+    metadata_target = await _metadata_target(db)
     columns = [
         func.count(Book.id).label("total"),
         func.count(Book.id).filter(Book.is_image_book.is_(True)).label("image"),
     ]
     blocked_keys = set()
     for key in JOB_TYPES:
-        missing_where, blocked_where = _missing_filters(key)
+        missing_where, blocked_where = _missing_filters(
+            key, metadata_target=metadata_target
+        )
         columns.append(
             func.count(Book.id).filter(and_(*missing_where)).label(f"m_{key}")
         )
@@ -305,7 +324,9 @@ async def count_missing_books(db: AsyncSession, job_type: str) -> tuple[int, int
     'missing' = books ready to process (prerequisites met but not yet done).
     'blocked' = books that need a prerequisite first (e.g. text extraction).
     """
-    missing_where, blocked_where = _missing_filters(job_type)
+    missing_where, blocked_where = _missing_filters(
+        job_type, metadata_target=await _metadata_target(db)
+    )
     if missing_where is None:
         return 0, 0
 
@@ -327,7 +348,9 @@ async def get_missing_book_ids(db: AsyncSession, job_type: str) -> list:
 
     For 'summarize', also includes books without text (they need extraction first).
     """
-    missing_where, _ = _missing_filters(job_type)
+    missing_where, _ = _missing_filters(
+        job_type, metadata_target=await _metadata_target(db)
+    )
     if missing_where is None:
         return []
 

@@ -44,13 +44,19 @@ def record_json(record: BookRecord) -> dict:
 
 async def init_metadata_plugins(
     session_factory: async_sessionmaker,
+    *,
+    job_only: bool = False,
 ) -> list[MetadataPlugin]:
-    """Instantiate every enabled plugin with the operator settings."""
+    """Instantiate plugins with the operator settings. `job_only`
+    additionally applies the background job's source-list setting;
+    interactive surfaces see every enabled plugin."""
     from app.services.settings import get_all_settings
 
     async with session_factory() as settings_db:
         app_settings = await get_all_settings(settings_db)
 
+    if job_only:
+        return registry.job_plugins(app_settings)
     return registry.enabled_plugins(app_settings)
 
 

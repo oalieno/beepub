@@ -77,6 +77,36 @@ def test_enabled_plugins_filters_by_need_and_have():
     assert "open_library" not in by_title
 
 
+def test_job_plugins_respect_source_list_and_toggles():
+    # Empty list = every enabled plugin.
+    assert [p.name for p in registry.job_plugins({})] == BUILTIN_ORDER
+
+    # The job list narrows; unknown names are ignored.
+    listed = {"metadata_job_sources": "goodreads, books_tw, nonexistent"}
+    assert [p.name for p in registry.job_plugins(listed)] == ["goodreads", "books_tw"]
+
+    # Disabled beats listed.
+    disabled = {
+        "metadata_job_sources": "goodreads, books_tw",
+        "metadata_source_books_tw_enabled": "false",
+    }
+    assert [p.name for p in registry.job_plugins(disabled)] == ["goodreads"]
+
+    assert registry.job_source_count({}) == len(BUILTIN_ORDER)
+    assert registry.job_source_count(listed) == 2
+
+
+def test_settings_defaults_derive_from_registry():
+    from app.services.settings import DEFAULTS, SECRET_SETTINGS
+
+    for name in BUILTIN_ORDER:
+        assert DEFAULTS[f"metadata_source_{name}_enabled"] == "true"
+    assert DEFAULTS["google_books_api_key"] == ""
+    assert DEFAULTS["hardcover_api_token"] == ""
+    assert DEFAULTS[registry.JOB_SOURCES_KEY] == ""
+    assert {"google_books_api_key", "hardcover_api_token"} <= SECRET_SETTINGS
+
+
 def test_plugin_setting_defaults_and_secret_keys():
     defaults = registry.plugin_setting_defaults()
     for name in BUILTIN_ORDER:

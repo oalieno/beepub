@@ -95,6 +95,28 @@ def enabled_plugins(
     return selected
 
 
+JOB_SOURCES_KEY = "metadata_job_sources"
+
+
+def job_plugins(settings: dict[str, str]) -> list[MetadataPlugin]:
+    """Plugins the background fetch job iterates: enabled ∩ the job's
+    source-list setting (comma-separated names; empty = all enabled).
+    Interactive surfaces (ISBN lookup, manual refetch) ignore the job
+    list and see every enabled plugin."""
+    selected = enabled_plugins(settings)
+    raw = settings.get(JOB_SOURCES_KEY, "").strip()
+    if not raw:
+        return selected
+    wanted = {name.strip() for name in raw.split(",") if name.strip()}
+    return [p for p in selected if p.name in wanted]
+
+
+def job_source_count(settings: dict[str, str]) -> int:
+    """The metadata_backfill completion threshold: a book is done once
+    it has a row for every source the job would fetch."""
+    return len(job_plugins(settings))
+
+
 def cover_allowed_hosts() -> frozenset[str]:
     """Union of every registered plugin's cover hosts — the SSRF
     allowlist for server-side cover downloads."""

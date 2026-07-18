@@ -104,7 +104,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
     try:
         async with create_task_engine() as (_engine, session_factory):
-            plugins = await init_metadata_plugins(session_factory)
+            plugins = await init_metadata_plugins(session_factory, job_only=True)
 
             async with session_factory() as db:
                 book_info = await fetch_book_info(db, book_id)
