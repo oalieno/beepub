@@ -3,7 +3,8 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
-from app.services.metadata_sources.readmoo import ReadmooSource
+from app.plugins.metadata.base import BookQuery
+from app.plugins.metadata.readmoo import ReadmooPlugin
 
 
 class FakeAsyncClient:
@@ -69,7 +70,7 @@ class FakeFetchClient:
 
 
 def test_build_queries_normalizes_and_deduplicates():
-    queries = ReadmooSource._build_queries(
+    queries = ReadmooPlugin._build_queries(
         "極限返航（電影書衣典藏版）", ["安迪．威爾（Andy Weir）"]
     )
 
@@ -82,7 +83,7 @@ def test_build_queries_normalizes_and_deduplicates():
 
 
 def test_build_queries_strips_square_bracket_subtitle():
-    queries = ReadmooSource._build_queries("千年鬼【直木獎得主西條奈加最催淚之作】", [])
+    queries = ReadmooPlugin._build_queries("千年鬼【直木獎得主西條奈加最催淚之作】", [])
 
     assert queries == [
         "千年鬼【直木獎得主西條奈加最催淚之作】",
@@ -105,7 +106,7 @@ def test_extract_book_links_filters_non_book_links_and_dedups():
     """
 
     soup = BeautifulSoup(html, "html.parser")
-    links = ReadmooSource._extract_book_links(soup, limit=5)
+    links = ReadmooPlugin._extract_book_links(soup, limit=5)
 
     assert links == [
         ("https://readmoo.com/book/210217152000101", "極限返航"),
@@ -115,18 +116,20 @@ def test_extract_book_links_filters_non_book_links_and_dedups():
 
 def test_search_falls_back_to_normalized_query(monkeypatch):
     FakeAsyncClient.requests = []
-    monkeypatch.setattr(
-        "app.services.metadata_sources.readmoo.httpx.AsyncClient", FakeAsyncClient
+    monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeAsyncClient)
+
+    plugin = ReadmooPlugin()
+    candidates = asyncio.run(
+        plugin._search(
+            BookQuery(
+                title="極限返航（電影書衣典藏版）", authors=["安迪．威爾（Andy Weir）"]
+            )
+        )
     )
 
-    source = ReadmooSource()
-    results = asyncio.run(
-        source.search("極限返航（電影書衣典藏版）", ["安迪．威爾（Andy Weir）"], None)
-    )
-
-    assert len(results) == 1
-    assert results[0].title == "極限返航"
-    assert results[0].url == "https://readmoo.com/book/210290289000101"
+    assert len(candidates) == 1
+    assert candidates[0].title == "極限返航"
+    assert candidates[0].url == "https://readmoo.com/book/210290289000101"
     assert FakeAsyncClient.requests == [
         (
             "https://readmoo.com/search/keyword",
@@ -138,12 +141,10 @@ def test_search_falls_back_to_normalized_query(monkeypatch):
 
 
 def test_fetch_parses_itemprop_rating_and_count(monkeypatch):
-    monkeypatch.setattr(
-        "app.services.metadata_sources.readmoo.httpx.AsyncClient", FakeFetchClient
-    )
+    monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeFetchClient)
 
-    source = ReadmooSource()
-    result = asyncio.run(source.fetch("https://readmoo.com/book/210363642000101"))
+    plugin = ReadmooPlugin()
+    record = asyncio.run(plugin._fetch("https://readmoo.com/book/210363642000101"))
 
-    assert result.rating == 4.7
-    assert result.rating_count == 237
+    assert record.rating == 4.7
+    assert record.rating_count == 237

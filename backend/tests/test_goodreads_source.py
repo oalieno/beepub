@@ -3,7 +3,8 @@ import asyncio
 import httpx
 from bs4 import BeautifulSoup
 
-from app.services.metadata_sources.goodreads import GoodreadsSource
+from app.plugins.metadata.base import BookQuery
+from app.plugins.metadata.goodreads import GoodreadsPlugin
 
 
 class FakeAsyncClient:
@@ -41,7 +42,6 @@ class FakeAsyncClient:
 
 
 def test_extract_book_links_supports_modern_selector_and_dedup():
-    source = GoodreadsSource()
     soup = BeautifulSoup(
         """
         <html><body>
@@ -54,7 +54,7 @@ def test_extract_book_links_supports_modern_selector_and_dedup():
         "html.parser",
     )
 
-    links = source._extract_book_links(soup, limit=5)
+    links = GoodreadsPlugin._extract_book_links(soup, limit=5)
 
     assert links == [
         (
@@ -65,7 +65,7 @@ def test_extract_book_links_supports_modern_selector_and_dedup():
 
 
 def test_build_queries_strips_square_bracket_subtitle():
-    queries = GoodreadsSource._build_queries(
+    queries = GoodreadsPlugin._build_queries(
         "千年鬼【直木獎得主西條奈加最催淚之作】", []
     )
 
@@ -77,15 +77,16 @@ def test_build_queries_strips_square_bracket_subtitle():
 
 def test_search_falls_back_to_title_only(monkeypatch):
     FakeAsyncClient.requests = []
-    monkeypatch.setattr(
-        "app.services.metadata_sources.goodreads.httpx.AsyncClient", FakeAsyncClient
+    monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeAsyncClient)
+
+    plugin = GoodreadsPlugin()
+    candidates = asyncio.run(
+        plugin._search(BookQuery(title="極限返航", authors=["安迪．威爾"]))
     )
 
-    source = GoodreadsSource()
-    results = asyncio.run(source.search("極限返航", ["安迪．威爾"], None))
-
-    assert len(results) == 1
-    assert results[0].url == "https://www.goodreads.com/book/show/60495597"
+    assert len(candidates) == 1
+    assert candidates[0].url == "https://www.goodreads.com/book/show/60495597"
+    assert not candidates[0].exact
     assert FakeAsyncClient.requests == [
         ("https://www.goodreads.com/search", "極限返航 安迪．威爾"),
         ("https://www.goodreads.com/search", "極限返航"),
