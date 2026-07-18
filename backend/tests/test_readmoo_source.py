@@ -72,7 +72,8 @@ class FakeFetchClient:
           </div>
           <div class='my-3 border-bottom' itemprop='text' id='book-detail-description'>
             <h2><i class='mo mo-bookinfo'></i> 詳細資訊</h2>
-            <p>香港知名作家董啟章出道以來，尺度最大<br/><br/>《心》姊妹篇，長篇情慾小說</p>
+            <p>香港知名作家董啟章出道以來，尺度最大<br/><br/><strong>《心》姊妹篇，長篇情慾小說</strong></p>
+            <p>靈、性、慾之間，你選擇哪一個？</p>
           </div>
         </body></html>
         """
@@ -180,8 +181,12 @@ def test_fetch_parses_bibliographic_fields_and_rating(monkeypatch):
     assert record.rating_count == 237
     assert record.title == "神"
     assert record.authors == ["董啟章"]
-    # The 詳細資訊 heading is stripped; the paragraph text survives.
-    assert record.description is not None
-    assert "詳細資訊" not in record.description
-    assert record.description.startswith("香港知名作家董啟章")
-    assert "《心》姊妹篇" in record.description
+    # The 詳細資訊 heading is stripped; <br><br> runs and <p> boundaries
+    # become blank lines (markdown paragraph breaks — single newlines
+    # collapse when the description is rendered); inline tags like
+    # <strong> don't split the text.
+    assert record.description == (
+        "香港知名作家董啟章出道以來，尺度最大"
+        "\n\n《心》姊妹篇，長篇情慾小說"
+        "\n\n靈、性、慾之間，你選擇哪一個？"
+    )

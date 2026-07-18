@@ -170,14 +170,24 @@ class ReadmooPlugin(MetadataPlugin):
     def _parse_description(soup: BeautifulSoup) -> str | None:
         """Full intro lives in #book-detail-description (an h2 「詳細資訊」
         heading followed by the text); the meta descriptions are 50-char
-        truncations."""
+        truncations.
+
+        The page formats with <br><br> runs and <p> blocks; descriptions
+        are displayed through markdown, where single newlines collapse —
+        so paragraph boundaries must come out as blank lines to survive
+        rendering."""
         container = soup.select_one("#book-detail-description")
         if container is None:
             meta = soup.select_one("meta[property='og:description']")
             return meta.get("content") if meta else None
         for heading in container.find_all(["h1", "h2", "h3"]):
             heading.extract()
-        text = container.get_text("\n", strip=True)
+        for br in container.find_all("br"):
+            br.replace_with("\n")
+        for block in container.find_all(["p", "div", "li"]):
+            block.append("\n\n")
+        lines = [line.strip() for line in container.get_text().splitlines()]
+        text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
         return text or None
 
     async def _fetch(self, url: str) -> BookRecord:
