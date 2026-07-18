@@ -18,13 +18,37 @@ logger = logging.getLogger(__name__)
 API_BASE = "https://www.googleapis.com/books/v1/volumes"
 
 
+# Best-first: the detail endpoint serves several sizes; search hits cap out
+# at a 128px thumbnail when they carry imageLinks at all.
+_COVER_PREFERENCE = (
+    "extraLarge",
+    "large",
+    "medium",
+    "small",
+    "thumbnail",
+    "smallThumbnail",
+)
+
+
+def _pick_cover(image_links: dict) -> str | None:
+    for key in _COVER_PREFERENCE:
+        url = image_links.get(key)
+        if not url:
+            continue
+        if url.startswith("http://"):
+            url = "https://" + url[len("http://") :]
+        # edge=curl bakes a fake page-fold into the image — not cover art.
+        return url.replace("&edge=curl", "").replace("edge=curl&", "")
+    return None
+
+
 async def lookup_isbn(isbn: str, api_key: str = "") -> dict | None:
     """One-shot volumeInfo lookup used to prefill the add-physical-book
     form. Returns display-ready fields (not a FetchResult — that shape is
     ratings/reviews-oriented and drops publisher/cover)."""
     params: dict[str, str | int] = {"q": f"isbn:{isbn}", "maxResults": 1}
-    if api_key:
-        params["key"] = api_key
+    key_params: dict[str, str] = {"key": api_key} if api_key else {}
+    params.update(key_params)
     try:
         async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             resp = await client.get(API_BASE, params=params)
@@ -35,11 +59,27 @@ async def lookup_isbn(isbn: str, api_key: str = "") -> dict | None:
             items = resp.json().get("items") or []
             if not items:
                 return None
-            vi = items[0].get("volumeInfo", {})
+            vi = dict(items[0].get("volumeInfo", {}))
             image_links = vi.get("imageLinks") or {}
-            cover = image_links.get("thumbnail") or image_links.get("smallThumbnail")
-            if cover and cover.startswith("http://"):
-                cover = "https://" + cover[len("http://") :]
+
+            # Search responses routinely omit imageLinks (and sometimes
+            # description/publisher) even when the volume has them — the
+            # volume detail is the authoritative record.
+            volume_id = items[0].get("id")
+            if volume_id:
+                detail = await client.get(f"{API_BASE}/{volume_id}", params=key_params)
+                if detail.status_code == 200:
+                    dvi = detail.json().get("volumeInfo", {})
+                    image_links = dvi.get("imageLinks") or image_links
+                    for field in (
+                        "description",
+                        "publisher",
+                        "publishedDate",
+                        "language",
+                    ):
+                        if not vi.get(field) and dvi.get(field):
+                            vi[field] = dvi[field]
+
             title = vi.get("title")
             if vi.get("subtitle"):
                 title = f"{title}: {vi['subtitle']}" if title else vi["subtitle"]
@@ -50,7 +90,7 @@ async def lookup_isbn(isbn: str, api_key: str = "") -> dict | None:
                 "description": vi.get("description"),
                 "published_date": vi.get("publishedDate"),
                 "language": vi.get("language"),
-                "cover_url": cover,
+                "cover_url": _pick_cover(image_links),
             }
     except RateLimitError:
         raise

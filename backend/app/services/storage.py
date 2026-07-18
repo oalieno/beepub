@@ -19,6 +19,9 @@ MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500 MB
 COVER_URL_ALLOWED_HOSTS = {
     "books.google.com",
     "books.googleusercontent.com",
+    # Volume-detail image links are sometimes served from Google's generic
+    # image CDN rather than the books hosts.
+    "lh3.googleusercontent.com",
     "covers.openlibrary.org",
 }
 MAX_COVER_DOWNLOAD_SIZE = 5 * 1024 * 1024  # 5 MB
