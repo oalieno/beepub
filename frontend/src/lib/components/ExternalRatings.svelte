@@ -2,6 +2,8 @@
   import { booksApi } from "$lib/api/books";
   import * as m from "$lib/paraglide/messages.js";
   import { toastStore } from "$lib/stores/toast";
+  import { getMetadataSources } from "$lib/stores/metadataSources";
+  import { onMount } from "svelte";
   import { Pencil, Plus, Unlink, Ban } from "@lucide/svelte";
   import * as Popover from "$lib/components/ui/popover";
   import type { ExternalMetadataOut } from "$lib/types";
@@ -16,39 +18,40 @@
     isAdmin: boolean;
   } = $props();
 
-  const SOURCE_META: Record<
-    string,
-    {
-      label: string;
-      urlPrefix: string;
-      idPattern: RegExp;
-      idHint: string;
+  type SourceMeta = {
+    label: string;
+    urlPrefix: string;
+    idPattern: RegExp;
+    idHint: string;
+  };
+
+  // Server-driven registry: only enabled, manually-linkable sources
+  // (the ratings-bearing plugins declare url_prefix). Registry order.
+  let sourceMeta = $state<Record<string, SourceMeta>>({});
+  let linkableSources = $state<string[]>([]);
+  let sourcesLoaded = $state(false);
+
+  onMount(async () => {
+    try {
+      const registry = await getMetadataSources();
+      const map: Record<string, SourceMeta> = {};
+      const linkable: string[] = [];
+      for (const source of registry) {
+        if (!source.enabled || !source.url_prefix) continue;
+        map[source.name] = {
+          label: source.label,
+          urlPrefix: source.url_prefix,
+          idPattern: new RegExp(source.id_pattern ?? "^.+$"),
+          idHint: source.id_hint ?? "ID",
+        };
+        linkable.push(source.name);
+      }
+      sourceMeta = map;
+      linkableSources = linkable;
+      sourcesLoaded = true;
+    } catch {
+      // Registry unavailable — inline ratings fall back to raw names.
     }
-  > = $derived({
-    goodreads: {
-      label: m.external_goodreads(),
-      urlPrefix: "https://www.goodreads.com/book/show/",
-      idPattern: /^\d+[\w-]*$/,
-      idHint: "e.g. 33017208",
-    },
-    readmoo: {
-      label: m.external_readmoo(),
-      urlPrefix: "https://readmoo.com/book/",
-      idPattern: /^\d+$/,
-      idHint: "e.g. 210227953000101",
-    },
-    google_books: {
-      label: m.external_google_books(),
-      urlPrefix: "https://books.google.com/books?id=",
-      idPattern: /^[\w-]+$/,
-      idHint: "e.g. qixiEAAAQBAJ",
-    },
-    hardcover: {
-      label: m.external_hardcover(),
-      urlPrefix: "https://hardcover.app/books/",
-      idPattern: /^[\w-]+$/,
-      idHint: "e.g. the-left-hand-of-darkness",
-    },
   });
 
   let editingUrlSource = $state<string | null>(null);
@@ -80,14 +83,18 @@
     }
   }
 
-  // Sources with actual data (rating or URL) — shown inline
+  // Sources with actual data (rating or URL) — shown inline. Once the
+  // registry is loaded, disabled/unknown sources are hidden (their rows
+  // stay in the DB and reappear on re-enable).
   let foundMeta = $derived(
-    externalMeta.filter((m) => m.source_url != null || m.rating != null),
+    externalMeta
+      .filter((x) => x.source_url != null || x.rating != null)
+      .filter((x) => !sourcesLoaded || x.source in sourceMeta),
   );
 
   function extractSourceId(source: string, url: string | null): string {
     if (!url) return "";
-    const prefix = SOURCE_META[source]?.urlPrefix ?? "";
+    const prefix = sourceMeta[source]?.urlPrefix ?? "";
     if (prefix && url.startsWith(prefix)) {
       return url.slice(prefix.length);
     }
@@ -105,9 +112,9 @@
     try {
       const id = editingUrlValue.trim();
       if (id) {
-        const meta = SOURCE_META[editingUrlSource];
+        const meta = sourceMeta[editingUrlSource];
         if (meta && !meta.idPattern.test(id)) {
-          validationError = `Invalid ID format. ${meta.idHint}`;
+          validationError = m.external_invalid_id({ hint: meta.idHint });
           return;
         }
         const prefix = meta?.urlPrefix ?? "";
@@ -121,16 +128,16 @@
         .catch(() => [] as ExternalMetadataOut[]);
       editingUrlSource = null;
       toastStore.success(
-        id ? "Source URL updated, fetching metadata..." : "Source URL removed",
+        id ? m.external_url_updated() : m.external_url_removed(),
       );
     } catch (e) {
       toastStore.error((e as Error).message);
     }
   }
 
-  function getSourceMeta(source: string) {
+  function getSourceMeta(source: string): SourceMeta {
     return (
-      SOURCE_META[source] ?? {
+      sourceMeta[source] ?? {
         label: source,
         urlPrefix: "",
         idPattern: /^.+$/,
@@ -145,7 +152,7 @@
   ): string | null {
     if (!sourceUrl) return null;
     if (sourceUrl.startsWith("http")) return sourceUrl;
-    const prefix = SOURCE_META[source]?.urlPrefix ?? "";
+    const prefix = sourceMeta[source]?.urlPrefix ?? "";
     return prefix ? prefix + sourceUrl : null;
   }
 </script>
@@ -154,7 +161,7 @@
   {@const src = getSourceMeta(source)}
   <div class="space-y-3">
     <p class="text-sm font-medium text-foreground">
-      Link {src.label} page
+      {m.external_link_source({ source: src.label })}
     </p>
     <div class="flex items-center gap-1.5">
       <span class="text-xs text-muted-foreground whitespace-nowrap"
@@ -211,7 +218,7 @@
     {/each}
 
     <!-- "+ Sources" popover for managing all sources -->
-    {#if isAdmin}
+    {#if isAdmin && linkableSources.length > 0}
       <Popover.Root
         bind:open={
           () => sourcesOpen,
@@ -226,13 +233,13 @@
             class="flex items-center gap-1 text-muted-foreground/60 hover:text-muted-foreground text-sm transition-colors"
           >
             <Plus size={14} />
-            Sources
+            {m.external_sources_button()}
           </button>
         </Popover.Trigger>
         <Popover.Content align="start" class="w-72">
           {#if editingUrlSource}
             {@const currentMeta = externalMeta.find(
-              (m) => m.source === editingUrlSource,
+              (x) => x.source === editingUrlSource,
             )}
             {@render urlEditForm(
               editingUrlSource,
@@ -241,10 +248,11 @@
           {:else}
             <div class="space-y-1">
               <p class="text-sm font-medium text-foreground mb-3">
-                Metadata sources
+                {m.external_metadata_sources()}
               </p>
-              {#each Object.entries(SOURCE_META) as [key, src]}
-                {@const meta = externalMeta.find((m) => m.source === key)}
+              {#each linkableSources as key}
+                {@const src = getSourceMeta(key)}
+                {@const meta = externalMeta.find((x) => x.source === key)}
                 {@const externalUrl = meta
                   ? getExternalUrl(key, meta.source_url)
                   : null}
@@ -261,7 +269,7 @@
                         class="text-xs text-primary hover:text-primary/80 transition-colors"
                         onclick={() => startEditUrl(key, null)}
                       >
-                        + Link
+                        {m.external_link()}
                       </button>
                     {:else if isEmptyMarker}
                       <!-- Searched but not found -->
@@ -272,14 +280,14 @@
                       <button
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
                         onclick={() => startEditUrl(key, null)}
-                        title="Link manually"
+                        title={m.external_link_manually()}
                       >
                         <Pencil size={12} />
                       </button>
                       <button
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
                         onclick={() => unlinkSource(key)}
-                        title="Unlink — allow re-search"
+                        title={m.external_unlink()}
                       >
                         <Unlink size={12} />
                       </button>
@@ -300,7 +308,7 @@
                         class="text-muted-foreground/50 hover:text-foreground transition-colors"
                         onclick={() =>
                           startEditUrl(key, meta?.source_url ?? null)}
-                        title="Edit source URL"
+                        title={m.external_edit_url()}
                       >
                         <Pencil size={12} />
                       </button>

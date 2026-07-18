@@ -25,6 +25,7 @@ from app.routers import (
     jobs,
     kosync,
     libraries,
+    metadata,
     opds,
     search,
     series,
@@ -97,6 +98,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(libraries.router)
 app.include_router(books.router)
+app.include_router(metadata.router)
 # /opds is the e-reader convention (nginx routes it to the backend);
 # /api/opds is kept as an alias and hidden from the OpenAPI schema to
 # avoid duplicate operation ids.

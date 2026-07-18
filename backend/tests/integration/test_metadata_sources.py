@@ -30,6 +30,57 @@ async def test_toggle_round_trips_through_admin_settings(admin_client):
     assert updated["metadata_job_sources"] == "goodreads, google_books"
 
 
+async def test_sources_endpoint_reflects_registry_and_settings(
+    admin_client, user_client
+):
+    # Any authenticated user can read the registry (the frontend builds
+    # its source knowledge from it).
+    resp = await user_client.get("/api/metadata/sources")
+    assert resp.status_code == 200
+    sources = {s["name"]: s for s in resp.json()["sources"]}
+    assert set(sources) == {
+        "goodreads",
+        "readmoo",
+        "google_books",
+        "hardcover",
+        "books_tw",
+        "open_library",
+    }
+
+    goodreads = sources["goodreads"]
+    assert goodreads["enabled"] is True
+    assert goodreads["in_job"] is True
+    assert goodreads["url_prefix"] == "https://www.goodreads.com/book/show/"
+    assert "rating" in goodreads["provides"]
+
+    books_tw = sources["books_tw"]
+    assert books_tw["label"] == "博客來"
+    assert books_tw["accepts"] == ["isbn"]
+    assert books_tw["url_prefix"] is None
+    assert books_tw["kind"] == "scraper"
+
+    google = sources["google_books"]
+    assert google["configured"] is False  # no API key set in tests
+    assert google["setting_keys"] == ["google_books_api_key"]
+
+    # Toggling + job list flips the flags.
+    resp = await admin_client.put(
+        "/api/admin/settings",
+        json={
+            "metadata_source_readmoo_enabled": "false",
+            "metadata_job_sources": "goodreads",
+        },
+    )
+    assert resp.status_code == 200
+
+    resp = await admin_client.get("/api/metadata/sources")
+    sources = {s["name"]: s for s in resp.json()["sources"]}
+    assert sources["readmoo"]["enabled"] is False
+    assert sources["readmoo"]["in_job"] is False
+    assert sources["goodreads"]["in_job"] is True
+    assert sources["google_books"]["in_job"] is False
+
+
 async def test_manual_link_rejects_disabled_and_unknown_sources(admin_client):
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)

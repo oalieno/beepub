@@ -77,8 +77,10 @@ class BookRecord:
 
 
 # Field names a plugin may list in `provides` (source_url is universal
-# bookkeeping, not a data capability).
-RECORD_FIELDS = frozenset(f.name for f in fields(BookRecord)) - {"source_url"}
+# bookkeeping, not a data capability). The ordered tuple drives stable
+# display ordering.
+RECORD_FIELD_ORDER = tuple(f.name for f in fields(BookRecord) if f.name != "source_url")
+RECORD_FIELDS = frozenset(RECORD_FIELD_ORDER)
 
 
 @dataclass

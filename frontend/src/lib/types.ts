@@ -323,6 +323,27 @@ export type ReadingStatus =
   | "read"
   | "did_not_finish";
 
+export interface MetadataSourceOut {
+  name: string;
+  label: string;
+  kind: string;
+  locale: string | null;
+  accepts: string[];
+  provides: string[];
+  enabled: boolean;
+  in_job: boolean;
+  configured: boolean;
+  setting_keys: string[];
+  secret_setting_keys: string[];
+  url_prefix: string | null;
+  id_pattern: string | null;
+  id_hint: string | null;
+}
+
+export interface MetadataSourcesOut {
+  sources: MetadataSourceOut[];
+}
+
 export interface IsbnSourceResult {
   source: string;
   label: string;
