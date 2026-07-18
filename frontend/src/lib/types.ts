@@ -323,7 +323,9 @@ export type ReadingStatus =
   | "read"
   | "did_not_finish";
 
-export interface IsbnLookupOut {
+export interface IsbnSourceResult {
+  source: string;
+  label: string;
   title: string | null;
   authors: string[];
   publisher: string | null;
@@ -331,6 +333,17 @@ export interface IsbnLookupOut {
   published_date: string | null;
   language: string | null;
   cover_url: string | null;
+}
+
+export interface IsbnCoverCandidate {
+  source: string;
+  label: string;
+  url: string;
+}
+
+export interface IsbnLookupOut {
+  results: IsbnSourceResult[];
+  covers: IsbnCoverCandidate[];
 }
 
 export interface InteractionOut {

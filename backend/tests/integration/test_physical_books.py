@@ -138,31 +138,60 @@ async def test_cover_url_host_allowlist(admin_client):
     assert response.status_code == 422
 
 
-async def test_isbn_lookup_prefill(admin_client, monkeypatch):
-    async def fake_lookup(isbn: str, google_api_key: str = ""):
-        assert isbn == "9789571234567"
-        return {
-            "title": "查到的書",
-            "authors": ["某作者"],
-            "publisher": "某出版社",
-            "description": "簡介",
-            "published_date": "2020-01-01",
-            "language": "zh-TW",
-            "cover_url": "https://books.google.com/books/content?id=x",
-        }
+async def test_isbn_lookup_returns_per_source_results(admin_client, monkeypatch):
+    from app.plugins.metadata import BookRecord
 
-    monkeypatch.setattr("app.routers.books.lookup_isbn", fake_lookup)
+    async def fake_lookup_all(isbn: str, settings: dict):
+        assert isbn == "9789571234567"
+        return [
+            (
+                "google_books",
+                BookRecord(
+                    title="查到的書",
+                    authors=["某作者"],
+                    publisher="某出版社",
+                    description="簡介",
+                    published_date="2020-01-01",
+                    language="zh-TW",
+                    cover_url="https://books.google.com/books/content?id=x",
+                ),
+            ),
+            (
+                "books_tw",
+                BookRecord(
+                    title="查到的書（台版）",
+                    authors=["某作者"],
+                    publisher="某出版社",
+                    cover_url="https://im1.book.com.tw/image/getImage?i=x",
+                ),
+            ),
+            # Cover-only degradation: feeds covers, never a source pill.
+            (
+                "open_library",
+                BookRecord(cover_url="https://covers.openlibrary.org/b/isbn/x-L.jpg"),
+            ),
+        ]
+
+    monkeypatch.setattr("app.routers.books.lookup_isbn_all", fake_lookup_all)
     response = await admin_client.get("/api/books/isbn-lookup?isbn=9789571234567")
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["title"] == "查到的書"
-    assert data["cover_url"].startswith("https://books.google.com/")
+
+    assert [r["source"] for r in data["results"]] == ["google_books", "books_tw"]
+    assert data["results"][0]["title"] == "查到的書"
+    assert data["results"][1]["label"] == "博客來"
+    assert [c["source"] for c in data["covers"]] == [
+        "google_books",
+        "books_tw",
+        "open_library",
+    ]
 
 
-async def test_isbn_lookup_not_found(admin_client, monkeypatch):
-    async def fake_lookup(isbn: str, google_api_key: str = ""):
-        return None
+async def test_isbn_lookup_empty_is_still_200(admin_client, monkeypatch):
+    async def fake_lookup_all(isbn: str, settings: dict):
+        return []
 
-    monkeypatch.setattr("app.routers.books.lookup_isbn", fake_lookup)
+    monkeypatch.setattr("app.routers.books.lookup_isbn_all", fake_lookup_all)
     response = await admin_client.get("/api/books/isbn-lookup?isbn=0000000000")
-    assert response.status_code == 404
+    assert response.status_code == 200
+    assert response.json() == {"results": [], "covers": []}

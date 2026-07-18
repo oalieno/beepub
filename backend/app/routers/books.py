@@ -34,6 +34,7 @@ from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.plugins.metadata import registry as metadata_registry
+from app.plugins.metadata.service import lookup_isbn_all
 from app.rate_limit import limiter
 from app.schemas.book import (
     BookLibraryUpdate,
@@ -45,7 +46,9 @@ from app.schemas.book import (
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
+    IsbnCoverCandidate,
     IsbnLookupOut,
+    IsbnSourceResult,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
     PhysicalBookCreate,
@@ -60,9 +63,8 @@ from app.schemas.reading import (
 )
 from app.schemas.series import PaginatedFeed
 from app.services.epub_parser import extract_cover, parse_epub_metadata
-from app.services.isbn_lookup import lookup_isbn
 from app.services.partial_md5 import compute_partial_md5
-from app.services.settings import get_setting
+from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
     cover_url_allowed,
     delete_file,
@@ -1139,14 +1141,40 @@ async def isbn_lookup(
     db: Annotated[AsyncSession, Depends(get_db)],
     isbn: str = Query(min_length=5, max_length=20),
 ):
-    """Metadata prefill for the add-physical-book form (Google Books with
-    an Open Library fallback — keyless Google 429s aggressively)."""
+    """Fan the ISBN out to every capable enabled plugin and return the
+    per-source results with provenance. Always 200 — empty lists mean
+    nothing was found anywhere."""
     _require_upload_permission(current_user)
-    api_key = await get_setting(db, "google_books_api_key") or ""
-    info = await lookup_isbn(isbn, google_api_key=api_key)
-    if info is None:
-        raise HTTPException(status_code=404, detail="No metadata found for this ISBN")
-    return info
+    app_settings = await get_all_settings(db)
+
+    results: list[IsbnSourceResult] = []
+    covers: list[IsbnCoverCandidate] = []
+    seen_cover_urls: set[str] = set()
+    for name, record in await lookup_isbn_all(isbn, app_settings):
+        plugin_cls = metadata_registry.get_plugin_class(name)
+        label = plugin_cls.label if plugin_cls else name
+        # Records without a title (cover-only degradations) still feed
+        # the cover candidates but don't become a pickable source.
+        if record.title:
+            results.append(
+                IsbnSourceResult(
+                    source=name,
+                    label=label,
+                    title=record.title,
+                    authors=record.authors,
+                    publisher=record.publisher,
+                    description=record.description,
+                    published_date=record.published_date,
+                    language=record.language,
+                    cover_url=record.cover_url,
+                )
+            )
+        if record.cover_url and record.cover_url not in seen_cover_urls:
+            seen_cover_urls.add(record.cover_url)
+            covers.append(
+                IsbnCoverCandidate(source=name, label=label, url=record.cover_url)
+            )
+    return IsbnLookupOut(results=results, covers=covers)
 
 
 @router.get("/{book_id}", response_model=BookOut)
@@ -1736,9 +1764,7 @@ async def update_external_metadata_url(
         db, metadata_registry.enabled_key(validated_source)
     )
     if enabled_value == "false":
-        raise HTTPException(
-            status_code=409, detail=f"{validated_source} is disabled"
-        )
+        raise HTTPException(status_code=409, detail=f"{validated_source} is disabled")
 
     # Validate source URL format from the plugin's linking declaration
     if body.source_url is not None:

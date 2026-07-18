@@ -134,9 +134,12 @@ class PhysicalBookCreate(BaseModel):
     cover_url: str | None = Field(default=None, max_length=1000)
 
 
-class IsbnLookupOut(BaseModel):
-    """Best-effort metadata prefill for the add-physical-book form."""
+class IsbnSourceResult(BaseModel):
+    """One source's bibliographic answer for an ISBN (raw, as the
+    plugin parsed it) — the user picks which source to prefill from."""
 
+    source: str
+    label: str
     title: str | None = None
     authors: list[str] = []
     publisher: str | None = None
@@ -144,6 +147,21 @@ class IsbnLookupOut(BaseModel):
     published_date: str | None = None
     language: str | None = None
     cover_url: str | None = None
+
+
+class IsbnCoverCandidate(BaseModel):
+    source: str
+    label: str
+    url: str
+
+
+class IsbnLookupOut(BaseModel):
+    """Per-source fan-out results for the add-physical-book form.
+    `results` holds sources that located the book (registry order);
+    `covers` holds every distinct cover candidate, best-priority first."""
+
+    results: list[IsbnSourceResult] = []
+    covers: list[IsbnCoverCandidate] = []
 
 
 class SeriesBookBrief(BaseModel):
