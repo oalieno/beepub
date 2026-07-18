@@ -209,6 +209,7 @@ async def list_library_books(
     author: str | None = Query(None),
     tag: str | None = Query(None),
     series: str | None = Query(None),
+    format: str | None = Query(None),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
@@ -244,6 +245,8 @@ async def list_library_books(
                 Book.epub_series == series,
             )
         )
+    if format:
+        base_query = base_query.where(Book.format == format)
 
     # Count total
     count_query = select(func.count()).select_from(base_query.subquery())

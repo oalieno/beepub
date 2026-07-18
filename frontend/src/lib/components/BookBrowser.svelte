@@ -51,6 +51,7 @@
     author?: string;
     tag?: string;
     series?: string;
+    format?: string;
     sort?: string;
     order?: string;
     limit?: number;
@@ -70,6 +71,7 @@
     initialTag = "",
     initialAuthor = "",
     initialSeries = "",
+    initialFormat = "",
     initialSort = "added_at:desc",
     initialCollapse = false,
     emptyMessage = "",
@@ -84,6 +86,7 @@
     initialTag?: string;
     initialAuthor?: string;
     initialSeries?: string;
+    initialFormat?: string;
     initialSort?: string;
     initialCollapse?: boolean;
     emptyMessage?: string;
@@ -100,6 +103,8 @@
     filterAuthor: string;
     filterTag: string;
     filterSeries: string;
+    // Optional for snapshot compatibility (snapshots predating the field).
+    filterFormat?: string;
     sortValue: string;
     collapse: boolean;
   }
@@ -139,6 +144,7 @@
     filterAuthor: initialAuthor,
     filterTag: initialTag,
     filterSeries: initialSeries,
+    filterFormat: initialFormat,
     sortValue:
       initialSeries && initialSort === "added_at:desc"
         ? "series_index:asc"
@@ -152,7 +158,13 @@
   let feedItems = $state<LibraryFeedItem[]>(init.feedItems);
   let totalBooks = $state(init.totalBooks);
   let collapse = $state(init.collapse);
-  let shownCount = $derived(collapse ? feedItems.length : books.length);
+  let filterFormat = $state(init.filterFormat ?? "");
+  // The feed groups by series; a format filter needs the flat list, so it
+  // overrides collapse the same way the table view does.
+  let flatForced = $derived(!!filterFormat);
+  let shownCount = $derived(
+    collapse && !flatForced ? feedItems.length : books.length,
+  );
   let hasMore = $derived(shownCount < totalBooks);
   let loading = $state(!isRestoring);
   let loadingMore = $state(false);
@@ -186,6 +198,7 @@
       filterAuthor,
       filterTag,
       filterSeries,
+      filterFormat,
       sortValue,
       collapse,
     });
@@ -197,6 +210,7 @@
       author: filterAuthor || undefined,
       tag: filterTag || undefined,
       series: filterSeries || undefined,
+      format: filterFormat || undefined,
       sort: sortBy,
       order: sortOrder,
       limit: PAGE_SIZE,
@@ -207,7 +221,7 @@
   async function loadData() {
     loading = true;
     try {
-      if (collapse && fetchFeed) {
+      if (collapse && !flatForced && fetchFeed) {
         const result = await fetchFeed(queryParams(0));
         feedItems = result.items;
         totalBooks = result.total;
@@ -228,7 +242,7 @@
     if (loadingMore || !hasMore) return;
     loadingMore = true;
     try {
-      if (collapse && fetchFeed) {
+      if (collapse && !flatForced && fetchFeed) {
         const result = await fetchFeed(queryParams(feedItems.length));
         feedItems = [...feedItems, ...result.items];
         totalBooks = result.total;
@@ -288,13 +302,15 @@
     handleImmediateChange();
   }
 
-  function clearFilter(type: "author" | "tag" | "series") {
+  function clearFilter(type: "author" | "tag" | "series" | "format") {
     if (type === "author") {
       filterAuthor = "";
       filterAuthorInput = "";
     } else if (type === "tag") {
       filterTag = "";
       filterTagInput = "";
+    } else if (type === "format") {
+      filterFormat = "";
     } else {
       filterSeries = "";
       filterSeriesInput = "";
@@ -425,6 +441,15 @@
         onclick={() => clearFilter("tag")}
       >
         {m.browser_filter_tag({ tag: localizedTagLabel(filterTag) })}
+        <X size={12} />
+      </button>
+    {/if}
+    {#if filterFormat}
+      <button
+        class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
+        onclick={() => clearFilter("format")}
+      >
+        {filterFormat === "physical" ? m.physical_badge() : filterFormat}
         <X size={12} />
       </button>
     {/if}

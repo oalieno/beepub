@@ -120,6 +120,23 @@ async def test_opds_excludes_physical_books(admin_client):
     assert physical["id"] not in response.text
 
 
+async def test_format_filter_on_book_lists(admin_client):
+    library_id = await create_library(admin_client, "Filter Lib")
+    epub = await upload_epub(admin_client, library_id, title="Filter EPUB")
+    physical = await create_physical(admin_client, library_id)
+
+    scoped = await admin_client.get(
+        f"/api/libraries/{library_id}/books?format=physical"
+    )
+    assert [b["id"] for b in scoped.json()["items"]] == [physical["id"]]
+    assert scoped.json()["total"] == 1
+
+    global_list = await admin_client.get("/api/books/all?format=physical")
+    ids = [b["id"] for b in global_list.json()["items"]]
+    assert physical["id"] in ids
+    assert epub["id"] not in ids
+
+
 async def test_delete_physical_book(admin_client):
     library_id = await create_library(admin_client)
     book = await create_physical(admin_client, library_id)

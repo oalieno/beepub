@@ -125,6 +125,7 @@
     author?: string;
     tag?: string;
     series?: string;
+    format?: string;
     sort?: string;
     order?: string;
     limit?: number;
@@ -159,6 +160,8 @@
     else url.searchParams.delete("tag");
     if (state.filterSeries) url.searchParams.set("series", state.filterSeries);
     else url.searchParams.delete("series");
+    if (state.filterFormat) url.searchParams.set("format", state.filterFormat);
+    else url.searchParams.delete("format");
     if (state.sortValue !== "added_at:desc")
       url.searchParams.set("sort", state.sortValue);
     else url.searchParams.delete("sort");
@@ -280,6 +283,7 @@
           initialTag={(page.url.searchParams.get("tag") ?? "").trim()}
           initialAuthor={(page.url.searchParams.get("author") ?? "").trim()}
           initialSeries={(page.url.searchParams.get("series") ?? "").trim()}
+          initialFormat={(page.url.searchParams.get("format") ?? "").trim()}
           initialSort={page.url.searchParams.get("sort") || "added_at:desc"}
           initialCollapse={page.url.searchParams.get("collapse") === "1"}
           emptyMessage={m.browser_no_books()}

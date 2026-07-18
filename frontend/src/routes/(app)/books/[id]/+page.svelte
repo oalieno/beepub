@@ -640,12 +640,16 @@
             {book.display_title ?? "Untitled"}
           </h1>
           {#if isPhysical}
-            <span
-              class="inline-flex items-center gap-1.5 mt-2 mr-2 px-3 py-1 bg-secondary rounded-full text-sm text-muted-foreground"
+            <!-- Doubles as the entry to the library filtered to physical
+                 books (same navigation pattern as the author chips). -->
+            <button
+              type="button"
+              class="inline-flex items-center gap-1.5 mt-2 mr-2 px-3 py-1 bg-secondary rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onclick={() => filterInLibrary("format", "physical")}
             >
               <BookCopy size={14} />
               {m.physical_badge()}
-            </span>
+            </button>
           {/if}
           {#if editions.length > 0}
             <a

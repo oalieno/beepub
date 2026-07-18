@@ -319,6 +319,7 @@ export const booksApi = {
     author?: string;
     tag?: string;
     series?: string;
+    format?: string;
     library?: string;
     has_rating?: boolean;
     sort?: string;
@@ -331,6 +332,7 @@ export const booksApi = {
     if (options?.author) params.set("author", options.author);
     if (options?.tag) params.set("tag", options.tag);
     if (options?.series) params.set("series", options.series);
+    if (options?.format) params.set("format", options.format);
     if (options?.library) params.set("library", options.library);
     if (options?.has_rating) params.set("has_rating", "true");
     if (options?.sort) params.set("sort", options.sort);

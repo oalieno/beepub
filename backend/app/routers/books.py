@@ -953,6 +953,7 @@ async def list_all_books(
     author: str | None = Query(None),
     tag: str | None = Query(None),
     series: str | None = Query(None),
+    format: str | None = Query(None),
     library: uuid.UUID | None = Query(None),
     has_rating: bool = Query(False),
     sort: str = Query("created_at"),
@@ -1000,6 +1001,8 @@ async def list_all_books(
                 Book.epub_series == series,
             )
         )
+    if format:
+        base_query = base_query.where(Book.format == format)
     if library:
         base_query = base_query.where(
             Book.id.in_(

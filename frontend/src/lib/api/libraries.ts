@@ -49,6 +49,7 @@ export const librariesApi = {
       author?: string;
       tag?: string;
       series?: string;
+      format?: string;
       sort?: string;
       order?: string;
       limit?: number;
@@ -60,6 +61,7 @@ export const librariesApi = {
     if (options?.author) params.set("author", options.author);
     if (options?.tag) params.set("tag", options.tag);
     if (options?.series) params.set("series", options.series);
+    if (options?.format) params.set("format", options.format);
     if (options?.sort) params.set("sort", options.sort);
     if (options?.order) params.set("order", options.order);
     if (options?.limit != null) params.set("limit", String(options.limit));

@@ -68,6 +68,12 @@ test("add a physical book and track manual progress", async ({ page }) => {
   await expect(page.getByText("42%").first()).toBeVisible();
   await page.reload();
   await expect(page.getByText("42%").first()).toBeVisible();
+
+  // The chip filters the library down to physical books.
+  await page.getByRole("button", { name: "Physical book" }).first().click();
+  await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+\?format=physical/);
+  await expect(page.getByText("Paper Copy E2E").first()).toBeVisible();
+  await expect(page.getByText("E2E Test Book")).toHaveCount(0);
 });
 
 test("admin moves a book to another library", async ({ page }) => {
