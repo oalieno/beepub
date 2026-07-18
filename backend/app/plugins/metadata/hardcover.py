@@ -44,6 +44,7 @@ class HardcoverPlugin(MetadataPlugin):
             "published_date",
             "rating",
             "rating_count",
+            "readers_count",
             "tags",
         }
     )
@@ -71,6 +72,7 @@ class HardcoverPlugin(MetadataPlugin):
     def _record_from_doc(doc: dict) -> BookRecord:
         rating = doc.get("rating")
         ratings_count = doc.get("ratings_count")
+        readers = doc.get("users_read_count")
         return BookRecord(
             source_url=doc.get("slug"),
             title=doc.get("title"),
@@ -79,6 +81,7 @@ class HardcoverPlugin(MetadataPlugin):
             published_date=doc.get("release_date"),
             rating=float(rating) if rating else None,
             rating_count=int(ratings_count) if ratings_count else None,
+            readers_count=int(readers) if readers else None,
             tags=(
                 (doc.get("genres") or [])
                 + (doc.get("moods") or [])

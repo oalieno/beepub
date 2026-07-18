@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import enum
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -17,9 +16,6 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy import (
-    Enum as SAEnum,
-)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,13 +29,6 @@ if TYPE_CHECKING:
     from app.models.tag import BookTag
     from app.models.user import User
     from app.models.work import Work
-
-
-class MetadataSource(enum.StrEnum):
-    goodreads = "goodreads"
-    readmoo = "readmoo"
-    google_books = "google_books"
-    hardcover = "hardcover"
 
 
 class Book(Base, TimestampMixin):
@@ -182,14 +171,18 @@ class ExternalMetadata(Base):
     book_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("books.id", ondelete="CASCADE"), nullable=False
     )
-    source: Mapped[MetadataSource] = mapped_column(
-        SAEnum(MetadataSource), nullable=False
-    )
+    # Plugin name (drop-in plugins mean no DB enum — the registry is the
+    # source of truth for valid values).
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
     source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    # SQL consumers (popularity, the ratings UI) keep real columns; the
+    # rest of the plugin's BookRecord lives in `record`. record NULL =
+    # "searched, not found" marker.
     rating: Mapped[float | None] = mapped_column(Numeric(3, 2), nullable=True)
     rating_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    readers_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reviews: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    record: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

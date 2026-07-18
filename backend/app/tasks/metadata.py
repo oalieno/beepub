@@ -4,7 +4,9 @@ The core function _run_fetch_book_metadata() is shared by both:
 - fetch_book_metadata (per-book celery task, default queue)
 - bulk_jobs._execute_book_task (bulk orchestrator, bulk queue)
 
-No AI/LLM calls. Handles rate limits with Redis cooldown flags.
+No AI/LLM calls. Handles rate limits with Redis cooldown flags — the
+cooldown length is each plugin's declared ratelimit_cooldown; plugins
+themselves never touch Redis or sleep.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from sqlalchemy import text
 
 from app.celeryapp import celery
 from app.config import settings as app_config
+from app.plugins.metadata import BookQuery, Clue, RateLimitError, registry
 
 logger = logging.getLogger(__name__)
 
@@ -26,14 +29,6 @@ DELAY_BETWEEN_BOOKS = 1.5
 
 # Redis key prefix for rate limit cooldown
 RATELIMIT_KEY_PREFIX = "beepub:ratelimit"
-
-# Cooldown TTLs per source (seconds)
-RATELIMIT_TTLS = {
-    "google_books": 86400,  # 24h (daily quota of 1000)
-    "hardcover": 60,  # 60s (per-minute limit of 60)
-    "goodreads": 300,  # 5min
-    "readmoo": 300,  # 5min
-}
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +42,9 @@ async def _is_rate_limited(redis_client: aioredis.Redis, source: str) -> bool:
 
 
 async def _set_rate_limited(redis_client: aioredis.Redis, source: str) -> None:
-    """Mark a source as rate-limited with appropriate TTL."""
-    ttl = RATELIMIT_TTLS.get(source, 300)
+    """Mark a source as rate-limited with its declared cooldown TTL."""
+    plugin_cls = registry.get_plugin_class(source)
+    ttl = plugin_cls.ratelimit_cooldown if plugin_cls else 300
     await redis_client.set(f"{RATELIMIT_KEY_PREFIX}:{source}", "1", ex=ttl)
     logger.warning(f"Rate limited by {source} — cooldown {ttl}s")
 
@@ -76,22 +72,23 @@ async def _write_empty_marker(db, book_id: str, source_name: str) -> None:
 
 
 async def _run_fetch_book_metadata(book_id: str) -> None:
-    """Fetch metadata from all sources for a book, then run deterministic tag mapping.
+    """Resolve every enabled plugin for a book, then run deterministic
+    tag mapping.
 
-    Skips already-fetched sources. Writes empty markers for not-found books.
-    Respects rate limit cooldown flags in Redis.
+    Skips already-fetched sources. Writes empty markers for not-found
+    books (and for plugins that can't locate this book at all, so
+    metadata_count still completes). Respects rate limit cooldown flags
+    in Redis. A plugin raising ≠ not found: no marker, retried next run.
     """
     import uuid as _uuid
 
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
         fetch_book_info,
-        init_metadata_sources,
+        init_metadata_plugins,
         run_tag_mapping,
-        search_and_fetch,
         upsert_external_metadata,
     )
-    from app.services.metadata_sources.base import RateLimitError
     from app.services.popularity import recompute_popularity
 
     redis_client = aioredis.from_url(app_config.redis_url)
@@ -107,7 +104,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
     try:
         async with create_task_engine() as (_engine, session_factory):
-            sources = await init_metadata_sources(session_factory)
+            plugins = await init_metadata_plugins(session_factory)
 
             async with session_factory() as db:
                 book_info = await fetch_book_info(db, book_id)
@@ -115,11 +112,12 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
                 return
 
             display_title, display_authors, isbn = book_info
+            available_clues = {Clue.TITLE} | ({Clue.ISBN} if isbn else set())
 
-            for source in sources:
+            for plugin in plugins:
                 try:
                     # Skip if rate-limited
-                    if await _is_rate_limited(redis_client, source.source_name):
+                    if await _is_rate_limited(redis_client, plugin.name):
                         continue
 
                     # Skip if already fetched this source
@@ -129,35 +127,43 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
                                 "SELECT 1 FROM external_metadata "
                                 "WHERE book_id = :book_id AND source = :source"
                             ),
-                            {"book_id": book_id, "source": source.source_name},
+                            {"book_id": book_id, "source": plugin.name},
                         )
                         already_fetched = existing.one_or_none() is not None
                     if already_fetched:
                         continue
 
+                    if not (plugin.accepts & available_clues):
+                        # This plugin can never locate this book (e.g. an
+                        # ISBN-only source, a book without an ISBN) —
+                        # record it like a not-found so the book's
+                        # metadata_count still reaches the full set.
+                        async with session_factory() as db:
+                            await _write_empty_marker(db, book_id, plugin.name)
+                        continue
+
                     # HTTP scraping runs with NO session open — the task
                     # engine pool is tiny and these calls take seconds each.
-                    result = await search_and_fetch(
-                        source, display_title, display_authors, isbn, book_id
+                    record = await plugin.resolve(
+                        BookQuery(
+                            title=display_title,
+                            authors=display_authors,
+                            isbn=isbn,
+                        )
                     )
 
                     async with session_factory() as db:
-                        if not result:
-                            await _write_empty_marker(db, book_id, source.source_name)
+                        if record is None:
+                            await _write_empty_marker(db, book_id, plugin.name)
                         else:
-                            fetch_result, source_url = result
                             await upsert_external_metadata(
-                                db,
-                                book_id,
-                                source.source_name,
-                                source_url,
-                                fetch_result,
+                                db, book_id, plugin.name, record
                             )
                 except RateLimitError:
-                    await _set_rate_limited(redis_client, source.source_name)
+                    await _set_rate_limited(redis_client, plugin.name)
                 except Exception as e:
                     logger.error(
-                        f"Error fetching {source.source_name} for book {book_id}: {e}"
+                        f"Error fetching {plugin.name} for book {book_id}: {e}"
                     )
 
             # Update metadata_count flag on the book
@@ -208,23 +214,25 @@ def fetch_book_metadata(self, book_id: str) -> None:
 
 
 async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
-    """Fetch a single source using its stored source_url, then re-map tags."""
+    """Fetch a single source using its stored source_url, then re-map tags.
+
+    The pinned URL rides in as the `url` clue — the most precise clue a
+    plugin can get."""
     import uuid as _uuid
 
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
-        init_metadata_sources,
+        init_metadata_plugins,
         run_tag_mapping,
         upsert_external_metadata,
     )
-    from app.services.metadata_sources.base import RateLimitError
     from app.services.popularity import recompute_popularity
 
     async with create_task_engine() as (_engine, session_factory):
-        sources = await init_metadata_sources(session_factory)
-        source = next((s for s in sources if s.source_name == source_name), None)
-        if not source:
-            logger.warning(f"Unknown source: {source_name}")
+        plugins = await init_metadata_plugins(session_factory)
+        plugin = next((p for p in plugins if p.name == source_name), None)
+        if not plugin:
+            logger.warning(f"Unknown or disabled source: {source_name}")
             return
 
         async with session_factory() as db:
@@ -242,9 +250,15 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
 
             pinned_url = row["source_url"]
             try:
-                fetch_result = await source.fetch(pinned_url)
+                record = await plugin.resolve(BookQuery(url=pinned_url))
+                if record is None:
+                    logger.warning(
+                        f"{source_name} returned nothing for pinned URL "
+                        f"{pinned_url} (book {book_id})"
+                    )
+                    return
                 await upsert_external_metadata(
-                    db, book_id, source_name, pinned_url, fetch_result
+                    db, book_id, source_name, record, source_url=pinned_url
                 )
                 await recompute_popularity(db, [_uuid.UUID(book_id)])
                 await db.commit()

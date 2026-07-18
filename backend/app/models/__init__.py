@@ -1,4 +1,4 @@
-from app.models.book import Book, ExternalMetadata, MetadataSource
+from app.models.book import Book, ExternalMetadata
 from app.models.book_embedding import BookEmbeddingChunk
 from app.models.book_embedding_unified import BookEmbedding
 from app.models.book_locations import BookLocations
@@ -27,7 +27,6 @@ __all__ = [
     "UserLibraryExclusion",
     "Book",
     "ExternalMetadata",
-    "MetadataSource",
     "Bookshelf",
     "BookshelfBook",
     "UserBookInteraction",

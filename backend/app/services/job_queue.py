@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.book import Book
-from app.services.metadata_sources import NUM_METADATA_SOURCES
+from app.plugins.metadata import registry
 
 logger = logging.getLogger(__name__)
 
@@ -242,7 +242,7 @@ def _missing_filters(job_type: str):
         return [Book.has_tags.is_(False)], None
 
     elif job_type == "metadata_backfill":
-        return [Book.metadata_count < NUM_METADATA_SOURCES], None
+        return [Book.metadata_count < len(registry.all_plugins())], None
 
     elif job_type == "digest":
         # "" marks a file that could not be read (kept out of the missing

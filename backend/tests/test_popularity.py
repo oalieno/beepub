@@ -47,4 +47,4 @@ async def test_recompute_popularity_runs_update_with_expected_params():
     assert "source = 'readmoo'" in sql
     assert "source = 'hardcover'" in sql
     assert "source = 'google_books'" not in sql
-    assert "users_read_count" in sql
+    assert "readers_count" in sql

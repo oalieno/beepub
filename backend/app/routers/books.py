@@ -27,12 +27,13 @@ from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
-from app.models.book import Book, ExternalMetadata, MetadataSource
+from app.models.book import Book, ExternalMetadata
 from app.models.book_locations import BookLocations
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
+from app.plugins.metadata import registry as metadata_registry
 from app.rate_limit import limiter
 from app.schemas.book import (
     BookLibraryUpdate,
@@ -1721,26 +1722,27 @@ async def update_external_metadata_url(
     current_user: Annotated[User, Depends(require_admin)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    # Validate source
-    try:
-        validated_source = MetadataSource(source)
-    except ValueError:
+    # Validate source against the plugin registry
+    plugin_cls = metadata_registry.get_plugin_class(source)
+    if plugin_cls is None:
         raise HTTPException(
             status_code=400,
             detail="Invalid source. Must be one of: "
-            f"{', '.join(s.value for s in MetadataSource)}",
+            f"{', '.join(c.name for c in metadata_registry.all_plugins())}",
         )
+    validated_source = plugin_cls.name
 
-    # Validate source URL format
-    _SOURCE_URL_PATTERNS: dict[MetadataSource, re.Pattern[str]] = {
-        MetadataSource.goodreads: re.compile(
-            r"^https://www\.goodreads\.com/book/show/\d+[\w-]*$"
-        ),
-        MetadataSource.readmoo: re.compile(r"^https://readmoo\.com/book/\d+$"),
-    }
+    # Validate source URL format from the plugin's linking declaration
     if body.source_url is not None:
-        pattern = _SOURCE_URL_PATTERNS.get(validated_source)
-        if pattern and not pattern.match(body.source_url):
+        if not plugin_cls.url_prefix:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{source} does not support manual linking",
+            )
+        pattern = re.compile(
+            "^" + re.escape(plugin_cls.url_prefix) + plugin_cls.id_pattern.lstrip("^")
+        )
+        if not pattern.match(body.source_url):
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid URL format for {source}",
@@ -1764,8 +1766,9 @@ async def update_external_metadata_url(
             meta.source_url = None
             meta.rating = None
             meta.rating_count = None
+            meta.readers_count = None
             meta.reviews = None
-            meta.raw_data = None
+            meta.record = None
         else:
             meta = ExternalMetadata(
                 book_id=book_id,
@@ -1813,10 +1816,9 @@ async def delete_external_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Unlink a source completely — removes the row so it can be re-searched."""
-    try:
-        validated_source = MetadataSource(source)
-    except ValueError:
+    if metadata_registry.get_plugin_class(source) is None:
         raise HTTPException(status_code=400, detail="Invalid source")
+    validated_source = source
 
     result = await db.execute(
         select(ExternalMetadata).where(

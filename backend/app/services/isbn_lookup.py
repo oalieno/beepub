@@ -1,112 +1,64 @@
 """ISBN → display metadata for the add-physical-book prefill.
 
-Google Books first (best data, but keyless access 429s aggressively —
-effectively requires the operator's google_books_api_key), then Open
-Library as the keyless fallback. Covers get their own fallback chain:
-Taiwanese ISBNs are usually metadata-only records upstream (no
-imageLinks on Google, no cover_i on OL), while books.com.tw carries
-nearly every TW edition."""
+A thin chain over the metadata plugins (Google Books → Open Library,
+then the books.com.tw / Open Library cover fallbacks), preserving the
+single-result endpoint contract. The per-source fan-out with provenance
+replaces this in the next step."""
 
 import logging
-import re
 
-import httpx
-
-from app.services.metadata_sources.base import REQUEST_TIMEOUT, RateLimitError
-from app.services.metadata_sources.google_books import (
-    lookup_isbn as google_lookup_isbn,
-)
+from app.plugins.metadata import BookQuery, BookRecord, RateLimitError
+from app.plugins.metadata.books_tw import BooksTwPlugin
+from app.plugins.metadata.google_books import GoogleBooksPlugin
+from app.plugins.metadata.open_library import OpenLibraryPlugin
 
 logger = logging.getLogger(__name__)
 
-OPENLIBRARY_SEARCH = "https://openlibrary.org/search.json"
 
-BOOKS_TW_SEARCH = "https://search.books.com.tw/search/query/key/{isbn}"
-# The plain www.books.com.tw image path 403s scripted fetches; the im1
-# image proxy serves it openly, full-size when w/h are omitted.
-_BOOKS_TW_IMG_RE = re.compile(
-    r"https://im\d\.book\.com\.tw/image/getImage\?i="
-    r"(https://www\.books\.com\.tw/img/[^&\"\s]+\.jpg)"
-)
-_BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0 Safari/537.36"
-    ),
-    "Accept-Language": "zh-TW,zh;q=0.9",
-}
-
-
-async def _books_tw_cover(isbn: str) -> str | None:
-    """Cover-only fallback from the books.com.tw ISBN search."""
-    try:
-        async with httpx.AsyncClient(
-            headers=_BROWSER_HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True
-        ) as client:
-            resp = await client.get(BOOKS_TW_SEARCH.format(isbn=isbn))
-            if resp.status_code != 200:
-                return None
-            match = _BOOKS_TW_IMG_RE.search(resp.text)
-            if not match:
-                return None
-            return f"https://im1.book.com.tw/image/getImage?i={match.group(1)}"
-    except Exception as e:
-        logger.warning(f"books.com.tw cover lookup failed: {e}")
-        return None
-
-
-async def _openlibrary_lookup(isbn: str) -> dict | None:
-    params = {
-        "isbn": isbn,
-        "fields": "title,author_name,publisher,first_publish_year,cover_i",
-        "limit": 1,
+def _as_dict(record: BookRecord) -> dict:
+    return {
+        "title": record.title,
+        "authors": record.authors,
+        "publisher": record.publisher,
+        "description": record.description,
+        "published_date": record.published_date,
+        "language": record.language,
+        "cover_url": record.cover_url,
     }
-    try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
-            resp = await client.get(OPENLIBRARY_SEARCH, params=params)
-            if resp.status_code != 200:
-                return None
-            docs = resp.json().get("docs") or []
-            if not docs:
-                return None
-            doc = docs[0]
-            cover_id = doc.get("cover_i")
-            publishers = doc.get("publisher") or []
-            year = doc.get("first_publish_year")
-            return {
-                "title": doc.get("title"),
-                "authors": doc.get("author_name", []),
-                "publisher": publishers[0] if publishers else None,
-                "description": None,
-                "published_date": str(year) if year else None,
-                # Open Library language codes are MARC (eng/jpn); leave the
-                # field to the user rather than guessing a mapping.
-                "language": None,
-                "cover_url": (
-                    f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"
-                    if cover_id
-                    else None
-                ),
-            }
-    except Exception as e:
-        logger.warning(f"Open Library ISBN lookup failed: {e}")
-        return None
 
 
 async def lookup_isbn(isbn: str, google_api_key: str = "") -> dict | None:
-    info = None
+    query = BookQuery(isbn=isbn)
+
+    record: BookRecord | None = None
     try:
-        info = await google_lookup_isbn(isbn, api_key=google_api_key)
+        record = await GoogleBooksPlugin(
+            {"google_books_api_key": google_api_key}
+        ).resolve(query)
     except RateLimitError:
         pass  # fall through to Open Library
-    if not info:
-        info = await _openlibrary_lookup(isbn)
-    if info and not info.get("cover_url"):
+
+    if record is None or record.title is None:
+        try:
+            ol = await OpenLibraryPlugin().resolve(query)
+        except RateLimitError:
+            ol = None
+        if ol is not None and ol.title is not None:
+            record = ol
+
+    if record is None or record.title is None:
+        return None
+
+    info = _as_dict(record)
+    if not info.get("cover_url"):
         # Metadata found but no cover art upstream — the common case for
         # TW editions. books.com.tw first, then the Open Library by-ISBN
         # guess (default=false 404s cleanly; the UI drops broken previews).
-        info["cover_url"] = (
-            await _books_tw_cover(isbn)
-            or f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
+        try:
+            tw = await BooksTwPlugin().resolve(query)
+        except RateLimitError:
+            tw = None
+        info["cover_url"] = (tw.cover_url if tw else None) or (
+            f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false"
         )
     return info

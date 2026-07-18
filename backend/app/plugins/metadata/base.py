@@ -72,6 +72,7 @@ class BookRecord:
     tags: list[str] = field(default_factory=list)
     rating: float | None = None
     rating_count: int | None = None
+    readers_count: int | None = None  # e.g. hardcover's users_read_count
     reviews: list[dict] | None = None
 
 

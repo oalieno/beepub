@@ -73,7 +73,7 @@ _RECOMPUTE_SQL = text("""
                         100.0,
                         GREATEST(
                             LN(COALESCE(em.rating_count, 0) + 1) / LN(:hardcover_rating_anchor + 1) * 100.0,
-                            LN(COALESCE((em.raw_data->>'users_read_count')::int, 0) + 1) / LN(:hardcover_read_anchor + 1) * 100.0
+                            LN(COALESCE(em.readers_count, 0) + 1) / LN(:hardcover_read_anchor + 1) * 100.0
                         )
                     )
                 ELSE 0.0 END

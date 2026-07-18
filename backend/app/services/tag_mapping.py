@@ -411,68 +411,28 @@ def map_raw_tags(
     return results
 
 
-def collect_raw_tags_from_metadata(
-    external_metadata: list[dict],
-    epub_tags: list[str] | None = None,
-) -> list[str]:
-    """Collect all raw tags from external metadata sources and epub tags.
-
-    Args:
-        external_metadata: List of dicts with 'source' and 'raw_data' keys
-        epub_tags: Tags from EPUB metadata / Calibre
-    """
-    raw_tags: list[str] = []
-
-    for meta in external_metadata:
-        raw_data = meta.get("raw_data") or {}
-        source = meta.get("source", "")
-
-        if source == "goodreads":
-            raw_tags.extend(raw_data.get("genres", []))
-            raw_tags.extend(raw_data.get("shelves", []))
-
-        elif source == "readmoo":
-            raw_tags.extend(raw_data.get("categories", []))
-
-        elif source == "google_books":
-            # Hierarchical strings like "Fiction / Science Fiction"
-            for cat in raw_data.get("categories", []):
-                raw_tags.append(cat)
-                # Also add each level separately
-                for part in cat.split(" / "):
-                    part = part.strip()
-                    if part:
-                        raw_tags.append(part)
-            if raw_data.get("mainCategory"):
-                raw_tags.append(raw_data["mainCategory"])
-
-        elif source == "hardcover":
-            raw_tags.extend(raw_data.get("genres", []))
-            raw_tags.extend(raw_data.get("moods", []))
-            raw_tags.extend(raw_data.get("tags", []))
-
-    if epub_tags:
-        raw_tags.extend(epub_tags)
-
-    return _split_raw_tags(raw_tags)
-
-
 async def generate_tags_from_metadata(
     db: AsyncSession,
     book_id: uuid.UUID,
 ) -> int:
     """Generate curated tags for a book from its external metadata + epub tags.
 
-    Deterministic: no LLM calls. Uses synonym mapping only.
+    Deterministic: no LLM calls. Uses synonym mapping only. Raw tags
+    come straight from each source's stored BookRecord (plugins put
+    their raw tag strings in record["tags"]; migration 054 converted
+    legacy rows) — no per-source extraction knowledge lives here.
     """
-    # Fetch external metadata
+    # Collect raw tags from the stored per-source records
     result = await db.execute(
-        text("SELECT source, raw_data FROM external_metadata WHERE book_id = :book_id"),
+        text(
+            "SELECT record FROM external_metadata "
+            "WHERE book_id = :book_id AND record IS NOT NULL"
+        ),
         {"book_id": str(book_id)},
     )
-    external_metadata = [
-        {"source": row[0], "raw_data": row[1]} for row in result.fetchall()
-    ]
+    raw_tags: list[str] = []
+    for row in result.fetchall():
+        raw_tags.extend(row[0].get("tags") or [])
 
     # Fetch epub_tags
     result = await db.execute(
@@ -480,11 +440,11 @@ async def generate_tags_from_metadata(
         {"book_id": str(book_id)},
     )
     row = result.one_or_none()
-    epub_tags = row[0] if row and row[0] else None
+    if row and row[0]:
+        raw_tags.extend(row[0])
 
-    # Collect and map
-    raw_tags = collect_raw_tags_from_metadata(external_metadata, epub_tags)
-    mapped = map_raw_tags(raw_tags)
+    # Map through the curated vocabulary
+    mapped = map_raw_tags(_split_raw_tags(raw_tags))
 
     if not mapped:
         return []
