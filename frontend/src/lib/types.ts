@@ -50,7 +50,7 @@ export interface BookTag {
 
 export interface BookOut {
   id: string;
-  file_size: number;
+  file_size: number | null; // null = physical book (no file)
   format: string;
   cover_path: string | null;
   epub_title: string | null;
@@ -322,6 +322,16 @@ export type ReadingStatus =
   | "currently_reading"
   | "read"
   | "did_not_finish";
+
+export interface IsbnLookupOut {
+  title: string | null;
+  authors: string[];
+  publisher: string | null;
+  description: string | null;
+  published_date: string | null;
+  language: string | null;
+  cover_url: string | null;
+}
 
 export interface InteractionOut {
   rating: number | null;

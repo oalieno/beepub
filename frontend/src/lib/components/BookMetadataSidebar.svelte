@@ -281,16 +281,18 @@
         <span class="text-foreground font-medium">{book.epub_isbn}</span>
       </div>
     {/if}
-    <div>
-      <span class="text-muted-foreground block text-xs mb-0.5"
-        >{m.metadata_label_file_size()}</span
-      >
-      <span class="text-foreground font-medium"
-        >{book.file_size < 1_048_576
-          ? (book.file_size / 1024).toFixed(1) + " KB"
-          : (book.file_size / 1_048_576).toFixed(1) + " MB"}</span
-      >
-    </div>
+    {#if book.file_size != null}
+      <div>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.metadata_label_file_size()}</span
+        >
+        <span class="text-foreground font-medium"
+          >{book.file_size < 1_048_576
+            ? (book.file_size / 1024).toFixed(1) + " KB"
+            : (book.file_size / 1_048_576).toFixed(1) + " MB"}</span
+        >
+      </div>
+    {/if}
     {#if book.word_count}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5"

@@ -13,6 +13,7 @@ import type {
   HighlightOut,
   IllustrationOut,
   InteractionOut,
+  IsbnLookupOut,
   PaginatedBooksWithInteraction,
   PaginatedFeed,
   ProgressOut,
@@ -43,6 +44,26 @@ export const booksApi = {
   },
 
   get: (bookId: string) => get(`/books/${bookId}`) as Promise<BookOut>,
+
+  createPhysical: (payload: {
+    library_id: string;
+    title: string;
+    authors?: string[];
+    publisher?: string | null;
+    description?: string | null;
+    published_date?: string | null;
+    isbn?: string | null;
+    language?: string | null;
+    cover_url?: string | null;
+  }) => post("/books/physical", payload) as Promise<BookOut>,
+
+  isbnLookup: (isbn: string) =>
+    get(
+      `/books/isbn-lookup?isbn=${encodeURIComponent(isbn)}`,
+    ) as Promise<IsbnLookupOut>,
+
+  updateManualProgress: (bookId: string, percentage: number) =>
+    put(`/books/${bookId}/manual-progress`, { percentage }),
 
   moveToLibrary: (bookId: string, libraryId: string) =>
     put(`/books/${bookId}/library`, { library_id: libraryId }) as Promise<{

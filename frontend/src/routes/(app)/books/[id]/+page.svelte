@@ -50,6 +50,7 @@
     X,
     Search,
     Star,
+    BookCopy,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -95,6 +96,47 @@
 
   let book = $state<BookOut | null>(null);
   let interaction = $state<InteractionOut | null>(null);
+  // Physical books have no file: no reader, no download — progress is a
+  // hand-entered percentage instead.
+  let isPhysical = $derived(book?.format === "physical");
+  let physicalPctEdit = $state<number | null>(null);
+  let physicalPct = $derived(
+    physicalPctEdit ??
+      Math.round(interaction?.reading_progress?.percentage ?? 0),
+  );
+  let savingPhysicalPct = $state(false);
+
+  async function saveManualProgress() {
+    if (physicalPctEdit == null || savingPhysicalPct || !book) return;
+    savingPhysicalPct = true;
+    try {
+      await booksApi.updateManualProgress(book.id, physicalPctEdit);
+      const emptyProgress = {
+        cfi: null,
+        percentage: null,
+        current_page: null,
+        font_size: null,
+        section_index: null,
+        section_page: null,
+        section_page_counts: null,
+        total_pages: null,
+        last_read_at: null,
+        kosync: null,
+      };
+      interaction = {
+        ...(interaction ?? newInteraction()),
+        reading_progress: {
+          ...(interaction?.reading_progress ?? emptyProgress),
+          percentage: physicalPctEdit,
+        },
+      };
+      physicalPctEdit = null;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      savingPhysicalPct = false;
+    }
+  }
   let externalMeta = $state<ExternalMetadataOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
@@ -597,6 +639,14 @@
           <h1 class="text-4xl font-bold leading-tight text-foreground">
             {book.display_title ?? "Untitled"}
           </h1>
+          {#if isPhysical}
+            <span
+              class="inline-flex items-center gap-1.5 mt-2 mr-2 px-3 py-1 bg-secondary rounded-full text-sm text-muted-foreground"
+            >
+              <BookCopy size={14} />
+              {m.physical_badge()}
+            </span>
+          {/if}
           {#if editions.length > 0}
             <a
               href="#editions"
@@ -643,18 +693,44 @@
           ondatechange={handleDateChange}
         />
 
+        {#if isPhysical}
+          <!-- No reader to report progress — the percentage is hand-set. -->
+          <div class="mt-4 max-w-xs">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-sm font-medium">{m.physical_progress()}</span>
+              <span class="text-sm text-muted-foreground tabular-nums"
+                >{physicalPct}%</span
+              >
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              value={physicalPct}
+              disabled={savingPhysicalPct}
+              oninput={(e) => (physicalPctEdit = Number(e.currentTarget.value))}
+              onchange={saveManualProgress}
+              class="w-full accent-primary"
+              aria-label={m.physical_progress()}
+            />
+          </div>
+        {/if}
+
         <!-- Action Buttons (desktop) -->
         <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
-          <button
-            onclick={() =>
-              goto(`/books/${book!.id}/read`, { replaceState: true })}
-            class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
-          >
-            <BookOpen size={16} />
-            {interaction?.reading_status === "currently_reading"
-              ? m.book_continue_reading()
-              : m.book_start_reading()}
-          </button>
+          {#if !isPhysical}
+            <button
+              onclick={() =>
+                goto(`/books/${book!.id}/read`, { replaceState: true })}
+              class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
+            >
+              <BookOpen size={16} />
+              {interaction?.reading_status === "currently_reading"
+                ? m.book_continue_reading()
+                : m.book_start_reading()}
+            </button>
+          {/if}
           <button
             class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {interaction?.reading_status ===
             'want_to_read'
@@ -677,7 +753,9 @@
                 : ""}
             />
           </button>
-          {#if isNative()}
+          {#if isPhysical}
+            <!-- nothing to download -->
+          {:else if isNative()}
             {#if inLocalLibrary}
               <button
                 class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-primary hover:shadow-md transition-all"
@@ -1070,15 +1148,25 @@
     style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
   >
     <div class="flex items-center gap-2.5" style="max-width: 900px;">
-      <button
-        onclick={() => goto(`/books/${book!.id}/read`, { replaceState: true })}
-        class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
-      >
-        <BookOpen size={16} />
-        {interaction?.reading_status === "currently_reading"
-          ? m.book_continue_reading()
-          : m.book_start_reading()}
-      </button>
+      {#if !isPhysical}
+        <button
+          onclick={() =>
+            goto(`/books/${book!.id}/read`, { replaceState: true })}
+          class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
+        >
+          <BookOpen size={16} />
+          {interaction?.reading_status === "currently_reading"
+            ? m.book_continue_reading()
+            : m.book_start_reading()}
+        </button>
+      {:else}
+        <span
+          class="h-12 flex-1 flex items-center justify-center gap-2 bg-card card-soft rounded-full text-muted-foreground text-sm"
+        >
+          <BookCopy size={16} />
+          {m.physical_badge()} · {physicalPct}%
+        </span>
+      {/if}
       <button
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {interaction?.reading_status ===
         'want_to_read'
@@ -1101,7 +1189,9 @@
             : ""}
         />
       </button>
-      {#if isNative()}
+      {#if isPhysical}
+        <!-- nothing to download -->
+      {:else if isNative()}
         {#if inLocalLibrary}
           <button
             class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-primary transition-all"

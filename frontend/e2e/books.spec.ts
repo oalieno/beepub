@@ -17,7 +17,8 @@ test("upload a book, open it, and read it", async ({ page }) => {
   await page.getByRole("link", { name: LIBRARY_NAME }).first().click();
   await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+$/);
 
-  await page.getByRole("button", { name: "Upload Books" }).click();
+  await page.getByRole("button", { name: "Add books" }).first().click();
+  await page.getByRole("menuitem", { name: "Upload Books" }).click();
   await page.locator('input[type="file"]').setInputFiles(FIXTURE);
   await expect(page.getByText("Uploaded 1 book(s)")).toBeVisible({
     timeout: 15_000,
@@ -40,6 +41,33 @@ test("upload a book, open it, and read it", async ({ page }) => {
       .getByText("The starship librarian")
       .first(),
   ).toBeVisible({ timeout: 30_000 });
+});
+
+test("add a physical book and track manual progress", async ({ page }) => {
+  await page.goto("/libraries");
+  await page.getByRole("link", { name: LIBRARY_NAME }).first().click();
+  await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+$/);
+
+  await page.getByRole("button", { name: "Add books" }).first().click();
+  await page.getByRole("menuitem", { name: "Add a physical book" }).click();
+  await page.locator("#physical-title").fill("Paper Copy E2E");
+  await page.locator("#physical-authors").fill("Shelf Author");
+  await page.getByRole("button", { name: "Add a physical book" }).click();
+  await expect(page.getByText("Physical book added")).toBeVisible();
+
+  await page.getByText("Paper Copy E2E").first().click();
+  await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
+  await expect(page.getByText("Physical book").first()).toBeVisible();
+  // No reader and no download for a paper copy.
+  await expect(
+    page.getByRole("button", { name: /Start Reading|Continue Reading/ }),
+  ).toHaveCount(0);
+
+  // Hand-set progress persists across a reload.
+  await page.locator('input[type="range"]').fill("42");
+  await expect(page.getByText("42%").first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByText("42%").first()).toBeVisible();
 });
 
 test("admin moves a book to another library", async ({ page }) => {

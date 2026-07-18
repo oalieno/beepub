@@ -4,6 +4,7 @@
   import {
     TriangleAlert,
     BookOpen,
+    BookCopy,
     Bookmark,
     Check,
     HardDrive,
@@ -67,8 +68,13 @@
     >
       {book.display_title ?? m.common_untitled()}
     </h3>
-    {#if status || book.has_unresolved_reports || $linkedServerBookIds.has(book.id)}
+    {#if status || book.format === "physical" || book.has_unresolved_reports || $linkedServerBookIds.has(book.id)}
       <div class="flex items-center gap-1.5 mt-1 text-xs">
+        {#if book.format === "physical"}
+          <span class="text-muted-foreground" title={m.physical_badge()}>
+            <BookCopy size={12} />
+          </span>
+        {/if}
         {#if status === "read"}
           <span class="inline-flex items-center gap-1 text-primary font-medium">
             <Check size={12} strokeWidth={3} />{m.mybooks_tab_read()}

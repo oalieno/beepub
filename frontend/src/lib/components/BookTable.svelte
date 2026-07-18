@@ -137,7 +137,7 @@
             {/if}
           </td>
           <td class="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
-            {formatSize(book.file_size)}
+            {book.file_size != null ? formatSize(book.file_size) : "—"}
           </td>
           <td class="px-3 py-2.5 text-muted-foreground whitespace-nowrap">
             {formatAdded(book)}

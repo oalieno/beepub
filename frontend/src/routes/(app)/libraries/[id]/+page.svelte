@@ -12,10 +12,12 @@
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
+  import AddPhysicalBookModal from "$lib/components/AddPhysicalBookModal.svelte";
   import { LibraryDetailSkeleton } from "$lib/components/skeletons";
+  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { ArrowLeftRight, Upload } from "@lucide/svelte";
+  import { ArrowLeftRight, BookCopy, Plus, Upload } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
@@ -61,6 +63,7 @@
   let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
+  let showPhysicalModal = $state(false);
   let dragOver = $state(false);
 
   interface PageSnapshot {
@@ -231,13 +234,26 @@
         {/if}
       </div>
       {#if canUpload}
-        <button
-          class="shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-xl transition-colors"
-          onclick={() => (showUploadModal = true)}
-        >
-          <Upload size={16} />
-          {m.library_upload()}
-        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger>
+            <button
+              class="shrink-0 flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-4 py-2 rounded-xl transition-colors"
+            >
+              <Plus size={16} />
+              {m.library_add_books()}
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Content align="end">
+            <DropdownMenu.Item onclick={() => (showUploadModal = true)}>
+              <Upload size={14} />
+              {m.library_upload()}
+            </DropdownMenu.Item>
+            <DropdownMenu.Item onclick={() => (showPhysicalModal = true)}>
+              <BookCopy size={14} />
+              {m.physical_add()}
+            </DropdownMenu.Item>
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
       {/if}
     </div>
 
@@ -317,3 +333,13 @@
     {/if}
   </div>
 </Modal>
+
+<AddPhysicalBookModal
+  open={showPhysicalModal}
+  libraryId={id}
+  onclose={() => (showPhysicalModal = false)}
+  oncreated={() => {
+    showPhysicalModal = false;
+    reloadNonce += 1;
+  }}
+/>
