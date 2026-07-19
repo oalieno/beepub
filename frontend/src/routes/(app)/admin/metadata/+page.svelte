@@ -27,6 +27,10 @@
   let keyValues = $state<Record<string, string>>({});
   let visibleFields = $state<Record<string, boolean>>({});
 
+  // The background-fetch section only offers enabled sources — the job
+  // is enabled ∩ list server-side, a disabled source can't be fetched.
+  const enabledSources = $derived(sources.filter((s) => enabled[s.name]));
+
   // Labels for the credential inputs of the built-in plugins; a drop-in
   // plugin's keys fall back to the raw key name.
   const SETTING_LABELS: Record<
@@ -138,11 +142,13 @@
           payload[key] = keyValues[key] ?? "";
         }
       }
-      const checked = sources
+      // Empty = "all enabled sources" (the default): store the explicit
+      // list only when the operator actually excluded something.
+      const checked = enabledSources
         .filter((source) => inJob[source.name])
         .map((source) => source.name);
       payload.metadata_job_sources =
-        checked.length === sources.length ? "" : checked.join(",");
+        checked.length === enabledSources.length ? "" : checked.join(",");
 
       await adminApi.updateSettings(payload);
       invalidateMetadataSources();
@@ -248,25 +254,6 @@
               {/each}
             </div>
 
-            <label
-              class="flex items-start gap-2 text-sm {enabled[source.name]
-                ? ''
-                : 'pointer-events-none'}"
-            >
-              <input
-                type="checkbox"
-                bind:checked={inJob[source.name]}
-                disabled={!enabled[source.name]}
-                class="mt-0.5 h-4 w-4 rounded border-input accent-primary"
-              />
-              <span>
-                <span class="text-foreground">{m.admin_metadata_in_job()}</span>
-                <span class="block text-xs text-muted-foreground">
-                  {m.admin_metadata_in_job_help()}
-                </span>
-              </span>
-            </label>
-
             {#if source.setting_keys.length > 0}
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {#each source.setting_keys as key (key)}
@@ -290,6 +277,39 @@
             {/if}
           </div>
         {/each}
+      </Card.Content>
+    </Card.Root>
+
+    <!-- Background fetch is the job's setting, not a per-plugin one:
+         which enabled sources the library-wide batch pulls from. -->
+    <div class="mt-8 mb-3">
+      <h2 class="text-lg font-semibold text-foreground">
+        {m.admin_metadata_in_job()}
+      </h2>
+      <p class="mt-1 text-sm text-muted-foreground">
+        {m.admin_metadata_in_job_help()}
+      </p>
+    </div>
+    <Card.Root>
+      <Card.Content class="p-6">
+        {#if enabledSources.length > 0}
+          <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {#each enabledSources as source (source.name)}
+              <label class="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  bind:checked={inJob[source.name]}
+                  class="h-4 w-4 rounded border-input accent-primary"
+                />
+                <span>{source.label}</span>
+              </label>
+            {/each}
+          </div>
+        {:else}
+          <p class="text-sm text-muted-foreground">
+            {m.admin_metadata_in_job_empty()}
+          </p>
+        {/if}
       </Card.Content>
     </Card.Root>
 
