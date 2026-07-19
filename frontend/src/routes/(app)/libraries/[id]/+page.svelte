@@ -12,7 +12,6 @@
   import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
-  import AddPhysicalBookModal from "$lib/components/AddPhysicalBookModal.svelte";
   import { LibraryDetailSkeleton } from "$lib/components/skeletons";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { LibraryOut } from "$lib/types";
@@ -63,7 +62,6 @@
   let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
-  let showPhysicalModal = $state(false);
   let dragOver = $state(false);
 
   interface PageSnapshot {
@@ -251,7 +249,9 @@
               <Upload size={14} />
               {m.library_upload()}
             </DropdownMenu.Item>
-            <DropdownMenu.Item onclick={() => (showPhysicalModal = true)}>
+            <DropdownMenu.Item
+              onclick={() => goto(`/libraries/${id}/physical/new`)}
+            >
               <BookCopy size={14} />
               {m.physical_add()}
             </DropdownMenu.Item>
@@ -337,14 +337,3 @@
     {/if}
   </div>
 </Modal>
-
-<AddPhysicalBookModal
-  open={showPhysicalModal}
-  libraryId={id}
-  libraryName={library?.name ?? ""}
-  onclose={() => (showPhysicalModal = false)}
-  oncreated={() => {
-    showPhysicalModal = false;
-    reloadNonce += 1;
-  }}
-/>

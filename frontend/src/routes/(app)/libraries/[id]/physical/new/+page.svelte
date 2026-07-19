@@ -1,9 +1,13 @@
 <script lang="ts">
+  import { page } from "$app/state";
+  import { goto } from "$app/navigation";
+  import { onMount } from "svelte";
   import { booksApi } from "$lib/api/books";
+  import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { Search } from "@lucide/svelte";
-  import Modal from "$lib/components/Modal.svelte";
+  import { BookCopy, Search } from "@lucide/svelte";
+  import BackButton from "$lib/components/BackButton.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
@@ -11,10 +15,10 @@
   import { Textarea } from "$lib/components/ui/textarea";
   import type { IsbnSourceResult } from "$lib/types";
 
-  // One row in the candidate list. ISBN/URL lookups already fetched the
-  // full record per source; title-search rows carry a (source, ref)
-  // pick resolved on click. Fine-tuning (other covers, per-field
-  // sources) is the edit-metadata modal's job.
+  // The form is the destination; online sources are an autocomplete
+  // that fills it. One row per search hit — ISBN/URL lookups already
+  // fetched the full record per source, title-search rows carry a
+  // (source, ref) pick resolved on click.
   interface CandidateRow {
     key: string;
     source: string;
@@ -28,26 +32,16 @@
     record?: IsbnSourceResult;
   }
 
-  let {
-    open,
-    libraryId,
-    libraryName = "",
-    onclose,
-    oncreated,
-  }: {
-    open: boolean;
-    libraryId: string;
-    libraryName?: string;
-    onclose: () => void;
-    oncreated: () => void;
-  } = $props();
+  const libraryId = $derived(page.params.id as string);
+  let libraryName = $state("");
 
-  let step = $state<1 | 2>(1);
   let lookupQuery = $state("");
   let lookingUp = $state(false);
   let candidates = $state<CandidateRow[]>([]);
+  let popoverOpen = $state(false);
   let pendingKey = $state<string | null>(null);
   let sourceFilter = $state<string | null>(null);
+  let filledFrom = $state<string | null>(null);
 
   let isbn = $state("");
   let title = $state("");
@@ -80,28 +74,14 @@
       : candidates,
   );
 
-  function reset() {
-    step = 1;
-    lookupQuery = "";
-    candidates = [];
-    pendingKey = null;
-    sourceFilter = null;
-    isbn = "";
-    title = "";
-    authors = "";
-    publisher = "";
-    publishedDate = "";
-    description = "";
-    coverUrl = null;
-    queryTitle = "";
-  }
-
-  // Closing the modal (X, cancel, backdrop) always starts over — a
-  // reopened form stuck mid-flow reads as a bug, not a convenience.
-  function handleClose() {
-    reset();
-    onclose();
-  }
+  onMount(async () => {
+    try {
+      const library = await librariesApi.get(libraryId);
+      libraryName = library.name;
+    } catch {
+      // Header just omits the library name; creating still works.
+    }
+  });
 
   function metaLine(row: CandidateRow): string {
     // Self-published rows repeat the author as publisher — say it once.
@@ -114,22 +94,23 @@
       .join(" · ");
   }
 
-  function applyRecord(record: IsbnSourceResult) {
+  function applyRecord(record: IsbnSourceResult, sourceLabel: string) {
     title = record.title ?? "";
     authors = record.authors.join(", ");
     publisher = record.publisher ?? "";
     publishedDate = record.published_date ?? "";
     description = record.description ?? "";
     // The picked source's cover or none — never another source's
-    // (mixing sources silently is the edit-metadata feature's call).
+    // (mixing sources is the edit-metadata feature's call).
     coverUrl = record.cover_url;
-    step = 2;
+    filledFrom = sourceLabel;
+    popoverOpen = false;
   }
 
   async function pick(row: CandidateRow) {
     if (pendingKey) return;
     if (row.record) {
-      applyRecord(row.record);
+      applyRecord(row.record, row.label);
       return;
     }
     pendingKey = row.key;
@@ -140,7 +121,7 @@
         ...(queryTitle ? { title: queryTitle } : {}),
       });
       if (info.results.length > 0) {
-        applyRecord(info.results[0]);
+        applyRecord(info.results[0], row.label);
       } else {
         toastStore.info(m.physical_isbn_not_found());
       }
@@ -149,12 +130,6 @@
     } finally {
       pendingKey = null;
     }
-  }
-
-  function manualEntry() {
-    // Carry over what the search box already told us.
-    if (queryTitle && !title.trim()) title = queryTitle;
-    step = 2;
   }
 
   async function handleLookup() {
@@ -188,6 +163,7 @@
           coverUrl: c.cover_url,
           ref: c.ref,
         }));
+        popoverOpen = candidates.length > 0;
         if (candidates.length === 0) {
           toastStore.info(m.physical_isbn_not_found());
         }
@@ -216,9 +192,11 @@
       record: r,
     }));
     if (candidates.length === 1) {
-      applyRecord(candidates[0].record!);
+      applyRecord(candidates[0].record!, candidates[0].label);
     } else if (candidates.length === 0) {
       toastStore.info(m.physical_isbn_not_found());
+    } else {
+      popoverOpen = true;
     }
   }
 
@@ -240,8 +218,7 @@
         cover_url: coverUrl,
       });
       toastStore.success(m.physical_created());
-      reset();
-      oncreated();
+      goto(`/libraries/${libraryId}`);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -250,50 +227,70 @@
   }
 </script>
 
-<Modal title={m.physical_add()} {open} onclose={handleClose}>
-  {#if step === 1}
-    <div class="space-y-4">
-      <p class="text-sm text-muted-foreground">
-        {m.physical_step_search()}
-        {#if libraryName}
-          · {m.physical_add_to_library({ name: libraryName })}
-        {/if}
+<svelte:head>
+  <title>{m.physical_add()} - BeePub</title>
+</svelte:head>
+
+<div class="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 pb-24">
+  <BackButton
+    href="/libraries/{libraryId}"
+    label={libraryName || m.nav_library()}
+  />
+
+  <div class="mt-4 mb-6">
+    <h1 class="text-2xl font-bold text-foreground">{m.physical_add()}</h1>
+    {#if libraryName}
+      <p class="mt-1 text-sm text-muted-foreground">
+        {m.physical_add_to_library({ name: libraryName })}
       </p>
+    {/if}
+  </div>
 
-      <div class="flex gap-2">
-        <Input
-          id="physical-lookup"
-          bind:value={lookupQuery}
-          placeholder={m.physical_lookup_label()}
-          autocomplete="off"
-          spellcheck={false}
-          class="flex-1"
-          onkeydown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              handleLookup();
-            }
-          }}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          class="shrink-0"
-          disabled={lookingUp || !lookupQuery.trim()}
-          onclick={handleLookup}
-        >
-          {#if lookingUp}
-            <Spinner size="sm" />
-          {:else}
-            <Search size={14} />
-          {/if}
-          {m.physical_isbn_lookup()}
-        </Button>
-      </div>
+  <!-- Autofill bar: search fills the form below; the form never waits
+       for it — manual entry is just typing. -->
+  <div class="relative mb-6">
+    <div class="flex gap-2">
+      <Input
+        id="physical-lookup"
+        bind:value={lookupQuery}
+        placeholder={m.physical_autofill_hint()}
+        autocomplete="off"
+        spellcheck={false}
+        class="flex-1"
+        onkeydown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleLookup();
+          }
+        }}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        class="shrink-0"
+        disabled={lookingUp || !lookupQuery.trim()}
+        onclick={handleLookup}
+      >
+        {#if lookingUp}
+          <Spinner size="sm" />
+        {:else}
+          <Search size={14} />
+        {/if}
+        {m.physical_isbn_lookup()}
+      </Button>
+    </div>
 
-      {#if candidates.length > 0}
+    {#if popoverOpen && candidates.length > 0}
+      <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
+      <div
+        class="fixed inset-0 z-10"
+        onclick={() => (popoverOpen = false)}
+      ></div>
+      <div
+        class="absolute inset-x-0 top-full z-20 mt-2 overflow-hidden rounded-md border bg-background shadow-lg"
+      >
         {#if sourcePills.length > 1}
-          <div class="flex flex-wrap gap-1.5">
+          <div class="flex flex-wrap gap-1.5 border-b p-2">
             <button
               type="button"
               class="rounded-full border px-2.5 py-1 text-xs transition-colors {sourceFilter ===
@@ -321,10 +318,9 @@
             {/each}
           </div>
         {/if}
-
-        <!-- max-h deliberately cuts a row mid-height: the partial row is
-             the scroll cue (a clean 4-row fit reads as "that's all"). -->
-        <div class="max-h-80 space-y-0.5 overflow-y-auto rounded-md border p-1">
+        <!-- max-h deliberately cuts a row mid-height: the partial row
+             is the scroll cue. -->
+        <div class="max-h-80 space-y-0.5 overflow-y-auto p-1">
           {#each visibleCandidates as row (row.key)}
             <button
               type="button"
@@ -372,109 +368,104 @@
             </button>
           {/each}
         </div>
-      {/if}
-
-      <div class="pt-1">
-        <button
-          type="button"
-          class="text-sm text-primary hover:underline"
-          onclick={manualEntry}
-        >
-          {m.physical_manual_entry()} →
-        </button>
       </div>
-    </div>
-  {:else}
-    <form
-      class="space-y-4"
-      onsubmit={(e) => {
-        e.preventDefault();
-        handleSubmit();
-      }}
-    >
-      <p class="text-sm text-muted-foreground">{m.physical_step_confirm()}</p>
+    {/if}
 
-      <div class="flex gap-5">
-        {#if coverUrl}
-          <img
-            src={coverUrl}
-            alt=""
-            class="w-36 self-start rounded-sm book-shadow"
-            onerror={() => (coverUrl = null)}
-          />
-        {/if}
-        <div class="min-w-0 flex-1 space-y-4">
+    {#if filledFrom}
+      <p class="mt-2 text-xs text-muted-foreground">
+        {m.physical_filled_from({ source: filledFrom })}
+      </p>
+    {/if}
+  </div>
+
+  <form
+    class="space-y-5"
+    onsubmit={(e) => {
+      e.preventDefault();
+      handleSubmit();
+    }}
+  >
+    <div class="flex flex-col gap-6 sm:flex-row">
+      {#if coverUrl}
+        <img
+          src={coverUrl}
+          alt=""
+          class="w-40 self-center rounded-sm book-shadow sm:self-start"
+          onerror={() => (coverUrl = null)}
+        />
+      {:else}
+        <div
+          class="flex aspect-[2/3] w-40 shrink-0 items-center justify-center self-center rounded-md border-2 border-dashed border-border sm:self-start"
+        >
+          <BookCopy size={32} class="text-muted-foreground/40" />
+        </div>
+      {/if}
+      <div class="min-w-0 flex-1 space-y-4">
+        <div class="space-y-1.5">
+          <Label for="physical-title" class="text-sm font-medium">
+            {m.metadata_field_title()}
+          </Label>
+          <Input id="physical-title" bind:value={title} required />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="physical-authors" class="text-sm font-medium">
+            {m.metadata_field_authors()}
+          </Label>
+          <Input id="physical-authors" bind:value={authors} />
+        </div>
+        <div class="grid grid-cols-2 gap-3">
           <div class="space-y-1.5">
-            <Label for="physical-title" class="text-sm font-medium">
-              {m.metadata_field_title()}
+            <Label for="physical-publisher" class="text-sm font-medium">
+              {m.metadata_field_publisher()}
             </Label>
-            <Input id="physical-title" bind:value={title} required />
+            <Input id="physical-publisher" bind:value={publisher} />
           </div>
           <div class="space-y-1.5">
-            <Label for="physical-authors" class="text-sm font-medium">
-              {m.metadata_field_authors()}
-            </Label>
-            <Input id="physical-authors" bind:value={authors} />
-          </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-1.5">
-              <Label for="physical-publisher" class="text-sm font-medium">
-                {m.metadata_field_publisher()}
-              </Label>
-              <Input id="physical-publisher" bind:value={publisher} />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="physical-date" class="text-sm font-medium">
-                {m.metadata_field_published_date()}
-              </Label>
-              <Input
-                id="physical-date"
-                bind:value={publishedDate}
-                placeholder="YYYY-MM-DD"
-              />
-            </div>
-          </div>
-          <div class="space-y-1.5">
-            <Label for="physical-isbn" class="text-sm font-medium">
-              {m.metadata_label_isbn()}
+            <Label for="physical-date" class="text-sm font-medium">
+              {m.metadata_field_published_date()}
             </Label>
             <Input
-              id="physical-isbn"
-              bind:value={isbn}
-              inputmode="numeric"
-              autocomplete="off"
-              spellcheck={false}
-              placeholder="9789571234567"
-              class="max-w-56"
+              id="physical-date"
+              bind:value={publishedDate}
+              placeholder="YYYY-MM-DD"
             />
           </div>
         </div>
-      </div>
-
-      <div class="space-y-1.5">
-        <Label for="physical-description" class="text-sm font-medium">
-          {m.metadata_field_description()}
-        </Label>
-        <Textarea id="physical-description" bind:value={description} rows={4} />
-      </div>
-
-      <div class="flex items-center justify-between gap-2 pt-1">
-        <button
-          type="button"
-          class="text-sm text-primary hover:underline"
-          onclick={() => (step = 1)}
-        >
-          ← {m.physical_reselect()}
-        </button>
-        <div class="flex gap-2">
-          <Button type="button" variant="ghost" onclick={handleClose}>
-            {m.common_cancel()}
-          </Button>
-          <Button type="submit" disabled={saving || !title.trim()}>
-            {saving ? m.physical_creating() : m.physical_add()}
-          </Button>
+        <div class="space-y-1.5">
+          <Label for="physical-isbn" class="text-sm font-medium">
+            {m.metadata_label_isbn()}
+          </Label>
+          <Input
+            id="physical-isbn"
+            bind:value={isbn}
+            inputmode="numeric"
+            autocomplete="off"
+            spellcheck={false}
+            placeholder="9789571234567"
+            class="max-w-56"
+          />
         </div>
       </div>
-    </form>
-  {/if}
-</Modal>
+    </div>
+
+    <div class="space-y-1.5">
+      <Label for="physical-description" class="text-sm font-medium">
+        {m.metadata_field_description()}
+      </Label>
+      <Textarea id="physical-description" bind:value={description} rows={5} />
+    </div>
+
+    <div class="flex justify-end gap-2 pt-2">
+      <Button
+        type="button"
+        variant="ghost"
+        onclick={() => goto(`/libraries/${libraryId}`)}
+      >
+        {m.common_cancel()}
+      </Button>
+      <Button type="submit" disabled={saving || !title.trim()}>
+        {saving ? m.physical_creating() : m.physical_add()}
+      </Button>
+    </div>
+  </form>
+</div>
