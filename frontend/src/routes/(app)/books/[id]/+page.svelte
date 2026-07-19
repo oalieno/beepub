@@ -6,6 +6,7 @@
   import { beepubSync } from "$lib/reading/beepub";
   import { worksApi } from "$lib/api/works";
   import { coverUrl } from "$lib/api/client";
+  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { librariesApi } from "$lib/api/libraries";
@@ -587,11 +588,11 @@
             class="max-w-full h-auto rounded-sm book-shadow"
           />
         {:else}
-          <div
-            class="w-full aspect-[2/3] rounded-sm bg-secondary flex items-center justify-center book-shadow"
-          >
-            <BookOpen class="text-muted-foreground/30" size={48} />
-          </div>
+          <GeneratedCover
+            title={book.display_title ?? "Untitled"}
+            authors={book.display_authors ?? []}
+            class="w-full aspect-[2/3]"
+          />
         {/if}
       </div>
 

@@ -3,12 +3,12 @@
   import type { BookOut, BookWithInteractionOut } from "$lib/types";
   import {
     TriangleAlert,
-    BookOpen,
     BookCopy,
     Bookmark,
     Check,
     HardDrive,
   } from "@lucide/svelte";
+  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { linkedServerBookIds } from "$lib/stores/linkedBooks";
@@ -37,28 +37,28 @@
   <div
     class="aspect-[2/3] mb-3 flex items-end justify-center overflow-hidden rounded-sm"
   >
-    <div
-      class="relative inline-flex book-shadow-hover transition-all duration-300"
-    >
-      {#if book.cover_path}
+    {#if book.cover_path}
+      <div
+        class="relative inline-flex book-shadow-hover transition-all duration-300"
+      >
         <img
           use:authedSrc={coverUrl(book.id, book.updated_at)}
           alt="{book.display_title} cover"
           class="w-full h-full object-cover rounded-sm book-shadow"
           loading="lazy"
         />
-      {:else}
-        <div
-          class="w-full aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
-        >
-          <BookOpen class="text-muted-foreground/30" size={36} />
-          <span
-            class="text-muted-foreground/60 text-xs text-center line-clamp-3"
-            >{book.display_title ?? m.common_untitled()}</span
-          >
-        </div>
-      {/if}
-    </div>
+      </div>
+    {:else}
+      <div
+        class="relative h-full book-shadow-hover transition-all duration-300"
+      >
+        <GeneratedCover
+          title={book.display_title ?? m.common_untitled()}
+          authors={book.display_authors ?? []}
+          class="h-full aspect-[2/3]"
+        />
+      </div>
+    {/if}
   </div>
 
   <!-- Info below cover — fixed height so grid rows align -->

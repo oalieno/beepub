@@ -1,7 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import type { SeriesOut } from "$lib/types";
-  import { BookOpen } from "@lucide/svelte";
+  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import StarRating from "./StarRating.svelte";
@@ -36,28 +36,27 @@
   <div
     class="aspect-[2/3] mb-3 flex items-end justify-center overflow-hidden rounded-sm"
   >
-    <div
-      class="relative inline-flex book-shadow-hover transition-all duration-300"
-    >
-      {#if cover?.cover_path}
+    {#if cover?.cover_path}
+      <div
+        class="relative inline-flex book-shadow-hover transition-all duration-300"
+      >
         <img
           use:authedSrc={coverUrl(cover.id, cover.updated_at)}
           alt="{series.series_name} cover"
           class="w-full h-full object-cover rounded-sm book-shadow"
           loading="lazy"
         />
-      {:else}
-        <div
-          class="w-full aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
-        >
-          <BookOpen class="text-muted-foreground/30" size={36} />
-          <span
-            class="text-muted-foreground/60 text-xs text-center line-clamp-3"
-            >{series.series_name}</span
-          >
-        </div>
-      {/if}
-    </div>
+      </div>
+    {:else}
+      <div
+        class="relative h-full book-shadow-hover transition-all duration-300"
+      >
+        <GeneratedCover
+          title={series.series_name}
+          class="h-full aspect-[2/3]"
+        />
+      </div>
+    {/if}
   </div>
 
   <!-- Info -->

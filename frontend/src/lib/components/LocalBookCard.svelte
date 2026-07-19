@@ -17,7 +17,6 @@
   import { goto } from "$app/navigation";
   import {
     Bookmark,
-    BookOpen,
     Check,
     Cloud,
     CloudUpload,
@@ -26,6 +25,7 @@
     Trash2,
   } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
@@ -72,15 +72,7 @@
           loading="lazy"
         />
       {:else}
-        <div
-          class="h-56 sm:h-64 aspect-[2/3] bg-secondary rounded-sm flex flex-col items-center justify-center gap-2 p-4 book-shadow"
-        >
-          <BookOpen class="text-muted-foreground/30" size={36} />
-          <span
-            class="text-muted-foreground/60 text-xs text-center line-clamp-3"
-            >{entry.title}</span
-          >
-        </div>
+        <GeneratedCover title={entry.title} class="h-56 sm:h-64 aspect-[2/3]" />
       {/if}
     </div>
   </div>
