@@ -344,6 +344,20 @@ export interface MetadataSourcesOut {
   sources: MetadataSourceOut[];
 }
 
+export interface MetadataSearchCandidate {
+  source: string;
+  label: string;
+  // Opaque — echoed back as metadata-lookup's `ref` on pick.
+  ref: string;
+  title: string;
+  authors: string[];
+  url: string | null;
+}
+
+export interface MetadataSearchOut {
+  candidates: MetadataSearchCandidate[];
+}
+
 export interface IsbnSourceResult {
   source: string;
   label: string;

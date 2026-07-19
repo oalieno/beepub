@@ -14,6 +14,7 @@ import type {
   IllustrationOut,
   InteractionOut,
   IsbnLookupOut,
+  MetadataSearchOut,
   PaginatedBooksWithInteraction,
   PaginatedFeed,
   ProgressOut,
@@ -62,13 +63,25 @@ export const booksApi = {
     title?: string;
     author?: string;
     url?: string;
+    // Pick step of the two-step search: resolve one metadata-search
+    // candidate on its owning source (title/author ride along).
+    source?: string;
+    ref?: string;
   }) => {
     const qs = new URLSearchParams();
     if (params.isbn) qs.set("isbn", params.isbn);
     if (params.title) qs.set("title", params.title);
     if (params.author) qs.set("author", params.author);
     if (params.url) qs.set("url", params.url);
+    if (params.source) qs.set("source", params.source);
+    if (params.ref) qs.set("ref", params.ref);
     return get(`/books/metadata-lookup?${qs}`) as Promise<IsbnLookupOut>;
+  },
+
+  metadataSearch: (params: { title: string; author?: string }) => {
+    const qs = new URLSearchParams({ title: params.title });
+    if (params.author) qs.set("author", params.author);
+    return get(`/books/metadata-search?${qs}`) as Promise<MetadataSearchOut>;
   },
 
   moveToLibrary: (bookId: string, libraryId: string) =>
