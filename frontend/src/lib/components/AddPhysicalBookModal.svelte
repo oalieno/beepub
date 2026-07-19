@@ -116,7 +116,12 @@
   }
 
   function metaLine(row: CandidateRow): string {
-    return [row.publisher, row.publishedDate?.slice(0, 4), row.label]
+    // Self-published rows repeat the author as publisher — say it once.
+    const publisher =
+      row.publisher && !row.authors.includes(row.publisher)
+        ? row.publisher
+        : null;
+    return [publisher, row.publishedDate?.slice(0, 4), row.label]
       .filter(Boolean)
       .join(" · ");
   }
@@ -348,7 +353,7 @@
                 : 'border-border text-muted-foreground hover:bg-secondary'}"
               onclick={() => (sourceFilter = null)}
             >
-              {m.physical_filter_all()}（{candidates.length}）
+              {m.physical_filter_all({ count: candidates.length })}
             </button>
             {#each sourcePills as pill (pill.source)}
               <button
@@ -359,13 +364,18 @@
                   : 'border-border text-muted-foreground hover:bg-secondary'}"
                 onclick={() => (sourceFilter = pill.source)}
               >
-                {pill.label}（{pill.count}）
+                {m.physical_source_count({
+                  label: pill.label,
+                  count: pill.count,
+                })}
               </button>
             {/each}
           </div>
         {/if}
 
-        <div class="max-h-72 space-y-0.5 overflow-y-auto rounded-md border p-1">
+        <!-- max-h deliberately cuts a row mid-height: the partial row is
+             the scroll cue (a clean 4-row fit reads as "that's all"). -->
+        <div class="max-h-80 space-y-0.5 overflow-y-auto rounded-md border p-1">
           {#each visibleCandidates as row (row.key)}
             <div class="flex items-center gap-1">
               <button
@@ -374,6 +384,7 @@
                 row.key
                   ? 'bg-primary/10'
                   : 'hover:bg-secondary'}"
+                title={row.title}
                 onclick={() => (selectedKey = row.key)}
                 ondblclick={goNext}
               >
@@ -401,7 +412,7 @@
                       </p>
                     {/if}
                     {#if metaLine(row)}
-                      <p class="truncate text-xs text-muted-foreground/80">
+                      <p class="truncate text-xs text-muted-foreground">
                         {metaLine(row)}
                       </p>
                     {/if}
@@ -488,20 +499,27 @@
             </Label>
             <Input id="physical-authors" bind:value={authors} />
           </div>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="space-y-1.5">
-              <Label for="physical-publisher" class="text-sm font-medium">
-                {m.metadata_field_publisher()}
-              </Label>
-              <Input id="physical-publisher" bind:value={publisher} />
-            </div>
-            <div class="space-y-1.5">
-              <Label for="physical-date" class="text-sm font-medium">
-                {m.metadata_field_published_date()}
-              </Label>
-              <Input id="physical-date" bind:value={publishedDate} />
-            </div>
-          </div>
+        </div>
+      </div>
+
+      <!-- Full width below the cover row so every remaining field shares
+           one left edge (the indented column above ends with the cover). -->
+      <div class="grid grid-cols-2 gap-3">
+        <div class="space-y-1.5">
+          <Label for="physical-publisher" class="text-sm font-medium">
+            {m.metadata_field_publisher()}
+          </Label>
+          <Input id="physical-publisher" bind:value={publisher} />
+        </div>
+        <div class="space-y-1.5">
+          <Label for="physical-date" class="text-sm font-medium">
+            {m.metadata_field_published_date()}
+          </Label>
+          <Input
+            id="physical-date"
+            bind:value={publishedDate}
+            placeholder="YYYY-MM-DD"
+          />
         </div>
       </div>
 
@@ -530,6 +548,7 @@
               inputmode="numeric"
               autocomplete="off"
               spellcheck={false}
+              placeholder="9789571234567"
               class="max-w-56"
             />
           </div>
