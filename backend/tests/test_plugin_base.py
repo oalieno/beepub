@@ -97,3 +97,29 @@ def test_no_candidates_and_no_title_return_none():
     plugin = FakePlugin([SearchCandidate(url="a", title="a")])
     # Non-exact candidates can't be scored without a query title.
     assert asyncio.run(plugin.resolve(BookQuery(isbn="123"))) is None
+
+
+def test_candidates_lift_search_without_judgment():
+    hits = [
+        SearchCandidate(url="1", title="完全無關的另一本書"),
+        SearchCandidate(url="2", title="極限返航"),
+    ]
+    plugin = FakePlugin(hits)
+    # Every hit comes back — even ones resolve() would score below the
+    # confidence floor. The user is the judge in the two-step flow.
+    assert asyncio.run(plugin.candidates(BookQuery(title="極限返航"))) == hits
+    assert plugin.fetched == []
+
+
+def test_candidates_default_to_empty_without_search():
+    class SingleShot(MetadataPlugin):
+        name = "single"
+        label = "Single"
+        accepts = frozenset({Clue.ISBN})
+        provides = frozenset({"cover_url"})
+
+        async def resolve(self, query: BookQuery) -> BookRecord | None:
+            return None
+
+    plugin = SingleShot({})
+    assert asyncio.run(plugin.candidates(BookQuery(title="x"))) == []

@@ -33,9 +33,9 @@ from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
-from app.plugins.metadata import BookQuery
+from app.plugins.metadata import BookQuery, Clue
 from app.plugins.metadata import registry as metadata_registry
-from app.plugins.metadata.service import lookup_all
+from app.plugins.metadata.service import lookup_all, resolve_one, search_all
 from app.rate_limit import limiter
 from app.schemas.book import (
     BookLibraryUpdate,
@@ -50,6 +50,8 @@ from app.schemas.book import (
     IsbnCoverCandidate,
     IsbnLookupOut,
     IsbnSourceResult,
+    MetadataSearchCandidate,
+    MetadataSearchOut,
     PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
     PhysicalBookCreate,
@@ -1145,28 +1147,76 @@ async def metadata_lookup(
     title: str | None = Query(None, min_length=1, max_length=500),
     author: str | None = Query(None, max_length=255),
     url: str | None = Query(None, max_length=1000),
+    source: str | None = Query(None, max_length=50),
+    ref: str | None = Query(None, max_length=1000),
 ):
     """Fan the clues out to every capable enabled plugin (a pasted URL
     dispatches to its owning plugin instead) and return per-source
     results with provenance. Always 200 — empty lists mean nothing was
-    found anywhere."""
+    found anywhere.
+
+    (source, ref) is the pick step of the two-step search: `ref` is a
+    candidate from metadata-search, echoed back verbatim, and resolves
+    on its owning plugin only. It can't ride the `url` param because
+    some refs are bare source-side IDs (google volume ids) that no
+    url_prefix can dispatch."""
     _require_upload_permission(current_user)
-    if not (isbn or title or url):
+    app_settings = await get_all_settings(db)
+
+    if source or ref:
+        if not (source and ref):
+            raise HTTPException(status_code=422, detail="source and ref go together")
+        plugin_cls = metadata_registry.get_plugin_class(source)
+        if plugin_cls is None:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown metadata source: {source}"
+            )
+        if not metadata_registry.is_enabled(plugin_cls, app_settings):
+            raise HTTPException(
+                status_code=409, detail=f"{plugin_cls.name} is disabled"
+            )
+        if Clue.URL not in plugin_cls.accepts or not plugin_cls.url_prefix:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{plugin_cls.name} does not support candidate picks",
+            )
+        # The owning plugin will fetch whatever ref says — constrain it
+        # to the plugin's own ID shape, bare or full-URL (the same rule
+        # manual linking enforces), so it can't point anywhere else.
+        id_body = plugin_cls.id_pattern.lstrip("^").rstrip("$")
+        if not re.fullmatch(f"(?:{re.escape(plugin_cls.url_prefix)})?{id_body}", ref):
+            raise HTTPException(
+                status_code=400, detail=f"Invalid ref for {plugin_cls.name}"
+            )
+        # Original clues ride along: google re-runs its search with them
+        # to restore the search/detail merge (TW descriptions).
+        query = BookQuery(
+            isbn=isbn,
+            title=title,
+            authors=[author] if author else [],
+            url=ref,
+        )
+        record = await resolve_one(
+            plugin_cls(app_settings), query, resolver=cached_resolve
+        )
+        pairs = [(plugin_cls.name, record)] if record else []
+    elif not (isbn or title or url):
         raise HTTPException(
             status_code=422, detail="Provide an isbn, a title, or a url"
         )
-    app_settings = await get_all_settings(db)
-    query = BookQuery(
-        isbn=isbn,
-        title=title,
-        authors=[author] if author else [],
-        url=url,
-    )
+    else:
+        query = BookQuery(
+            isbn=isbn,
+            title=title,
+            authors=[author] if author else [],
+            url=url,
+        )
+        pairs = await lookup_all(query, app_settings, resolver=cached_resolve)
 
     results: list[IsbnSourceResult] = []
     covers: list[IsbnCoverCandidate] = []
     seen_cover_urls: set[str] = set()
-    for name, record in await lookup_all(query, app_settings, resolver=cached_resolve):
+    for name, record in pairs:
         plugin_cls = metadata_registry.get_plugin_class(name)
         label = plugin_cls.label if plugin_cls else name
         # Records without a title (cover-only degradations) still feed
@@ -1191,6 +1241,49 @@ async def metadata_lookup(
                 IsbnCoverCandidate(source=name, label=label, url=record.cover_url)
             )
     return IsbnLookupOut(results=results, covers=covers)
+
+
+@router.get("/metadata-search", response_model=MetadataSearchOut)
+@limiter.limit("10/minute")
+async def metadata_search(
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    title: str = Query(..., min_length=1, max_length=500),
+    author: str | None = Query(None, max_length=255),
+):
+    """First step of the two-step title search: raw per-source search
+    hits, no fuzzy judgment — the user picks the right book and the
+    frontend calls metadata-lookup with (source, ref) to fetch its full
+    record. Always 200; empty means no source had candidates."""
+    _require_upload_permission(current_user)
+    app_settings = await get_all_settings(db)
+    query = BookQuery(title=title, authors=[author] if author else [])
+
+    candidates: list[MetadataSearchCandidate] = []
+    for name, cands in await search_all(query, app_settings):
+        plugin_cls = metadata_registry.get_plugin_class(name)
+        label = plugin_cls.label if plugin_cls else name
+        for cand in cands:
+            # A hit without a title can't be judged by the user.
+            if not cand.title:
+                continue
+            page_url = None
+            if cand.url.startswith("http"):
+                page_url = cand.url
+            elif plugin_cls and plugin_cls.url_prefix:
+                page_url = plugin_cls.url_prefix + cand.url
+            candidates.append(
+                MetadataSearchCandidate(
+                    source=name,
+                    label=label,
+                    ref=cand.url,
+                    title=cand.title,
+                    authors=cand.authors,
+                    url=page_url,
+                )
+            )
+    return MetadataSearchOut(candidates=candidates)
 
 
 @router.get("/{book_id}", response_model=BookOut)

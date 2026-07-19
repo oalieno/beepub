@@ -138,6 +138,19 @@ class MetadataPlugin(ABC):
             event_hooks={"response": [_raise_on_429]},
         )
 
+    async def candidates(self, query: BookQuery) -> list[SearchCandidate]:
+        """Raw search hits for the interactive two-step flow: the user
+        sees this plugin's candidates and picks one; the picked
+        candidate's `url` comes back later as the `url` clue of a
+        resolve(). Judgment (fuzzy scoring, confidence floors) stays out
+        — the whole point is showing the user what resolve() would have
+        judged. Default lifts _search(); single-shot plugins without one
+        have no candidates to offer."""
+        try:
+            return await self._search(query)
+        except NotImplementedError:
+            return []
+
     async def resolve(self, query: BookQuery) -> BookRecord | None:
         if query.url and Clue.URL in self.accepts:
             return await self._fetch(query.url)

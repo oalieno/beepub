@@ -1,4 +1,5 @@
-"""Unit tests for the metadata lookup fan-out orchestrator (lookup_all)."""
+"""Unit tests for the metadata fan-out orchestrators (lookup_all /
+search_all)."""
 
 import asyncio
 
@@ -9,6 +10,7 @@ from app.plugins.metadata.base import (
     Clue,
     MetadataPlugin,
     RateLimitError,
+    SearchCandidate,
 )
 
 
@@ -136,3 +138,72 @@ def test_url_dispatches_to_the_owning_plugin_only(monkeypatch):
         BookQuery(url="https://unknown.example/x"),
     )
     assert results == []
+
+
+def _make_search_plugin(
+    plugin_name: str,
+    hits: list[SearchCandidate],
+    *,
+    error: Exception | None = None,
+    plugin_accepts: frozenset[Clue] = frozenset({Clue.TITLE}),
+    plugin_provides: frozenset[str] = frozenset({"title", "cover_url"}),
+):
+    class Fake(MetadataPlugin):
+        name = plugin_name
+        label = plugin_name
+        accepts = plugin_accepts
+        provides = plugin_provides
+
+        async def _search(self, query: BookQuery) -> list[SearchCandidate]:
+            if error is not None:
+                raise error
+            return hits
+
+    return Fake
+
+
+def _run_search(monkeypatch, plugin_classes, query: BookQuery):
+    def fake_enabled(settings_arg, *, need=None, have=None):
+        return [
+            cls({}) for cls in plugin_classes if have is None or (cls.accepts & have)
+        ]
+
+    monkeypatch.setattr(service.registry, "enabled_plugins", fake_enabled)
+    return asyncio.run(service.search_all(query, {}))
+
+
+def test_search_all_keeps_order_and_drops_empty_and_failing_sources(monkeypatch):
+    hit = SearchCandidate(url="https://a/1", title="神")
+    found = _run_search(
+        monkeypatch,
+        [
+            _make_search_plugin("alpha", [hit]),
+            _make_search_plugin("empty", []),
+            _make_search_plugin("broken", [], error=RuntimeError("boom")),
+            _make_search_plugin("limited", [], error=RateLimitError("limited")),
+            _make_search_plugin("gamma", [hit, hit]),
+        ],
+        BookQuery(title="神"),
+    )
+    assert [(name, len(cands)) for name, cands in found] == [("alpha", 1), ("gamma", 2)]
+
+
+def test_search_all_skips_ratings_only_and_title_blind_plugins(monkeypatch):
+    ratings_only = _make_search_plugin(
+        "ratings",
+        [SearchCandidate(url="https://r/1", title="神")],
+        plugin_provides=frozenset({"rating", "reviews"}),
+    )
+    isbn_only = _make_search_plugin(
+        "isbnonly",
+        [SearchCandidate(url="https://i/1", title="神")],
+        plugin_accepts=frozenset({Clue.ISBN}),
+    )
+    usable = _make_search_plugin(
+        "usable", [SearchCandidate(url="https://u/1", title="神")]
+    )
+
+    found = _run_search(
+        monkeypatch, [ratings_only, isbn_only, usable], BookQuery(title="神")
+    )
+    assert [name for name, _ in found] == ["usable"]

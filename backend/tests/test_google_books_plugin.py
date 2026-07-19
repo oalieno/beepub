@@ -92,3 +92,19 @@ def test_pinned_fetch_without_prior_search_still_works(monkeypatch):
     assert record.source_url == "o5zjzwEACAAJ"
     assert record.publisher == "聯經"  # detail only — no search stash
     assert record.cover_url == "https://books.google.com/thumb?id=x"
+
+
+def test_url_pick_with_title_rebuilds_the_search_stash(monkeypatch):
+    """A candidate pick (or a pinned URL in the job) arrives on a fresh
+    instance. With the original clues riding along, resolve re-runs the
+    search so the merge keeps the search-only TW description."""
+    monkeypatch.setattr("app.plugins.metadata.base.httpx.AsyncClient", FakeAsyncClient)
+
+    record = asyncio.run(
+        GoogleBooksPlugin().resolve(BookQuery(url="o5zjzwEACAAJ", title="神"))
+    )
+
+    assert record is not None
+    assert record.description == "search-only description for a TW no-preview volume"
+    assert record.publisher == "聯經出版事業公司"  # search-first again
+    assert record.cover_url == "https://books.google.com/thumb?id=x"

@@ -134,6 +134,24 @@ class PhysicalBookCreate(BaseModel):
     cover_url: str | None = Field(default=None, max_length=1000)
 
 
+class MetadataSearchCandidate(BaseModel):
+    """One raw search hit from one source. `ref` is opaque (a full page
+    URL or a bare source-side ID) — the pick step echoes it back as
+    metadata-lookup's `ref` and only its owning plugin interprets it;
+    `url` is a human-clickable page link when one can be derived."""
+
+    source: str
+    label: str
+    ref: str
+    title: str
+    authors: list[str] = []
+    url: str | None = None
+
+
+class MetadataSearchOut(BaseModel):
+    candidates: list[MetadataSearchCandidate] = []
+
+
 class IsbnSourceResult(BaseModel):
     """One source's bibliographic answer for an ISBN (raw, as the
     plugin parsed it) — the user picks which source to prefill from."""

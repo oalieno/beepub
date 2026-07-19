@@ -94,6 +94,16 @@ class GoogleBooksPlugin(MetadataPlugin):
                 return volume_id
         return url
 
+    async def resolve(self, query: BookQuery) -> BookRecord | None:
+        # A url clue arriving on a fresh instance (candidate pick,
+        # pinned URL in the job) has no search-side stash, but the merge
+        # in _fetch needs one — TW no-preview volumes carry their
+        # description only in the search response. Re-run the search
+        # when the other clues allow so the stash covers the volume.
+        if query.url and (query.isbn or query.title):
+            await self._search(query)
+        return await super().resolve(query)
+
     async def _search(self, query: BookQuery) -> list[SearchCandidate]:
         candidates: list[SearchCandidate] = []
         params: dict[str, str | int] = {"maxResults": 5, **self._key_params()}

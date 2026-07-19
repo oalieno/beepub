@@ -224,3 +224,120 @@ async def test_lookup_accepts_title_and_url_clues(admin_client, monkeypatch):
     )
     assert response.status_code == 200
     assert seen_queries[-1].url == "https://readmoo.com/book/210071675000101"
+
+
+async def test_metadata_search_lists_per_source_candidates(admin_client, monkeypatch):
+    from app.plugins.metadata import SearchCandidate
+
+    async def fake_search_all(query, settings: dict):
+        assert query.title == "神"
+        assert query.authors == ["董啟章"]
+        return [
+            (
+                "readmoo",
+                [
+                    SearchCandidate(
+                        url="https://readmoo.com/book/210071675000101", title="神"
+                    ),
+                    SearchCandidate(url="https://readmoo.com/book/2", title=""),
+                ],
+            ),
+            # google refs are bare volume ids — the page url derives
+            # from the plugin's url_prefix.
+            ("google_books", [SearchCandidate(url="o5zjzwEACAAJ", title="神")]),
+        ]
+
+    monkeypatch.setattr("app.routers.books.search_all", fake_search_all)
+    response = await admin_client.get(
+        "/api/books/metadata-search?title=%E7%A5%9E&author=%E8%91%A3%E5%95%9F%E7%AB%A0"
+    )
+    assert response.status_code == 200, response.text
+    candidates = response.json()["candidates"]
+
+    # The untitled hit is dropped — nothing for the user to judge.
+    assert [(c["source"], c["ref"]) for c in candidates] == [
+        ("readmoo", "https://readmoo.com/book/210071675000101"),
+        ("google_books", "o5zjzwEACAAJ"),
+    ]
+    assert candidates[0]["url"] == "https://readmoo.com/book/210071675000101"
+    assert candidates[1]["url"] == "https://books.google.com/books?id=o5zjzwEACAAJ"
+    assert candidates[1]["label"] == "Google Books"
+
+    response = await admin_client.get("/api/books/metadata-search")
+    assert response.status_code == 422
+
+
+async def test_lookup_pick_resolves_on_the_owning_plugin_only(
+    admin_client, monkeypatch
+):
+    from app.plugins.metadata import BookRecord
+
+    picks = []
+
+    async def fake_resolve_one(plugin, query, *, resolver=None):
+        picks.append((plugin.name, query))
+        return BookRecord(title="神", description="全文")
+
+    async def fail_lookup_all(query, settings: dict, *, resolver=None):
+        raise AssertionError("a pick must not fan out")
+
+    monkeypatch.setattr("app.routers.books.resolve_one", fake_resolve_one)
+    monkeypatch.setattr("app.routers.books.lookup_all", fail_lookup_all)
+
+    # A full-URL ref (readmoo) and a bare-id ref (google) both pass the
+    # plugin's own shape validation; the original clues ride along.
+    response = await admin_client.get(
+        "/api/books/metadata-lookup?source=readmoo"
+        "&ref=https://readmoo.com/book/210071675000101&title=%E7%A5%9E"
+    )
+    assert response.status_code == 200, response.text
+    assert [r["source"] for r in response.json()["results"]] == ["readmoo"]
+    assert picks[-1][0] == "readmoo"
+    assert picks[-1][1].url == "https://readmoo.com/book/210071675000101"
+    assert picks[-1][1].title == "神"
+
+    response = await admin_client.get(
+        "/api/books/metadata-lookup?source=google_books&ref=o5zjzwEACAAJ"
+    )
+    assert response.status_code == 200
+    assert picks[-1][1].url == "o5zjzwEACAAJ"
+
+
+async def test_lookup_pick_rejects_bad_source_and_foreign_ref(
+    admin_client, monkeypatch
+):
+    async def fake_resolve_one(plugin, query, *, resolver=None):
+        raise AssertionError("invalid picks must not resolve")
+
+    monkeypatch.setattr("app.routers.books.resolve_one", fake_resolve_one)
+
+    # source and ref go together.
+    response = await admin_client.get("/api/books/metadata-lookup?source=readmoo")
+    assert response.status_code == 422
+
+    response = await admin_client.get("/api/books/metadata-lookup?source=nope&ref=1")
+    assert response.status_code == 400
+
+    # A ref outside the plugin's own ID shape (SSRF guard).
+    response = await admin_client.get(
+        "/api/books/metadata-lookup?source=readmoo&ref=https://evil.example/x"
+    )
+    assert response.status_code == 400
+
+    # Disabled source → 409, same as manual linking.
+    resp = await admin_client.put(
+        "/api/admin/settings",
+        json={"metadata_source_readmoo_enabled": "false"},
+    )
+    assert resp.status_code == 200
+    try:
+        response = await admin_client.get(
+            "/api/books/metadata-lookup?source=readmoo"
+            "&ref=https://readmoo.com/book/210071675000101"
+        )
+        assert response.status_code == 409
+    finally:
+        await admin_client.put(
+            "/api/admin/settings",
+            json={"metadata_source_readmoo_enabled": "true"},
+        )

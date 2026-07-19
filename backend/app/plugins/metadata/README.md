@@ -67,6 +67,25 @@ google_books makes a volume-detail call inside it. If your source's
 shape doesn't fit at all (books_tw and open_library are single-shot ISBN
 lookups), override `resolve()` directly and crawl however you need.
 
+### candidates() — the interactive two-step search
+
+```python
+async def candidates(self, query: BookQuery) -> list[SearchCandidate]
+```
+
+Optional. Exposes the plugin's raw search hits so a user can pick the
+right book before anything is fetched — deliberately without the fuzzy
+judgment resolve() applies, because here the user is the judge. The
+picked candidate's `url` value comes back later as the `url` clue of a
+resolve() call, so it must be something your `_fetch`/resolve
+understands (a page URL or a bare source-side ID matching your
+`id_pattern`). Callers echo the original search clues alongside that
+`url` — a plugin whose record quality depends on its search response
+(google_books merges it in) can re-run the search from them. The
+default implementation lifts `_search()`; plugins that override
+resolve() directly inherit an empty candidate list unless they also
+implement this.
+
 ## Declarations
 
 | ClassVar | Meaning |
