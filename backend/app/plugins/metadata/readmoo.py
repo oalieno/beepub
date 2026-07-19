@@ -41,12 +41,14 @@ class ReadmooPlugin(MetadataPlugin):
             "authors",
             "publisher",
             "description",
+            "cover_url",
             "rating",
             "rating_count",
             "reviews",
             "tags",
         }
     )
+    cover_hosts = frozenset({"cdn.readmoo.com"})
     url_prefix = "https://readmoo.com/book/"
     id_pattern = r"^\d+$"
     id_hint = "e.g. 210227953000101"
@@ -190,6 +192,18 @@ class ReadmooPlugin(MetadataPlugin):
         text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
         return text or None
 
+    @staticmethod
+    def _parse_cover(soup: BeautifulSoup) -> str | None:
+        """og:image carries the full-size cover (~630x945); the
+        itemprop=image element only has a 460x580 variant."""
+        og = soup.select_one("meta[property='og:image']")
+        if og and og.get("content"):
+            return og["content"]
+        img = soup.select_one("img[itemprop='image']")
+        if img and img.get("src"):
+            return img["src"]
+        return None
+
     async def _fetch(self, url: str) -> BookRecord:
         try:
             async with self._client(HEADERS) as client:
@@ -303,6 +317,7 @@ class ReadmooPlugin(MetadataPlugin):
                     authors=authors,
                     publisher=publisher,
                     description=self._parse_description(soup),
+                    cover_url=self._parse_cover(soup),
                     rating=rating,
                     rating_count=rating_count,
                     reviews=reviews if reviews else None,

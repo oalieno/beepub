@@ -63,8 +63,11 @@ class FakeFetchClient:
 
     async def get(self, url: str, params: dict | None = None):
         html = """
-        <html><body>
+        <html><head>
+          <meta property='og:image' content='https://cdn.readmoo.com/cover/jf/iebkrig.jpg?v=1683260019' />
+        </head><body>
           <h1 class='book-detail-title'>神</h1>
+          <img itemprop='image' src='https://cdn.readmoo.com/cover/jf/iebkrig_460x580.jpg' alt='神'/>
           <a href='/contributor/x'><span itemprop='author'>董啟章</span></a>
           <div class='quick-btn-star'>
             <div itemprop='ratingValue' content='4.7'></div>
@@ -181,6 +184,10 @@ def test_fetch_parses_bibliographic_fields_and_rating(monkeypatch):
     assert record.rating_count == 237
     assert record.title == "神"
     assert record.authors == ["董啟章"]
+    # og:image (full size) wins over the itemprop=image 460x580 variant.
+    assert (
+        record.cover_url == "https://cdn.readmoo.com/cover/jf/iebkrig.jpg?v=1683260019"
+    )
     # The 詳細資訊 heading is stripped; <br><br> runs and <p> boundaries
     # become blank lines (markdown paragraph breaks — single newlines
     # collapse when the description is rendered); inline tags like

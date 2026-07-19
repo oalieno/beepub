@@ -54,6 +54,7 @@ def test_cover_hosts_union_covers_the_known_hosts():
             "covers.openlibrary.org",
             "im1.book.com.tw",
             "im2.book.com.tw",
+            "cdn.readmoo.com",
         }
     )
 
@@ -76,13 +77,13 @@ def test_enabled_plugins_filters_by_need_and_have():
     cover_by_isbn = [
         p.name for p in registry.enabled_plugins({}, need="cover_url", have={Clue.ISBN})
     ]
-    assert cover_by_isbn == ["google_books", "books_tw", "open_library"]
+    assert cover_by_isbn == ["readmoo", "google_books", "books_tw", "open_library"]
 
     disabled = {"metadata_source_books_tw_enabled": "false"}
     assert [
         p.name
         for p in registry.enabled_plugins(disabled, need="cover_url", have={Clue.ISBN})
-    ] == ["google_books", "open_library"]
+    ] == ["readmoo", "google_books", "open_library"]
 
     # A title-only query never reaches ISBN-only plugins.
     by_title = [p.name for p in registry.enabled_plugins({}, have={Clue.TITLE})]
