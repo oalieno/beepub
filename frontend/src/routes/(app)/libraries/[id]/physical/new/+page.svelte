@@ -231,7 +231,7 @@
   <title>{m.physical_add()} - BeePub</title>
 </svelte:head>
 
-<div class="mx-auto max-w-3xl px-4 py-6 sm:px-6 sm:py-10 pb-24">
+<div class="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-10 pb-24">
   <BackButton
     href="/libraries/{libraryId}"
     label={libraryName || m.nav_library()}
@@ -387,15 +387,19 @@
   >
     <div class="flex flex-col gap-6 sm:flex-row">
       {#if coverUrl}
-        <img
-          src={coverUrl}
-          alt=""
-          class="w-40 self-center rounded-sm book-shadow sm:self-start"
-          onerror={() => (coverUrl = null)}
-        />
+        <div
+          class="aspect-[2/3] w-40 shrink-0 self-center sm:w-[198px] sm:self-start"
+        >
+          <img
+            src={coverUrl}
+            alt=""
+            class="h-full w-full rounded-sm object-cover book-shadow"
+            onerror={() => (coverUrl = null)}
+          />
+        </div>
       {:else}
         <div
-          class="flex aspect-[2/3] w-40 shrink-0 items-center justify-center self-center rounded-md border-2 border-dashed border-border sm:self-start"
+          class="flex aspect-[2/3] w-40 shrink-0 items-center justify-center self-center rounded-md border-2 border-dashed border-border sm:w-[198px] sm:self-start"
         >
           <BookCopy size={32} class="text-muted-foreground/40" />
         </div>
