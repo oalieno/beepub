@@ -371,6 +371,8 @@ export interface IsbnSourceResult {
   published_date: string | null;
   language: string | null;
   cover_url: string | null;
+  // The source's own page for this book — clickable provenance.
+  url: string | null;
 }
 
 export interface IsbnCoverCandidate {

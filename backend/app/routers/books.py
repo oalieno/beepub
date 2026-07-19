@@ -1137,6 +1137,18 @@ async def list_all_books_feed(
     return PaginatedFeed(items=items, total=total)
 
 
+def _source_page_url(plugin_cls: type | None, ref: str | None) -> str | None:
+    """Human-clickable page for a source-side ref, which may be a full
+    URL or a bare ID (google volume ids, hardcover slugs) that needs the
+    plugin's url_prefix to become one."""
+    if not ref:
+        return None
+    if ref.startswith("http"):
+        return ref
+    prefix = getattr(plugin_cls, "url_prefix", None)
+    return prefix + ref if prefix else None
+
+
 @router.get("/metadata-lookup", response_model=IsbnLookupOut)
 @limiter.limit("10/minute")
 async def metadata_lookup(
@@ -1233,6 +1245,7 @@ async def metadata_lookup(
                     published_date=record.published_date,
                     language=record.language,
                     cover_url=record.cover_url,
+                    url=_source_page_url(plugin_cls, record.source_url),
                 )
             )
         if record.cover_url and record.cover_url not in seen_cover_urls:
@@ -1268,11 +1281,6 @@ async def metadata_search(
             # A hit without a title can't be judged by the user.
             if not cand.title:
                 continue
-            page_url = None
-            if cand.url.startswith("http"):
-                page_url = cand.url
-            elif plugin_cls and plugin_cls.url_prefix:
-                page_url = plugin_cls.url_prefix + cand.url
             candidates.append(
                 MetadataSearchCandidate(
                     source=name,
@@ -1280,7 +1288,7 @@ async def metadata_search(
                     ref=cand.url,
                     title=cand.title,
                     authors=cand.authors,
-                    url=page_url,
+                    url=_source_page_url(plugin_cls, cand.url),
                     publisher=cand.publisher,
                     published_date=cand.published_date,
                     cover_url=cand.cover_url,

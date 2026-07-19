@@ -195,7 +195,7 @@
   <title>{user?.username ?? m.admin_users_heading()} - Admin - BeePub</title>
 </svelte:head>
 
-<div class="max-w-3xl mx-auto px-4 sm:px-8 py-6">
+<div class="max-w-5xl mx-auto px-4 sm:px-8 py-6">
   <div class="mb-1">
     <BackButton href="/admin/users" label={m.admin_users_heading()} />
   </div>

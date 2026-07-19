@@ -169,6 +169,9 @@ class IsbnSourceResult(BaseModel):
     published_date: str | None = None
     language: str | None = None
     cover_url: str | None = None
+    # The source's own page for this book — provenance the user can
+    # click to verify what was filled in.
+    url: str | None = None
 
 
 class IsbnCoverCandidate(BaseModel):

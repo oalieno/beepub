@@ -6,7 +6,7 @@
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import { BookCopy, Search } from "@lucide/svelte";
+  import { BookCopy, ExternalLink, Search } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -42,6 +42,7 @@
   let pendingKey = $state<string | null>(null);
   let sourceFilter = $state<string | null>(null);
   let filledFrom = $state<string | null>(null);
+  let filledFromUrl = $state<string | null>(null);
 
   let isbn = $state("");
   let title = $state("");
@@ -104,6 +105,7 @@
     // (mixing sources is the edit-metadata feature's call).
     coverUrl = record.cover_url;
     filledFrom = sourceLabel;
+    filledFromUrl = record.url;
     popoverOpen = false;
   }
 
@@ -373,7 +375,21 @@
 
     {#if filledFrom}
       <p class="mt-2 text-xs text-muted-foreground">
-        {m.physical_filled_from({ source: filledFrom })}
+        {m.physical_filled_prefix()}
+        {#if filledFromUrl}
+          <a
+            href={filledFromUrl}
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex items-center gap-0.5 align-bottom text-primary hover:underline"
+          >
+            {filledFrom}
+            <ExternalLink size={11} />
+          </a>
+        {:else}
+          <span class="text-foreground">{filledFrom}</span>
+        {/if}
+        {m.physical_filled_suffix()}
       </p>
     {/if}
   </div>

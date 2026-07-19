@@ -196,7 +196,7 @@
   <title>{m.admin_metadata_title()} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24">
+<div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10 pb-24">
   <BackButton href="/admin" label={m.nav_admin()} />
 
   <div class="mt-4 mb-6">
