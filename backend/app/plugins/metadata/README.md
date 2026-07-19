@@ -6,7 +6,9 @@ this directory.
 
 **Adding a plugin is drop-in:**
 
-1. Write `your_source.py` — a `MetadataPlugin` subclass (see below)
+1. Copy `_template.py` to `your_source.py` and fill it in (the
+   registry skips `_`-prefixed modules, so the template itself is
+   never loaded)
 2. Put it in this directory
 3. Restart the backend
 
@@ -56,6 +58,13 @@ inherit it:
 async def _search(self, query: BookQuery) -> list[SearchCandidate]
 async def _fetch(self, url: str) -> BookRecord
 ```
+
+The contract is two-sided, and the naming encodes it: `resolve()` and
+`candidates()` are what callers invoke; `_search`/`_fetch` are
+implement-only — nothing outside the plugin ever calls them, and
+calling them directly would bypass the confidence floor, the
+prefetched short-circuit, and the resolve cache. The leading
+underscore means "yours to write, not yours to call".
 
 The default resolve handles the generic logic uniformly: a `url` clue
 goes straight to `_fetch`; ISBN-located candidates (`exact=True`) win
