@@ -120,7 +120,7 @@ class GoodreadsPlugin(MetadataPlugin):
                                 SearchCandidate(url=final_url.split("?")[0], exact=True)
                             )
                         else:
-                            soup = BeautifulSoup(resp.text, "html.parser")
+                            soup = BeautifulSoup(resp.text, "lxml")
                             for full_url, text in self._extract_book_links(
                                 soup, limit=3
                             ):
@@ -146,7 +146,7 @@ class GoodreadsPlugin(MetadataPlugin):
                     if resp.status_code != 200:
                         continue
 
-                    soup = BeautifulSoup(resp.text, "html.parser")
+                    soup = BeautifulSoup(resp.text, "lxml")
                     links = self._extract_book_links(soup, limit=5)
                     if links:
                         candidates = [
@@ -175,7 +175,7 @@ class GoodreadsPlugin(MetadataPlugin):
                 if resp.status_code != 200:
                     return BookRecord(source_url=url)
 
-                soup = BeautifulSoup(resp.text, "html.parser")
+                soup = BeautifulSoup(resp.text, "lxml")
 
                 # Try JSON-LD structured data
                 json_ld = soup.find("script", type="application/ld+json")

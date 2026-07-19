@@ -107,6 +107,29 @@ def test_build_queries_strips_square_bracket_subtitle():
     ]
 
 
+def test_description_survives_a_mis_nested_br_subtree():
+    """On malformed pages html.parser can nest <br> elements, swallowing
+    everything after the first line into the first br's subtree (real
+    case: 異鄉人 210466370000101 kept only its opening line)."""
+    soup = BeautifulSoup(
+        "<div id='book-detail-description'><p>我知道行走人間注定孤獨，</p></div>",
+        "html.parser",
+    )
+    p = soup.find("p")
+    outer_br = soup.new_tag("br")
+    outer_br.append("但是，你憑什麼批判我的靈魂？")
+    inner_br = soup.new_tag("br")
+    inner_br.append("卡繆存在主義代表作")
+    outer_br.append(inner_br)
+    p.append(outer_br)
+
+    desc = ReadmooPlugin._parse_description(soup)
+
+    assert desc is not None
+    assert "但是，你憑什麼批判我的靈魂？" in desc
+    assert "卡繆存在主義代表作" in desc
+
+
 def test_extract_cards_parses_full_result_cards():
     # Real search-page card shape: full title lives in the h4 anchor's
     # title attribute (the visible text is line-wrapped), the cover is

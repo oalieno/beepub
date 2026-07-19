@@ -197,7 +197,7 @@ class ReadmooPlugin(MetadataPlugin):
                         SEARCH_URL, params={"q": query.isbn, "src": "search"}
                     )
                     if resp.status_code == 200:
-                        soup = BeautifulSoup(resp.text, "html.parser")
+                        soup = BeautifulSoup(resp.text, "lxml")
                         candidates = self._extract_candidates(soup, limit=3)
                         for candidate in candidates:
                             candidate.exact = True
@@ -219,7 +219,7 @@ class ReadmooPlugin(MetadataPlugin):
                     if resp.status_code != 200:
                         continue
 
-                    soup = BeautifulSoup(resp.text, "html.parser")
+                    soup = BeautifulSoup(resp.text, "lxml")
                     found = self._extract_candidates(soup, limit=5)
                     if found:
                         candidates = found
@@ -246,8 +246,13 @@ class ReadmooPlugin(MetadataPlugin):
             return meta.get("content") if meta else None
         for heading in container.find_all(["h1", "h2", "h3"]):
             heading.extract()
+        # insert_before + unwrap, NOT replace_with: on malformed pages a
+        # parser can mis-nest <br> and swallow the rest of the text into
+        # its subtree — replace_with would discard it (異鄉人 lost all
+        # but its first line this way); unwrap lifts children back out.
         for br in container.find_all("br"):
-            br.replace_with("\n")
+            br.insert_before("\n")
+            br.unwrap()
         for block in container.find_all(["p", "div", "li"]):
             block.append("\n\n")
         lines = [line.strip() for line in container.get_text().splitlines()]
@@ -273,7 +278,7 @@ class ReadmooPlugin(MetadataPlugin):
                 if resp.status_code != 200:
                     return BookRecord(source_url=url)
 
-                soup = BeautifulSoup(resp.text, "html.parser")
+                soup = BeautifulSoup(resp.text, "lxml")
 
                 title_el = soup.select_one("h1.book-detail-title") or soup.select_one(
                     "h1"

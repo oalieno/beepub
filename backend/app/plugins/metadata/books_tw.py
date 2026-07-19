@@ -85,7 +85,7 @@ class BooksTwPlugin(MetadataPlugin):
         if img_match:
             cover_url = f"https://im1.book.com.tw/image/getImage?i={img_match.group(1)}"
 
-        soup = BeautifulSoup(html, "html.parser")
+        soup = BeautifulSoup(html, "lxml")
 
         title = None
         source_url = None
