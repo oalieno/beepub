@@ -352,6 +352,9 @@ export interface MetadataSearchCandidate {
   title: string;
   authors: string[];
   url: string | null;
+  publisher: string | null;
+  published_date: string | null;
+  cover_url: string | null;
 }
 
 export interface MetadataSearchOut {

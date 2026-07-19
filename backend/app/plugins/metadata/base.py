@@ -88,13 +88,20 @@ class SearchCandidate:
     """One hit from a plugin's internal search, consumed by the default
     resolve(). `exact` marks ISBN-located hits (skips fuzzy scoring);
     `prefetched` carries a full record when the search response already
-    contained everything (skips the _fetch round-trip)."""
+    contained everything (skips the _fetch round-trip).
+
+    publisher/published_date/cover_url are display garnish for the
+    two-step candidate list — fill them when the search response has
+    them for free, never with extra requests."""
 
     url: str
     title: str = ""
     authors: list[str] = field(default_factory=list)
     exact: bool = False
     prefetched: BookRecord | None = None
+    publisher: str | None = None
+    published_date: str | None = None
+    cover_url: str | None = None
 
 
 class MetadataPlugin(ABC):

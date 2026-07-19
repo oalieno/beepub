@@ -42,12 +42,14 @@ class HardcoverPlugin(MetadataPlugin):
             "authors",
             "description",
             "published_date",
+            "cover_url",
             "rating",
             "rating_count",
             "readers_count",
             "tags",
         }
     )
+    cover_hosts = frozenset({"assets.hardcover.app"})
     settings_keys = ("hardcover_api_token",)
     secret_settings_keys = ("hardcover_api_token",)
     ratelimit_cooldown = 60
@@ -69,7 +71,14 @@ class HardcoverPlugin(MetadataPlugin):
         return headers
 
     @staticmethod
-    def _record_from_doc(doc: dict) -> BookRecord:
+    def _cover_from_doc(doc: dict) -> str | None:
+        image = doc.get("image")
+        if isinstance(image, dict):
+            return image.get("url")
+        return None
+
+    @classmethod
+    def _record_from_doc(cls, doc: dict) -> BookRecord:
         rating = doc.get("rating")
         ratings_count = doc.get("ratings_count")
         readers = doc.get("users_read_count")
@@ -79,6 +88,7 @@ class HardcoverPlugin(MetadataPlugin):
             authors=doc.get("author_names") or [],
             description=doc.get("description"),
             published_date=doc.get("release_date"),
+            cover_url=cls._cover_from_doc(doc),
             rating=float(rating) if rating else None,
             rating_count=int(ratings_count) if ratings_count else None,
             readers_count=int(readers) if readers else None,
@@ -131,6 +141,8 @@ class HardcoverPlugin(MetadataPlugin):
                             title=best_title,
                             authors=doc.get("author_names") or [],
                             prefetched=self._record_from_doc(doc),
+                            published_date=doc.get("release_date"),
+                            cover_url=self._cover_from_doc(doc),
                         )
                     )
         except RateLimitError:

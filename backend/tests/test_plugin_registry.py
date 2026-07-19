@@ -55,6 +55,7 @@ def test_cover_hosts_union_covers_the_known_hosts():
             "im1.book.com.tw",
             "im2.book.com.tw",
             "cdn.readmoo.com",
+            "assets.hardcover.app",
         }
     )
 

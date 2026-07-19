@@ -107,6 +107,43 @@ def test_build_queries_strips_square_bracket_subtitle():
     ]
 
 
+def test_extract_cards_parses_full_result_cards():
+    # Real search-page card shape: full title lives in the h4 anchor's
+    # title attribute (the visible text is line-wrapped), the cover is
+    # lazy-loaded via data-lazy-original.
+    html = """
+    <html><body><div id='chalkboard'>
+      <li class='listItem-box swiper-slide'>
+        <div class='thumbnail'>
+          <a href='https://readmoo.com/book/210478260000101' class='book-cover product-link'>
+            <img itemprop='image' src='https://cdn.readmoo.com/images/openbook.png'
+                 data-lazy-original='https://cdn.readmoo.com/cover/bc/aal6k5g_210x315.jpg?v=1'/>
+          </a>
+        </div>
+        <div class='caption'>
+          <h4><a class='product-link' href='https://readmoo.com/book/210478260000101'
+                 title='奧德賽：荷馬史詩故事II【倫敦大學教授精心詮釋】'>
+            奧德賽
+            ：荷馬史詩故事II【倫敦大學教授精心詮釋】
+          </a></h4>
+          <div class='contributor-info'><a href='/contributor/1'>阿爾弗雷德．約翰．丘奇</a></div>
+          <div class='publisher-info'><a href='/publisher/9052'>有理文化</a></div>
+        </div>
+      </li>
+    </div></body></html>
+    """
+
+    cards = ReadmooPlugin._extract_cards(BeautifulSoup(html, "html.parser"), limit=5)
+
+    assert len(cards) == 1
+    card = cards[0]
+    assert card.url == "https://readmoo.com/book/210478260000101"
+    assert card.title == "奧德賽：荷馬史詩故事II【倫敦大學教授精心詮釋】"
+    assert card.authors == ["阿爾弗雷德．約翰．丘奇"]
+    assert card.publisher == "有理文化"
+    assert card.cover_url == "https://cdn.readmoo.com/cover/bc/aal6k5g_210x315.jpg?v=1"
+
+
 def test_extract_book_links_filters_non_book_links_and_dedups():
     html = """
     <html><body>

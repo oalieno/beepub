@@ -146,6 +146,10 @@ class MetadataSearchCandidate(BaseModel):
     title: str
     authors: list[str] = []
     url: str | None = None
+    # Display garnish when the search response had them for free.
+    publisher: str | None = None
+    published_date: str | None = None
+    cover_url: str | None = None
 
 
 class MetadataSearchOut(BaseModel):

@@ -78,6 +78,74 @@ class ReadmooPlugin(MetadataPlugin):
 
         return queries
 
+    @classmethod
+    def _extract_cards(cls, soup: BeautifulSoup, limit: int) -> list[SearchCandidate]:
+        """Parse full result cards (li.listItem-box): canonical book
+        URL, full title (the h4 anchor's title attribute — the visible
+        text is line-wrapped), authors, publisher, and the lazy-loaded
+        cover thumbnail. Falls back to _extract_book_links when the
+        page layout doesn't match."""
+        cards: list[SearchCandidate] = []
+        seen: set[str] = set()
+        for li in soup.select("li.listItem-box"):
+            link = li.select_one(".caption h4 a.product-link") or li.select_one(
+                "a.product-link[href*='/book/']"
+            )
+            if link is None:
+                continue
+            href = link.get("href", "")
+            full_url = href if href.startswith("http") else f"https://readmoo.com{href}"
+            path = urlparse(full_url).path or ""
+            if not re.match(r"^/book/\d+$", path):
+                continue
+            url = f"https://readmoo.com{path}"
+            if url in seen:
+                continue
+            title = (link.get("title") or link.get_text(strip=True) or "").strip()
+            if not title:
+                continue
+            authors = [
+                a.get_text(strip=True)
+                for a in li.select(".contributor-info a")
+                if a.get_text(strip=True)
+            ]
+            publisher_el = li.select_one(".publisher-info a")
+            img = li.select_one("img[data-lazy-original]") or li.select_one(
+                "img[itemprop='image']"
+            )
+            cover = None
+            if img is not None:
+                cover = img.get("data-lazy-original") or img.get("src")
+                if cover and cover.endswith("openbook.png"):  # lazy placeholder
+                    cover = None
+            seen.add(url)
+            cards.append(
+                SearchCandidate(
+                    url=url,
+                    title=title,
+                    authors=authors,
+                    publisher=(
+                        publisher_el.get_text(strip=True) if publisher_el else None
+                    ),
+                    cover_url=cover,
+                )
+            )
+            if len(cards) >= limit:
+                break
+        return cards
+
+    @classmethod
+    def _extract_candidates(
+        cls, soup: BeautifulSoup, limit: int
+    ) -> list[SearchCandidate]:
+        cards = cls._extract_cards(soup, limit)
+        if cards:
+            return cards
+        return [
+            SearchCandidate(url=url, title=text)
+            for url, text in cls._extract_book_links(soup, limit)
+        ]
+
     @staticmethod
     def _extract_book_links(soup: BeautifulSoup, limit: int) -> list[tuple[str, str]]:
         links: list[tuple[str, str]] = []
@@ -130,12 +198,9 @@ class ReadmooPlugin(MetadataPlugin):
                     )
                     if resp.status_code == 200:
                         soup = BeautifulSoup(resp.text, "html.parser")
-                        candidates = [
-                            SearchCandidate(url=full_url, title=text, exact=True)
-                            for full_url, text in self._extract_book_links(
-                                soup, limit=3
-                            )
-                        ]
+                        candidates = self._extract_candidates(soup, limit=3)
+                        for candidate in candidates:
+                            candidate.exact = True
             except RateLimitError:
                 raise
             except Exception as e:
@@ -155,12 +220,9 @@ class ReadmooPlugin(MetadataPlugin):
                         continue
 
                     soup = BeautifulSoup(resp.text, "html.parser")
-                    links = self._extract_book_links(soup, limit=5)
-                    if links:
-                        candidates = [
-                            SearchCandidate(url=full_url, title=text)
-                            for full_url, text in links
-                        ]
+                    found = self._extract_candidates(soup, limit=5)
+                    if found:
+                        candidates = found
                         break
         except RateLimitError:
             raise

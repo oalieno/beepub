@@ -120,6 +120,9 @@ class GoogleBooksPlugin(MetadataPlugin):
                     title=vi.get("title", ""),
                     authors=vi.get("authors", []),
                     exact=exact,
+                    publisher=vi.get("publisher"),
+                    published_date=vi.get("publishedDate"),
+                    cover_url=_pick_cover(vi.get("imageLinks") or {}),
                 )
             )
 

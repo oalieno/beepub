@@ -1281,6 +1281,9 @@ async def metadata_search(
                     title=cand.title,
                     authors=cand.authors,
                     url=page_url,
+                    publisher=cand.publisher,
+                    published_date=cand.published_date,
+                    cover_url=cand.cover_url,
                 )
             )
     return MetadataSearchOut(candidates=candidates)
