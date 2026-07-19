@@ -2,25 +2,19 @@
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import {
-    Check,
-    ChevronDown,
-    ChevronRight,
-    ExternalLink,
-    Search,
-  } from "@lucide/svelte";
+  import { Search } from "@lucide/svelte";
   import Modal from "$lib/components/Modal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
   import { Textarea } from "$lib/components/ui/textarea";
-  import type { IsbnCoverCandidate, IsbnSourceResult } from "$lib/types";
+  import type { IsbnSourceResult } from "$lib/types";
 
   // One row in the candidate list. ISBN/URL lookups already fetched the
   // full record per source; title-search rows carry a (source, ref)
-  // pick resolved when the user commits with 下一步. Fine-tuning (other
-  // covers, per-field sources) is the edit-metadata modal's job.
+  // pick resolved on click. Fine-tuning (other covers, per-field
+  // sources) is the edit-metadata modal's job.
   interface CandidateRow {
     key: string;
     source: string;
@@ -30,7 +24,6 @@
     publisher: string | null;
     publishedDate: string | null;
     coverUrl: string | null;
-    url: string | null;
     ref?: string;
     record?: IsbnSourceResult;
   }
@@ -53,8 +46,7 @@
   let lookupQuery = $state("");
   let lookingUp = $state(false);
   let candidates = $state<CandidateRow[]>([]);
-  let selectedKey = $state<string | null>(null);
-  let pendingNext = $state(false);
+  let pendingKey = $state<string | null>(null);
   let sourceFilter = $state<string | null>(null);
 
   let isbn = $state("");
@@ -64,13 +56,8 @@
   let publishedDate = $state("");
   let description = $state("");
   let coverUrl = $state<string | null>(null);
-  let coverLabel = $state<string | null>(null);
-  let moreOpen = $state(false);
   let saving = $state(false);
 
-  // Cover-only degradations (books_tw/open_library) from an ISBN
-  // fan-out: the fallback when the picked source has no cover.
-  let lookupCovers: IsbnCoverCandidate[] = [];
   // The clue the candidates were searched with — a pick echoes it so
   // the source can rebuild its search-side context (google's merge).
   let queryTitle = "";
@@ -92,15 +79,12 @@
       ? candidates.filter((row) => row.source === sourceFilter)
       : candidates,
   );
-  const selectedRow = $derived(
-    candidates.find((row) => row.key === selectedKey) ?? null,
-  );
 
   function reset() {
     step = 1;
     lookupQuery = "";
     candidates = [];
-    selectedKey = null;
+    pendingKey = null;
     sourceFilter = null;
     isbn = "";
     title = "";
@@ -109,10 +93,14 @@
     publishedDate = "";
     description = "";
     coverUrl = null;
-    coverLabel = null;
-    moreOpen = false;
-    lookupCovers = [];
     queryTitle = "";
+  }
+
+  // Closing the modal (X, cancel, backdrop) always starts over — a
+  // reopened form stuck mid-flow reads as a bug, not a convenience.
+  function handleClose() {
+    reset();
+    onclose();
   }
 
   function metaLine(row: CandidateRow): string {
@@ -126,49 +114,25 @@
       .join(" · ");
   }
 
-  function applyRecord(row: CandidateRow, record: IsbnSourceResult) {
+  function applyRecord(record: IsbnSourceResult) {
     title = record.title ?? "";
     authors = record.authors.join(", ");
     publisher = record.publisher ?? "";
     publishedDate = record.published_date ?? "";
     description = record.description ?? "";
-    if (record.cover_url) {
-      coverUrl = record.cover_url;
-      coverLabel = row.label;
-    } else if (lookupCovers.length > 0) {
-      coverUrl = lookupCovers[0].url;
-      coverLabel = lookupCovers[0].label;
-    } else {
-      coverUrl = null;
-      coverLabel = null;
-    }
-    moreOpen = Boolean(description.trim() || isbn.trim());
+    // The picked source's cover or none — never another source's
+    // (mixing sources silently is the edit-metadata feature's call).
+    coverUrl = record.cover_url;
     step = 2;
   }
 
-  function dropCover(url: string) {
-    // A cover URL that 404s (e.g. the Open Library by-ISBN guess) falls
-    // back to the next candidate instead of showing a broken image.
-    lookupCovers = lookupCovers.filter((c) => c.url !== url);
-    if (coverUrl === url) {
-      if (lookupCovers.length > 0) {
-        coverUrl = lookupCovers[0].url;
-        coverLabel = lookupCovers[0].label;
-      } else {
-        coverUrl = null;
-        coverLabel = null;
-      }
-    }
-  }
-
-  async function goNext() {
-    const row = selectedRow;
-    if (!row || pendingNext) return;
+  async function pick(row: CandidateRow) {
+    if (pendingKey) return;
     if (row.record) {
-      applyRecord(row, row.record);
+      applyRecord(row.record);
       return;
     }
-    pendingNext = true;
+    pendingKey = row.key;
     try {
       const info = await booksApi.metadataLookup({
         source: row.source,
@@ -176,26 +140,21 @@
         ...(queryTitle ? { title: queryTitle } : {}),
       });
       if (info.results.length > 0) {
-        lookupCovers = info.covers.filter(
-          (c) => c.url !== info.results[0].cover_url,
-        );
-        applyRecord(row, info.results[0]);
+        applyRecord(info.results[0]);
       } else {
         toastStore.info(m.physical_isbn_not_found());
       }
     } catch {
       toastStore.info(m.physical_isbn_not_found());
     } finally {
-      pendingNext = false;
+      pendingKey = null;
     }
   }
 
   function manualEntry() {
     // Carry over what the search box already told us.
     if (queryTitle && !title.trim()) title = queryTitle;
-    selectedKey = null;
     step = 2;
-    moreOpen = true;
   }
 
   async function handleLookup() {
@@ -204,9 +163,7 @@
 
     lookingUp = true;
     candidates = [];
-    selectedKey = null;
     sourceFilter = null;
-    lookupCovers = [];
     queryTitle = "";
     try {
       // One input, three clue kinds: URL, ISBN (10/13 digits, dashes
@@ -229,13 +186,10 @@
           publisher: c.publisher,
           publishedDate: c.published_date,
           coverUrl: c.cover_url,
-          url: c.url,
           ref: c.ref,
         }));
         if (candidates.length === 0) {
           toastStore.info(m.physical_isbn_not_found());
-        } else {
-          selectedKey = candidates[0].key;
         }
       }
     } catch {
@@ -250,7 +204,6 @@
     // full record comes back in one call and rows carry it directly.
     const info = await booksApi.metadataLookup(params);
     const withTitle = info.results.filter((r) => r.title);
-    lookupCovers = info.covers;
     candidates = withTitle.map((r, i) => ({
       key: `${r.source}:${i}`,
       source: r.source,
@@ -260,16 +213,12 @@
       publisher: r.publisher,
       publishedDate: r.published_date,
       coverUrl: r.cover_url,
-      url: null,
       record: r,
     }));
     if (candidates.length === 1) {
-      selectedKey = candidates[0].key;
-      applyRecord(candidates[0], candidates[0].record!);
+      applyRecord(candidates[0].record!);
     } else if (candidates.length === 0) {
       toastStore.info(m.physical_isbn_not_found());
-    } else {
-      selectedKey = candidates[0].key;
     }
   }
 
@@ -301,7 +250,7 @@
   }
 </script>
 
-<Modal title={m.physical_add()} {open} {onclose}>
+<Modal title={m.physical_add()} {open} onclose={handleClose}>
   {#if step === 1}
     <div class="space-y-4">
       <p class="text-sm text-muted-foreground">
@@ -377,68 +326,55 @@
              the scroll cue (a clean 4-row fit reads as "that's all"). -->
         <div class="max-h-80 space-y-0.5 overflow-y-auto rounded-md border p-1">
           {#each visibleCandidates as row (row.key)}
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                class="min-w-0 flex-1 rounded-sm px-2 py-1.5 text-left transition-colors {selectedKey ===
-                row.key
-                  ? 'bg-primary/10'
-                  : 'hover:bg-secondary'}"
-                title={row.title}
-                onclick={() => (selectedKey = row.key)}
-                ondblclick={goNext}
-              >
-                <div class="flex items-center gap-2.5">
-                  <div
-                    class="h-14 w-9 shrink-0 overflow-hidden rounded-sm bg-muted"
-                  >
-                    {#if row.coverUrl}
-                      <img
-                        src={row.coverUrl}
-                        alt=""
-                        loading="lazy"
-                        class="h-full w-full object-cover"
-                        onerror={(e) =>
-                          ((e.currentTarget as HTMLImageElement).style.display =
-                            "none")}
-                      />
-                    {/if}
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm text-foreground">{row.title}</p>
-                    {#if row.authors.length > 0}
-                      <p class="truncate text-xs text-muted-foreground">
-                        {row.authors.join(", ")}
-                      </p>
-                    {/if}
-                    {#if metaLine(row)}
-                      <p class="truncate text-xs text-muted-foreground">
-                        {metaLine(row)}
-                      </p>
-                    {/if}
-                  </div>
-                  {#if selectedKey === row.key}
-                    <Check size={16} class="shrink-0 text-primary" />
+            <button
+              type="button"
+              class="w-full rounded-sm px-2 py-1.5 text-left transition-colors {pendingKey ===
+              row.key
+                ? 'bg-primary/10'
+                : 'hover:bg-secondary'}"
+              title={row.title}
+              disabled={pendingKey !== null}
+              onclick={() => pick(row)}
+            >
+              <div class="flex items-center gap-2.5">
+                <div
+                  class="h-14 w-9 shrink-0 overflow-hidden rounded-sm bg-muted"
+                >
+                  {#if row.coverUrl}
+                    <img
+                      src={row.coverUrl}
+                      alt=""
+                      loading="lazy"
+                      class="h-full w-full object-cover"
+                      onerror={(e) =>
+                        ((e.currentTarget as HTMLImageElement).style.display =
+                          "none")}
+                    />
                   {/if}
                 </div>
-              </button>
-              {#if row.url}
-                <a
-                  href={row.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  class="shrink-0 p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-                  title={row.url}
-                >
-                  <ExternalLink size={14} />
-                </a>
-              {/if}
-            </div>
+                <div class="min-w-0 flex-1">
+                  <p class="truncate text-sm text-foreground">{row.title}</p>
+                  {#if row.authors.length > 0}
+                    <p class="truncate text-xs text-muted-foreground">
+                      {row.authors.join(", ")}
+                    </p>
+                  {/if}
+                  {#if metaLine(row)}
+                    <p class="truncate text-xs text-muted-foreground">
+                      {metaLine(row)}
+                    </p>
+                  {/if}
+                </div>
+                {#if pendingKey === row.key}
+                  <Spinner size="sm" />
+                {/if}
+              </div>
+            </button>
           {/each}
         </div>
       {/if}
 
-      <div class="flex items-center justify-between gap-2 pt-1">
+      <div class="pt-1">
         <button
           type="button"
           class="text-sm text-primary hover:underline"
@@ -446,18 +382,6 @@
         >
           {m.physical_manual_entry()} →
         </button>
-        {#if candidates.length > 0}
-          <Button
-            type="button"
-            disabled={!selectedRow || pendingNext}
-            onclick={goNext}
-          >
-            {#if pendingNext}
-              <Spinner size="sm" />
-            {/if}
-            {m.physical_next()}
-          </Button>
-        {/if}
       </div>
     </div>
   {:else}
@@ -470,21 +394,14 @@
     >
       <p class="text-sm text-muted-foreground">{m.physical_step_confirm()}</p>
 
-      <div class="flex gap-4">
+      <div class="flex gap-5">
         {#if coverUrl}
-          <div class="shrink-0 space-y-1 self-start">
-            <img
-              src={coverUrl}
-              alt=""
-              class="w-24 rounded-sm book-shadow"
-              onerror={() => dropCover(coverUrl!)}
-            />
-            {#if coverLabel}
-              <p class="w-24 text-center text-xs text-muted-foreground">
-                {m.physical_cover_from({ source: coverLabel })}
-              </p>
-            {/if}
-          </div>
+          <img
+            src={coverUrl}
+            alt=""
+            class="w-36 self-start rounded-sm book-shadow"
+            onerror={() => (coverUrl = null)}
+          />
         {/if}
         <div class="min-w-0 flex-1 space-y-4">
           <div class="space-y-1.5">
@@ -499,45 +416,24 @@
             </Label>
             <Input id="physical-authors" bind:value={authors} />
           </div>
-        </div>
-      </div>
-
-      <!-- Full width below the cover row so every remaining field shares
-           one left edge (the indented column above ends with the cover). -->
-      <div class="grid grid-cols-2 gap-3">
-        <div class="space-y-1.5">
-          <Label for="physical-publisher" class="text-sm font-medium">
-            {m.metadata_field_publisher()}
-          </Label>
-          <Input id="physical-publisher" bind:value={publisher} />
-        </div>
-        <div class="space-y-1.5">
-          <Label for="physical-date" class="text-sm font-medium">
-            {m.metadata_field_published_date()}
-          </Label>
-          <Input
-            id="physical-date"
-            bind:value={publishedDate}
-            placeholder="YYYY-MM-DD"
-          />
-        </div>
-      </div>
-
-      <button
-        type="button"
-        class="flex items-center gap-1 text-sm font-medium text-foreground"
-        onclick={() => (moreOpen = !moreOpen)}
-      >
-        {#if moreOpen}
-          <ChevronDown size={14} />
-        {:else}
-          <ChevronRight size={14} />
-        {/if}
-        {m.physical_more_fields()}
-      </button>
-
-      {#if moreOpen}
-        <div class="space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <Label for="physical-publisher" class="text-sm font-medium">
+                {m.metadata_field_publisher()}
+              </Label>
+              <Input id="physical-publisher" bind:value={publisher} />
+            </div>
+            <div class="space-y-1.5">
+              <Label for="physical-date" class="text-sm font-medium">
+                {m.metadata_field_published_date()}
+              </Label>
+              <Input
+                id="physical-date"
+                bind:value={publishedDate}
+                placeholder="YYYY-MM-DD"
+              />
+            </div>
+          </div>
           <div class="space-y-1.5">
             <Label for="physical-isbn" class="text-sm font-medium">
               {m.metadata_label_isbn()}
@@ -552,18 +448,15 @@
               class="max-w-56"
             />
           </div>
-          <div class="space-y-1.5">
-            <Label for="physical-description" class="text-sm font-medium">
-              {m.metadata_field_description()}
-            </Label>
-            <Textarea
-              id="physical-description"
-              bind:value={description}
-              rows={3}
-            />
-          </div>
         </div>
-      {/if}
+      </div>
+
+      <div class="space-y-1.5">
+        <Label for="physical-description" class="text-sm font-medium">
+          {m.metadata_field_description()}
+        </Label>
+        <Textarea id="physical-description" bind:value={description} rows={4} />
+      </div>
 
       <div class="flex items-center justify-between gap-2 pt-1">
         <button
@@ -574,7 +467,7 @@
           ← {m.physical_reselect()}
         </button>
         <div class="flex gap-2">
-          <Button type="button" variant="ghost" onclick={onclose}>
+          <Button type="button" variant="ghost" onclick={handleClose}>
             {m.common_cancel()}
           </Button>
           <Button type="submit" disabled={saving || !title.trim()}>
