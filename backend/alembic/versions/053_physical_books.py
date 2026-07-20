@@ -22,21 +22,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "books", "file_path", existing_type=sa.String(500), nullable=True
-    )
-    op.alter_column(
-        "books", "file_size", existing_type=sa.BigInteger(), nullable=True
-    )
+    op.alter_column("books", "file_path", existing_type=sa.String(500), nullable=True)
+    op.alter_column("books", "file_size", existing_type=sa.BigInteger(), nullable=True)
 
 
 def downgrade() -> None:
     # File-less rows cannot survive the NOT NULL constraints coming back.
     op.execute("DELETE FROM books WHERE file_path IS NULL")
     op.execute("UPDATE books SET file_size = 0 WHERE file_size IS NULL")
-    op.alter_column(
-        "books", "file_size", existing_type=sa.BigInteger(), nullable=False
-    )
-    op.alter_column(
-        "books", "file_path", existing_type=sa.String(500), nullable=False
-    )
+    op.alter_column("books", "file_size", existing_type=sa.BigInteger(), nullable=False)
+    op.alter_column("books", "file_path", existing_type=sa.String(500), nullable=False)
