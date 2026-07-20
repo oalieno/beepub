@@ -221,11 +221,15 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
     """Fetch a single source using its stored source_url, then re-map tags.
 
     The pinned URL rides in as the `url` clue — the most precise clue a
-    plugin can get."""
+    plugin can get. The book's own clues ride along with it: google
+    rebuilds its search stash from them (the search/detail merge that
+    keeps TW descriptions), and a url-only query would archive a
+    degraded record over a good one."""
     import uuid as _uuid
 
     from app.database import create_task_engine
     from app.services.metadata_fetch import (
+        fetch_book_info,
         init_metadata_plugins,
         run_tag_mapping,
         upsert_external_metadata,
@@ -240,6 +244,7 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
             return
 
         async with session_factory() as db:
+            book_info = await fetch_book_info(db, book_id)
             result = await db.execute(
                 text(
                     "SELECT source_url FROM external_metadata "
@@ -253,8 +258,16 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
                 return
 
             pinned_url = row["source_url"]
+            title, authors, isbn = book_info if book_info else ("", [], None)
             try:
-                record = await plugin.resolve(BookQuery(url=pinned_url))
+                record = await plugin.resolve(
+                    BookQuery(
+                        url=pinned_url,
+                        title=title or None,
+                        authors=authors,
+                        isbn=isbn,
+                    )
+                )
                 if record is None:
                     logger.warning(
                         f"{source_name} returned nothing for pinned URL "

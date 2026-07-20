@@ -126,3 +126,35 @@ async def test_manual_link_rejects_disabled_and_unknown_sources(admin_client):
     )
     assert resp.status_code == 200
     assert resp.json()["source_url"] == url
+
+
+async def test_single_source_refetch_carries_book_clues(admin_client, monkeypatch):
+    """The rebind/pinned refetch must echo the book's own clues next to
+    the pinned URL — a url-only query archives a degraded record for
+    sources that need their search-side context (google's merge)."""
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    book_id = book["id"]
+
+    resp = await admin_client.put(
+        f"/api/books/{book_id}/external/goodreads/url",
+        json={"source_url": "https://www.goodreads.com/book/show/60495597"},
+    )
+    assert resp.status_code == 200
+
+    from app.plugins.metadata.base import BookRecord
+    from app.plugins.metadata.goodreads import GoodreadsPlugin
+    from app.tasks.metadata import _run_fetch_metadata_source
+
+    captured = {}
+
+    async def fake_resolve(self, query):
+        captured["query"] = query
+        return BookRecord(source_url=query.url, title="stub")
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", fake_resolve)
+    await _run_fetch_metadata_source(book_id, "goodreads")
+
+    query = captured["query"]
+    assert query.url == "https://www.goodreads.com/book/show/60495597"
+    assert query.title, "the book's title must ride along with the pinned URL"
