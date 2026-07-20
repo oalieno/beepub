@@ -6,14 +6,19 @@
   <title>{page.status} - BeePub</title>
 </svelte:head>
 
+<!-- The root layout adds no chrome, so true centering = the full
+     viewport; a fixed-height image box would letterbox and drag the
+     visual weight upward, so the image keeps its own ratio instead. -->
 <div
-  class="flex flex-col items-center justify-center min-h-[60dvh] px-4 py-12 text-center"
+  class="flex min-h-dvh flex-col items-center justify-center px-4 py-8 text-center"
 >
   <img
-    src="/404.png"
-    alt="404"
-    style="max-width: min(24rem, 70vw);"
-    class="mb-4 sm:!max-w-96"
+    src={page.status >= 500 ? "/error-500.png" : "/error-404.png"}
+    alt={page.status >= 500
+      ? "BeePub mascot sitting dazed in front of a cracked 500"
+      : "BeePub mascot lying in front of a cracked 404"}
+    style="width: min(34rem, 85vw); max-height: 42dvh; height: auto; object-fit: contain;"
+    class="mb-4"
   />
   <p class="text-muted-foreground text-lg mb-6">
     {page.error?.message || "Page not found"}
