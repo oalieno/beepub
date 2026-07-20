@@ -124,6 +124,16 @@ class GoogleBooksPlugin(MetadataPlugin):
         # when the other clues allow so the stash covers the volume.
         if query.url and (query.isbn or query.title):
             await self._search(query)
+            volume_id = self._extract_volume_id(query.url)
+            if volume_id not in getattr(self, "_search_vi", {}) and (
+                query.isbn and query.title
+            ):
+                # The ISBN-first search satisfies itself with whatever
+                # editions carry that ISBN — which may not include the
+                # pinned volume at all. Retry on the title clues so the
+                # merge has a stash entry for it (a degraded record here
+                # would overwrite a good archive).
+                await self._search(BookQuery(title=query.title, authors=query.authors))
         return await super().resolve(query)
 
     async def _search(self, query: BookQuery) -> list[SearchCandidate]:

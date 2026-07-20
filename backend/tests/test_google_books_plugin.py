@@ -128,3 +128,53 @@ def test_reflow_restores_cjk_line_breaks_google_flattened():
     formatted = "第一行\n第二行 保留"
     assert _reflow_description(formatted) == formatted
     assert _reflow_description(None) is None
+
+
+OTHER_EDITION_PAYLOAD = {
+    "items": [
+        {"id": "OTHER_VOLUME", "volumeInfo": {"title": "神", "publisher": "別家"}}
+    ]
+}
+
+
+class IsbnMissesPinnedClient(FakeAsyncClient):
+    """isbn: search finds other editions only; intitle: finds the pinned
+    volume."""
+
+    async def get(self, url: str, params: dict | None = None):
+        if "/volumes/" in url:
+            payload = DETAIL_PAYLOAD
+        elif "isbn:" in (params or {}).get("q", ""):
+            payload = OTHER_EDITION_PAYLOAD
+        else:
+            payload = SEARCH_PAYLOAD
+        return httpx.Response(
+            200,
+            text=json.dumps(payload),
+            headers={"content-type": "application/json"},
+            request=httpx.Request("GET", url, params=params),
+        )
+
+
+def test_pinned_refetch_survives_isbn_search_missing_the_volume(monkeypatch):
+    """The refetch job echoes every clue it has. Google's ISBN-first
+    search can satisfy itself with other editions and never index the
+    pinned volume — the stash miss used to degrade the record and
+    overwrite a good archive. The title-clue retry keeps the merge."""
+    monkeypatch.setattr(
+        "app.plugins.metadata.base.httpx.AsyncClient", IsbnMissesPinnedClient
+    )
+
+    record = asyncio.run(
+        GoogleBooksPlugin().resolve(
+            BookQuery(
+                url="o5zjzwEACAAJ",
+                isbn="9789570849523",
+                title="神",
+                authors=["董啟章"],
+            )
+        )
+    )
+
+    assert record is not None
+    assert record.description == "search-only description for a TW no-preview volume"
