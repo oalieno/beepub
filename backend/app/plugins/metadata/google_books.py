@@ -5,6 +5,7 @@ description/publisher) even when the volume has them, so _fetch always
 reads the volume-detail endpoint — the authoritative record."""
 
 import logging
+import re
 from urllib.parse import parse_qs, urlparse
 
 from app.plugins.metadata.base import (
@@ -30,6 +31,27 @@ _COVER_PREFERENCE = (
     "thumbnail",
     "smallThumbnail",
 )
+
+
+# The API flattens a description's line breaks into ASCII spaces. In
+# CJK prose a plain space between two CJK characters can only be such a
+# scar — real spaces sit next to Latin text ("PChome Online") and real
+# CJK spacing uses U+3000. Latin-only descriptions are indistinguishable
+# from normal prose and stay untouched.
+_CJK = (
+    "\\u3000-\\u303f"  # CJK punctuation
+    "\\u3041-\\u30ff"  # kana
+    "\\u4e00-\\u9fff"  # ideographs
+    "\\uf900-\\ufaff"  # compatibility ideographs
+    "\\uff00-\\uffef"  # fullwidth forms
+)
+_FLATTENED_BREAK = re.compile(f"(?<=[{_CJK}]) +(?=[{_CJK}])")
+
+
+def _reflow_description(text: str | None) -> str | None:
+    if not text or "\n" in text:
+        return text
+    return _FLATTENED_BREAK.sub("\n", text)
 
 
 def _pick_cover(image_links: dict) -> str | None:
@@ -204,7 +226,7 @@ class GoogleBooksPlugin(MetadataPlugin):
                     title=title,
                     authors=vi.get("authors", []),
                     publisher=vi.get("publisher"),
-                    description=vi.get("description"),
+                    description=_reflow_description(vi.get("description")),
                     published_date=vi.get("publishedDate"),
                     language=vi.get("language"),
                     cover_url=_pick_cover(vi.get("imageLinks") or {}),

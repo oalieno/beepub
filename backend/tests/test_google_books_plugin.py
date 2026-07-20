@@ -108,3 +108,23 @@ def test_url_pick_with_title_rebuilds_the_search_stash(monkeypatch):
     assert record.description == "search-only description for a TW no-preview volume"
     assert record.publisher == "聯經出版事業公司"  # search-first again
     assert record.cover_url == "https://books.google.com/thumb?id=x"
+
+
+def test_reflow_restores_cjk_line_breaks_google_flattened():
+    """Google flattens description line breaks into ASCII spaces; between
+    two CJK characters such a space can only be that scar."""
+    from app.plugins.metadata.google_books import _reflow_description
+
+    flat = (
+        "人生有限而且短暫， 到底要把握當下？ ＃規則訂明＃ PChome Online網路家庭 詹宏志"
+    )
+    assert _reflow_description(flat) == (
+        "人生有限而且短暫，\n到底要把握當下？\n＃規則訂明＃ PChome Online網路家庭\n詹宏志"
+    )
+    # Latin prose is indistinguishable from normal spacing — untouched.
+    english = "A tale of two cities. It was the best of times."
+    assert _reflow_description(english) == english
+    # Anything already carrying newlines was not flattened — untouched.
+    formatted = "第一行\n第二行 保留"
+    assert _reflow_description(formatted) == formatted
+    assert _reflow_description(None) is None
