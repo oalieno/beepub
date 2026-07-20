@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
+  import { afterNavigate, goto } from "$app/navigation";
   import { onDestroy, onMount } from "svelte";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
@@ -81,6 +81,22 @@
     tags: m.metadata_field_tags,
     description: m.metadata_field_description,
   };
+
+  // Leaving must pop the history entry, not push a fresh /books/{id} —
+  // otherwise the detail page's history.back() lands right back here
+  // and the two back buttons chase each other forever.
+  let cameFromApp = $state(false);
+  afterNavigate((nav) => {
+    if (nav.from) cameFromApp = true;
+  });
+
+  function goBack() {
+    if (cameFromApp) {
+      history.back();
+    } else {
+      goto(`/books/${bookId}`);
+    }
+  }
 
   onMount(async () => {
     try {
@@ -385,7 +401,7 @@
         }
       }
       toastStore.success(m.metadata_updated());
-      goto(`/books/${bookId}`);
+      goBack();
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
@@ -402,6 +418,7 @@
   <BackButton
     href="/books/{bookId}"
     label={book?.display_title ?? m.common_back()}
+    onclick={cameFromApp ? () => history.back() : undefined}
   />
 
   <div class="mt-4 mb-6">
@@ -572,11 +589,7 @@
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
-        <Button
-          type="button"
-          variant="ghost"
-          onclick={() => goto(`/books/${bookId}`)}
-        >
+        <Button type="button" variant="ghost" onclick={goBack}>
           {m.common_cancel()}
         </Button>
         <Button type="submit" disabled={saving}>
