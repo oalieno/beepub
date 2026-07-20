@@ -414,7 +414,7 @@
         <div class="shrink-0 self-center sm:self-start">
           <button
             type="button"
-            class="group relative block aspect-[2/3] w-40 overflow-hidden rounded-md sm:w-[198px]"
+            class="group relative block aspect-[2/3] w-40 overflow-hidden rounded-md sm:w-[249px]"
             onclick={() => (openField = "cover")}
           >
             {#if coverPreviewSrc}
