@@ -44,6 +44,7 @@ class BookOut(BaseModel):
     series: str | None = None
     series_index: float | None = None
     tags: list[str] | None = None
+    field_sources: dict[str, str] | None = None
     word_count: int | None = None
     is_image_book: bool | None = None
     has_unresolved_reports: bool = False
@@ -115,6 +116,23 @@ class BookMetadataUpdate(BaseModel):
     series: str | None = None
     series_index: float | None = None
     tags: list[str] | None = None
+    # Provenance map maintained by the edit page — replaced wholesale
+    # when sent ({} clears everything). Values are plugin names or
+    # "manual"; keys are the overridable fields plus "cover".
+    field_sources: dict[str, str] | None = None
+
+    @field_validator("field_sources")
+    @classmethod
+    def _known_fields_only(cls, value: dict | None) -> dict | None:
+        if value is None:
+            return None
+        allowed = set(cls.model_fields) - {"field_sources"} | {"cover"}
+        for key, source in value.items():
+            if key not in allowed:
+                raise ValueError(f"Unknown field: {key}")
+            if not source or len(source) > 50:
+                raise ValueError(f"Invalid source for {key}")
+        return value
 
 
 class PhysicalBookCreate(BaseModel):
@@ -169,6 +187,7 @@ class IsbnSourceResult(BaseModel):
     published_date: str | None = None
     language: str | None = None
     cover_url: str | None = None
+    tags: list[str] = []
     # The source's own page for this book — provenance the user can
     # click to verify what was filled in.
     url: str | None = None
@@ -213,6 +232,13 @@ class SeriesNeighborsOut(BaseModel):
     progress: SeriesProgress | None = None
 
 
+class BookCoverUpdate(BaseModel):
+    """Replace a book's cover from a source URL (server-side fetch,
+    restricted to the plugin-declared cover hosts)."""
+
+    url: str = Field(min_length=1, max_length=1000)
+
+
 class BookReportCreate(BaseModel):
     issue_type: str
     description: str | None = None
@@ -247,6 +273,9 @@ class ExternalMetadataOut(BaseModel):
     rating: float | None
     rating_count: int | None
     reviews: list | None
+    # The archived BookRecord (record store) — the edit-metadata page
+    # reads per-field version candidates straight out of it, no refetch.
+    record: dict | None = None
     fetched_at: datetime
 
     model_config = {"from_attributes": True}

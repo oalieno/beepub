@@ -30,6 +30,24 @@ def cover_url_allowed(url: str) -> bool:
     return parsed.scheme == "https" and parsed.hostname in COVER_URL_ALLOWED_HOSTS
 
 
+def save_cover_bytes(data: bytes, dest_path: str) -> bool:
+    """Decode-and-re-encode arbitrary image bytes into the canonical
+    JPEG cover. The decode is the validation — non-image payloads
+    return False and leave no file behind."""
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+            img.convert("RGB").save(dest_path, "JPEG", quality=88)
+        return True
+    except Exception:
+        delete_file(dest_path)
+        return False
+
+
 async def download_cover(url: str, dest_path: str) -> bool:
     """Fetch a cover image from an allowlisted metadata host. Best-effort:
     any failure returns False and leaves no file behind. The bytes are
@@ -59,15 +77,7 @@ async def download_cover(url: str, dest_path: str) -> bool:
                     chunks.append(chunk)
         if size == 0:
             return False
-
-        import io
-
-        from PIL import Image
-
-        with Image.open(io.BytesIO(b"".join(chunks))) as img:
-            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            img.convert("RGB").save(dest_path, "JPEG", quality=88)
-        return True
+        return save_cover_bytes(b"".join(chunks), dest_path)
     except Exception:
         delete_file(dest_path)
         return False

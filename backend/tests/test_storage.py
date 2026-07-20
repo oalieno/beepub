@@ -12,6 +12,7 @@ from app.services.storage import (
     get_book_path,
     get_cover_path,
     get_illustration_path,
+    save_cover_bytes,
     save_upload_file,
 )
 
@@ -203,3 +204,33 @@ class TestDeleteFile:
         ):
             with pytest.raises(PermissionError):
                 delete_file("/data/books/locked.epub")
+
+
+# ---------------------------------------------------------------------------
+# save_cover_bytes
+# ---------------------------------------------------------------------------
+
+
+class TestSaveCoverBytes:
+    @staticmethod
+    def _png_bytes() -> bytes:
+        import io
+
+        from PIL import Image
+
+        buf = io.BytesIO()
+        Image.new("RGB", (4, 6), "red").save(buf, "PNG")
+        return buf.getvalue()
+
+    def test_reencodes_any_image_to_jpeg(self, tmp_path):
+        from PIL import Image
+
+        dest = tmp_path / "cover.jpg"
+        assert save_cover_bytes(self._png_bytes(), str(dest)) is True
+        with Image.open(dest) as img:
+            assert img.format == "JPEG"
+
+    def test_garbage_returns_false_and_leaves_no_file(self, tmp_path):
+        dest = tmp_path / "cover.jpg"
+        assert save_cover_bytes(b"definitely not an image", str(dest)) is False
+        assert not dest.exists()

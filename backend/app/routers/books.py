@@ -38,6 +38,7 @@ from app.plugins.metadata import registry as metadata_registry
 from app.plugins.metadata.service import lookup_all, resolve_one, search_all
 from app.rate_limit import limiter
 from app.schemas.book import (
+    BookCoverUpdate,
     BookLibraryUpdate,
     BookLocationsIn,
     BookLocationsOut,
@@ -70,11 +71,13 @@ from app.services.metadata_fetch import cached_resolve
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
+    MAX_COVER_DOWNLOAD_SIZE,
     cover_url_allowed,
     delete_file,
     download_cover,
     get_book_path,
     get_cover_path,
+    save_cover_bytes,
     save_upload_file,
 )
 from app.tasks.auto_tag import auto_tag_book
@@ -1245,6 +1248,7 @@ async def metadata_lookup(
                     published_date=record.published_date,
                     language=record.language,
                     cover_url=record.cover_url,
+                    tags=record.tags or [],
                     url=_source_page_url(plugin_cls, record.source_url),
                 )
             )
@@ -1612,6 +1616,58 @@ async def get_book_cover(
     if not book.cover_path or not os.path.exists(book.cover_path):
         raise HTTPException(status_code=404, detail="Cover not found")
     return FileResponse(book.cover_path, media_type="image/jpeg")
+
+
+@router.put("/{book_id}/cover", response_model=BookOut)
+async def update_book_cover(
+    book_id: uuid.UUID,
+    body: BookCoverUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Replace the cover from an allowlisted source URL. The download
+    lands in a temp file first so a failure can't destroy the cover the
+    book already has."""
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    if not cover_url_allowed(body.url):
+        raise HTTPException(status_code=422, detail="cover url host is not allowed")
+    dest = get_cover_path(book_id)
+    tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
+    if not await download_cover(body.url, tmp):
+        raise HTTPException(status_code=502, detail="Cover download failed")
+    os.replace(tmp, dest)
+    book.cover_path = dest
+    await db.commit()
+    await db.refresh(book)
+    return book
+
+
+@router.post("/{book_id}/cover", response_model=BookOut)
+async def upload_book_cover(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File()],
+):
+    result = await db.execute(select(Book).where(Book.id == book_id))
+    book = result.scalar_one_or_none()
+    if not book:
+        raise HTTPException(status_code=404, detail="Book not found")
+    data = await file.read()
+    if len(data) > MAX_COVER_DOWNLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="Cover image too large")
+    dest = get_cover_path(book_id)
+    tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
+    if not save_cover_bytes(data, tmp):
+        raise HTTPException(status_code=422, detail="Not a decodable image")
+    os.replace(tmp, dest)
+    book.cover_path = dest
+    await db.commit()
+    await db.refresh(book)
+    return book
 
 
 @router.post("/{book_id}/refresh")

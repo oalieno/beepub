@@ -68,6 +68,9 @@ class Book(Base, TimestampMixin):
     series: Mapped[str | None] = mapped_column(String(500), nullable=True)
     series_index: Mapped[float | None] = mapped_column(Float, nullable=True)
     tags: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    # Where each override's current value came from — {"description":
+    # "readmoo", "title": "manual", ...}; a cleared override loses its key.
+    field_sources: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_image_book: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
