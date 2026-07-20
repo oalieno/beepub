@@ -676,6 +676,8 @@
   "browser_showing": "{total} book(s)",
   "browser_load_more": "Load more",
   "browser_no_books": "No books found",
+  "browser_no_matches": "No books match your filters",
+  "browser_library_empty": "This library has no books yet",
 
   "metadata_edit_title": "Edit Metadata",
   "metadata_field_title": "Title",

@@ -286,7 +286,7 @@
           initialFormat={(page.url.searchParams.get("format") ?? "").trim()}
           initialSort={page.url.searchParams.get("sort") || "added_at:desc"}
           initialCollapse={page.url.searchParams.get("collapse") === "1"}
-          emptyMessage={m.browser_no_books()}
+          emptyMessage={m.browser_library_empty()}
           searchPlaceholder={library
             ? m.browser_search_in_library({ name: library.name })
             : m.browser_search_all()}

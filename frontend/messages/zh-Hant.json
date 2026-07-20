@@ -676,6 +676,8 @@
   "browser_showing": "共 {total} 本",
   "browser_load_more": "載入更多",
   "browser_no_books": "找不到書籍",
+  "browser_no_matches": "找不到符合條件的書籍",
+  "browser_library_empty": "這個書庫還沒有書籍",
 
   "metadata_edit_title": "編輯中繼資料",
   "metadata_field_title": "標題",

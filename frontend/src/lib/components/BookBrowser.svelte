@@ -5,6 +5,7 @@
     ArrowUpDown,
     SlidersHorizontal,
     Layers,
+    BookOpen,
     BookX,
     LayoutGrid,
     List,
@@ -172,6 +173,18 @@
   let filterAuthor = $state(init.filterAuthor);
   let filterTag = $state(init.filterTag);
   let filterSeries = $state(init.filterSeries);
+  // Zero results means two different things: nothing matched the active
+  // filters (search semantics, "not found") vs. the collection is
+  // simply still empty (no failure at all).
+  let hasActiveFilters = $derived(
+    !!(
+      searchQuery.trim() ||
+      filterAuthor ||
+      filterTag ||
+      filterSeries ||
+      filterFormat
+    ),
+  );
   let sortValue = $state(init.sortValue);
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -575,10 +588,16 @@
     <div
       class="flex items-center justify-center w-14 h-14 rounded-full bg-muted mb-5"
     >
-      <BookX size={24} strokeWidth={1.5} class="text-muted-foreground" />
+      {#if hasActiveFilters}
+        <BookX size={24} strokeWidth={1.5} class="text-muted-foreground" />
+      {:else}
+        <BookOpen size={24} strokeWidth={1.5} class="text-muted-foreground" />
+      {/if}
     </div>
     <p class="text-foreground text-lg font-medium">
-      {emptyMessage || m.browser_no_books()}
+      {hasActiveFilters
+        ? m.browser_no_matches()
+        : emptyMessage || m.browser_no_books()}
     </p>
     {#if searchQuery.trim()}
       <button
