@@ -181,6 +181,19 @@
     return form[field] || epubValue(field);
   }
 
+  // EPUB descriptions often carry raw markup — cards and placeholders
+  // show it stripped, while picks still fill the raw value.
+  function stripHtml(value: string): string {
+    return value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+  }
+
+  function displayValue(field: string, value: string): string {
+    return field === "description" ? stripHtml(value) : value;
+  }
+
   function versionsFor(field: string): FieldVersion[] {
     const list: FieldVersion[] = [];
     const epub = epubValue(field);
@@ -190,6 +203,7 @@
         source: null,
         label: m.metadata_version_epub(),
         value: epub,
+        display: displayValue(field, epub),
         url: null,
       });
     }
@@ -201,6 +215,7 @@
           source: entry.source,
           label: entry.label,
           value,
+          display: displayValue(field, value),
           url: entry.url,
         });
       }
@@ -431,6 +446,13 @@
                 {m.metadata_change_cover()}
               </span>
             </div>
+            <!-- Touch screens have no hover — a persistent corner badge
+                 says the cover is tappable. -->
+            <div
+              class="absolute right-1.5 bottom-1.5 rounded-full bg-black/55 p-1.5 text-white sm:hidden"
+            >
+              <ImageIcon size={14} />
+            </div>
           </button>
           {#if coverSourceLabel()}
             <p class="mt-1.5 text-center text-xs text-muted-foreground">
@@ -531,8 +553,9 @@
         <Textarea
           id="edit-description"
           bind:value={form.description}
-          placeholder={epubValue("description")}
+          placeholder={stripHtml(epubValue("description"))}
           rows={6}
+          class="max-h-72"
           oninput={() => markManual("description")}
         />
         {@render filledFrom("description")}
@@ -595,6 +618,7 @@
       onclose={() => (openField = null)}
       fieldLabel={FIELD_LABELS[openField]()}
       currentValue={currentValue(openField)}
+      currentDisplay={displayValue(openField, currentValue(openField))}
       versions={versionsFor(openField)}
       multiline={openField === "description"}
       searchQuery={currentValue("title")}
@@ -605,7 +629,12 @@
     <CoverVersionsDialog
       open={true}
       onclose={() => (openField = null)}
-      currentSrc={coverPreviewSrc}
+      current={coverPreviewSrc
+        ? { src: coverPreviewSrc, authed: false }
+        : book?.cover_path
+          ? { src: coverUrl(book.id, book.updated_at), authed: true }
+          : null}
+      selectedUrl={pendingCover?.kind === "url" ? pendingCover.url : null}
       versions={coverVersions}
       searchQuery={currentValue("title")}
       onPick={pickCover}

@@ -4,7 +4,10 @@
     // null = the EPUB original (picking it clears the override).
     source: string | null;
     label: string;
+    // What a pick fills in (raw) vs. what the card shows (markup
+    // stripped for descriptions).
     value: string;
+    display: string;
     url: string | null;
   }
 </script>
@@ -24,6 +27,7 @@
     onclose,
     fieldLabel,
     currentValue,
+    currentDisplay = currentValue,
     versions,
     multiline = false,
     searchQuery = "",
@@ -34,6 +38,7 @@
     onclose: () => void;
     fieldLabel: string;
     currentValue: string;
+    currentDisplay?: string;
     versions: FieldVersion[];
     multiline?: boolean;
     searchQuery?: string;
@@ -73,7 +78,7 @@
               ? 'max-h-40 overflow-y-auto whitespace-pre-wrap'
               : 'truncate'}"
           >
-            {currentValue}
+            {currentDisplay}
           </p>
         </div>
       {/if}
@@ -83,6 +88,7 @@
         <div class="relative">
           <button
             type="button"
+            data-version-card
             class="w-full rounded-lg border p-3 text-left transition-colors {isCurrent
               ? 'border-primary/40 bg-primary/5'
               : 'border-border hover:bg-secondary'}"
@@ -105,7 +111,7 @@
                 ? 'max-h-40 overflow-y-auto whitespace-pre-wrap'
                 : 'truncate'}"
             >
-              {version.value}
+              {version.display}
             </p>
           </button>
           {#if version.url}

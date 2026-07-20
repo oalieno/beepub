@@ -10,6 +10,7 @@
   import Modal from "$lib/components/Modal.svelte";
   import MetadataVersionSearch from "$lib/components/MetadataVersionSearch.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { authedSrc } from "$lib/actions/authedSrc";
   import { Upload } from "@lucide/svelte";
   import type { IsbnSourceResult } from "$lib/types";
 
@@ -18,7 +19,8 @@
   let {
     open = false,
     onclose,
-    currentSrc,
+    current,
+    selectedUrl,
     versions,
     searchQuery = "",
     onPick,
@@ -27,8 +29,11 @@
   }: {
     open?: boolean;
     onclose: () => void;
-    // What the page currently shows (staged pick included) — marked 目前.
-    currentSrc: string | null;
+    // What the page shows right now (staged pick included) — always the
+    // first tile, so the grid is never empty even with a bare archive.
+    current: { src: string; authed: boolean } | null;
+    // The staged source pick, ringed in the candidate grid.
+    selectedUrl: string | null;
     versions: CoverVersion[];
     searchQuery?: string;
     onPick: (version: CoverVersion) => void;
@@ -48,15 +53,40 @@
 <Modal title={m.metadata_field_cover()} {open} {onclose}>
   <div class="space-y-4">
     <div class="grid grid-cols-3 gap-3">
+      {#if current}
+        <div>
+          <div
+            class="aspect-[2/3] overflow-hidden rounded-md border-2 border-primary/40"
+          >
+            {#if current.authed}
+              <img
+                use:authedSrc={current.src}
+                alt=""
+                class="h-full w-full object-cover"
+              />
+            {:else}
+              <img
+                src={current.src}
+                alt=""
+                class="h-full w-full object-cover"
+              />
+            {/if}
+          </div>
+          <p class="mt-1 truncate text-center text-xs text-muted-foreground">
+            {m.metadata_version_current()}
+          </p>
+        </div>
+      {/if}
+
       {#each versions as version (version.source + version.url)}
-        {@const isCurrent = version.url === currentSrc}
+        {@const isSelected = version.url === selectedUrl}
         <button
           type="button"
           class="group text-left"
           onclick={() => onPick(version)}
         >
           <div
-            class="aspect-[2/3] overflow-hidden rounded-md border-2 transition-colors {isCurrent
+            class="aspect-[2/3] overflow-hidden rounded-md border-2 transition-colors {isSelected
               ? 'border-primary'
               : 'border-transparent group-hover:border-border'}"
           >
@@ -69,9 +99,6 @@
           </div>
           <p class="mt-1 truncate text-center text-xs text-muted-foreground">
             {version.label}
-            {#if isCurrent}
-              · {m.metadata_version_current()}
-            {/if}
           </p>
         </button>
       {/each}
