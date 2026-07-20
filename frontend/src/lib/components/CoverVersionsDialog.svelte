@@ -43,6 +43,14 @@
 
   let fileInput = $state<HTMLInputElement | null>(null);
 
+  // Some cover URLs are guesses that fail loudly (open_library builds
+  // them from the ISBN with ?default=false) — a tile whose image can't
+  // load drops out instead of showing a broken thumbnail.
+  let failedUrls = $state<string[]>([]);
+  const visibleVersions = $derived(
+    versions.filter((v) => !failedUrls.includes(v.url)),
+  );
+
   function handleFileChange(event: Event) {
     const file = (event.currentTarget as HTMLInputElement).files?.[0];
     if (file) onUpload(file);
@@ -78,7 +86,7 @@
         </div>
       {/if}
 
-      {#each versions as version (version.source + version.url)}
+      {#each visibleVersions as version (version.source + version.url)}
         {@const isSelected = version.url === selectedUrl}
         <button
           type="button"
@@ -95,6 +103,7 @@
               alt={version.label}
               loading="lazy"
               class="h-full w-full object-cover"
+              onerror={() => (failedUrls = [...failedUrls, version.url])}
             />
           </div>
           <p class="mt-1 truncate text-center text-xs text-muted-foreground">
