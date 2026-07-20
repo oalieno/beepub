@@ -28,6 +28,7 @@
     fieldLabel,
     currentValue,
     currentDisplay = currentValue,
+    currentLabel = m.metadata_version_manual(),
     versions,
     multiline = false,
     searchQuery = "",
@@ -39,6 +40,10 @@
     fieldLabel: string;
     currentValue: string;
     currentDisplay?: string;
+    // Where the current value came from (field_sources), shown on the
+    // current-value card when it matches no version — value drift alone
+    // must not get a pick relabeled as hand-edited.
+    currentLabel?: string;
     versions: FieldVersion[];
     multiline?: boolean;
     searchQuery?: string;
@@ -65,7 +70,7 @@
         <div class="rounded-lg border border-primary/40 bg-primary/5 p-3">
           <div class="mb-1 flex items-center gap-2">
             <span class="text-xs font-medium text-muted-foreground">
-              {m.metadata_version_manual()}
+              {currentLabel}
             </span>
             <span
               class="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary"

@@ -307,6 +307,16 @@
         : null,
   );
 
+  // What field_sources says about the current value — the dialog's
+  // current-value card must not call a source pick "hand-edited" just
+  // because the archived record has since drifted from it.
+  function provenanceLabel(field: string): string {
+    const source = fieldSources[field];
+    return source && source !== "manual"
+      ? labelFor(source)
+      : m.metadata_version_manual();
+  }
+
   function pickCover(version: CoverVersion) {
     if (pendingCover?.kind === "file")
       URL.revokeObjectURL(pendingCover.preview);
@@ -619,6 +629,7 @@
       fieldLabel={FIELD_LABELS[openField]()}
       currentValue={currentValue(openField)}
       currentDisplay={displayValue(openField, currentValue(openField))}
+      currentLabel={provenanceLabel(openField)}
       versions={versionsFor(openField)}
       multiline={openField === "description"}
       searchQuery={currentValue("title")}
