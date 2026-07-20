@@ -63,7 +63,6 @@
   import ExternalRatings from "$lib/components/ExternalRatings.svelte";
   import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
   import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
-  import BookMetadataEditModal from "$lib/components/BookMetadataEditModal.svelte";
   import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import BackToTop from "$lib/components/BackToTop.svelte";
   import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
@@ -116,7 +115,6 @@
   let primaryBookId = $state<string | null>(null);
   let seriesNeighbors = $state<SeriesNeighborsOut | null>(null);
   let loading = $state(true);
-  let showEditModal = $state(false);
   let showAddToShelf = $state(false);
   let showMoveLibrary = $state(false);
   let moveLibraries = $state<LibraryOut[]>([]);
@@ -805,7 +803,9 @@
               </DropdownMenu.Item>
               {#if isAdmin}
                 <DropdownMenu.Separator />
-                <DropdownMenu.Item onclick={() => (showEditModal = true)}>
+                <DropdownMenu.Item
+                  onclick={() => goto(`/books/${bookId}/edit`)}
+                >
                   <Pencil size={14} />
                   {m.book_edit_metadata()}
                 </DropdownMenu.Item>
@@ -1275,7 +1275,7 @@
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
-          showEditModal = true;
+          goto(`/books/${bookId}/edit`);
           showMobileActions = false;
         }}
       >
@@ -1351,12 +1351,6 @@
 {/if}
 
 {#if book}
-  <BookMetadataEditModal
-    {book}
-    bind:open={showEditModal}
-    onupdate={(updated) => (book = updated)}
-  />
-
   <Modal
     title={m.book_add_to_bookshelf()}
     open={showAddToShelf}

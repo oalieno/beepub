@@ -71,6 +71,8 @@ export interface BookOut {
   series: string | null;
   series_index: number | null;
   tags: string[] | null;
+  // Per-field provenance: {"description": "readmoo", "title": "manual"}
+  field_sources: Record<string, string> | null;
   word_count: number | null;
   is_image_book: boolean | null;
   has_unresolved_reports: boolean;
@@ -217,7 +219,23 @@ export interface ExternalMetadataOut {
   rating: number | null;
   rating_count: number | null;
   reviews: Array<{ content: string; author?: string; rating?: number }> | null;
+  // The archived BookRecord — per-field version candidates for the
+  // edit-metadata page. null = row exists but nothing fetched yet.
+  record: MetadataRecord | null;
   fetched_at: string;
+}
+
+// BookRecord as stored in the record store / returned by lookups.
+export interface MetadataRecord {
+  source_url?: string | null;
+  title?: string | null;
+  authors?: string[];
+  publisher?: string | null;
+  description?: string | null;
+  published_date?: string | null;
+  language?: string | null;
+  cover_url?: string | null;
+  tags?: string[];
 }
 
 export interface HighlightOut {
@@ -371,6 +389,7 @@ export interface IsbnSourceResult {
   published_date: string | null;
   language: string | null;
   cover_url: string | null;
+  tags: string[];
   // The source's own page for this book — clickable provenance.
   url: string | null;
 }

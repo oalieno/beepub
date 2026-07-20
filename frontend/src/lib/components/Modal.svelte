@@ -8,11 +8,15 @@
     title = "",
     open = false,
     onclose,
+    contentClass = "",
     children,
   }: {
     title?: string;
     open?: boolean;
     onclose?: () => void;
+    // Extra classes for Dialog.Content — e.g. a wider max-w for
+    // dialogs that compare long text.
+    contentClass?: string;
     children?: Snippet;
   } = $props();
 </script>
@@ -26,7 +30,7 @@
   }}
 >
   <Dialog.Content
-    class="bg-card rounded-2xl p-0 gap-0 flex flex-col sm:max-w-lg max-h-[calc(100dvh-2rem)]"
+    class="bg-card rounded-2xl p-0 gap-0 flex flex-col sm:max-w-lg max-h-[calc(100dvh-2rem)] {contentClass}"
     showCloseButton={false}
   >
     <div class="flex items-center justify-between px-6 py-5 shrink-0">

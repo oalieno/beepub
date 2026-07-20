@@ -103,8 +103,29 @@ export const booksApi = {
       series?: string | null;
       series_index?: number | null;
       tags?: string[] | null;
+      field_sources?: Record<string, string> | null;
     },
   ) => put(`/books/${bookId}/metadata`, data) as Promise<BookOut>,
+
+  // Replace the cover from a source URL (server-side, allowlisted hosts).
+  updateCover: (bookId: string, url: string) =>
+    put(`/books/${bookId}/cover`, { url }) as Promise<BookOut>,
+
+  uploadCover: (bookId: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return fetch(`${apiBase()}/books/${bookId}/cover`, {
+      method: "POST",
+      headers: getAuthHeader(),
+      body: formData,
+    }).then(async (res) => {
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { detail?: string };
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      return res.json() as Promise<BookOut>;
+    });
+  },
 
   delete: (bookId: string) => del(`/books/${bookId}`),
 
