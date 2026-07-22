@@ -110,6 +110,12 @@ def test_job_plugins_respect_source_list_and_toggles():
     assert registry.job_source_count({}) == len(BUILTIN_ORDER)
     assert registry.job_source_count(listed) == 2
 
+    # The "none" sentinel — empty string already means "all enabled",
+    # so switching off the background fetch entirely needs its own value.
+    none = {"metadata_job_sources": registry.JOB_SOURCES_NONE}
+    assert registry.job_plugins(none) == []
+    assert registry.job_source_count(none) == 0
+
 
 def test_settings_defaults_derive_from_registry():
     from app.services.settings import DEFAULTS, SECRET_SETTINGS

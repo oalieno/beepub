@@ -18,7 +18,7 @@ import redis.asyncio as aioredis
 from sqlalchemy import text
 
 from app.config import settings as app_config
-from app.plugins.metadata import BookQuery, BookRecord, registry
+from app.plugins.metadata import BookQuery, BookRecord, RateLimitError, registry
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -147,6 +147,52 @@ async def upsert_external_metadata(
 RESOLVE_CACHE_TTL = 24 * 3600
 _RESOLVE_CACHE_PREFIX = "beepub:resolve"
 
+# ---------------------------------------------------------------------------
+# Source health — operational signal for /admin/metadata. Same class of
+# infrastructure as the resolve cache and rate-limit flags: lives in
+# Redis, plugins know nothing about it, and losing it just resets the
+# counters until the next fetch. "Not found" counts as a success here —
+# the source answered; only an exception is a failure. Rate limits are
+# tracked separately (the cooldown flag says "throttled", not "broken")
+# so they never trip the consecutive-failures alarm.
+# ---------------------------------------------------------------------------
+
+HEALTH_KEY_PREFIX = "beepub:metadata:health"
+
+
+async def record_source_health(
+    source: str,
+    outcome: str,
+    *,
+    error: str | None = None,
+    client: aioredis.Redis | None = None,
+) -> None:
+    """Best-effort write of a resolve outcome ("ok" | "error" |
+    "ratelimited") to the source's health hash. Never raises."""
+    own_client = client is None
+    try:
+        if own_client:
+            client = aioredis.from_url(app_config.redis_url)
+        key = f"{HEALTH_KEY_PREFIX}:{source}"
+        now = datetime.now(UTC).isoformat()
+        if outcome == "ok":
+            await client.hset(
+                key, mapping={"last_success_at": now, "consecutive_failures": 0}
+            )
+        elif outcome == "ratelimited":
+            await client.hset(key, mapping={"last_ratelimited_at": now})
+        else:
+            await client.hset(
+                key,
+                mapping={"last_error_at": now, "last_error": (error or "")[:500]},
+            )
+            await client.hincrby(key, "consecutive_failures", 1)
+    except Exception as e:
+        logger.debug(f"source health write failed: {e}")
+    finally:
+        if own_client and client is not None:
+            await client.aclose()
+
 
 def _clue_fingerprint(query: BookQuery) -> str:
     """Most-precise-clue precedence, mirroring how plugins locate: a URL
@@ -175,7 +221,19 @@ async def cached_resolve(plugin: MetadataPlugin, query: BookQuery) -> BookRecord
         except Exception as e:
             logger.debug(f"resolve cache read failed: {e}")
 
-        record = await plugin.resolve(query)
+        # Health is recorded only on live resolves — a cache hit never
+        # touched the upstream so it says nothing about its health.
+        try:
+            record = await plugin.resolve(query)
+        except RateLimitError:
+            await record_source_health(plugin.name, "ratelimited", client=client)
+            raise
+        except Exception as e:
+            await record_source_health(
+                plugin.name, "error", error=str(e), client=client
+            )
+            raise
+        await record_source_health(plugin.name, "ok", client=client)
 
         if record is not None and client is not None:
             try:

@@ -52,6 +52,7 @@ class HardcoverPlugin(MetadataPlugin):
     cover_hosts = frozenset({"assets.hardcover.app"})
     settings_keys = ("hardcover_api_token",)
     secret_settings_keys = ("hardcover_api_token",)
+    key_url = "https://hardcover.app/account/api"
     ratelimit_cooldown = 60
     url_prefix = "https://hardcover.app/books/"
     id_pattern = r"^[\w-]+$"

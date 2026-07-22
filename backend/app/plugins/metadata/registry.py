@@ -96,17 +96,24 @@ def enabled_plugins(
 
 
 JOB_SOURCES_KEY = "metadata_job_sources"
+# "No sources at all" needs its own sentinel because the empty string
+# already means the default ("every enabled source") — without it,
+# deselecting the last source would silently round-trip back to all.
+JOB_SOURCES_NONE = "-"
 
 
 def job_plugins(settings: dict[str, str]) -> list[MetadataPlugin]:
     """Plugins the background fetch job iterates: enabled ∩ the job's
-    source-list setting (comma-separated names; empty = all enabled).
-    Interactive surfaces (ISBN lookup, manual refetch) ignore the job
-    list and see every enabled plugin."""
+    source-list setting (comma-separated names; empty = all enabled,
+    JOB_SOURCES_NONE = background fetch off). Interactive surfaces
+    (ISBN lookup, manual refetch) ignore the job list and see every
+    enabled plugin."""
     selected = enabled_plugins(settings)
     raw = settings.get(JOB_SOURCES_KEY, "").strip()
     if not raw:
         return selected
+    if raw == JOB_SOURCES_NONE:
+        return []
     wanted = {name.strip() for name in raw.split(",") if name.strip()}
     return [p for p in selected if p.name in wanted]
 

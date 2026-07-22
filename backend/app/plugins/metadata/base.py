@@ -120,6 +120,7 @@ class MetadataPlugin(ABC):
     cover_hosts: ClassVar[frozenset[str]] = frozenset()
     settings_keys: ClassVar[tuple[str, ...]] = ()
     secret_settings_keys: ClassVar[tuple[str, ...]] = ()
+    key_url: ClassVar[str | None] = None  # where the operator gets a key
     ratelimit_cooldown: ClassVar[int] = 300  # seconds; enforced by the job runner
     # Manual-linking metadata; all three set <=> Clue.URL in accepts.
     url_prefix: ClassVar[str | None] = None

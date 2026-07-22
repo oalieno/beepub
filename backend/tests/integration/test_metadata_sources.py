@@ -158,3 +158,95 @@ async def test_single_source_refetch_carries_book_clues(admin_client, monkeypatc
     query = captured["query"]
     assert query.url == "https://www.goodreads.com/book/show/60495597"
     assert query.title, "the book's title must ride along with the pinned URL"
+
+
+async def test_source_stats_tallies_and_health(admin_client, user_client, monkeypatch):
+    """The stats endpoint: admin-only, archive tallies from
+    external_metadata, and the Redis health hash written at the resolve
+    chokepoints (success resets the failure counter, errors bump it,
+    rate limits never count as failures)."""
+    resp = await user_client.get("/api/metadata/sources/stats")
+    assert resp.status_code == 403
+
+    # A blank install still answers, with every source zeroed.
+    resp = await admin_client.get("/api/metadata/sources/stats")
+    assert resp.status_code == 200
+    stats = resp.json()["stats"]
+    assert stats["goodreads"]["books_found"] == 0
+    assert stats["goodreads"]["last_success_at"] is None
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    book_id = book["id"]
+
+    resp = await admin_client.put(
+        f"/api/books/{book_id}/external/goodreads/url",
+        json={"source_url": "https://www.goodreads.com/book/show/60495597"},
+    )
+    assert resp.status_code == 200
+
+    from app.plugins.metadata.base import BookQuery, BookRecord, RateLimitError
+    from app.plugins.metadata.goodreads import GoodreadsPlugin
+    from app.services.metadata_fetch import cached_resolve
+    from app.tasks.metadata import _run_fetch_metadata_source
+
+    async def ok_resolve(self, query):
+        return BookRecord(source_url=query.url, title="stub")
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", ok_resolve)
+    await _run_fetch_metadata_source(book_id, "goodreads")
+
+    resp = await admin_client.get("/api/metadata/sources/stats")
+    goodreads = resp.json()["stats"]["goodreads"]
+    assert goodreads["books_found"] == 1
+    assert goodreads["books_not_found"] == 0
+    assert goodreads["last_fetched_at"] is not None
+    assert goodreads["last_success_at"] is not None
+    assert goodreads["consecutive_failures"] == 0
+
+    # Failures through the shared resolve path bump the counter and
+    # keep the error message; rate limits are tracked separately.
+    async def broken_resolve(self, query):
+        raise RuntimeError("scraper layout changed")
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", broken_resolve)
+    plugin = GoodreadsPlugin({})
+    for _ in range(2):
+        with pytest.raises(RuntimeError):
+            await cached_resolve(plugin, BookQuery(title="whatever"))
+
+    async def limited_resolve(self, query):
+        raise RateLimitError("goodreads")
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", limited_resolve)
+    with pytest.raises(RateLimitError):
+        await cached_resolve(plugin, BookQuery(title="whatever"))
+
+    resp = await admin_client.get("/api/metadata/sources/stats")
+    goodreads = resp.json()["stats"]["goodreads"]
+    assert goodreads["consecutive_failures"] == 2
+    assert "scraper layout changed" in goodreads["last_error"]
+    assert goodreads["last_ratelimited_at"] is not None
+
+    # One success heals the streak (but keeps the error history).
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", ok_resolve)
+    await cached_resolve(plugin, BookQuery(title="whatever"))
+
+    resp = await admin_client.get("/api/metadata/sources/stats")
+    goodreads = resp.json()["stats"]["goodreads"]
+    assert goodreads["consecutive_failures"] == 0
+    assert goodreads["last_error_at"] is not None
+
+
+async def test_job_sources_none_sentinel_round_trips(admin_client):
+    """'-' = background fetch off entirely; empty string still means
+    the default (all enabled sources)."""
+    resp = await admin_client.put(
+        "/api/admin/settings", json={"metadata_job_sources": "-"}
+    )
+    assert resp.status_code == 200
+
+    resp = await admin_client.get("/api/metadata/sources")
+    sources = resp.json()["sources"]
+    assert all(s["in_job"] is False for s in sources)
+    assert all(s["enabled"] is True for s in sources)

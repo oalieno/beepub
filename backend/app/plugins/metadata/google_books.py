@@ -96,6 +96,7 @@ class GoogleBooksPlugin(MetadataPlugin):
     )
     settings_keys = ("google_books_api_key",)
     secret_settings_keys = ("google_books_api_key",)
+    key_url = "https://console.cloud.google.com/apis/credentials"
     ratelimit_cooldown = 86400  # keyless access 429s for a long time
     url_prefix = "https://books.google.com/books?id="
     id_pattern = r"^[\w-]+$"

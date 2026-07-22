@@ -231,6 +231,7 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
     from app.services.metadata_fetch import (
         fetch_book_info,
         init_metadata_plugins,
+        record_source_health,
         run_tag_mapping,
         upsert_external_metadata,
     )
@@ -260,14 +261,22 @@ async def _run_fetch_metadata_source(book_id: str, source_name: str) -> None:
             pinned_url = row["source_url"]
             title, authors, isbn = book_info if book_info else ("", [], None)
             try:
-                record = await plugin.resolve(
-                    BookQuery(
-                        url=pinned_url,
-                        title=title or None,
-                        authors=authors,
-                        isbn=isbn,
+                try:
+                    record = await plugin.resolve(
+                        BookQuery(
+                            url=pinned_url,
+                            title=title or None,
+                            authors=authors,
+                            isbn=isbn,
+                        )
                     )
-                )
+                except RateLimitError:
+                    await record_source_health(source_name, "ratelimited")
+                    raise
+                except Exception as e:
+                    await record_source_health(source_name, "error", error=str(e))
+                    raise
+                await record_source_health(source_name, "ok")
                 if record is None:
                     logger.warning(
                         f"{source_name} returned nothing for pinned URL "
