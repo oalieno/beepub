@@ -6,7 +6,7 @@ import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import redis.asyncio as aioredis
@@ -23,6 +23,11 @@ from app.tasks.text_extract import extract_book_text
 logger = logging.getLogger(__name__)
 
 SYNC_KEY_PREFIX = "beepub:calibre:sync"
+
+# Safety margin when comparing Calibre's per-book last_modified (written
+# by the machine running Calibre) against our last_synced_at (server
+# clock). Books stamped inside the margin just take the normal slow path.
+CALIBRE_CLOCK_SKEW = timedelta(minutes=10)
 
 
 def get_metadata_db_mtime(calibre_path: str) -> datetime | None:
@@ -50,6 +55,7 @@ class CalibreBookInfo:
     cover_path: str | None  # full path to cover.jpg or None
     file_size: int
     added_at: str | None  # Calibre timestamp (when added to Calibre)
+    last_modified: str | None  # Calibre timestamp (last change to this book)
 
 
 @dataclass
@@ -128,6 +134,7 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                 b.has_cover,
                 b.pubdate,
                 b.timestamp AS added_at,
+                b.last_modified,
                 b.series_index,
                 d.name AS file_name,
                 d.uncompressed_size AS file_size,
@@ -197,6 +204,9 @@ def read_calibre_books(calibre_dir: str) -> list[CalibreBookInfo]:
                     cover_path=cover,
                     file_size=row["file_size"] or 0,
                     added_at=added_at_str,
+                    last_modified=(
+                        str(row["last_modified"]) if row["last_modified"] else None
+                    ),
                 )
             )
         return results
@@ -212,6 +222,28 @@ def _parse_calibre_timestamp(ts: str | None) -> datetime | None:
         return datetime.fromisoformat(ts)
     except (ValueError, TypeError):
         return None
+
+
+def _calibre_row_unchanged(
+    last_modified: str | None,
+    epub_mtime: datetime | None,
+    previous_synced_at: datetime | None,
+) -> bool:
+    """Fast-path check: Calibre stamps last_modified on every change it
+    makes to a book (metadata, covers, files), so a row older than our
+    previous sync — minus clock skew, since the stamp comes from the
+    machine running Calibre — can't have anything new for us. Books
+    without a stored epub_mtime still need the slow path once to
+    backfill it. Out-of-band edits (not through Calibre) are already
+    unsupported."""
+    if previous_synced_at is None or epub_mtime is None:
+        return False
+    cal_modified = _parse_calibre_timestamp(last_modified)
+    if cal_modified is None:
+        return False
+    if cal_modified.tzinfo is None:
+        cal_modified = cal_modified.replace(tzinfo=UTC)
+    return cal_modified < previous_synced_at - CALIBRE_CLOCK_SKEW
 
 
 def _sync_key(library_id: uuid.UUID) -> str:
@@ -275,10 +307,12 @@ async def sync_calibre_library(
             lib_check = await db.execute(
                 select(Library).where(Library.id == library_id)
             )
-            if not lib_check.scalar_one_or_none():
+            library = lib_check.scalar_one_or_none()
+            if not library:
                 logger.info(f"Library {library_id} was deleted, aborting sync")
                 await _update_progress(result, total, 0, "failed")
                 return
+            previous_synced_at = library.last_synced_at
 
             # Get existing books in this library by calibre_id
             existing_query = (
@@ -296,8 +330,21 @@ async def sync_calibre_library(
             for i, cal_book in enumerate(calibre_books):
                 try:
                     if cal_book.calibre_id in existing_books:
-                        # Update existing book
                         book = existing_books[cal_book.calibre_id]
+
+                        # Fast path — skips the per-book file stats, which
+                        # dominate cold-cache sync time on large libraries.
+                        if _calibre_row_unchanged(
+                            cal_book.last_modified,
+                            book.epub_mtime,
+                            previous_synced_at,
+                        ):
+                            result.unchanged += 1
+                            if (i + 1) % 500 == 0:
+                                await _update_progress(result, total, i + 1)
+                            continue
+
+                        # Update existing book
                         changed = False
                         if book.file_path != cal_book.epub_path:
                             book.file_path = cal_book.epub_path

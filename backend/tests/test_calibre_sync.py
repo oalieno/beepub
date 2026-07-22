@@ -8,7 +8,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.services.calibre import get_metadata_db_mtime, scan_calibre_libraries
+from app.services.calibre import (
+    _calibre_row_unchanged,
+    get_metadata_db_mtime,
+    scan_calibre_libraries,
+)
 
 
 class TestGetMetadataDbMtime:
@@ -78,6 +82,39 @@ class TestScanCalibreLibraries:
         result = scan_calibre_libraries(str(root))
 
         assert [r["name"] for r in result] == ["calibre", "Library B"]
+
+
+class TestCalibreRowUnchanged:
+    """Fast-path skip: only when Calibre's own stamp proves the row
+    predates our previous sync (with clock-skew margin)."""
+
+    NOW = datetime(2026, 7, 22, 12, 0, 0, tzinfo=UTC)
+    MTIME = datetime(2026, 7, 1, tzinfo=UTC)
+
+    def test_old_row_is_skipped(self):
+        assert _calibre_row_unchanged("2026-07-20 08:00:00+00:00", self.MTIME, self.NOW)
+
+    def test_naive_timestamp_treated_as_utc(self):
+        assert _calibre_row_unchanged("2026-07-20 08:00:00", self.MTIME, self.NOW)
+
+    def test_recent_row_takes_slow_path(self):
+        assert not _calibre_row_unchanged(
+            "2026-07-22 11:58:00+00:00", self.MTIME, self.NOW
+        )
+
+    def test_within_skew_margin_takes_slow_path(self):
+        # 5 minutes before the previous sync — inside the 10-minute margin.
+        assert not _calibre_row_unchanged(
+            "2026-07-22 11:55:00+00:00", self.MTIME, self.NOW
+        )
+
+    def test_missing_inputs_take_slow_path(self):
+        assert not _calibre_row_unchanged(None, self.MTIME, self.NOW)
+        assert not _calibre_row_unchanged("garbage", self.MTIME, self.NOW)
+        # First sync ever: no previous timestamp.
+        assert not _calibre_row_unchanged("2026-07-20 08:00:00+00:00", self.MTIME, None)
+        # Legacy book without a stored epub_mtime must backfill it once.
+        assert not _calibre_row_unchanged("2026-07-20 08:00:00+00:00", None, self.NOW)
 
 
 def _make_library(**overrides):
