@@ -8,7 +8,6 @@ _STATIC_DEFAULTS = {
     "registration_enabled": "false",
     "timezone": "Asia/Taipei",
     "calibre_base_dir": "/calibre",
-    "calibre_auto_sync_interval_minutes": "30",
     # Provider credentials (stored once)
     "gemini_api_key": "",
     "openai_api_key": "",

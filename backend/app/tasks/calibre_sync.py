@@ -9,8 +9,12 @@ from app.celeryapp import celery
 logger = logging.getLogger(__name__)
 
 
-async def _check_and_sync_calibre(force: bool = False) -> None:
-    """Gate-check dispatcher: check settings, interval, mtime, then dispatch per-library sync tasks."""
+async def _check_and_sync_calibre() -> None:
+    """Gate-check dispatcher: sync any auto-sync library whose metadata.db
+    changed since its last sync. Runs every beat tick (60s); the mtime
+    gate makes the steady state one file stat per library per minute,
+    and the per-book last_modified fast path makes a triggered sync of
+    an unchanged library cost seconds — no rate-limit interval needed."""
     import redis.asyncio as aioredis
     from sqlalchemy import select
 
@@ -18,7 +22,6 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
     from app.database import create_task_engine
     from app.models.library import Library
     from app.services.calibre import get_metadata_db_mtime, get_sync_status
-    from app.services.settings import get_setting
 
     LOCK_KEY = "beepub:calibre:auto_sync_lock"
     LOCK_TTL = 300  # 5 minutes
@@ -33,11 +36,6 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
         try:
             async with create_task_engine() as (_engine, session_factory):
                 async with session_factory() as db:
-                    interval_minutes = int(
-                        await get_setting(db, "calibre_auto_sync_interval_minutes")
-                        or "30"
-                    )
-
                     # Query libraries with auto_sync enabled and a calibre path
                     result = await db.execute(
                         select(Library).where(
@@ -50,26 +48,18 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
                 if not libraries:
                     return
 
-                from datetime import UTC, datetime, timedelta
+                from datetime import UTC, datetime
 
                 now = datetime.now(UTC)
 
                 for lib in libraries:
-                    # Gate 2: Interval elapsed (skip if not force and too recent)
-                    if not force and lib.last_synced_at:
-                        next_sync = lib.last_synced_at + timedelta(
-                            minutes=interval_minutes
-                        )
-                        if now < next_sync:
-                            continue
-
-                    # Gate 3: mtime changed (skip if metadata.db unchanged)
+                    # Gate 1: mtime changed (skip if metadata.db unchanged)
                     mtime = get_metadata_db_mtime(lib.calibre_path)
                     if mtime and lib.last_synced_at and mtime <= lib.last_synced_at:
                         logger.debug(f"No changes for {lib.name}, skipping")
                         continue
 
-                    # Gate 4: Not already running
+                    # Gate 2: Not already running
                     sync_status = await get_sync_status(lib.id)
                     if sync_status and sync_status.get("status") == "running":
                         started_at = sync_status.get("started_at")
@@ -103,11 +93,11 @@ async def _check_and_sync_calibre(force: bool = False) -> None:
     soft_time_limit=6 * 3600,
     time_limit=6 * 3600 + 300,
 )
-def check_and_sync_calibre(force: bool = False) -> None:
+def check_and_sync_calibre() -> None:
     """Celery beat task: periodic calibre sync dispatcher."""
     from app.celeryapp import run_async
 
-    run_async(_check_and_sync_calibre(force=force))
+    run_async(_check_and_sync_calibre())
 
 
 @celery.task(

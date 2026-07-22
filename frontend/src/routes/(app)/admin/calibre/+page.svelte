@@ -4,15 +4,8 @@
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import * as Select from "$lib/components/ui/select";
   import type { CalibreLibraryInfo, CalibreLibraryStatus } from "$lib/types";
-  import {
-    HardDrive,
-    RefreshCw,
-    Link,
-    LoaderCircle,
-    Timer,
-  } from "@lucide/svelte";
+  import { HardDrive, RefreshCw, Link, LoaderCircle } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import * as m from "$lib/paraglide/messages.js";
@@ -25,7 +18,6 @@
   let pollingIntervals = $state<Record<string, ReturnType<typeof setInterval>>>(
     {},
   );
-  let syncIntervalMinutes = $state(30);
   let calibreBaseDir = $state("/calibre");
 
   let linkedLibraries = $derived(libraries.filter((l) => l.linked));
@@ -53,8 +45,6 @@
       ]);
       libraries = libs;
       if (settings) {
-        syncIntervalMinutes =
-          parseInt(settings.calibre_auto_sync_interval_minutes) || 30;
         calibreBaseDir = settings.calibre_base_dir || "/calibre";
       }
       for (const lib of libraries) {
@@ -163,24 +153,6 @@
     }
   }
 
-  async function handleIntervalChange(value: string) {
-    syncIntervalMinutes = parseInt(value);
-    try {
-      await adminApi.updateSettings({
-        calibre_auto_sync_interval_minutes: String(syncIntervalMinutes),
-      });
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  function formatIntervalLabel(minutes: number): string {
-    if (minutes < 60)
-      return m.admin_calibre_every_min({ minutes: String(minutes) });
-    if (minutes === 60) return m.admin_calibre_every_1h();
-    return m.admin_calibre_every_hours({ hours: String(minutes / 60) });
-  }
-
   function formatRelativeTime(isoString: string | null): string {
     if (!isoString) return "—";
     const date = new Date(isoString);
@@ -271,42 +243,7 @@
   {:else}
     <!-- Header bar -->
     {#if linkedLibraries.length > 0}
-      <div class="flex items-center justify-between gap-3 mb-5">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-semibold text-foreground whitespace-nowrap"
-            >{m.admin_calibre_auto_sync()}</span
-          >
-          <Timer size={14} class="text-muted-foreground shrink-0" />
-          <Select.Root
-            type="single"
-            value={String(syncIntervalMinutes)}
-            onValueChange={handleIntervalChange}
-          >
-            <Select.Trigger class="h-8 w-[140px] text-sm bg-card border-border">
-              {formatIntervalLabel(syncIntervalMinutes)}
-            </Select.Trigger>
-            <Select.Content align="start">
-              <Select.Item value="5"
-                >{m.admin_calibre_interval_5m()}</Select.Item
-              >
-              <Select.Item value="15"
-                >{m.admin_calibre_interval_15m()}</Select.Item
-              >
-              <Select.Item value="30"
-                >{m.admin_calibre_interval_30m()}</Select.Item
-              >
-              <Select.Item value="60"
-                >{m.admin_calibre_interval_1h()}</Select.Item
-              >
-              <Select.Item value="360"
-                >{m.admin_calibre_interval_6h()}</Select.Item
-              >
-              <Select.Item value="1440"
-                >{m.admin_calibre_interval_24h()}</Select.Item
-              >
-            </Select.Content>
-          </Select.Root>
-        </div>
+      <div class="flex items-center justify-end gap-3 mb-5">
         <button
           class="text-sm font-medium text-primary hover:text-primary/80 transition-colors disabled:opacity-40 whitespace-nowrap"
           onclick={handleSyncAll}

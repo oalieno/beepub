@@ -490,7 +490,6 @@ export interface AdminSettings {
   registration_enabled: string;
   timezone: string;
   calibre_base_dir: string;
-  calibre_auto_sync_interval_minutes: string;
   gemini_api_key: string;
   openai_api_key: string;
   openai_base_url: string;

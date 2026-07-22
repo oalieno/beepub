@@ -142,18 +142,11 @@ def _make_redis(lock_acquired=True):
 
 async def _run_check(
     libraries,
-    settings_dict=None,
-    force=False,
     lock_acquired=True,
     mtime_value=None,
     sync_status_value=None,
 ):
     """Run _check_and_sync_calibre with fully mocked dependencies."""
-    if settings_dict is None:
-        settings_dict = {
-            "calibre_auto_sync_interval_minutes": "30",
-        }
-
     if mtime_value is None:
         mtime_value = datetime.now(UTC)
 
@@ -174,13 +167,9 @@ async def _run_check(
     mock_engine_ctx.__aenter__ = AsyncMock(return_value=(MagicMock(), mock_factory))
     mock_engine_ctx.__aexit__ = AsyncMock()
 
-    async def mock_get_setting(db, key):
-        return settings_dict.get(key, "")
-
     with (
         patch("redis.asyncio.from_url", return_value=mock_redis),
         patch("app.database.create_task_engine", return_value=mock_engine_ctx),
-        patch("app.services.settings.get_setting", side_effect=mock_get_setting),
         patch("app.services.calibre.get_metadata_db_mtime", return_value=mtime_value),
         patch(
             "app.services.calibre.get_sync_status",
@@ -191,7 +180,7 @@ async def _run_check(
     ):
         from app.tasks.calibre_sync import _check_and_sync_calibre
 
-        await _check_and_sync_calibre(force=force)
+        await _check_and_sync_calibre()
 
     return mock_task
 
@@ -206,11 +195,12 @@ class TestCheckAndSyncCalibre:
         mock_task.delay.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_skip_when_interval_not_elapsed(self):
-        """Should skip a library when the interval hasn't elapsed yet."""
-        lib = _make_library(last_synced_at=datetime.now(UTC) - timedelta(minutes=5))
+    async def test_recent_sync_still_dispatches_on_change(self):
+        """No rate-limit interval: a change right after a sync re-syncs
+        within the next tick (cheap thanks to the fast path)."""
+        lib = _make_library(last_synced_at=datetime.now(UTC) - timedelta(minutes=1))
         mock_task = await _run_check(libraries=[lib])
-        mock_task.delay.assert_not_called()
+        mock_task.delay.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skip_when_mtime_unchanged(self):
@@ -247,13 +237,6 @@ class TestCheckAndSyncCalibre:
             str(lib.id),
             str(lib.created_by),
         )
-
-    @pytest.mark.asyncio
-    async def test_force_skips_interval_check(self):
-        """force=True should skip the interval check."""
-        lib = _make_library(last_synced_at=datetime.now(UTC) - timedelta(minutes=1))
-        mock_task = await _run_check(libraries=[lib], force=True)
-        mock_task.delay.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_skip_when_lock_not_acquired(self):
