@@ -353,6 +353,7 @@ export interface MetadataSourceOut {
   configured: boolean;
   setting_keys: string[];
   secret_setting_keys: string[];
+  key_url: string | null;
   url_prefix: string | null;
   id_pattern: string | null;
   id_hint: string | null;
@@ -360,6 +361,22 @@ export interface MetadataSourceOut {
 
 export interface MetadataSourcesOut {
   sources: MetadataSourceOut[];
+}
+
+export interface MetadataSourceStats {
+  books_found: number;
+  books_not_found: number;
+  last_fetched_at: string | null;
+  cooldown_seconds: number | null;
+  last_success_at: string | null;
+  last_error_at: string | null;
+  last_error: string | null;
+  last_ratelimited_at: string | null;
+  consecutive_failures: number;
+}
+
+export interface MetadataSourceStatsOut {
+  stats: Record<string, MetadataSourceStats>;
 }
 
 export interface MetadataSearchCandidate {
