@@ -250,3 +250,54 @@ async def test_job_sources_none_sentinel_round_trips(admin_client):
     sources = resp.json()["sources"]
     assert all(s["in_job"] is False for s in sources)
     assert all(s["enabled"] is True for s in sources)
+
+
+async def test_ratelimit_resume_is_announced_and_cancellable(admin_client):
+    """A 429 arms exactly one announced continuation (NX dedup), the
+    jobs page exposes its ETA, cancelling deletes it, and the fired
+    task honours a cancel by not starting a run."""
+    import redis.asyncio as aioredis
+
+    from app.config import settings as app_config
+    from app.services.job_queue import get_generation
+    from app.tasks.metadata import (
+        RESUME_KEY,
+        _resume_backfill,
+        _set_rate_limited,
+    )
+
+    client = aioredis.from_url(app_config.redis_url, decode_responses=True)
+    try:
+        await _set_rate_limited(client, "goodreads")
+        eta = await client.get(RESUME_KEY)
+        assert eta is not None
+
+        # NX dedup: a second 429 in the same window keeps the first ETA.
+        await _set_rate_limited(client, "readmoo")
+        assert await client.get(RESUME_KEY) == eta
+
+        resp = await admin_client.get("/api/admin/jobs")
+        jobs = {j["key"]: j for j in resp.json()["jobs"]}
+        assert jobs["metadata_backfill"]["resume_at"] == eta
+        assert all(
+            j["resume_at"] is None for k, j in jobs.items() if k != "metadata_backfill"
+        )
+
+        # Cancel: key gone, and the fired task no-ops instead of
+        # starting a run.
+        resp = await admin_client.delete("/api/admin/jobs/metadata_backfill/resume")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "cancelled"
+        assert await client.get(RESUME_KEY) is None
+
+        gen_before = await get_generation("metadata_backfill")
+        await _resume_backfill()
+        assert await get_generation("metadata_backfill") == gen_before
+
+        # Uncancelled: the claim consumes the key and starts a run.
+        await _set_rate_limited(client, "goodreads")
+        await _resume_backfill()
+        assert await get_generation("metadata_backfill") == gen_before + 1
+        assert await client.get(RESUME_KEY) is None
+    finally:
+        await client.aclose()

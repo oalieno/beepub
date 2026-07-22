@@ -322,7 +322,7 @@
                       {#if missingKey(source)}
                         <Badge
                           variant="outline"
-                          class="border-amber-600/40 font-normal text-amber-700 dark:border-amber-500/40 dark:text-amber-500"
+                          class="border-primary/40 font-normal text-primary"
                         >
                           {m.admin_metadata_needs_key()}
                         </Badge>
@@ -345,7 +345,7 @@
                       {#if (stat?.consecutive_failures ?? 0) >= 3}
                         <Badge
                           variant="outline"
-                          class="border-amber-600/40 font-normal text-amber-700 dark:border-amber-500/40 dark:text-amber-500"
+                          class="border-destructive/40 font-normal text-destructive"
                         >
                           {m.source_badge_failing({
                             count: String(stat.consecutive_failures),
@@ -454,7 +454,7 @@
                         {/if}
                       </p>
                       {#if stat?.last_error}
-                        <p class="text-amber-700 dark:text-amber-500">
+                        <p class="text-destructive/90">
                           {m.source_stats_last_error({
                             time: relTime(stat.last_error_at),
                           })}: {stat.last_error}

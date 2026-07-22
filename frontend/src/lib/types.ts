@@ -576,6 +576,7 @@ export interface JobStatus {
   blocked_label: string;
   pending: number;
   requires_ai: boolean;
+  resume_at: string | null;
 }
 
 export interface AllJobsResponse {

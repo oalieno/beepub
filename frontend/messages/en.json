@@ -475,6 +475,7 @@
   "admin_jobs_status_pending": "Pending",
   "admin_jobs_stop": "Stop this job",
   "admin_jobs_stop_label": "Stop",
+  "admin_jobs_resume_notice": "A source is cooling down — resuming at {time}",
   "admin_jobs_ai_not_configured": "AI provider not configured — check Admin Settings",
   "admin_jobs_run_tooltip": "Process unprocessed books",
   "admin_jobs_run_label": "Run",

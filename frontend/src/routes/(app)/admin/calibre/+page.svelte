@@ -282,7 +282,7 @@
             value={String(syncIntervalMinutes)}
             onValueChange={handleIntervalChange}
           >
-            <Select.Trigger class="h-8 w-[130px] text-xs bg-card border-border">
+            <Select.Trigger class="h-8 w-[140px] text-sm bg-card border-border">
               {formatIntervalLabel(syncIntervalMinutes)}
             </Select.Trigger>
             <Select.Content align="start">

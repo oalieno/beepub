@@ -475,6 +475,7 @@
   "admin_jobs_status_pending": "待處理",
   "admin_jobs_stop": "停止此工作",
   "admin_jobs_stop_label": "停止",
+  "admin_jobs_resume_notice": "有來源限流冷卻中，將於 {time} 續掃",
   "admin_jobs_ai_not_configured": "AI 供應商未設定 — 請檢查管理設定",
   "admin_jobs_run_tooltip": "處理未處理的書籍",
   "admin_jobs_run_label": "執行",

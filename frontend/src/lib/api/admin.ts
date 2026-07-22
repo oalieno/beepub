@@ -97,6 +97,11 @@ export const adminApi = {
       job_type: string;
     }>,
 
+  cancelBackfillResume: () =>
+    del("/admin/jobs/metadata_backfill/resume") as Promise<{
+      status: string;
+    }>,
+
   // LLM Usage
   getLlmUsage: (period: string = "month", feature?: string) => {
     const params = new URLSearchParams({ period });

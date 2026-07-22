@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { adminApi } from "$lib/api/admin";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
@@ -13,6 +14,7 @@
     LibraryBig,
     LoaderCircle,
     Square,
+    Timer,
   } from "@lucide/svelte";
   import { FormSkeleton } from "$lib/components/skeletons";
   import BackButton from "$lib/components/BackButton.svelte";
@@ -85,6 +87,27 @@
     } finally {
       triggeringJob = null;
     }
+  }
+
+  async function cancelResume() {
+    try {
+      await adminApi.cancelBackfillResume();
+      await fetchJobs();
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function resumeTime(iso: string): string {
+    return (
+      new Intl.DateTimeFormat(getLocale(), {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+        .format(new Date(iso))
+        // CLDR writes 上午03:36 with no gap — give the period a space.
+        .replace(/^([上下]午)/, "$1 ")
+    );
   }
 
   onMount(async () => {
@@ -207,6 +230,25 @@
                 </div>
               {/if}
             </div>
+
+            {#if job.resume_at}
+              <div
+                class="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-primary"
+              >
+                <Timer size={13} class="shrink-0" />
+                <span>
+                  {m.admin_jobs_resume_notice({
+                    time: resumeTime(job.resume_at),
+                  })}
+                </span>
+                <button
+                  class="font-medium underline underline-offset-2 hover:text-foreground transition-colors"
+                  onclick={cancelResume}
+                >
+                  {m.common_cancel()}
+                </button>
+              </div>
+            {/if}
           </div>
 
           <!-- Action buttons -->

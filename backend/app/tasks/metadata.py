@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import redis.asyncio as aioredis
 from sqlalchemy import text
@@ -29,6 +29,14 @@ DELAY_BETWEEN_BOOKS = 1.5
 
 # Redis key prefix for rate limit cooldown
 RATELIMIT_KEY_PREFIX = "beepub:ratelimit"
+
+# One pending "resume the backfill once the cooldown lapses" slot. The
+# value is the scheduled ETA (shown on the jobs page); deleting the key
+# cancels — the fired task's atomic DELETE claim comes back empty and it
+# no-ops. The key carries its own expiry so a lost celery message can't
+# block future resumes forever.
+RESUME_KEY = "beepub:metadata:resume_at"
+RESUME_SLACK = 60  # seconds past cooldown expiry
 
 
 # ---------------------------------------------------------------------------
@@ -47,6 +55,57 @@ async def _set_rate_limited(redis_client: aioredis.Redis, source: str) -> None:
     ttl = plugin_cls.ratelimit_cooldown if plugin_cls else 300
     await redis_client.set(f"{RATELIMIT_KEY_PREFIX}:{source}", "1", ex=ttl)
     logger.warning(f"Rate limited by {source} — cooldown {ttl}s")
+    await _schedule_resume(redis_client, ttl + RESUME_SLACK)
+
+
+async def _schedule_resume(redis_client: aioredis.Redis, delay_seconds: int) -> None:
+    """Arm the one-shot resume, if none is pending (NX = one per window).
+
+    Books skipped while a source cools stay unmarked, so a run that hit a
+    rate limit is a run cut short — this is the announced continuation
+    that picks them up the moment retrying can succeed, instead of a
+    surprise re-run or an eternal periodic scan."""
+    eta = datetime.now(UTC) + timedelta(seconds=delay_seconds)
+    try:
+        armed = await redis_client.set(
+            RESUME_KEY, eta.isoformat(), nx=True, ex=delay_seconds + 3600
+        )
+        if armed:
+            resume_backfill.apply_async(countdown=delay_seconds)
+            logger.info(f"Scheduled backfill resume in {delay_seconds}s")
+    except Exception as e:
+        logger.warning(f"Failed to schedule backfill resume: {e}")
+
+
+async def _schedule_resume_for_cooling(
+    redis_client: aioredis.Redis, source: str
+) -> None:
+    """Arm a resume for a source found already cooling (flag set by an
+    earlier run) — its skipped books would otherwise wait for a manual
+    scan even though the cooldown has a known end."""
+    ttl = await redis_client.ttl(f"{RATELIMIT_KEY_PREFIX}:{source}")
+    if ttl > 0:
+        await _schedule_resume(redis_client, ttl + RESUME_SLACK)
+
+
+async def _resume_backfill() -> None:
+    redis_client = aioredis.from_url(app_config.redis_url)
+    try:
+        # Atomic claim; 0 = the operator cancelled (or the key expired).
+        if not await redis_client.delete(RESUME_KEY):
+            logger.info("Backfill resume cancelled, skipping")
+            return
+    finally:
+        await redis_client.aclose()
+    await _auto_start_backfill()
+
+
+@celery.task(name="app.tasks.metadata.resume_backfill")
+def resume_backfill() -> None:
+    """One-shot continuation of a rate-limit-interrupted backfill."""
+    from app.celeryapp import run_async
+
+    run_async(_resume_backfill())
 
 
 async def _write_empty_marker(db, book_id: str, source_name: str) -> None:
@@ -117,8 +176,11 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
             for plugin in plugins:
                 try:
-                    # Skip if rate-limited
+                    # Skip if rate-limited — but arm the continuation:
+                    # this book stays unmarked, and the cooldown has a
+                    # known end.
                     if await _is_rate_limited(redis_client, plugin.name):
+                        await _schedule_resume_for_cooling(redis_client, plugin.name)
                         continue
 
                     # Skip if already fetched this source
