@@ -23,6 +23,7 @@ _PREFERRED_ORDER = (
     "google_books",
     "hardcover",
     "books_tw",
+    "kingstone",
     "open_library",
 )
 
