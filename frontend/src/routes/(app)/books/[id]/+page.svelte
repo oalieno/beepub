@@ -324,7 +324,11 @@
     try {
       await booksApi.delete(bookId);
       toastStore.success(m.book_deleted());
-      goto("/");
+      // The book page no longer exists — replace it in history so back
+      // doesn't land on a 404.
+      goto(book?.library_id ? `/libraries/${book.library_id}` : "/", {
+        replaceState: true,
+      });
     } catch (e) {
       toastStore.error((e as Error).message);
     }
