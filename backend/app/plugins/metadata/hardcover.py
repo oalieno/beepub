@@ -1,7 +1,10 @@
 """Hardcover plugin — GraphQL API; ratings plus genre/mood/tag data.
 
 The search response already carries the whole document, so candidates
-ship a prefetched record and the default resolve() skips _fetch."""
+ship a prefetched record and the default resolve() skips _fetch. The
+URL path is a real books(where: slug) lookup — slugs for CJK titles
+are year+UUID (no title words), so a slug can never be turned back
+into a search query."""
 
 import logging
 
@@ -26,6 +29,23 @@ SEARCH_QUERY = """
 query Search($query: String!) {
   search(query: $query, query_type: "Book", per_page: 5) {
     results
+  }
+}
+"""
+
+BOOK_QUERY = """
+query BookBySlug($slug: String!) {
+  books(where: {slug: {_eq: $slug}}, limit: 1) {
+    slug
+    title
+    description
+    release_date
+    rating
+    ratings_count
+    users_read_count
+    cached_tags
+    image { url }
+    contributions { author { name } }
   }
 }
 """
@@ -164,9 +184,44 @@ class HardcoverPlugin(MetadataPlugin):
                 best, best_score = t, score
         return best
 
+    @classmethod
+    def _record_from_book_row(cls, row: dict) -> BookRecord:
+        """The books table speaks a different shape than the search
+        document: authors live in contributions, tags in cached_tags
+        (category -> entries; Content Warning stays out, matching the
+        search path's genres+moods+tags)."""
+        rating = row.get("rating")
+        ratings_count = row.get("ratings_count")
+        readers = row.get("users_read_count")
+        cached = row.get("cached_tags") or {}
+        return BookRecord(
+            source_url=row.get("slug"),
+            title=row.get("title"),
+            authors=[
+                c["author"]["name"]
+                for c in (row.get("contributions") or [])
+                if isinstance(c, dict)
+                and isinstance(c.get("author"), dict)
+                and c["author"].get("name")
+            ],
+            description=row.get("description") or None,
+            published_date=row.get("release_date"),
+            cover_url=cls._cover_from_doc(row),
+            rating=float(rating) if rating else None,
+            rating_count=int(ratings_count) if ratings_count else None,
+            readers_count=int(readers) if readers else None,
+            tags=[
+                entry["tag"]
+                for category in ("Genre", "Mood", "Tag")
+                for entry in cached.get(category) or []
+                if isinstance(entry, dict) and entry.get("tag")
+            ],
+        )
+
     async def _fetch(self, url: str) -> BookRecord:
-        """Re-search by slug. Used for manually-linked URLs; `url` may be
-        a bare slug or a full hardcover.app/books/ URL."""
+        """By-slug lookup. Used for candidate picks and pinned URLs;
+        `url` may be a bare slug or a full hardcover.app/books/ URL.
+        An unknown slug returns a bare record — never a guess."""
         slug = url.removeprefix(self.url_prefix)
         if not self._token():
             return BookRecord(source_url=slug)
@@ -176,35 +231,25 @@ class HardcoverPlugin(MetadataPlugin):
                 resp = await client.post(
                     API_URL,
                     headers=self._headers(),
-                    json={
-                        "query": SEARCH_QUERY,
-                        "variables": {"query": slug.replace("-", " ")},
-                    },
+                    json={"query": BOOK_QUERY, "variables": {"slug": slug}},
                 )
                 if resp.status_code != 200:
+                    logger.warning(
+                        f"Hardcover book lookup returned {resp.status_code}: "
+                        f"{resp.text[:200]}"
+                    )
                     return BookRecord(source_url=slug)
 
-                hits = (
-                    resp.json()
-                    .get("data", {})
-                    .get("search", {})
-                    .get("results", {})
-                    .get("hits", [])
-                )
-
-                # Find matching book by slug or use first result
-                doc = None
-                for hit in hits:
-                    d = hit.get("document", {})
-                    if d.get("slug") == slug:
-                        doc = d
-                        break
-                if not doc and hits:
-                    doc = hits[0].get("document", {})
-                if not doc:
+                data = resp.json()
+                if data.get("errors"):
+                    logger.warning(
+                        f"Hardcover book lookup errors for {slug}: "
+                        f"{str(data['errors'])[:200]}"
+                    )
+                rows = (data.get("data") or {}).get("books") or []
+                if not rows:
                     return BookRecord(source_url=slug)
-
-                return self._record_from_doc(doc)
+                return self._record_from_book_row(rows[0])
         except RateLimitError:
             raise
         except Exception as e:
