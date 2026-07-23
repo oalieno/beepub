@@ -48,12 +48,17 @@
     const date = new Date(
       Date.UTC(Number(year), Number(month) - 1, day ? Number(day) : 1),
     );
+    // CLDR zh runs the units together ("2025年11月26日") — space them
+    // out; Latin output has no CJK unit characters and passes through.
     return new Intl.DateTimeFormat(getLocale(), {
       year: "numeric",
       month: "long",
       ...(day ? { day: "numeric" } : {}),
       timeZone: "UTC",
-    }).format(date);
+    })
+      .format(date)
+      .replace(/(\d)([年月日])/g, "$1 $2")
+      .replace(/([年月])(\d)/g, "$1 $2");
   }
 
   function seriesDisplayTotal(
