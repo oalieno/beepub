@@ -565,7 +565,12 @@
   <title>{book?.display_title ?? "Book"} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-24 md:pb-6">
+<!-- Bottom padding clears the fixed action bar, whose own height grows
+     by env(safe-area-inset-bottom) on iOS — mirror it here or the last
+     section sits flush against the bar. -->
+<div
+  class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-6"
+>
   {#if loading}
     <BookDetailSkeleton />
   {:else if book}
