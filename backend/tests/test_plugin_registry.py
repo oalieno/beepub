@@ -96,7 +96,8 @@ def test_enabled_plugins_filters_by_need_and_have():
 
     # A title-only query never reaches ISBN-only plugins.
     by_title = [p.name for p in registry.enabled_plugins({}, have={Clue.TITLE})]
-    assert "books_tw" not in by_title
+    assert "books_tw" in by_title
+    assert "kingstone" in by_title
     assert "open_library" not in by_title
 
 

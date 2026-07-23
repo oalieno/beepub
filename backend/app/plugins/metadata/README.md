@@ -73,8 +73,16 @@ anything under `MIN_CONFIDENCE` is discarded; a candidate carrying
 `prefetched` (search response already had the full document) skips the
 `_fetch` round-trip. `_fetch` is not limited to one request —
 google_books makes a volume-detail call inside it. If your source's
-shape doesn't fit at all (books_tw and open_library are single-shot ISBN
-lookups), override `resolve()` directly and crawl however you need.
+shape doesn't fit at all, override `resolve()` directly and crawl
+however you need (open_library is a single-shot ISBN lookup; books_tw
+has no reachable product page, so its picks re-run the search and match
+the product id — every record rides in `prefetched`).
+
+`_fetch` must be a real lookup of the identifier it is handed. Never
+try to reconstruct a search query from an opaque ref (slugs for CJK
+titles are year+UUID — no title words survive), and never substitute a
+"best" hit when the identifier itself wasn't found: below that bar,
+answering a bare record beats linking a different book.
 
 ### candidates() — the interactive two-step search
 
