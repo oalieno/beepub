@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { keyboardVisible } from "$lib/stores/keyboard";
   import * as m from "$lib/paraglide/messages.js";
   import { BookOpen, Highlighter, Settings } from "@lucide/svelte";
-  import { onMount, onDestroy } from "svelte";
 
   // Serverless local mode has no desktop sidebar — the tab bar is the only
   // navigation, so unlike MobileTabBar it stays visible at every width.
@@ -26,32 +26,9 @@
       match: (p: string) => p.startsWith("/local/settings"),
     },
   ]);
-
-  // Hide tab bar when iOS keyboard is visible
-  let keyboardVisible = $state(false);
-  let viewport: VisualViewport | null = null;
-
-  function onViewportResize() {
-    if (!viewport) return;
-    // When keyboard opens, visualViewport.height shrinks significantly
-    keyboardVisible = viewport.height < window.innerHeight * 0.75;
-  }
-
-  onMount(() => {
-    viewport = window.visualViewport ?? null;
-    if (viewport) {
-      viewport.addEventListener("resize", onViewportResize);
-    }
-  });
-
-  onDestroy(() => {
-    if (viewport) {
-      viewport.removeEventListener("resize", onViewportResize);
-    }
-  });
 </script>
 
-{#if !keyboardVisible}
+{#if !$keyboardVisible}
   <nav
     class="fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border"
     style="padding-bottom: env(safe-area-inset-bottom, 0px);"

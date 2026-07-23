@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { keyboardVisible } from "$lib/stores/keyboard";
   import { ArrowUp } from "@lucide/svelte";
 
   let { threshold = 400, bottomOffset = "5.5rem" } = $props<{
@@ -24,7 +25,7 @@
   }
 </script>
 
-{#if visible}
+{#if visible && !$keyboardVisible}
   <button
     onclick={scrollToTop}
     class="fixed right-4 z-30 md:hidden h-11 w-11 flex items-center justify-center bg-card card-soft rounded-full text-foreground shadow-lg active:scale-95 transition-transform"

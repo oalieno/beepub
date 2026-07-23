@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { goto, afterNavigate } from "$app/navigation";
+  import { keyboardVisible } from "$lib/stores/keyboard";
   import { authStore } from "$lib/stores/auth";
   import { booksApi } from "$lib/api/books";
   import { beepubSync } from "$lib/reading/beepub";
@@ -1096,7 +1097,7 @@
 {/if}
 
 <!-- Mobile Sticky Bottom Bar -->
-{#if book && !loading}
+{#if book && !loading && !$keyboardVisible}
   <div
     class="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3"
     style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"

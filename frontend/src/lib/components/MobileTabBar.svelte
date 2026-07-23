@@ -2,10 +2,10 @@
   import { page } from "$app/state";
   import { isOnline } from "$lib/services/network";
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
+  import { keyboardVisible } from "$lib/stores/keyboard";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import { Home, ShelvingUnit, BookCopy, Compass, User } from "@lucide/svelte";
-  import { onMount, onDestroy } from "svelte";
 
   let online = $derived($isOnline);
 
@@ -57,32 +57,9 @@
     e.preventDefault();
     toastStore.info(m.nav_available_when_online());
   }
-
-  // Hide tab bar when iOS keyboard is visible
-  let keyboardVisible = $state(false);
-  let viewport: VisualViewport | null = null;
-
-  function onViewportResize() {
-    if (!viewport) return;
-    // When keyboard opens, visualViewport.height shrinks significantly
-    keyboardVisible = viewport.height < window.innerHeight * 0.75;
-  }
-
-  onMount(() => {
-    viewport = window.visualViewport ?? null;
-    if (viewport) {
-      viewport.addEventListener("resize", onViewportResize);
-    }
-  });
-
-  onDestroy(() => {
-    if (viewport) {
-      viewport.removeEventListener("resize", onViewportResize);
-    }
-  });
 </script>
 
-{#if !keyboardVisible}
+{#if !$keyboardVisible}
   <nav
     class="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border"
     style="padding-bottom: env(safe-area-inset-bottom, 0px);"
