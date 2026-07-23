@@ -16,6 +16,7 @@ from app.models.companion import CompanionConversation, CompanionMessage
 from app.services.epub_text import extract_text_up_to
 from app.services.llm import ChatMessage, LLMStream, get_companion_provider
 from app.services.settings import get_all_settings
+from app.services.text_chunking import is_meta_echo_summary
 
 logger = logging.getLogger(__name__)
 
@@ -178,10 +179,10 @@ async def _build_context_from_chunks(
         # Skip non-content sections (copyright, TOC, epigraphs, etc.)
         if len(chunk.text.strip()) < 1000:
             continue
-        if chunk.summary:
+        if chunk.summary and not is_meta_echo_summary(chunk.summary):
             entry = f"[Ch {chunk.spine_index}] {chunk.summary}"
         else:
-            # No summary yet — use first 200 chars as fallback
+            # No usable summary yet — use first 200 chars as fallback
             entry = f"[Ch {chunk.spine_index}] {chunk.text[:200]}..."
         if summary_chars + len(entry) > MAX_SUMMARY_CHARS:
             break

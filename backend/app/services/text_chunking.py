@@ -19,6 +19,16 @@ SOFT_TARGET = 500
 HARD_MAX = 600
 OVERLAP = 100
 
+# A cheap LLM sometimes echoes the summarization instructions instead of
+# summarizing ("*   Task: Summarize the provided text…"). Head-anchored:
+# no real summary opens with an imperative "Summarize" or a task bullet.
+_META_ECHO_RE = re.compile(r"^(?:\*\s*task:|summarize\b)", re.IGNORECASE)
+
+
+def is_meta_echo_summary(summary: str) -> bool:
+    """True when a stored chapter summary is instruction echo, not content."""
+    return bool(_META_ECHO_RE.match(summary.lstrip()))
+
 
 @dataclass
 class TextSubChunk:

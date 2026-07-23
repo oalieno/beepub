@@ -68,6 +68,7 @@ async def _run_summarize_chunks(
     from app.services.llm import LLMNotConfiguredError, get_tag_provider
     from app.services.llm_usage import log_llm_usage
     from app.services.settings import get_all_settings
+    from app.services.text_chunking import is_meta_echo_summary
 
     # Prevent duplicate summarization of the same book. The timeout must
     # cover the whole per-book runtime (large books × LLM latency).
@@ -170,6 +171,17 @@ async def _run_summarize_chunks(
                             exc_info=True,
                         )
                         # Don't fail the whole task — skip this chunk
+                        continue
+
+                    if not summary or is_meta_echo_summary(summary):
+                        # The model echoed the instructions instead of
+                        # summarizing — treat like a failure: leave NULL
+                        # so the next run retries instead of archiving
+                        # garbage.
+                        logger.warning(
+                            f"Meta-echo summary for chunk {chunk_id} "
+                            f"(spine {spine_index}) of book {book_id}, skipping"
+                        )
                         continue
 
                 async with session_factory() as db:

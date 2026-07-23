@@ -264,3 +264,22 @@ class TestEdgeCases:
         # The period lands at index SOFT_TARGET-1 which is just before the window
         # so the window starts scanning from SOFT_TARGET
         assert len(result) > 1
+
+
+def test_meta_echo_summaries_are_detected():
+    from app.services.text_chunking import is_meta_echo_summary
+
+    # Real garbage shapes archived by older summarize runs.
+    for garbage in (
+        "*   Task: Summarize the provided book chapter",
+        "Summarize the provided text.\n2-4 sentences.",
+        "  *  TASK: Summarize a book chapter/section.",
+    ):
+        assert is_meta_echo_summary(garbage)
+
+    for legit in (
+        "主角出場，衝突爆發。",
+        "Elizabeth meets Darcy at the ball; the chapter summarizes weeks of courtship.",
+        "* 這章用條列講了三件事。",
+    ):
+        assert not is_meta_echo_summary(legit)
