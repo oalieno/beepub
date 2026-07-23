@@ -9,12 +9,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal, get_db
 from app.deps import get_current_user
+from app.models.book_text import BookTextChunk
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.user import User
 from app.routers.books import _get_book_with_access
@@ -23,13 +24,17 @@ from app.schemas.companion import (
     CompanionConversationSummary,
     CompanionMessageRequest,
     CompanionRenameRequest,
+    RecapOut,
+    RecapSection,
 )
 from app.services.companion import (
+    _parse_cfi,
     get_or_create_conversation,
     stream_companion_response,
 )
 from app.services.llm import LLMNotConfiguredError, LLMStream
 from app.services.sse import sse_event
+from app.services.text_chunking import is_meta_echo_summary
 
 logger = logging.getLogger(__name__)
 
@@ -253,3 +258,48 @@ async def delete_companion_conversation(
     if conversation is not None:
         await db.delete(conversation)
         await db.commit()
+
+
+@router.get("/{book_id}/recap", response_model=RecapOut)
+async def get_book_recap(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    cfi: str | None = None,
+) -> RecapOut:
+    """Chapter summaries up to the reader's position — the same stored
+    summaries the companion context uses, surfaced for the reader.
+
+    Spoiler rule: strictly before the current spine section (a chapter
+    in progress is never summarized to its own reader). No parseable
+    position means no sections — fail closed, never spoil."""
+    await _get_book_with_access(book_id, current_user, db)
+    current_spine, _ = _parse_cfi(cfi)
+
+    result = await db.execute(
+        select(
+            BookTextChunk.spine_index,
+            BookTextChunk.section_title,
+            BookTextChunk.summary,
+        )
+        .where(
+            BookTextChunk.book_id == book_id,
+            BookTextChunk.summary.is_not(None),
+            # Same non-content filter as the companion context: skip
+            # copyright pages, TOCs, epigraphs.
+            func.length(BookTextChunk.text) >= 1000,
+        )
+        .order_by(BookTextChunk.spine_index)
+    )
+    # Older summarize runs archived instruction echo ("* Task: …") —
+    # filter it out of the display path until those rows regenerate.
+    rows = [r for r in result.all() if not is_meta_echo_summary(r.summary)]
+
+    sections = [
+        RecapSection(
+            spine_index=r.spine_index, title=r.section_title, summary=r.summary
+        )
+        for r in rows
+        if current_spine is not None and r.spine_index < current_spine
+    ]
+    return RecapOut(sections=sections, has_any=len(rows) > 0)

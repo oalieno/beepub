@@ -1053,8 +1053,15 @@
         {toc}
         {darkMode}
         {currentHref}
+        loadRecap={aiBookId && !isImageBook
+          ? () => booksApi.getRecap(aiBookId!, reader?.getCurrentCfi() ?? "")
+          : null}
         onchapter={(href) => {
           reader?.displayChapter(href);
+          activeSidebar = null;
+        }}
+        onspine={(spineIndex) => {
+          reader?.displayChapter(spineIndex);
           activeSidebar = null;
         }}
         onclose={() => (activeSidebar = null)}

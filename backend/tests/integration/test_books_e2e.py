@@ -83,3 +83,64 @@ async def test_delete_removes_book_everywhere(admin_client, library_id):
     assert response.json()["total"] == 0
     response = await admin_client.get(f"/api/books/{book['id']}/file")
     assert response.status_code == 404
+
+
+async def test_recap_shows_only_read_chapters(admin_client, user_client, library_id):
+    """The recap endpoint returns stored chapter summaries strictly
+    before the reader's spine position, never at or past it, and fails
+    closed without a parseable position."""
+    import uuid as _uuid
+
+    from app.database import engine
+    from app.models.book_text import BookTextChunk
+
+    book = await upload(admin_client, library_id, build_epub())
+    book_id = book["id"]
+
+    filler = "字" * 1200  # past the non-content length filter
+    async with engine.begin() as conn:
+        for spine, (title, summary) in enumerate(
+            [
+                ("版權頁", None),  # never summarized
+                ("序", "*   Task: Summarize the provided text."),  # LLM echo
+                ("第一章", "主角出場。"),
+                ("第二章", "衝突爆發。"),
+                ("第三章", "尚未讀到的雷。"),
+            ]
+        ):
+            await conn.execute(
+                BookTextChunk.__table__.insert().values(
+                    id=_uuid.uuid4(),
+                    book_id=book_id,
+                    spine_index=spine,
+                    section_title=title,
+                    text=filler,
+                    char_offset=0,
+                    summary=summary,
+                )
+            )
+
+    # Reading in spine 3 (cfi /6/8 → index 3): only chapter 1 shows —
+    # the echo row is filtered, chapter 2 is in progress, chapter 3 is
+    # the future.
+    resp = await admin_client.get(f"/api/books/{book_id}/recap?cfi=epubcfi(/6/8!/4/2)")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["has_any"] is True
+    assert [s["title"] for s in data["sections"]] == ["第一章"]
+
+    # No position → no sections (fail closed), but has_any still reports.
+    resp = await admin_client.get(f"/api/books/{book_id}/recap")
+    assert resp.json() == {"sections": [], "has_any": True}
+
+    # Access control rides _get_book_with_access: a user excluded from
+    # the library can't read summaries.
+    users = (await admin_client.get("/api/admin/users")).json()
+    user_id = next(u["id"] for u in users if u["role"] != "admin")
+    resp = await admin_client.put(
+        f"/api/admin/users/{user_id}/library-access",
+        json={"excluded_library_ids": [library_id]},
+    )
+    assert resp.status_code == 200
+    resp = await user_client.get(f"/api/books/{book_id}/recap?cfi=epubcfi(/6/8!/4/2)")
+    assert resp.status_code == 403

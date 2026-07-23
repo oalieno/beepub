@@ -6,22 +6,40 @@
   import { X } from "@lucide/svelte";
   import { tick } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import type { RecapOut } from "$lib/types";
 
   let {
     toc = [],
     darkMode = false,
     currentHref = "",
+    loadRecap = null,
     onchapter,
+    onspine,
     onclose,
   }: {
     toc?: TocItem[];
     darkMode?: boolean;
     currentHref?: string;
+    // Server books only — null hides the recap tab entirely.
+    loadRecap?: (() => Promise<RecapOut>) | null;
     onchapter?: (href: string) => void;
+    onspine?: (spineIndex: number) => void;
     onclose?: () => void;
   } = $props();
 
   let scrollContainer: HTMLDivElement | undefined = $state(undefined);
+  let activeTab = $state<"toc" | "recap">("toc");
+  let recap = $state<RecapOut | null>(null);
+  let recapError = $state(false);
+
+  function showRecap() {
+    activeTab = "recap";
+    if (recap || !loadRecap) return;
+    recapError = false;
+    loadRecap()
+      .then((r) => (recap = r))
+      .catch(() => (recapError = true));
+  }
 
   function isActive(itemHref: string): boolean {
     if (!currentHref) return false;
@@ -96,13 +114,35 @@
       ? 'border-ink-800'
       : 'border-border'}"
   >
-    <p
-      class="text-sm font-semibold {darkMode
-        ? 'text-ink-200'
-        : 'text-foreground'}"
-    >
-      {m.reader_toc()}
-    </p>
+    {#if loadRecap}
+      <div class="flex items-center gap-1 -ml-2">
+        {#each [{ key: "toc", label: m.reader_toc() }, { key: "recap", label: m.reader_recap() }] as tab}
+          {@const selected = activeTab === tab.key}
+          <button
+            class="px-2 py-1 rounded-md text-sm transition-colors {selected
+              ? darkMode
+                ? 'text-white font-semibold'
+                : 'text-foreground font-semibold'
+              : darkMode
+                ? 'text-ink-500 hover:text-ink-300'
+                : 'text-muted-foreground hover:text-foreground'}"
+            aria-pressed={selected}
+            onclick={() =>
+              tab.key === "recap" ? showRecap() : (activeTab = "toc")}
+          >
+            {tab.label}
+          </button>
+        {/each}
+      </div>
+    {:else}
+      <p
+        class="text-sm font-semibold {darkMode
+          ? 'text-ink-200'
+          : 'text-foreground'}"
+      >
+        {m.reader_toc()}
+      </p>
+    {/if}
     <button
       aria-label={m.common_close()}
       class="p-1 rounded-md transition-colors {darkMode
@@ -114,7 +154,56 @@
     </button>
   </div>
   <div class="flex-1 overflow-y-auto p-2" bind:this={scrollContainer}>
-    {#if toc.length === 0}
+    {#if activeTab === "recap"}
+      {#if recapError || (recap && recap.sections.length === 0)}
+        <p
+          class="text-sm {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'} py-4 px-3 text-center"
+        >
+          {#if recapError}
+            {m.reader_recap_load_failed()}
+          {:else if recap?.has_any}
+            {m.reader_recap_empty_start()}
+          {:else}
+            {m.reader_recap_empty_none()}
+          {/if}
+        </p>
+      {:else if !recap}
+        <p
+          class="text-sm {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'} py-4 text-center"
+        >
+          {m.common_loading()}
+        </p>
+      {:else}
+        <div class="flex flex-col gap-4 p-2">
+          {#each recap.sections as section}
+            <div>
+              <button
+                class="text-sm font-medium mb-1 text-left {darkMode
+                  ? 'text-ink-200 hover:text-white'
+                  : 'text-foreground hover:text-primary'} transition-colors"
+                onclick={() => {
+                  onspine?.(section.spine_index);
+                  onclose?.();
+                }}
+              >
+                {section.title ?? `#${section.spine_index + 1}`}
+              </button>
+              <p
+                class="text-sm leading-relaxed whitespace-pre-line {darkMode
+                  ? 'text-ink-400'
+                  : 'text-muted-foreground'}"
+              >
+                {section.summary}
+              </p>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    {:else if toc.length === 0}
       <p
         class="text-sm {darkMode
           ? 'text-ink-500'

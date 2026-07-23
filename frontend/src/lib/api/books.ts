@@ -19,6 +19,7 @@ import type {
   PaginatedFeed,
   ProgressOut,
   ReadingStats,
+  RecapOut,
   ReadingStatus,
   ReferenceImageInput,
   SeriesNeighborsOut,
@@ -388,6 +389,13 @@ export const booksApi = {
   // Collapsed feed across all accessible libraries (the All books tab).
   getFeed: (options?: FeedParams) =>
     get(`/books/feed${feedQuery(options)}`) as Promise<PaginatedFeed>,
+
+  // Chapter summaries up to the reading position (stored summaries,
+  // no AI call at read time).
+  getRecap: (bookId: string, cfi: string) =>
+    get(
+      `/books/${bookId}/recap?${new URLSearchParams({ cfi })}`,
+    ) as Promise<RecapOut>,
 
   // Companion
   listCompanionConversations: (bookId: string) =>

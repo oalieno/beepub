@@ -515,6 +515,19 @@ export interface AiStatus {
   embedding: boolean;
 }
 
+export interface RecapSection {
+  spine_index: number;
+  title: string | null;
+  summary: string;
+}
+
+export interface RecapOut {
+  sections: RecapSection[];
+  // Whether the book has stored summaries at all — tells "nothing
+  // generated yet" apart from "still at the start".
+  has_any: boolean;
+}
+
 export interface CalibreLibraryInfo {
   path: string;
   name: string;

@@ -1819,7 +1819,8 @@
     _doNext();
   }
 
-  export function displayChapter(href: string) {
+  // Accepts a TOC href or a spine index — rendition.display takes both.
+  export function displayChapter(href: string | number) {
     restoringProgress = false;
     userNavigated = true;
     peekSaveHold = false;

@@ -45,3 +45,19 @@ class CompanionConversationOut(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class RecapSection(BaseModel):
+    spine_index: int
+    title: str | None
+    summary: str
+
+
+class RecapOut(BaseModel):
+    """Chapter summaries strictly before the reader's current position.
+
+    has_any says whether the book has summarized content at all, so the
+    UI can tell "nothing generated yet" from "you're still at the start"."""
+
+    sections: list[RecapSection]
+    has_any: bool
