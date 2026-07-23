@@ -128,10 +128,13 @@ async def test_recap_shows_only_read_chapters(admin_client, user_client, library
     data = resp.json()
     assert data["has_any"] is True
     assert [s["title"] for s in data["sections"]] == ["第一章"]
+    # The echo row and the never-summarized 版權頁 sit before the
+    # position → a bounded regeneration was enqueued.
+    assert data["generating"] is True
 
-    # No position → no sections (fail closed), but has_any still reports.
+    # No position → no sections (fail closed), and nothing enqueued.
     resp = await admin_client.get(f"/api/books/{book_id}/recap")
-    assert resp.json() == {"sections": [], "has_any": True}
+    assert resp.json() == {"sections": [], "has_any": True, "generating": False}
 
     # Access control rides _get_book_with_access: a user excluded from
     # the library can't read summaries.

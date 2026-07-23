@@ -57,7 +57,10 @@ class RecapOut(BaseModel):
     """Chapter summaries strictly before the reader's current position.
 
     has_any says whether the book has summarized content at all, so the
-    UI can tell "nothing generated yet" from "you're still at the start"."""
+    UI can tell "nothing generated yet" from "you're still at the start".
+    generating means a position-bounded summarize run was enqueued for
+    the missing sections — poll for them."""
 
     sections: list[RecapSection]
     has_any: bool
+    generating: bool = False

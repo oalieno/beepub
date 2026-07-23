@@ -272,7 +272,12 @@ async def get_book_recap(
 
     Spoiler rule: strictly before the current spine section (a chapter
     in progress is never summarized to its own reader). No parseable
-    position means no sections — fail closed, never spoil."""
+    position means no sections — fail closed, never spoil.
+
+    Sections the reader has passed but that have no usable summary yet
+    enqueue a position-bounded summarize run (opening the recap is the
+    event; only the chapters it needs are generated, never the whole
+    book) — `generating` tells the UI to poll."""
     await _get_book_with_access(book_id, current_user, db)
     current_spine, _ = _parse_cfi(cfi)
 
@@ -284,16 +289,19 @@ async def get_book_recap(
         )
         .where(
             BookTextChunk.book_id == book_id,
-            BookTextChunk.summary.is_not(None),
             # Same non-content filter as the companion context: skip
             # copyright pages, TOCs, epigraphs.
             func.length(BookTextChunk.text) >= 1000,
         )
         .order_by(BookTextChunk.spine_index)
     )
-    # Older summarize runs archived instruction echo ("* Task: …") —
-    # filter it out of the display path until those rows regenerate.
-    rows = [r for r in result.all() if not is_meta_echo_summary(r.summary)]
+    # Prompt-echo rows count as missing, like NULL — the summarize
+    # task regenerates both.
+    rows = [
+        r
+        for r in result.all()
+        if r.summary is not None and not is_meta_echo_summary(r.summary)
+    ]
 
     sections = [
         RecapSection(
@@ -302,4 +310,45 @@ async def get_book_recap(
         for r in rows
         if current_spine is not None and r.spine_index < current_spine
     ]
-    return RecapOut(sections=sections, has_any=len(rows) > 0)
+
+    generating = False
+    if current_spine is not None and current_spine > 0:
+        covered = {s.spine_index for s in sections}
+        missing_filters = [
+            BookTextChunk.book_id == book_id,
+            BookTextChunk.spine_index < current_spine,
+            func.length(BookTextChunk.text) >= 1000,
+        ]
+        if covered:
+            missing_filters.append(BookTextChunk.spine_index.not_in(covered))
+        missing = await db.execute(
+            select(func.count()).select_from(BookTextChunk).where(*missing_filters)
+        )
+        if (missing.scalar() or 0) > 0:
+            generating = await _enqueue_recap_summaries(book_id, current_spine - 1)
+
+    return RecapOut(sections=sections, has_any=len(rows) > 0, generating=generating)
+
+
+async def _enqueue_recap_summaries(book_id: uuid.UUID, up_to_spine: int) -> bool:
+    """Enqueue a position-bounded summarize, debounced per book.
+
+    The UI polls while `generating` — without the debounce every poll
+    would enqueue another run, and rate-limited runs each burn one LLM
+    call before noticing."""
+    import redis.asyncio as aioredis
+
+    from app.config import settings as app_config
+    from app.tasks.summarize import summarize_chunks
+
+    client = aioredis.from_url(app_config.redis_url)
+    try:
+        if not await client.set(f"recap-gen:{book_id}", "1", nx=True, ex=60):
+            return True  # a run was enqueued moments ago — still generating
+    except Exception:
+        logger.warning("Recap debounce unavailable, enqueueing anyway")
+    finally:
+        await client.aclose()
+
+    summarize_chunks.delay(str(book_id), up_to_spine_index=up_to_spine)
+    return True

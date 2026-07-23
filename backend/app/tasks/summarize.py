@@ -70,7 +70,10 @@ async def _run_summarize_chunks(
     from app.services.llm import LLMNotConfiguredError, get_tag_provider
     from app.services.llm_usage import log_llm_usage
     from app.services.settings import get_all_settings
-    from app.services.text_chunking import is_meta_echo_summary
+    from app.services.text_chunking import (
+        META_ECHO_SQL_PATTERN,
+        is_meta_echo_summary,
+    )
 
     # Prevent duplicate summarization of the same book. The timeout must
     # cover the whole per-book runtime (large books × LLM latency).
@@ -115,10 +118,14 @@ async def _run_summarize_chunks(
                 else:
                     book_lang = None  # will detect per-chunk below
 
-                # Get chunks that need summaries
+                # Get chunks that need summaries. Archived prompt echo
+                # counts as missing — older runs stored it, and a fresh
+                # generation overwrites it (self-healing, no manual
+                # cleanup pass).
                 filters = [
                     BookTextChunk.book_id == bid,
-                    BookTextChunk.summary.is_(None),
+                    BookTextChunk.summary.is_(None)
+                    | BookTextChunk.summary.op("~*")(META_ECHO_SQL_PATTERN),
                 ]
                 if up_to_spine_index is not None:
                     filters.append(BookTextChunk.spine_index <= up_to_spine_index)

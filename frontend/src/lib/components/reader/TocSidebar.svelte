@@ -31,15 +31,39 @@
   let activeTab = $state<"toc" | "recap">("toc");
   let recap = $state<RecapOut | null>(null);
   let recapError = $state(false);
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function fetchRecap() {
+    if (!loadRecap) return;
+    pollTimer = null;
+    loadRecap()
+      .then((r) => {
+        recap = r;
+        // Missing sections are being generated server-side — keep
+        // polling while the tab is open so they stream in.
+        if (r.generating && activeTab === "recap") {
+          pollTimer = setTimeout(fetchRecap, 5000);
+        }
+      })
+      .catch(() => {
+        if (!recap) recapError = true;
+      });
+  }
 
   function showRecap() {
     activeTab = "recap";
-    if (recap || !loadRecap) return;
-    recapError = false;
-    loadRecap()
-      .then((r) => (recap = r))
-      .catch(() => (recapError = true));
+    if (!loadRecap) return;
+    if (!recap) {
+      recapError = false;
+      fetchRecap();
+    } else if (recap.generating && !pollTimer) {
+      fetchRecap();
+    }
   }
+
+  $effect(() => () => {
+    if (pollTimer) clearTimeout(pollTimer);
+  });
 
   function isActive(itemHref: string): boolean {
     if (!currentHref) return false;
@@ -155,19 +179,13 @@
   </div>
   <div class="flex-1 overflow-y-auto p-2" bind:this={scrollContainer}>
     {#if activeTab === "recap"}
-      {#if recapError || (recap && recap.sections.length === 0)}
+      {#if recapError}
         <p
           class="text-sm {darkMode
             ? 'text-ink-500'
             : 'text-muted-foreground'} py-4 px-3 text-center"
         >
-          {#if recapError}
-            {m.reader_recap_load_failed()}
-          {:else if recap?.has_any}
-            {m.reader_recap_empty_start()}
-          {:else}
-            {m.reader_recap_empty_none()}
-          {/if}
+          {m.reader_recap_load_failed()}
         </p>
       {:else if !recap}
         <p
@@ -201,6 +219,25 @@
               </p>
             </div>
           {/each}
+          {#if recap.generating}
+            <p
+              class="text-sm {darkMode
+                ? 'text-ink-500'
+                : 'text-muted-foreground'} py-2 px-1 text-center animate-pulse"
+            >
+              {m.reader_recap_generating()}
+            </p>
+          {:else if recap.sections.length === 0}
+            <p
+              class="text-sm {darkMode
+                ? 'text-ink-500'
+                : 'text-muted-foreground'} py-2 px-1 text-center"
+            >
+              {recap.has_any
+                ? m.reader_recap_empty_start()
+                : m.reader_recap_empty_none()}
+            </p>
+          {/if}
         </div>
       {/if}
     {:else if toc.length === 0}

@@ -293,6 +293,7 @@
   "reader_recap_empty_start": "讀過章節的摘要會出現在這裡。",
   "reader_recap_empty_none": "這本書尚未生成章節摘要。",
   "reader_recap_load_failed": "無法載入前情提要。",
+  "reader_recap_generating": "正在生成讀過章節的摘要⋯",
   "reader_search_in_book": "書內搜尋",
   "reader_highlights": "畫線",
   "reader_ai_offline": "AI 功能需要網路連線",

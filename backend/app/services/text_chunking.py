@@ -22,7 +22,10 @@ OVERLAP = 100
 # A cheap LLM sometimes echoes the summarization instructions instead of
 # summarizing ("*   Task: Summarize the provided text…"). Head-anchored:
 # no real summary opens with an imperative "Summarize" or a task bullet.
+# The SQL pattern is the same rule for Postgres `~*` (case-insensitive),
+# used by the summarize task to treat archived echo as "needs redoing".
 _META_ECHO_RE = re.compile(r"^(?:\*\s*task:|summarize\b)", re.IGNORECASE)
+META_ECHO_SQL_PATTERN = r"^\s*(\*\s*task:|summarize\M)"
 
 
 def is_meta_echo_summary(summary: str) -> bool:

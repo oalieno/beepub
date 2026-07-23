@@ -526,6 +526,9 @@ export interface RecapOut {
   // Whether the book has stored summaries at all — tells "nothing
   // generated yet" apart from "still at the start".
   has_any: boolean;
+  // Missing sections before the reading position were enqueued for
+  // generation — poll while true.
+  generating: boolean;
 }
 
 export interface CalibreLibraryInfo {
