@@ -11,6 +11,7 @@ stays readable and testable in isolation.
 """
 
 import enum
+import re
 from abc import ABC
 from dataclasses import dataclass, field, fields
 from typing import ClassVar
@@ -25,6 +26,67 @@ REQUEST_TIMEOUT = 15
 # the site at all — below this score "not found" beats linking the
 # wrong book.
 MIN_CONFIDENCE = 60
+
+# Store listing decorations (edition markers, bundled extras): not title
+# content on either side of a comparison.
+_TITLE_DECORATIONS_RE = re.compile(r"【[^】]*】")
+_SUBTITLE_SPLIT_RE = re.compile(r"[：:]")
+_AUTHOR_NOISE_RE = re.compile(r"[\s·・．.‧,，]+")
+
+
+def _title_views(title: str) -> tuple[str, str, str | None]:
+    """(full, main, subtitle) views of a listing title, lowercased.
+
+    The main/subtitle split is on the first colon; no colon means no
+    subtitle view."""
+    full = re.sub(r"\s+", " ", _TITLE_DECORATIONS_RE.sub(" ", title)).strip().lower()
+    parts = _SUBTITLE_SPLIT_RE.split(full, maxsplit=1)
+    main = parts[0].strip()
+    subtitle = parts[1].strip() if len(parts) > 1 else ""
+    return full, main, subtitle or None
+
+
+def _authors_disjoint(a: list[str], b: list[str]) -> bool:
+    """True only when both sides name authors and none coincide."""
+    norm_a = {_AUTHOR_NOISE_RE.sub("", n).casefold() for n in a} - {""}
+    norm_b = {_AUTHOR_NOISE_RE.sub("", n).casefold() for n in b} - {""}
+    return bool(norm_a) and bool(norm_b) and norm_a.isdisjoint(norm_b)
+
+
+def title_confidence(
+    query_title: str,
+    candidate_title: str,
+    query_authors: list[str] | None = None,
+    candidate_authors: list[str] | None = None,
+) -> float:
+    """Confidence (0-100) that two listing titles name the same book.
+
+    token_sort_ratio splits on whitespace, so a CJK title compares as a
+    single token and a store's rewritten marketing subtitle (「全球熱銷
+    突破1000萬冊…」) dilutes a perfect main-title match below
+    MIN_CONFIDENCE. When both sides carry a subtitle, also score the
+    halves separately and take the weakest link: equal mains plus
+    overlapping subtitles is the edition-rewrite pattern, while equal
+    mains with unrelated subtitles is a series sibling (哈利波特：…)
+    that must stay rejected. Disjoint author sets veto the split view —
+    the same main title by someone else is a different book."""
+    q_full, q_main, q_subtitle = _title_views(query_title)
+    c_full, c_main, c_subtitle = _title_views(candidate_title)
+
+    score = fuzz.token_sort_ratio(q_full, c_full)
+    if (
+        q_main
+        and c_main
+        and q_subtitle
+        and c_subtitle
+        and not _authors_disjoint(query_authors or [], candidate_authors or [])
+    ):
+        split_score = min(
+            fuzz.ratio(q_main, c_main),
+            fuzz.partial_ratio(q_subtitle, c_subtitle),
+        )
+        score = max(score, split_score)
+    return score
 
 
 class Clue(enum.StrEnum):
@@ -171,7 +233,9 @@ class MetadataPlugin(ABC):
                 break
             if not query.title:
                 continue
-            score = fuzz.token_sort_ratio(query.title.lower(), candidate.title.lower())
+            score = title_confidence(
+                query.title, candidate.title, query.authors, candidate.authors
+            )
             if score > best_score:
                 best, best_score = candidate, score
 
