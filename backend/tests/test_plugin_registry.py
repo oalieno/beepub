@@ -16,6 +16,7 @@ BUILTIN_ORDER = [
     "hardcover",
     "books_tw",
     "kingstone",
+    "pubu",
     "open_library",
 ]
 
@@ -58,6 +59,10 @@ def test_cover_hosts_union_covers_the_known_hosts():
             "cdn.readmoo.com",
             "assets.hardcover.app",
             "cdn.kingstone.com.tw",
+            "res1.pubu.tw",
+            "res2.pubu.tw",
+            "res3.pubu.tw",
+            "res4.pubu.tw",
         }
     )
 

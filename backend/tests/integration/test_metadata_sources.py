@@ -44,6 +44,8 @@ async def test_sources_endpoint_reflects_registry_and_settings(
         "google_books",
         "hardcover",
         "books_tw",
+        "kingstone",
+        "pubu",
         "open_library",
     }
 
@@ -55,8 +57,8 @@ async def test_sources_endpoint_reflects_registry_and_settings(
 
     books_tw = sources["books_tw"]
     assert books_tw["label"] == "博客來"
-    assert books_tw["accepts"] == ["isbn"]
-    assert books_tw["url_prefix"] is None
+    assert books_tw["accepts"] == ["isbn", "title", "url"]
+    assert books_tw["url_prefix"] == "https://www.books.com.tw/products/"
     assert books_tw["kind"] == "scraper"
 
     google = sources["google_books"]
@@ -97,8 +99,8 @@ async def test_manual_link_rejects_disabled_and_unknown_sources(admin_client):
 
     # Sources without manual-linking support are refused.
     resp = await admin_client.put(
-        f"/api/books/{book_id}/external/books_tw/url",
-        json={"source_url": "https://www.books.com.tw/products/0010752879"},
+        f"/api/books/{book_id}/external/open_library/url",
+        json={"source_url": "https://openlibrary.org/books/OL7353617M"},
     )
     assert resp.status_code == 400
 

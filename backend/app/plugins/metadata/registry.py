@@ -24,6 +24,7 @@ _PREFERRED_ORDER = (
     "hardcover",
     "books_tw",
     "kingstone",
+    "pubu",
     "open_library",
 )
 
