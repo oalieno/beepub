@@ -6,6 +6,8 @@ import logging
 import re
 import uuid
 
+import httpx
+
 from app.celeryapp import celery
 
 logger = logging.getLogger(__name__)
@@ -165,6 +167,22 @@ async def _run_summarize_chunks(
                         )
                         summary = result.text.strip()
                         usage = result.usage
+                    except httpx.HTTPStatusError as e:
+                        if e.response.status_code == 429:
+                            # Rate-limited: every remaining chunk would 429
+                            # too, and hammering on only deepens the
+                            # cooldown. Stop the run — chunks stay NULL
+                            # and the next run resumes here.
+                            logger.warning(
+                                f"LLM rate limited, stopping summarize run for "
+                                f"book {book_id} at spine {spine_index}"
+                            )
+                            break
+                        logger.warning(
+                            f"Failed to summarize chunk {chunk_id} (spine {spine_index}) of book {book_id}",
+                            exc_info=True,
+                        )
+                        continue
                     except Exception:
                         logger.warning(
                             f"Failed to summarize chunk {chunk_id} (spine {spine_index}) of book {book_id}",
