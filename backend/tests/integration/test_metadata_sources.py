@@ -303,3 +303,110 @@ async def test_ratelimit_resume_is_announced_and_cancellable(admin_client):
         assert await client.get(RESUME_KEY) is None
     finally:
         await client.aclose()
+
+
+async def test_refresh_retries_empty_markers_but_backfill_does_not(
+    admin_client, monkeypatch
+):
+    """A not-found marker means "searched, nothing there" — the
+    unattended backfill must keep skipping it, but the interactive
+    fetch (pressing refresh) is the user saying "look again"."""
+    from app.plugins.metadata.base import BookRecord
+    from app.plugins.metadata.goodreads import GoodreadsPlugin
+    from app.plugins.metadata.registry import all_plugins
+    from app.tasks.metadata import _run_fetch_book_metadata
+
+    resp = await admin_client.put(
+        "/api/admin/settings",
+        json={
+            f"metadata_source_{cls.name}_enabled": (
+                "true" if cls.name == "goodreads" else "false"
+            )
+            for cls in all_plugins()
+        },
+    )
+    assert resp.status_code == 200
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    book_id = book["id"]
+
+    calls: list[str] = []
+    found = {"value": False}
+
+    async def stub_resolve(self, query):
+        calls.append(query.title)
+        if found["value"]:
+            return BookRecord(source_url="https://gr.example/1", title=query.title)
+        return None
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", stub_resolve)
+
+    async def goodreads_stats():
+        resp = await admin_client.get("/api/metadata/sources/stats")
+        return resp.json()["stats"]["goodreads"]
+
+    # Not found: an empty marker lands.
+    await _run_fetch_book_metadata(book_id)
+    stats = await goodreads_stats()
+    assert (stats["books_found"], stats["books_not_found"]) == (0, 1)
+
+    # The backfill skips the marker without resolving.
+    found["value"] = True
+    calls.clear()
+    await _run_fetch_book_metadata(book_id, job_only=True)
+    assert calls == []
+    stats = await goodreads_stats()
+    assert (stats["books_found"], stats["books_not_found"]) == (0, 1)
+
+    # The interactive path retries it and heals the row.
+    await _run_fetch_book_metadata(book_id)
+    assert len(calls) == 1
+    stats = await goodreads_stats()
+    assert (stats["books_found"], stats["books_not_found"]) == (1, 0)
+
+
+async def test_refresh_never_touches_pinned_rows(admin_client, monkeypatch):
+    """A pinned row is authoritative even before its record arrives —
+    the clue-based refresh must not fuzzy-resolve over it (that would
+    clobber the admin's link with a search guess)."""
+    from app.plugins.metadata.base import BookRecord
+    from app.plugins.metadata.goodreads import GoodreadsPlugin
+    from app.plugins.metadata.registry import all_plugins
+    from app.tasks.metadata import _run_fetch_book_metadata
+
+    resp = await admin_client.put(
+        "/api/admin/settings",
+        json={
+            f"metadata_source_{cls.name}_enabled": (
+                "true" if cls.name == "goodreads" else "false"
+            )
+            for cls in all_plugins()
+        },
+    )
+    assert resp.status_code == 200
+
+    library_id = await create_library(admin_client)
+    book = await upload_epub(admin_client, library_id)
+    book_id = book["id"]
+
+    pinned = "https://www.goodreads.com/book/show/60495597"
+    resp = await admin_client.put(
+        f"/api/books/{book_id}/external/goodreads/url",
+        json={"source_url": pinned},
+    )
+    assert resp.status_code == 200
+
+    calls: list[str] = []
+
+    async def stub_resolve(self, query):
+        calls.append(query.title)
+        return BookRecord(source_url="https://gr.example/other", title="wrong")
+
+    monkeypatch.setattr(GoodreadsPlugin, "resolve", stub_resolve)
+    await _run_fetch_book_metadata(book_id)
+    assert calls == []
+
+    resp = await admin_client.get(f"/api/books/{book_id}/external")
+    goodreads = next(m for m in resp.json() if m["source"] == "goodreads")
+    assert goodreads["source_url"] == pinned

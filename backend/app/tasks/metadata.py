@@ -140,8 +140,12 @@ async def _run_fetch_book_metadata(book_id: str, *, job_only: bool = False) -> N
     unattended backfill narrows to the Auto list, via
     _run_fetch_book_metadata_backfill.
 
-    Skips already-fetched sources. Writes empty markers for not-found
-    books (and for plugins that can't locate this book at all, so
+    Skips sources that already found a record. Not-found markers are
+    retried on the interactive path (pressing refresh means "look
+    again" — sources gain catalogue entries and matchers improve) but
+    skipped by the unattended backfill, which must not re-hammer every
+    absent book each scan. Writes empty markers for not-found books
+    (and for plugins that can't locate this book at all, so
     metadata_count still completes). Respects rate limit cooldown flags
     in Redis. A plugin raising ≠ not found: no marker, retried next run.
     """
@@ -189,17 +193,24 @@ async def _run_fetch_book_metadata(book_id: str, *, job_only: bool = False) -> N
                         await _schedule_resume_for_cooling(redis_client, plugin.name)
                         continue
 
-                    # Skip if already fetched this source
+                    # Skip if this source already found a record. A NULL
+                    # record is the "searched but not found" marker: it
+                    # only blocks the unattended backfill. A pinned row
+                    # (source_url set by an admin) is authoritative even
+                    # while its record is NULL — fuzzy re-resolve here
+                    # would clobber the pin; its refetch path is
+                    # _run_fetch_metadata_source.
                     async with session_factory() as db:
                         existing = await db.execute(
                             text(
-                                "SELECT 1 FROM external_metadata "
+                                "SELECT record IS NOT NULL OR source_url IS NOT NULL "
+                                "FROM external_metadata "
                                 "WHERE book_id = :book_id AND source = :source"
                             ),
                             {"book_id": book_id, "source": plugin.name},
                         )
-                        already_fetched = existing.one_or_none() is not None
-                    if already_fetched:
+                        row = existing.one_or_none()
+                    if row is not None and (row[0] or job_only):
                         continue
 
                     if not (plugin.accepts & available_clues):
