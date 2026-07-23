@@ -52,6 +52,11 @@ def test_book_page_parses_ld_date_crumbs_and_full_description():
     assert record.published_date == "2025/11/26"
     assert record.cover_url and record.cover_url.startswith("https://res")
     assert record.tags == ["書刊", "文學小說", "小說", "懸疑/推理小說"]
+    # The rating widget reads 「5.0分，5則評分」; comments are JS-loaded
+    # so reviews are never provided.
+    assert record.rating == 5.0
+    assert record.rating_count == 5
+    assert record.reviews is None
     # The full server-rendered intro, not the ~190-char og: teaser.
     assert record.description is not None
     assert len(record.description) > 500

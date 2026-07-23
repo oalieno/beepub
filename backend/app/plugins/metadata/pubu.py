@@ -32,6 +32,9 @@ BOOK_URL = BASE_URL + "/ebook/{item_id}"
 
 _EBOOK_ID_RE = re.compile(r"/ebook/(\d+)")
 _DATE_RE = re.compile(r"20\d{2}/\d{1,2}/\d{1,2}")
+# The rating widget reads 「5.0分，5則評分」. Comments are JS-loaded —
+# nothing to scrape, so reviews stay out of provides.
+_RATING_RE = re.compile(r"(\d+(?:\.\d+)?)分，(\d+)則評分")
 
 HEADERS = {
     "User-Agent": (
@@ -57,6 +60,8 @@ class PubuPlugin(MetadataPlugin):
             "published_date",
             "language",
             "cover_url",
+            "rating",
+            "rating_count",
             "tags",
         }
     )
@@ -203,6 +208,15 @@ class PubuPlugin(MetadataPlugin):
             if (text := a.get_text(strip=True)) and text != "首頁"
         ]
 
+        rating = None
+        rating_count = None
+        for widget in soup.select(".pubuUI-js-product-ratingStars"):
+            rating_match = _RATING_RE.search(widget.get_text(" ", strip=True))
+            if rating_match:
+                rating = float(rating_match.group(1)) or None
+                rating_count = int(rating_match.group(2)) or None
+                break
+
         description = cls._parse_description(soup)
         if description is None:
             description = (book.get("description") or "").strip() or None
@@ -217,6 +231,8 @@ class PubuPlugin(MetadataPlugin):
             published_date=published_date,
             language=book.get("inLanguage"),
             cover_url=image if isinstance(image, str) else None,
+            rating=rating,
+            rating_count=rating_count,
             tags=tags,
         )
 
