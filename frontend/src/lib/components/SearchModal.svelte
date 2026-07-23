@@ -234,7 +234,7 @@
 
 <Dialog.Root bind:open>
   <Dialog.Content
-    class="top-[12vh] translate-y-0 max-w-xl sm:max-w-xl bg-card rounded-2xl p-0 gap-0 block border-border/50 overflow-hidden"
+    class="top-[calc(env(safe-area-inset-top,0px)+3rem)] sm:top-[12vh] translate-y-0 max-w-xl sm:max-w-xl bg-card rounded-2xl p-0 gap-0 block border-border/50 overflow-hidden"
     showCloseButton={false}
     onkeydown={handleKeydown}
   >
