@@ -23,7 +23,7 @@ _TASK_REGISTRY: dict[str, list[tuple[str, str]]] = {
         ("app.tasks.summarize", "_run_summarize_chunks"),
     ],
     "metadata_backfill": [
-        ("app.tasks.metadata", "_run_fetch_book_metadata"),
+        ("app.tasks.metadata", "_run_fetch_book_metadata_backfill"),
     ],
     "auto_tag": [
         ("app.tasks.auto_tag", "_run_auto_tag_book"),
