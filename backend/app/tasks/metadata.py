@@ -130,8 +130,10 @@ async def _write_empty_marker(db, book_id: str, source_name: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _run_fetch_book_metadata(book_id: str) -> None:
-    """Resolve every enabled plugin for a book, then run deterministic
+async def _run_fetch_book_metadata(book_id: str, job_only: bool = True) -> None:
+    """Resolve the job's plugins for a book (or every enabled plugin
+    when job_only=False — the book page's manual refresh is interactive,
+    so the background Auto list doesn't apply), then run deterministic
     tag mapping.
 
     Skips already-fetched sources. Writes empty markers for not-found
@@ -164,7 +166,7 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
     try:
         async with create_task_engine() as (_engine, session_factory):
-            plugins = await init_metadata_plugins(session_factory, job_only=True)
+            plugins = await init_metadata_plugins(session_factory, job_only=job_only)
 
             async with session_factory() as db:
                 book_info = await fetch_book_info(db, book_id)
@@ -263,12 +265,14 @@ async def _run_fetch_book_metadata(book_id: str) -> None:
 
 
 @celery.task(name="app.tasks.metadata.fetch_book_metadata", bind=True, max_retries=2)
-def fetch_book_metadata(self, book_id: str) -> None:
-    """Celery task: run metadata backfill for a single book (default queue)."""
+def fetch_book_metadata(self, book_id: str, job_only: bool = True) -> None:
+    """Celery task: run metadata backfill for a single book (default
+    queue). job_only=False = the manual per-book refresh: every enabled
+    source, not just the background Auto list."""
     try:
         from app.celeryapp import run_async
 
-        run_async(_run_fetch_book_metadata(book_id))
+        run_async(_run_fetch_book_metadata(book_id, job_only=job_only))
     except Exception as exc:
         logger.exception(f"fetch_book_metadata failed for book {book_id}")
         raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))

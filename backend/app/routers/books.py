@@ -1677,7 +1677,9 @@ async def refresh_book_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     await _get_book_with_access(book_id, current_user, db)
-    fetch_book_metadata.delay(str(book_id))
+    # A user pressing refresh is interactive — every enabled source
+    # answers, not just the background job's Auto list.
+    fetch_book_metadata.delay(str(book_id), job_only=False)
     return {"status": "queued"}
 
 
