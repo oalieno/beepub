@@ -12,6 +12,7 @@ stays readable and testable in isolation.
 
 import enum
 import re
+import unicodedata
 from abc import ABC
 from dataclasses import dataclass, field, fields
 from typing import ClassVar
@@ -32,14 +33,17 @@ MIN_CONFIDENCE = 60
 _TITLE_DECORATIONS_RE = re.compile(r"【[^】]*】")
 _SUBTITLE_SPLIT_RE = re.compile(r"[：:]")
 _AUTHOR_NOISE_RE = re.compile(r"[\s·・．.‧,，]+")
+_CJK_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿]")
 
 
 def _title_views(title: str) -> tuple[str, str, str | None]:
-    """(full, main, subtitle) views of a listing title, lowercased.
+    """(full, main, subtitle) views of a listing title, NFKC-folded and
+    lowercased (stores mix fullwidth/halfwidth freely: ＯＬ vs OL).
 
     The main/subtitle split is on the first colon; no colon means no
     subtitle view."""
-    full = re.sub(r"\s+", " ", _TITLE_DECORATIONS_RE.sub(" ", title)).strip().lower()
+    full = unicodedata.normalize("NFKC", title)
+    full = re.sub(r"\s+", " ", _TITLE_DECORATIONS_RE.sub(" ", full)).strip().lower()
     parts = _SUBTITLE_SPLIT_RE.split(full, maxsplit=1)
     main = parts[0].strip()
     subtitle = parts[1].strip() if len(parts) > 1 else ""
@@ -69,18 +73,24 @@ def title_confidence(
     overlapping subtitles is the edition-rewrite pattern, while equal
     mains with unrelated subtitles is a series sibling (哈利波特：…)
     that must stay rejected. Disjoint author sets veto the split view —
-    the same main title by someone else is a different book."""
+    the same main title by someone else is a different book.
+
+    CJK spacing is stylistic (盤古之白, U+3000), so EPUBs and stores
+    disagree freely — 「素人 AV 女優」 vs 「素人AV女優」 tokenizes into
+    incomparable pieces. When either side contains CJK, a
+    space-insensitive view joins the comparison, under the same author
+    veto."""
     q_full, q_main, q_subtitle = _title_views(query_title)
     c_full, c_main, c_subtitle = _title_views(candidate_title)
 
     score = fuzz.token_sort_ratio(q_full, c_full)
-    if (
-        q_main
-        and c_main
-        and q_subtitle
-        and c_subtitle
-        and not _authors_disjoint(query_authors or [], candidate_authors or [])
-    ):
+    vetoed = _authors_disjoint(query_authors or [], candidate_authors or [])
+
+    if not vetoed and (_CJK_RE.search(q_full) or _CJK_RE.search(c_full)):
+        despaced = fuzz.ratio(q_full.replace(" ", ""), c_full.replace(" ", ""))
+        score = max(score, despaced)
+
+    if q_main and c_main and q_subtitle and c_subtitle and not vetoed:
         split_score = min(
             fuzz.ratio(q_main, c_main),
             fuzz.partial_ratio(q_subtitle, c_subtitle),

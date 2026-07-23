@@ -164,6 +164,38 @@ def test_disjoint_authors_veto_the_split_view():
     assert vetoed < MIN_CONFIDENCE
 
 
+def test_cjk_spacing_variants_clear_the_floor():
+    # Real store listings for 《素人AV女優》: the EPUB spaces out the
+    # words (素人 AV 女優), the stores don't, and they append (全) /
+    # fullwidth variants — token_sort tokenizes the two sides into
+    # incomparable pieces (~48).
+    query = "素人 AV 女優 人妻篇"
+    authors = ["川本貴裕"]
+    for listing in (
+        "素人AV女優 人妻篇(全)",
+        "【電子書】素人AV女優 人妻篇(全)",
+        "素人AV女優  人妻篇(全)限",
+    ):
+        assert title_confidence(query, listing, authors, authors) >= MIN_CONFIDENCE
+
+    # Sibling volumes score lower than the true match, so best-candidate
+    # selection still picks the right one.
+    true_score = title_confidence(query, "素人AV女優 人妻篇(全)", authors, authors)
+    for sibling in (
+        "素人AV女優OL篇",
+        "素人AV女優　ＯＬ篇(全)",
+        "素人AV女優 職業篇(全)",
+    ):
+        assert title_confidence(query, sibling, authors, authors) < true_score
+
+
+def test_latin_titles_keep_token_semantics():
+    # The space-insensitive view only joins for CJK — English titles
+    # keep whitespace as a signal.
+    assert title_confidence("the hobbit", "the silmarillion") < MIN_CONFIDENCE
+    assert title_confidence("Project Hail Mary", "Project Hail Mary") == 100
+
+
 def test_resolve_accepts_subtitle_rewritten_listing():
     plugin = FakePlugin(
         [
