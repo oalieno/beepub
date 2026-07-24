@@ -43,22 +43,17 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-async def get_api_token_user(
-    request: Request,
-    db: Annotated[AsyncSession, Depends(get_db)],
-) -> User:
-    """Authenticate a bearer API token (bpk_…) — machine surfaces only."""
-    unauthorized = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or missing API token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    header = request.headers.get("Authorization", "")
-    if not header.startswith("Bearer "):
-        raise unauthorized
-    token = header[7:].strip()
+async def user_for_bearer_token(db: AsyncSession, authorization: str) -> User | None:
+    """Resolve an ``Authorization: Bearer bpk_…`` header to its user.
+
+    Returns None for anything invalid. Shared by the FastAPI dependency
+    below and the MCP mount's ASGI gate.
+    """
+    if not authorization.startswith("Bearer "):
+        return None
+    token = authorization[7:].strip()
     if not token.startswith(TOKEN_PREFIX):
-        raise unauthorized
+        return None
 
     result = await db.execute(
         select(ApiToken, User)
@@ -67,10 +62,10 @@ async def get_api_token_user(
     )
     row = result.one_or_none()
     if row is None:
-        raise unauthorized
+        return None
     api_token, user = row
     if not user.is_active:
-        raise unauthorized
+        return None
 
     now = datetime.now(UTC)
     if (
@@ -83,6 +78,21 @@ async def get_api_token_user(
             .values(last_used_at=now)
         )
         await db.commit()
+    return user
+
+
+async def get_api_token_user(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> User:
+    """Authenticate a bearer API token (bpk_…) — machine surfaces only."""
+    user = await user_for_bearer_token(db, request.headers.get("Authorization", ""))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing API token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 

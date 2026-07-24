@@ -24,6 +24,7 @@ dependencies = [
     "structlog>=25.5.0",
     "pgvector>=0.3.6",
     "slowapi>=0.1.9",
+    "mcp>=1.28.1",
 ]
 
 [dependency-groups]

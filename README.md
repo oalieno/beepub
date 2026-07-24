@@ -27,6 +27,9 @@ show off CJK rendering. Demo data resets every 6 hours.
 - Offline reading for downloaded books
 - Works with e-readers: OPDS catalog for browsing and downloading, plus
   KOReader progress sync (kosync-compatible)
+- MCP server for AI assistants: let Claude (or any MCP client) search your
+  library and full text, recap what you've read — spoiler-safe — and work
+  with your highlights
 - Automatic reading activity tracking, streaks
 - Gacha-style random book pulls for choosing what to read next
 - Metadata lookup from external book sources
@@ -121,6 +124,26 @@ matched to your library show the e-reader progress in BeePub too. Log in to
 the web UI once after upgrading to enable sync for accounts created on
 older versions. Book matching uses KOReader's default *binary* checksum
 method — download the book via OPDS so both sides have the same file.
+
+### AI Assistants: MCP
+
+BeePub ships an MCP (Model Context Protocol) server, so AI assistants can
+work with *your* library: search books by fuzzy titles, keywords, or tags,
+find passages in the full text, read chapters, recap a book up to where you
+stopped, and pull your highlights and notes.
+
+Create an API token under **Profile → API Tokens**, then connect a client —
+for example Claude Code:
+
+```bash
+claude mcp add --transport http beepub https://<your-host>/mcp \
+  --header "Authorization: Bearer bpk_…"
+```
+
+Everything is read-only, scoped to the token's account and its library
+access. Chapter summaries are spoiler-protected on the server: the assistant
+only sees summaries up to your reading position unless you explicitly ask
+for the whole book.
 
 ### Reverse Proxy
 

@@ -76,6 +76,7 @@ async def _run_summarize_chunks(
     from app.services.settings import get_all_settings
     from app.services.text_chunking import (
         META_ECHO_SQL_PATTERN,
+        is_backmatter_title,
         is_meta_echo_summary,
     )
 
@@ -138,6 +139,7 @@ async def _run_summarize_chunks(
                         BookTextChunk.id,
                         BookTextChunk.spine_index,
                         BookTextChunk.text,
+                        BookTextChunk.section_title,
                     )
                     .where(*filters)
                     .order_by(BookTextChunk.spine_index)
@@ -159,11 +161,14 @@ async def _run_summarize_chunks(
             # individually, so progress is durable and a retried/re-run task
             # resumes where it left off (via the summary IS NULL filter).
             summarized = 0
-            for chunk_id, spine_index, chunk_text in chunk_data:
+            for chunk_id, spine_index, chunk_text, section_title in chunk_data:
                 stripped = chunk_text.strip()
                 usage = None
-                if len(stripped) < 1000:
-                    # Short/non-content section — no LLM call needed
+                if len(stripped) < 1000 or is_backmatter_title(section_title):
+                    # Short/non-content sections — and backmatter
+                    # (endnotes can run to 170k chars; summarizing
+                    # apparatus is pure LLM waste). Store the verbatim
+                    # head so the row counts as done.
                     summary = stripped[:200]
                 else:
                     # Truncate very long sections for the summary prompt

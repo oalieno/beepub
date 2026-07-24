@@ -34,7 +34,7 @@ from app.services.companion import (
 )
 from app.services.llm import LLMNotConfiguredError, LLMStream
 from app.services.sse import sse_event
-from app.services.text_chunking import is_meta_echo_summary
+from app.services.text_chunking import is_backmatter_title, is_meta_echo_summary
 
 logger = logging.getLogger(__name__)
 
@@ -295,11 +295,17 @@ async def get_book_recap(
         )
         .order_by(BookTextChunk.spine_index)
     )
+    # Backmatter (endnotes, credits, acknowledgments) is long enough to
+    # pass the length floor but isn't narrative — keep it out of the
+    # recap and out of the "needs generating" set.
+    chunks = [
+        r for r in result.all() if not is_backmatter_title(r.section_title)
+    ]
     # Prompt-echo rows count as missing, like NULL — the summarize
     # task regenerates both.
     rows = [
         r
-        for r in result.all()
+        for r in chunks
         if r.summary is not None and not is_meta_echo_summary(r.summary)
     ]
 
@@ -314,17 +320,12 @@ async def get_book_recap(
     generating = False
     if current_spine is not None and current_spine > 0:
         covered = {s.spine_index for s in sections}
-        missing_filters = [
-            BookTextChunk.book_id == book_id,
-            BookTextChunk.spine_index < current_spine,
-            func.length(BookTextChunk.text) >= 1000,
+        missing = [
+            r
+            for r in chunks
+            if r.spine_index < current_spine and r.spine_index not in covered
         ]
-        if covered:
-            missing_filters.append(BookTextChunk.spine_index.not_in(covered))
-        missing = await db.execute(
-            select(func.count()).select_from(BookTextChunk).where(*missing_filters)
-        )
-        if (missing.scalar() or 0) > 0:
+        if missing:
             generating = await _enqueue_recap_summaries(book_id, current_spine - 1)
 
     return RecapOut(sections=sections, has_any=len(rows) > 0, generating=generating)

@@ -81,6 +81,33 @@ async def test_gibberish_returns_empty_not_everything(admin_client: AsyncClient)
     assert await _search(admin_client, "C++") == []
 
 
+async def test_multi_keyword_narrows_then_broadens(admin_client: AsyncClient):
+    await _seed(admin_client)
+    # Every-token AND: 素人 AND 人妻 keeps only the matching volume.
+    titles = await _search(admin_client, "素人 人妻")
+    assert titles == [TITLES["spaced"]]
+    # No book has all tokens → broaden to any-token instead of empty.
+    titles = await _search(admin_client, "三體 明日 不存在的關鍵詞")
+    assert {TITLES["short"], TITLES["comma"]} <= set(titles)
+
+
+async def test_keywords_match_tags(admin_client: AsyncClient):
+    await _seed(admin_client)
+    response = await admin_client.get(
+        "/api/books/search", params={"q": "三體", "limit": 1}
+    )
+    book_id = response.json()["items"][0]["id"]
+    response = await admin_client.put(
+        f"/api/books/{book_id}/metadata", json={"tags": ["二戰", "歷史"]}
+    )
+    assert response.status_code == 200, response.text
+
+    # Topic query: none of these words are in any title — the tag carries it.
+    assert TITLES["short"] in await _search(admin_client, "二戰 納粹 軍事")
+    # Single tag word matches via the phrase tier too.
+    assert await _search(admin_client, "二戰") == [TITLES["short"]]
+
+
 async def test_library_search_uses_the_same_tiers(admin_client: AsyncClient):
     library_id = await _seed(admin_client)
     response = await admin_client.get(

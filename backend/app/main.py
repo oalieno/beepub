@@ -11,6 +11,9 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import settings
 from app.logging import setup_logging
+from app.mcp.auth import MCPAuthGate, MCPPathNormalizer
+from app.mcp.endpoint import MCPEndpoint
+from app.mcp.server import mcp as mcp_server
 from app.rate_limit import limiter
 from app.routers import (
     admin,
@@ -122,6 +125,11 @@ app.include_router(jobs.router)
 app.include_router(works.router)
 app.include_router(series.router)
 app.include_router(tokens.router)
+
+# MCP (read-only AI access) — bearer API tokens only, never cookies.
+mcp_endpoint = MCPEndpoint(mcp_server)
+app.mount("/mcp", MCPAuthGate(mcp_endpoint))
+app.add_middleware(MCPPathNormalizer)
 
 
 @app.get("/api/health")

@@ -784,8 +784,11 @@ async def search_books(
             (title_col.ilike(f"{q}%"), 1),
             else_=2,
         )
+    # Any-word (broadened) searches surface books hitting more keywords
+    # first; within equal counts the usual relevance applies.
+    rank_order = [search.rank.desc()] if search.rank is not None else []
     ranked_query = base_query.order_by(
-        relevance, func.length(title_col), title_col, Book.id
+        *rank_order, relevance, func.length(title_col), title_col, Book.id
     )
 
     result = await db.execute(ranked_query.limit(limit))

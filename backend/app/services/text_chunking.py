@@ -39,6 +39,26 @@ def is_meta_echo_summary(summary: str) -> bool:
     return bool(_META_ECHO_RE.search(summary.lstrip()))
 
 
+# Backmatter (endnotes, image credits, acknowledgments …) can be huge —
+# a 170k-char notes section is still not narrative content. Anchored to
+# the whole title (with volume/numbering affixes) so a real chapter
+# merely containing one of these words (「註釋的人生」) stays content.
+_BACKMATTER_RE = re.compile(
+    r"^(?:上|下|上冊|下冊|上卷|下卷|卷[一二三四五六七八九十\d]+)?\s*"
+    r"(?:註釋|注釋|註解|注解|附註|附注|圖片出處|图片出处|圖片來源|图片来源"
+    r"|謝詞|謝辭|致謝|致谢|參考書目|參考文獻|参考文献|版權|版权|奥付"
+    r"|(?:end|foot)?notes?|acknowledge?ments?|bibliography|references"
+    r"|(?:image |photo )?credits|copyright(?: page)?)"
+    r"\s*(?:頁|页|[一二三四五六七八九十\d]+)?$",
+    re.IGNORECASE,
+)
+
+
+def is_backmatter_title(title: str | None) -> bool:
+    """True for section titles that are apparatus, not narrative content."""
+    return bool(_BACKMATTER_RE.match((title or "").strip()))
+
+
 @dataclass
 class TextSubChunk:
     """A sub-chunk of a BookTextChunk with character offsets."""

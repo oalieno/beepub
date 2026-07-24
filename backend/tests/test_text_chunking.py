@@ -291,3 +291,37 @@ def test_meta_echo_summaries_are_detected():
         "* 這章用條列講了三件事。",
     ):
         assert not is_meta_echo_summary(legit)
+
+
+def test_backmatter_titles_are_detected():
+    from app.services.text_chunking import is_backmatter_title
+
+    # Apparatus, not narrative — a 170k-char 註釋 section must not be
+    # summarized or counted as a content chapter.
+    for title in (
+        "註釋",
+        "上冊註釋",
+        "圖片出處",
+        "謝詞",
+        "致謝",
+        "參考書目",
+        "版權頁",
+        "Notes",
+        "Endnotes",
+        "Acknowledgments",
+        "Acknowledgements",
+        "Image Credits",
+        "Copyright Page",
+    ):
+        assert is_backmatter_title(title), title
+
+    # Real chapters that merely contain a keyword stay content.
+    for title in (
+        "第一章",
+        "註釋的人生：一個編輯的回憶",
+        "Notes from the Underground, Revisited",
+        "神秘的鳳梨事件",
+        None,
+        "",
+    ):
+        assert not is_backmatter_title(title), title
