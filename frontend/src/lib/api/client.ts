@@ -13,6 +13,8 @@ const ERROR_MAP: Record<string, () => string> = {
   "Account is disabled": () => m.error_account_disabled(),
   "An illustration already exists for this text selection": () =>
     m.error_illustration_exists(),
+  "A token with this name already exists": () =>
+    m.profile_api_token_name_taken(),
   "Book already in shelf": () => m.error_book_in_shelf(),
   "Book is part of a Work. Dissolve the Work first, or move all its editions together.":
     () => m.error_move_book_in_work(),

@@ -1,3 +1,4 @@
+from app.models.api_token import ApiToken
 from app.models.book import Book, ExternalMetadata
 from app.models.book_embedding import BookEmbeddingChunk
 from app.models.book_embedding_unified import BookEmbedding
@@ -20,6 +21,7 @@ from app.models.user import User, UserRole
 from app.models.work import Work, WorkScanExclusion
 
 __all__ = [
+    "ApiToken",
     "User",
     "UserRole",
     "Library",

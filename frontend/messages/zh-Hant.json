@@ -76,7 +76,6 @@
   "setup_local_mode_disconnect_title": "中斷與目前伺服器的連線？",
   "setup_local_mode_disconnect_desc": "App 將改用本地模式。伺服器上的資料不受影響，隨時可重新連線。",
   "setup_back_to_local": "返回本地書庫",
-
   "home_page_title": "BeePub - 首頁",
   "home_offline_message": "你目前離線。下載的書籍可在下方閱讀。",
   "home_offline_retry": "重新檢查連線",
@@ -95,7 +94,6 @@
   "home_no_books": "還沒有書籍",
   "home_no_books_subtitle": "上傳一些 EPUB 檔案來開始吧。",
   "home_load_failed": "書庫載入失敗",
-
   "profile_page_title": "BeePub - 個人資料",
   "profile_change_username": "變更使用者名稱",
   "profile_new_username": "新使用者名稱",
@@ -104,6 +102,22 @@
   "profile_username_changed": "使用者名稱已變更",
   "profile_saving": "儲存中...",
   "profile_change_password": "變更密碼",
+  "profile_api_tokens": "API Token",
+  "profile_api_tokens_hint": "供 MCP 與外部工具使用的唯讀存取權杖，不能用於網頁登入。",
+  "profile_api_token_name_placeholder": "Token 名稱（例如 claude）",
+  "profile_api_token_create": "建立",
+  "profile_api_token_created_title": "權杖已建立",
+  "profile_api_token_show_once": "權杖只會顯示這一次，請立即複製保存。",
+  "profile_api_token_copy": "複製",
+  "profile_api_token_copied": "已複製",
+  "profile_api_token_copy_failed": "複製失敗，請手動選取複製。",
+  "profile_api_token_empty": "尚無權杖。",
+  "profile_api_token_never_used": "從未使用",
+  "profile_api_token_last_used": "上次使用 {date}",
+  "profile_api_token_revoke": "撤銷權杖",
+  "profile_api_token_revoke_confirm": "撤銷權杖「{name}」？",
+  "profile_api_token_revoke_confirm_desc": "使用中的用戶端會立即失效。",
+  "profile_api_token_name_taken": "已有同名的權杖。",
   "profile_current_password": "目前密碼",
   "profile_current_password_placeholder": "目前密碼",
   "profile_new_password": "新密碼",
@@ -119,7 +133,6 @@
   "profile_theme_light": "淺色",
   "profile_theme_dark": "深色",
   "profile_theme_system": "跟隨系統",
-
   "streak_days": "連續 {count} 天",
   "streak_set_goal": "設定目標",
   "streak_daily_goal": "每日目標",
@@ -128,7 +141,6 @@
   "streak_remove_goal": "移除目標",
   "streak_today": "今天",
   "streak_day_read": "有閱讀",
-
   "heatmap_title": "閱讀活動（{year}）",
   "heatmap_no_reading": "無閱讀紀錄",
   "heatmap_total_time": "共 {hours} 小時 {minutes} 分鐘",
@@ -140,7 +152,6 @@
   "time_minutes": "{minutes} 分鐘",
   "heatmap_less": "少",
   "heatmap_more": "多",
-
   "mybooks_tab_reading": "正在閱讀",
   "mybooks_tab_want_to_read": "想讀",
   "mybooks_tab_read": "已讀",
@@ -159,16 +170,13 @@
   "series_empty": "你的書庫裡沒有系列。",
   "series_view_volumes": "查看所有單行本",
   "series_volumes": "單行本",
-
   "allbooks_heading": "所有書籍",
-
   "highlights_page_title": "畫線 - BeePub",
   "highlights_entry_count": "{count} 則",
   "highlights_removed": "已移除畫線",
   "highlights_delete_confirm": "確定要刪除這個畫線嗎？",
   "highlights_no_highlights": "還沒有畫線",
   "highlights_empty_description": "閱讀時選取文字即可建立畫線。",
-
   "discover_page_title": "探索 - BeePub",
   "discover_recommendations": "為你推薦",
   "discover_recommendations_subtitle": "根據你的閱讀活動和收藏推薦。",
@@ -185,7 +193,6 @@
   "discover_category_trope": "套路",
   "discover_no_books_tagged": "還沒有標記 {category} 標籤的書籍。",
   "discover_see_all": "查看全部 →",
-
   "shelves_page_title": "我的書架 - BeePub",
   "collection_book_count": "{count} 本",
   "shelves_new": "新增書架",
@@ -201,7 +208,6 @@
   "shelves_create": "建立",
   "shelves_edit_title": "編輯書架",
   "shelves_updated": "書架已更新",
-
   "gacha_page_title": "BeePub - 抽書",
   "gacha_subtitle": "從你的書庫中隨機抽出一本書",
   "gacha_pull": "抽一本",
@@ -211,7 +217,6 @@
   "gacha_opening": "開包中...",
   "gacha_view_book": "去看看",
   "gacha_pull_again": "再開一包",
-
   "common_cancel": "取消",
   "common_confirm": "確認",
   "common_save": "儲存",
@@ -226,7 +231,6 @@
   "common_back": "返回",
   "datepicker_pick_date": "選擇日期",
   "common_undo": "復原",
-
   "book_delete_confirm": "確定要永久刪除此書？",
   "book_deleted": "書籍已刪除",
   "book_refresh_queued": "已排入中繼資料更新佇列",
@@ -247,10 +251,10 @@
   "book_move_library_none": "沒有其他可移入的書庫，請先建立一個。",
   "book_moved_library": "書籍已移動",
   "book_similar": "相似書籍",
-  "external_marked_not_found": "已標記為找不到",
-  "external_source_unlinked": "已解除連結",
-  "external_not_found": "找不到",
-  "external_mark_not_found": "標記為找不到",
+  "external_marked_not_found": "已標記為未找到",
+  "external_source_unlinked": "已取消連結來源",
+  "external_not_found": "未找到",
+  "external_mark_not_found": "標記為未找到",
   "book_download_epub": "下載 EPUB",
   "book_download_to_library": "下載到這台裝置",
   "book_in_local_library": "已在本機書庫，請到「本機書籍」管理",
@@ -271,7 +275,6 @@
   "book_no_bookshelves": "還沒有書架。",
   "book_create_bookshelf": "建立一個",
   "book_add_to_bookshelf": "加入書架",
-
   "reader_go_back": "返回",
   "reader_back_to_detail": "返回書籍詳情",
   "reader_auto_marked_reading": "已自動標記為閱讀中",
@@ -332,7 +335,6 @@
   "reader_margin_narrow": "窄",
   "reader_margin_normal": "標準",
   "reader_margin_wide": "寬",
-
   "companion_title": "閱讀夥伴",
   "companion_conversations": "對話",
   "companion_new_conv": "新對話",
@@ -359,7 +361,6 @@
   "companion_prompt_summarize": "幫我摘要目前的劇情",
   "companion_prompt_themes": "這本書的主題是什麼？",
   "companion_prompt_characters": "有哪些重要角色？",
-
   "reader_highlight_illustrations": "畫線與插圖",
   "reader_highlight_tab": "畫線",
   "reader_illustration_tab": "插圖",
@@ -378,14 +379,12 @@
   "reader_error_safety": "被安全過濾器封鎖",
   "reader_error_timeout": "API 逾時",
   "reader_error_server": "API 伺服器錯誤，請重試",
-
   "reader_toc_empty": "沒有目錄。",
   "reader_search_placeholder": "搜尋...",
   "reader_search_searching": "搜尋中...（已找到 {count} 筆）",
   "reader_search_no_results": "找不到結果。",
   "reader_search_results": "{count} 筆結果",
   "reader_search_empty_prompt": "輸入文字以在書中搜尋。",
-
   "admin_page_title": "管理 - BeePub",
   "admin_back_to_profile": "個人資料",
   "admin_stat_users": "使用者",
@@ -398,7 +397,6 @@
   "admin_link_llm_usage": "LLM 用量",
   "admin_link_metadata": "中繼資料來源",
   "admin_link_settings": "設定",
-
   "admin_users_title": "使用者 - 管理 - BeePub",
   "admin_users_heading": "使用者",
   "admin_users_subtitle": "管理使用者帳號和角色",
@@ -406,12 +404,9 @@
   "admin_users_dialog_title": "建立使用者",
   "admin_users_dialog_desc": "建立新的使用者帳號",
   "admin_users_delete_confirm": "確定刪除使用者「{username}」？此操作無法復原。",
-  "admin_reports_resolved": "回報已處理",
+  "admin_reports_resolved": "已解決",
   "admin_settings_saved": "設定已儲存",
   "admin_users_creating": "建立中...",
-
-
-
   "admin_llm_title": "LLM 用量 - 管理 - BeePub",
   "admin_llm_heading": "LLM 用量",
   "admin_llm_subtitle": "各 AI 功能的 Token 消耗量",
@@ -437,7 +432,6 @@
   "admin_llm_feat_embedding": "嵌入",
   "admin_llm_feat_illustration": "插圖",
   "admin_llm_feat_search": "語意搜尋",
-
   "admin_calibre_title": "Calibre 匯入 - 管理 - BeePub",
   "admin_calibre_heading": "Calibre 匯入",
   "admin_calibre_subtitle": "連結並同步 Calibre 書庫（唯讀）",
@@ -461,7 +455,6 @@
   "admin_calibre_sync_result": "新增 {added}、更新 {updated}、未變更 {unchanged}",
   "admin_calibre_sync_skipped": "、跳過 {skipped}",
   "admin_calibre_sync_failed": "同步失敗：{msg}",
-
   "admin_jobs_title": "工作 - 管理 - BeePub",
   "admin_jobs_heading": "工作",
   "admin_jobs_subtitle": "監控並觸發背景處理工作",
@@ -474,12 +467,10 @@
   "admin_jobs_ai_not_configured": "AI 供應商未設定 — 請檢查管理設定",
   "admin_jobs_run_tooltip": "處理未處理的書籍",
   "admin_jobs_run_label": "執行",
-
   "admin_reports_title": "書籍回報 - 管理 - BeePub",
   "admin_reports_heading": "書籍回報",
   "admin_reports_subtitle": "使用者回報與系統偵測的書籍問題",
   "admin_reports_unresolved": "未解決",
-  "admin_reports_resolved": "已解決",
   "admin_reports_empty_unresolved": "沒有未解決的回報",
   "admin_reports_empty_resolved": "沒有已解決的回報",
   "admin_reports_unknown_book": "未知書籍",
@@ -488,7 +479,6 @@
   "admin_reports_wrong_metadata": "中繼資料錯誤",
   "admin_reports_cant_open": "無法開啟",
   "admin_reports_other": "其他",
-
   "admin_settings_title": "設定 - 管理 - BeePub",
   "admin_settings_heading": "設定",
   "admin_settings_subtitle": "設定應用程式",
@@ -581,7 +571,6 @@
   "admin_settings_loading_models": "載入模型中…",
   "admin_settings_select_model": "選擇模型",
   "admin_settings_model_load_error": "無法載入模型 — 請手動輸入模型名稱",
-
   "admin_user_edit_title": "{username} - 管理 - BeePub",
   "admin_user_not_found": "找不到使用者。",
   "admin_user_last_admin": "這是唯一的管理員，無法降級或刪除。",
@@ -607,7 +596,6 @@
   "admin_user_new_password": "新密碼",
   "admin_user_new_password_placeholder": "新密碼",
   "admin_user_resetting": "重設中...",
-
   "admin_col_name": "名稱",
   "admin_col_description": "描述",
   "admin_col_username": "使用者名稱",
@@ -615,10 +603,9 @@
   "admin_col_role": "角色",
   "admin_col_joined": "加入日期",
   "admin_create": "建立",
-
   "illustration_title": "AI 插圖",
   "illustration_generating": "插圖生成中…",
-  "illustration_ready": "插圖完成！",
+  "illustration_ready": "插圖已完成！",
   "illustration_timeout": "生成逾時",
   "illustration_deleted": "插圖已刪除",
   "illustration_not_configured": "圖像 AI 未設定",
@@ -637,7 +624,6 @@
   "illustration_hide_source": "隱藏原文",
   "illustration_show_source": "顯示原文",
   "illustration_generating_toast": "正在生成插圖...",
-  "illustration_ready": "插圖已完成！",
   "illustration_safety_blocked": "內容被安全過濾器封鎖。請嘗試選取不同的文字。",
   "illustration_api_timeout": "API 請求逾時。請稍後再試。",
   "illustration_api_server": "API 伺服器錯誤。請稍後再試。",
@@ -645,7 +631,6 @@
   "illustration_generation_timeout": "生成逾時",
   "illustration_deleted_toast": "插圖已刪除",
   "illustration_style_light_novel": "輕小說",
-
   "highlight_action_highlight": "畫線",
   "highlight_style_fill": "螢光",
   "highlight_style_underline": "底線",
@@ -663,9 +648,7 @@
   "highlight_copy_failed": "複製失敗",
   "highlight_copied": "已複製",
   "highlight_empty": "還沒有畫線。",
-
   "share_highlight_title": "分享畫線",
-
   "browser_sort_newest": "最新加入",
   "browser_sort_oldest": "最舊加入",
   "browser_sort_title_asc": "標題 A → Z",
@@ -700,7 +683,6 @@
   "browser_no_books": "找不到書籍",
   "browser_no_matches": "找不到符合條件的書籍",
   "browser_library_empty": "這個書庫還沒有書籍",
-
   "metadata_edit_title": "編輯中繼資料",
   "metadata_field_title": "標題",
   "metadata_field_authors": "作者（以逗號分隔）",
@@ -734,7 +716,6 @@
   "physical_created": "已建立實體書紀錄",
   "physical_badge": "實體書",
   "physical_add_to_library": "將新增到「{name}」書庫。",
-
   "metadata_label_series": "系列",
   "metadata_label_library": "書庫",
   "metadata_label_libraries": "書庫",
@@ -755,7 +736,6 @@
   "metadata_series_vol_of": "第 {index} 卷，共 {total} 卷",
   "metadata_previous": "上一本",
   "metadata_next": "下一本",
-
   "notes_title": "筆記",
   "notes_markdown": "支援 Markdown",
   "notes_placeholder": "在這裡寫筆記...",
@@ -775,7 +755,6 @@
   "notes_toolbar_list": "清單",
   "notes_toolbar_quote": "引用",
   "notes_toolbar_link": "連結",
-
   "report_title": "回報問題",
   "report_issue_type": "問題類型",
   "report_select_placeholder": "選擇問題...",
@@ -788,27 +767,21 @@
   "report_wrong_metadata": "中繼資料錯誤",
   "report_cant_open": "無法開啟",
   "report_other": "其他",
-
   "external_goodreads": "Goodreads",
   "external_readmoo": "Readmoo",
   "external_google_books": "Google Books",
   "external_hardcover": "Hardcover",
   "external_link_source": "連結 {source} 頁面",
   "external_invalid_id": "ID 格式無效。{hint}",
-  "external_marked_not_found": "已標記為未找到",
-  "external_source_unlinked": "已取消連結來源",
   "external_url_updated": "來源網址已更新，正在取得中繼資料...",
   "external_url_removed": "來源網址已移除",
-  "external_not_found": "未找到",
   "external_link_manually": "手動連結",
   "external_unlink": "取消連結 — 允許重新搜尋",
   "external_edit_url": "編輯來源網址",
-  "external_mark_not_found": "標記為未找到",
   "external_sources_button": "來源",
   "external_sources_add": "+ 來源",
   "external_metadata_sources": "中繼資料來源",
   "external_link": "+ 連結",
-
   "status_want_to_read": "想讀",
   "status_reading": "正在閱讀",
   "status_read": "已讀",
@@ -817,16 +790,13 @@
   "status_clear": "清除狀態",
   "status_started": "開始日期",
   "status_finished": "完成日期",
-
   "book_cover_alt": "{title} 封面",
   "book_add_want_to_read": "加入想讀",
-
   "libraries_page_title": "書庫 - BeePub",
   "libraries_empty": "沒有可用的書庫",
   "libraries_empty_subtitle": "書庫由管理員建立後會顯示在這裡。",
   "libraries_this_device": "這台裝置",
   "libraries_cloud_books": "雲端書籍",
-
   "library_page_title": "{name} - BeePub",
   "library_calibre_badge": "Calibre",
   "library_upload": "上傳書籍",
@@ -848,8 +818,6 @@
   "library_deleted": "書庫已刪除",
   "library_delete_confirm": "確定刪除書庫「{name}」？",
   "library_delete_warning": "將永久刪除其中的 {count} 本書，以及所有使用者對這些書的畫線、評分與閱讀進度。",
-
-
   "local_page_title": "本地書籍 - BeePub",
   "local_native_only": "本地書庫僅在手機 app 中可用",
   "local_add": "新增書籍",
@@ -876,7 +844,6 @@
   "local_nav_books": "書庫",
   "local_nav_settings": "設定",
   "local_settings_page_title": "設定 - BeePub",
-
   "catalogs_page_title": "OPDS 目錄 - BeePub",
   "catalogs_native_only": "OPDS 目錄功能僅在手機 app 中可用",
   "catalogs_empty": "還沒有目錄",
@@ -905,7 +872,6 @@
   "catalogs_duplicate": "本地書庫已有這本書",
   "catalogs_no_epub": "這個項目沒有 EPUB 檔",
   "catalogs_download_error": "無法下載「{title}」",
-
   "kosync_title": "進度同步",
   "kosync_dialog_desc": "透過 kosync 伺服器，讓本機書籍與 KOReader 裝置同步閱讀位置。帳號資訊只保存在這台裝置上。",
   "kosync_server_label": "伺服器網址",
@@ -936,7 +902,6 @@
   "kosync_push_not_ready": "位置尚未就緒，請稍後再試",
   "kosync_pull_none": "伺服器上還沒有進度紀錄",
   "kosync_pull_own": "最新紀錄就是這台裝置的",
-
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "這個書架還沒有書",
   "bookshelf_empty_subtitle": "在書籍或系列詳情頁加入書架。",
@@ -947,7 +912,6 @@
   "bookshelf_series_removed": "已從書架移除系列",
   "bookshelf_view_grid": "格狀",
   "bookshelf_view_tier": "分級",
-
   "reader_page_title": "{title} - BeePub",
   "reader_no_cover": "無封面",
   "reader_series_up_next": "接下來：{series}",
@@ -957,7 +921,6 @@
   "reader_series_complete_msg": "你已讀完 {series} 系列全部 {count} 本書",
   "reader_finished_title": "你讀完了這本書",
   "reader_marked_read_undone": "已取消讀完標記",
-
   "error_access_denied": "存取被拒",
   "error_account_disabled": "帳號已停用",
   "error_illustration_exists": "此文字選取已有插圖",
@@ -1003,7 +966,6 @@
   "error_sync_in_progress": "同步進行中",
   "error_user_not_found": "找不到使用者",
   "error_username_exists": "使用者名稱已存在",
-
   "admin_link_duplicates": "重複版本",
   "duplicates_title": "重複版本",
   "duplicates_groups_count": "{count} 組",
@@ -1023,7 +985,6 @@
   "duplicates_initial_prompt": "點擊「精確比對」或「模糊比對」來掃描重複版本。",
   "book_editions_count": "{count} 個版本",
   "book_other_editions": "其他版本",
-
   "work_add_to_work": "新增書籍到作品",
   "work_remove_from_work": "從作品中移除",
   "work_remove_from_work_confirm": "要將這本書從作品中移除嗎？它會變成獨立的書籍。",
@@ -1042,7 +1003,6 @@
   "work_is_primary": "目前為主要版本",
   "work_primary_badge": "主要版本",
   "work_primary_set": "已設為主要版本",
-
   "duplicates_review_progress": "{current} / {total} 已審核",
   "duplicates_merge_all": "全部合併",
   "duplicates_merge_all_confirm": "要合併剩餘 {count} 組嗎？所有版本將被合併為作品。",

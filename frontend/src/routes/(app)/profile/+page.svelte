@@ -28,6 +28,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import LanguageSection from "$lib/components/settings/LanguageSection.svelte";
   import AppearanceSection from "$lib/components/settings/AppearanceSection.svelte";
+  import ApiTokensSection from "$lib/components/settings/ApiTokensSection.svelte";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   let online = $derived($isOnline);
@@ -367,6 +368,13 @@
           </Button>
         </form>
       {/if}
+
+      <!-- Divider -->
+      <div class="flex justify-center">
+        <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
+      </div>
+
+      <ApiTokensSection />
     {/if}
   </div>
 

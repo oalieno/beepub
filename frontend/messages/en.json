@@ -76,7 +76,6 @@
   "setup_local_mode_disconnect_title": "Disconnect from the current server?",
   "setup_local_mode_disconnect_desc": "The app switches to local mode. Nothing on the server is affected — reconnect anytime.",
   "setup_back_to_local": "Back to local library",
-
   "home_page_title": "BeePub - Home",
   "home_offline_message": "You're offline. Your downloaded books are available below.",
   "home_offline_retry": "Check connection",
@@ -95,7 +94,6 @@
   "home_no_books": "No books yet",
   "home_no_books_subtitle": "Upload some EPUBs to get started.",
   "home_load_failed": "Couldn't load your library",
-
   "profile_page_title": "BeePub - Profile",
   "profile_change_username": "Change Username",
   "profile_new_username": "New Username",
@@ -104,6 +102,22 @@
   "profile_username_changed": "Username changed successfully",
   "profile_saving": "Saving...",
   "profile_change_password": "Change Password",
+  "profile_api_tokens": "API Tokens",
+  "profile_api_tokens_hint": "Read-only access tokens for MCP and external tools — not a web login.",
+  "profile_api_token_name_placeholder": "Token name (e.g. claude)",
+  "profile_api_token_create": "Create",
+  "profile_api_token_created_title": "Token created",
+  "profile_api_token_show_once": "This token is shown only once — copy it now.",
+  "profile_api_token_copy": "Copy",
+  "profile_api_token_copied": "Copied",
+  "profile_api_token_copy_failed": "Copy failed — select the token text and copy it manually.",
+  "profile_api_token_empty": "No tokens yet.",
+  "profile_api_token_never_used": "never used",
+  "profile_api_token_last_used": "last used {date}",
+  "profile_api_token_revoke": "Revoke token",
+  "profile_api_token_revoke_confirm": "Revoke token “{name}”?",
+  "profile_api_token_revoke_confirm_desc": "Clients using it will stop working immediately.",
+  "profile_api_token_name_taken": "A token with this name already exists.",
   "profile_current_password": "Current Password",
   "profile_current_password_placeholder": "Current password",
   "profile_new_password": "New Password",
@@ -119,7 +133,6 @@
   "profile_theme_light": "Light",
   "profile_theme_dark": "Dark",
   "profile_theme_system": "System",
-
   "streak_days": "{count} day streak",
   "streak_set_goal": "set goal",
   "streak_daily_goal": "Daily goal",
@@ -128,7 +141,6 @@
   "streak_remove_goal": "Remove goal",
   "streak_today": "today",
   "streak_day_read": "Read",
-
   "heatmap_title": "Reading Activity ({year})",
   "heatmap_no_reading": "No reading",
   "heatmap_total_time": "{hours}h {minutes}m total",
@@ -140,7 +152,6 @@
   "time_minutes": "{minutes}m",
   "heatmap_less": "Less",
   "heatmap_more": "More",
-
   "mybooks_tab_reading": "Reading",
   "mybooks_tab_want_to_read": "Want to Read",
   "mybooks_tab_read": "Read",
@@ -159,16 +170,13 @@
   "series_empty": "No series found in your library.",
   "series_view_volumes": "View all volumes",
   "series_volumes": "Volumes",
-
   "allbooks_heading": "All Books",
-
   "highlights_page_title": "Highlights - BeePub",
   "highlights_entry_count": "{count} highlight(s)",
   "highlights_removed": "Highlight removed",
   "highlights_delete_confirm": "Delete this highlight?",
   "highlights_no_highlights": "No highlights yet",
   "highlights_empty_description": "Select text while reading to create highlights.",
-
   "discover_page_title": "Discover - BeePub",
   "discover_recommendations": "Recommended for You",
   "discover_recommendations_subtitle": "Based on your reading activity and favorites.",
@@ -185,7 +193,6 @@
   "discover_category_trope": "trope",
   "discover_no_books_tagged": "No books tagged with {category} tags yet.",
   "discover_see_all": "See all →",
-
   "shelves_page_title": "My Bookshelves - BeePub",
   "collection_book_count": "{count} book(s)",
   "shelves_new": "New Shelf",
@@ -201,7 +208,6 @@
   "shelves_create": "Create",
   "shelves_edit_title": "Edit shelf",
   "shelves_updated": "Shelf updated",
-
   "gacha_page_title": "BeePub - Gacha",
   "gacha_pull": "Pull a book",
   "gacha_subtitle": "Randomly pull a book from your library",
@@ -211,7 +217,6 @@
   "gacha_opening": "Opening...",
   "gacha_view_book": "View book",
   "gacha_pull_again": "Pull again",
-
   "common_cancel": "Cancel",
   "common_confirm": "Confirm",
   "common_save": "Save",
@@ -226,7 +231,6 @@
   "common_back": "Back",
   "datepicker_pick_date": "Pick a date",
   "common_undo": "Undo",
-
   "book_delete_confirm": "Delete this book permanently?",
   "book_deleted": "Book deleted",
   "book_refresh_queued": "Metadata refresh queued",
@@ -271,7 +275,6 @@
   "book_no_bookshelves": "No bookshelves yet. ",
   "book_create_bookshelf": "Create one",
   "book_add_to_bookshelf": "Add to Bookshelf",
-
   "reader_go_back": "Go back",
   "reader_back_to_detail": "Back to book detail",
   "reader_auto_marked_reading": "Marked as currently reading",
@@ -332,7 +335,6 @@
   "reader_margin_narrow": "Narrow",
   "reader_margin_normal": "Normal",
   "reader_margin_wide": "Wide",
-
   "companion_title": "Reading Companion",
   "companion_conversations": "Conversations",
   "companion_new_conv": "New conversation",
@@ -359,7 +361,6 @@
   "companion_prompt_summarize": "Summarize what's happened so far",
   "companion_prompt_themes": "What are the main themes?",
   "companion_prompt_characters": "Who are the key characters?",
-
   "reader_highlight_illustrations": "Highlights & Illustrations",
   "reader_highlight_tab": "Highlights",
   "reader_illustration_tab": "Illustrations",
@@ -378,14 +379,12 @@
   "reader_error_safety": "Blocked by safety filters",
   "reader_error_timeout": "API timed out",
   "reader_error_server": "API server error, please retry",
-
   "reader_toc_empty": "No table of contents.",
   "reader_search_placeholder": "Search...",
   "reader_search_searching": "Searching... ({count} found)",
   "reader_search_no_results": "No results found.",
   "reader_search_results": "{count} results",
   "reader_search_empty_prompt": "Type to search in this book.",
-
   "admin_page_title": "Admin - BeePub",
   "admin_back_to_profile": "Profile",
   "admin_stat_users": "Users",
@@ -398,7 +397,6 @@
   "admin_link_llm_usage": "LLM Usage",
   "admin_link_metadata": "Metadata sources",
   "admin_link_settings": "Settings",
-
   "admin_users_title": "Users - Admin - BeePub",
   "admin_users_heading": "Users",
   "admin_users_subtitle": "Manage user accounts and roles",
@@ -406,12 +404,9 @@
   "admin_users_dialog_title": "Create User",
   "admin_users_dialog_desc": "Create a new user account",
   "admin_users_delete_confirm": "Delete user \"{username}\"? This cannot be undone.",
-  "admin_reports_resolved": "Report resolved",
+  "admin_reports_resolved": "Resolved",
   "admin_settings_saved": "Settings saved",
   "admin_users_creating": "Creating...",
-
-
-
   "admin_llm_title": "LLM Usage - Admin - BeePub",
   "admin_llm_heading": "LLM Usage",
   "admin_llm_subtitle": "Token consumption across AI features",
@@ -437,7 +432,6 @@
   "admin_llm_feat_embedding": "Embedding",
   "admin_llm_feat_illustration": "Illustration",
   "admin_llm_feat_search": "Semantic Search",
-
   "admin_calibre_title": "Calibre Import - Admin - BeePub",
   "admin_calibre_heading": "Calibre Import",
   "admin_calibre_subtitle": "Link and sync Calibre libraries (read-only)",
@@ -461,7 +455,6 @@
   "admin_calibre_sync_result": "{added} added, {updated} updated, {unchanged} unchanged",
   "admin_calibre_sync_skipped": ", {skipped} skipped",
   "admin_calibre_sync_failed": "Sync failed: {msg}",
-
   "admin_jobs_title": "Jobs - Admin - BeePub",
   "admin_jobs_heading": "Jobs",
   "admin_jobs_subtitle": "Monitor and trigger background processing tasks",
@@ -474,12 +467,10 @@
   "admin_jobs_ai_not_configured": "AI provider not configured — check Admin Settings",
   "admin_jobs_run_tooltip": "Process unprocessed books",
   "admin_jobs_run_label": "Run",
-
   "admin_reports_title": "Book Reports - Admin - BeePub",
   "admin_reports_heading": "Book Reports",
   "admin_reports_subtitle": "User-reported and system-detected book issues",
   "admin_reports_unresolved": "Unresolved",
-  "admin_reports_resolved": "Resolved",
   "admin_reports_empty_unresolved": "No unresolved reports",
   "admin_reports_empty_resolved": "No resolved reports",
   "admin_reports_unknown_book": "Unknown book",
@@ -488,7 +479,6 @@
   "admin_reports_wrong_metadata": "Wrong metadata",
   "admin_reports_cant_open": "Can't open",
   "admin_reports_other": "Other",
-
   "admin_settings_title": "Settings - Admin - BeePub",
   "admin_settings_heading": "Settings",
   "admin_settings_subtitle": "Configure application settings",
@@ -505,7 +495,7 @@
   "admin_settings_calibre_path": "Calibre root path",
   "admin_settings_calibre_path_help": "Backend container path containing one or more Calibre libraries.",
   "admin_metadata_title": "Metadata sources",
-  "admin_metadata_subtitle": "Disabled sources are skipped everywhere \u2014 background fetching, lookups, covers \u2014 and their ratings are hidden. Auto marks the sources the background job fetches from; interactive lookups always use every enabled source.",
+  "admin_metadata_subtitle": "Disabled sources are skipped everywhere — background fetching, lookups, covers — and their ratings are hidden. Auto marks the sources the background job fetches from; interactive lookups always use every enabled source.",
   "admin_metadata_enabled": "Enabled",
   "admin_metadata_needs_key": "API key required",
   "metadata_provides_bibliographic": "Bibliographic data",
@@ -541,10 +531,10 @@
   "source_stats_not_found": "{count} not found",
   "source_stats_last_error": "Last error ({time})",
   "source_stats_last_ratelimited": "Last rate-limited {time}",
-  "source_badge_cooldown": "Rate-limited \u2014 {minutes}m left",
-  "source_badge_cooldown_hours": "Rate-limited \u2014 {hours}h left",
+  "source_badge_cooldown": "Rate-limited — {minutes}m left",
+  "source_badge_cooldown_hours": "Rate-limited — {hours}h left",
   "source_badge_failing": "{count} consecutive failures",
-  "source_key_saved": "Key saved \u2014 type a new value to replace it.",
+  "source_key_saved": "Key saved — type a new value to replace it.",
   "source_get_key": "Get a key",
   "admin_settings_google_books": "Google Books API Key",
   "admin_settings_google_books_help": "Free, 1000 requests/day",
@@ -581,7 +571,6 @@
   "admin_settings_loading_models": "Loading models…",
   "admin_settings_select_model": "Select a model",
   "admin_settings_model_load_error": "Could not load models — type a model name manually",
-
   "admin_user_edit_title": "{username} - Admin - BeePub",
   "admin_user_not_found": "User not found.",
   "admin_user_last_admin": "This is the only admin. Cannot demote or delete.",
@@ -607,7 +596,6 @@
   "admin_user_new_password": "New Password",
   "admin_user_new_password_placeholder": "New password",
   "admin_user_resetting": "Resetting...",
-
   "admin_col_name": "Name",
   "admin_col_description": "Description",
   "admin_col_username": "Username",
@@ -615,7 +603,6 @@
   "admin_col_role": "Role",
   "admin_col_joined": "Joined",
   "admin_create": "Create",
-
   "illustration_title": "AI Illustration",
   "illustration_generating": "Generating illustration...",
   "illustration_ready": "Illustration ready!",
@@ -637,7 +624,6 @@
   "illustration_hide_source": "Hide source text",
   "illustration_show_source": "Show source text",
   "illustration_generating_toast": "Generating illustration...",
-  "illustration_ready": "Illustration ready!",
   "illustration_safety_blocked": "Content was blocked by safety filters. Try a different text selection.",
   "illustration_api_timeout": "API request timed out. Please try again later.",
   "illustration_api_server": "API server error. Please try again later.",
@@ -645,7 +631,6 @@
   "illustration_generation_timeout": "Generation timed out",
   "illustration_deleted_toast": "Illustration deleted",
   "illustration_style_light_novel": "Light Novel",
-
   "highlight_action_highlight": "Highlight",
   "highlight_style_fill": "Highlight",
   "highlight_style_underline": "Underline",
@@ -663,9 +648,7 @@
   "highlight_copy_failed": "Copy failed",
   "highlight_copied": "Copied",
   "highlight_empty": "No highlights yet.",
-
   "share_highlight_title": "Share Highlight",
-
   "browser_sort_newest": "Newest added",
   "browser_sort_oldest": "Oldest added",
   "browser_sort_title_asc": "Title A → Z",
@@ -700,7 +683,6 @@
   "browser_no_books": "No books found",
   "browser_no_matches": "No books match your filters",
   "browser_library_empty": "This library has no books yet",
-
   "metadata_edit_title": "Edit Metadata",
   "metadata_field_title": "Title",
   "metadata_field_authors": "Authors (comma-separated)",
@@ -724,17 +706,16 @@
   "physical_add": "Add a physical book",
   "physical_autofill_hint": "Search title / ISBN / URL to autofill",
   "physical_filled_prefix": "Filled from",
-  "physical_filled_suffix": "\u2014 edit freely, you can change this later too",
+  "physical_filled_suffix": "— edit freely, you can change this later too",
   "physical_isbn_placeholder": "ISBN",
   "physical_filter_all": "All ({count})",
   "physical_source_count": "{label} ({count})",
   "physical_isbn_lookup": "Look up",
-  "physical_isbn_not_found": "Nothing found \u2014 fill it in manually",
+  "physical_isbn_not_found": "Nothing found — fill it in manually",
   "physical_creating": "Adding...",
   "physical_created": "Physical book added",
   "physical_badge": "Physical book",
-  "physical_add_to_library": "It will be added to \u201c{name}\u201d.",
-
+  "physical_add_to_library": "It will be added to “{name}”.",
   "metadata_label_series": "Series",
   "metadata_label_library": "Library",
   "metadata_label_libraries": "Libraries",
@@ -755,7 +736,6 @@
   "metadata_series_vol_of": "vol. {index} of {total}",
   "metadata_previous": "Previous",
   "metadata_next": "Next",
-
   "notes_title": "Notes",
   "notes_markdown": "Markdown supported",
   "notes_placeholder": "Write your notes here...",
@@ -775,7 +755,6 @@
   "notes_toolbar_list": "List",
   "notes_toolbar_quote": "Quote",
   "notes_toolbar_link": "Link",
-
   "report_title": "Report Issue",
   "report_issue_type": "Issue type",
   "report_select_placeholder": "Select an issue...",
@@ -788,27 +767,21 @@
   "report_wrong_metadata": "Wrong metadata",
   "report_cant_open": "Can't open",
   "report_other": "Other",
-
   "external_goodreads": "Goodreads",
   "external_readmoo": "Readmoo",
   "external_google_books": "Google Books",
   "external_hardcover": "Hardcover",
   "external_link_source": "Link {source} page",
   "external_invalid_id": "Invalid ID format. {hint}",
-  "external_marked_not_found": "Marked as not found",
-  "external_source_unlinked": "Source unlinked",
   "external_url_updated": "Source URL updated, fetching metadata...",
   "external_url_removed": "Source URL removed",
-  "external_not_found": "not found",
   "external_link_manually": "Link manually",
   "external_unlink": "Unlink — allow re-search",
   "external_edit_url": "Edit source URL",
-  "external_mark_not_found": "Mark as not found",
   "external_sources_button": "Sources",
   "external_sources_add": "+ Sources",
   "external_metadata_sources": "Metadata sources",
   "external_link": "+ Link",
-
   "status_want_to_read": "Want to Read",
   "status_reading": "Currently Reading",
   "status_read": "Read",
@@ -817,16 +790,13 @@
   "status_clear": "Clear status",
   "status_started": "Started",
   "status_finished": "Finished",
-
   "book_cover_alt": "{title} cover",
   "book_add_want_to_read": "Add to Want to Read",
-
   "libraries_page_title": "Libraries - BeePub",
   "libraries_empty": "No libraries available",
   "libraries_empty_subtitle": "Libraries will appear here once they are created by an admin.",
   "libraries_cloud_books": "Cloud books",
   "libraries_this_device": "This device",
-
   "library_page_title": "{name} - BeePub",
   "library_calibre_badge": "Calibre",
   "library_upload": "Upload Books",
@@ -848,8 +818,6 @@
   "library_deleted": "Library deleted",
   "library_delete_confirm": "Delete library \"{name}\"?",
   "library_delete_warning": "This permanently deletes its {count} books, along with every user's highlights, ratings, and reading progress for them.",
-
-
   "local_page_title": "Local Books - BeePub",
   "local_native_only": "The local library is available in the mobile app",
   "local_add": "Add books",
@@ -864,7 +832,7 @@
   "local_empty": "No local books yet",
   "local_empty_subtitle": "Import EPUB files from your device to read them here — no server needed.",
   "local_upload": "Upload to cloud",
-  "local_upload_success": "Uploaded \u201c{title}\u201d to your cloud library",
+  "local_upload_success": "Uploaded “{title}” to your cloud library",
   "local_upload_no_library": "No uploadable library (Calibre libraries are sync-managed)",
   "local_upload_pick_library": "Choose a library to upload to",
   "local_delete": "Delete book",
@@ -876,7 +844,6 @@
   "local_nav_books": "Books",
   "local_nav_settings": "Settings",
   "local_settings_page_title": "Settings - BeePub",
-
   "catalogs_page_title": "Catalogs - BeePub",
   "catalogs_native_only": "OPDS catalogs are available in the mobile app",
   "catalogs_empty": "No catalogs yet",
@@ -905,7 +872,6 @@
   "catalogs_duplicate": "Already in your local library",
   "catalogs_no_epub": "No EPUB available for this entry",
   "catalogs_download_error": "Couldn't download \"{title}\"",
-
   "kosync_title": "Progress sync",
   "kosync_dialog_desc": "Sync reading positions for local books with KOReader devices through a kosync server. The account stays on this device.",
   "kosync_server_label": "Server URL",
@@ -936,7 +902,6 @@
   "kosync_push_not_ready": "The position isn't ready to push yet — try again in a moment",
   "kosync_pull_none": "No position on the server yet",
   "kosync_pull_own": "The latest record is from this device",
-
   "bookshelf_page_title": "{name} - BeePub",
   "bookshelf_empty": "No books in this shelf yet",
   "bookshelf_empty_subtitle": "Add books and series from their detail pages.",
@@ -947,7 +912,6 @@
   "bookshelf_series_removed": "Series removed from shelf",
   "bookshelf_view_grid": "Grid",
   "bookshelf_view_tier": "Tier",
-
   "reader_page_title": "{title} - BeePub",
   "reader_no_cover": "No cover",
   "reader_series_up_next": "Up next in {series}",
@@ -957,7 +921,6 @@
   "reader_series_complete_msg": "You've finished all {count} books in {series}",
   "reader_finished_title": "You finished this book",
   "reader_marked_read_undone": "Finished mark removed",
-
   "error_access_denied": "Access denied",
   "error_account_disabled": "Account is disabled",
   "error_illustration_exists": "An illustration already exists for this text selection",
@@ -1003,7 +966,6 @@
   "error_sync_in_progress": "Sync already in progress",
   "error_user_not_found": "User not found",
   "error_username_exists": "Username already exists",
-
   "admin_link_duplicates": "Duplicate Editions",
   "duplicates_title": "Duplicate Editions",
   "duplicates_groups_count": "{count} groups",
@@ -1023,7 +985,6 @@
   "duplicates_initial_prompt": "Click \"Exact Match\" or \"Fuzzy Match\" to scan for duplicate editions.",
   "book_editions_count": "{count} editions",
   "book_other_editions": "Other Editions",
-
   "work_add_to_work": "Add Book to Work",
   "work_remove_from_work": "Remove from Work",
   "work_remove_from_work_confirm": "Remove this book from its Work? It will become an independent book.",
@@ -1042,7 +1003,6 @@
   "work_is_primary": "Current primary edition",
   "work_primary_badge": "Primary edition",
   "work_primary_set": "Set as primary edition",
-
   "duplicates_review_progress": "{current} / {total} reviewed",
   "duplicates_merge_all": "Merge All",
   "duplicates_merge_all_confirm": "Merge {count} remaining groups? All editions will be combined into Works.",

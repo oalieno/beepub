@@ -30,6 +30,7 @@ from app.routers import (
     search,
     series,
     tags,
+    tokens,
     works,
 )
 from app.services.auth import decode_token
@@ -120,6 +121,7 @@ app.include_router(search.router)
 app.include_router(jobs.router)
 app.include_router(works.router)
 app.include_router(series.router)
+app.include_router(tokens.router)
 
 
 @app.get("/api/health")

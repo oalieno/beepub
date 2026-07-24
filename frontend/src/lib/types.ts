@@ -531,6 +531,19 @@ export interface RecapOut {
   generating: boolean;
 }
 
+export interface ApiToken {
+  id: string;
+  name: string;
+  token_prefix: string;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface ApiTokenCreated extends ApiToken {
+  // The plaintext token — returned exactly once, at creation.
+  token: string;
+}
+
 export interface CalibreLibraryInfo {
   path: string;
   name: string;
