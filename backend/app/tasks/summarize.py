@@ -44,6 +44,10 @@ SUMMARY_PROMPT = """\
 Summarize this book chapter/section in 2-4 sentences. Focus on key events, \
 character actions, and important details. Keep it factual and concise.
 
+Recount the events directly, starting with a character, event, or fact. \
+Never open with meta framing about the text itself — no "這段文字描述了", \
+"本章節描述", "This section describes" or similar.
+
 CRITICAL: You MUST write the summary in {language}. Do NOT translate to English.
 
 Text:
