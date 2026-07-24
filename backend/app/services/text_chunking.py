@@ -20,17 +20,23 @@ HARD_MAX = 600
 OVERLAP = 100
 
 # A cheap LLM sometimes echoes the summarization instructions instead of
-# summarizing ("*   Task: Summarize the provided text…"). Head-anchored:
-# no real summary opens with an imperative "Summarize" or a task bullet.
+# summarizing. The echo takes many surface shapes ("*   Task: …",
+# "A chapter/section of a book.", "Book chapter/section.", "A long
+# excerpt from…") so head-anchoring alone can't enumerate them — but
+# every shape restates the prompt's own wording, and "2-4 sentences" /
+# "chapter/section" (literal slash) never occur in a genuine summary.
 # The SQL pattern is the same rule for Postgres `~*` (case-insensitive),
 # used by the summarize task to treat archived echo as "needs redoing".
-_META_ECHO_RE = re.compile(r"^(?:\*\s*task:|summarize\b)", re.IGNORECASE)
-META_ECHO_SQL_PATTERN = r"^\s*(\*\s*task:|summarize\M)"
+_META_ECHO_RE = re.compile(
+    r"^(?:\*\s*task:|summarize\b)|2-4 sentences|chapter/section",
+    re.IGNORECASE,
+)
+META_ECHO_SQL_PATTERN = r"^\s*(\*\s*task:|summarize\M)|2-4 sentences|chapter/section"
 
 
 def is_meta_echo_summary(summary: str) -> bool:
     """True when a stored chapter summary is instruction echo, not content."""
-    return bool(_META_ECHO_RE.match(summary.lstrip()))
+    return bool(_META_ECHO_RE.search(summary.lstrip()))
 
 
 @dataclass

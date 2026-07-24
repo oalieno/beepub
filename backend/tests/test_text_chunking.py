@@ -269,11 +269,19 @@ class TestEdgeCases:
 def test_meta_echo_summaries_are_detected():
     from app.services.text_chunking import is_meta_echo_summary
 
-    # Real garbage shapes archived by older summarize runs.
+    # Real garbage shapes archived by older summarize runs. The gemma-era
+    # batch had at least six surface shapes, so detection also keys on the
+    # prompt's own wording ("2-4 sentences", literal "chapter/section")
+    # appearing anywhere, not just head-anchored openers.
     for garbage in (
         "*   Task: Summarize the provided book chapter",
         "Summarize the provided text.\n2-4 sentences.",
         "  *  TASK: Summarize a book chapter/section.",
+        "A chapter/section of a book.\nSummarize in 2-4 sentences.",
+        "Book chapter/section.\nSummarize in 2-4 sentences.",
+        "A long excerpt from a book (appears to be *Re:Zero*).\nSummarize in 2-4 sentences.",
+        "*   Input: A segment of a novel. Constraint: 2-4 sentences.",
+        "*   Source text: Three sections of a narrative summarized in 2-4 sentences.",
     ):
         assert is_meta_echo_summary(garbage)
 
