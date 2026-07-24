@@ -12,7 +12,6 @@ from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
-from app.routers.books import book_search_conditions
 from app.schemas.book import (
     BookWithInteractionOut,
     PaginatedBooksWithInteraction,
@@ -24,6 +23,7 @@ from app.schemas.library import (
     LibraryUpdate,
 )
 from app.schemas.series import PaginatedFeed, PaginatedSeries
+from app.services.book_search import tiered_book_search
 from app.services.series import build_series_out, list_library_feed, list_series
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
@@ -221,8 +221,6 @@ async def list_library_books(
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .where(LibraryBook.library_id == library_id)
     )
-    if search:
-        base_query = base_query.where(or_(*book_search_conditions(search)))
     if author:
         base_query = base_query.where(
             or_(
@@ -247,6 +245,10 @@ async def list_library_books(
         )
     if format:
         base_query = base_query.where(Book.format == format)
+    if search:
+        # Applied last — the tier probe must see the fully-filtered scope.
+        tiered = await tiered_book_search(db, search, base_query)
+        base_query = base_query.where(or_(*tiered.conditions))
 
     # Count total
     count_query = select(func.count()).select_from(base_query.subquery())

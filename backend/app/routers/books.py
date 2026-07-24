@@ -66,6 +66,7 @@ from app.schemas.reading import (
     ReadingStatsOut,
 )
 from app.schemas.series import PaginatedFeed
+from app.services.book_search import tiered_book_search
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.metadata_fetch import cached_resolve
 from app.services.partial_md5 import compute_partial_md5
@@ -131,23 +132,6 @@ async def _today_in_app_timezone(db: AsyncSession) -> date:
         return datetime.now(UTC).date()
 
 
-def book_search_conditions(q: str) -> list:
-    """The shared 7-column book search filter (books/all-books/library search).
-
-    The authors arrays are matched through beepub_join_authors() — an
-    IMMUTABLE SQL function created in migration 044 — so the trigram
-    expression indexes on those columns apply. Keep the two in sync.
-    """
-    pattern = f"%{q}%"
-    return [
-        Book.title.ilike(pattern),
-        Book.epub_title.ilike(pattern),
-        func.beepub_join_authors(Book.authors).ilike(pattern),
-        func.beepub_join_authors(Book.epub_authors).ilike(pattern),
-        Book.series.ilike(pattern),
-        Book.epub_series.ilike(pattern),
-        Book.epub_isbn.ilike(pattern),
-    ]
 
 
 def _require_book_file(book: Book) -> None:
@@ -765,16 +749,15 @@ async def search_books(
 
     # Main query: search books in accessible libraries. A book can live in
     # several libraries, so collapse to one row per book (min library name).
-    base_query = (
+    scope = (
         select(Book, func.min(Library.name).label("library_name"))
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .join(Library, Library.id == LibraryBook.library_id)
-        .where(
-            LibraryBook.library_id.in_(select(accessible_lib_ids.c.id)),
-            or_(*book_search_conditions(q)),
-        )
+        .where(LibraryBook.library_id.in_(select(accessible_lib_ids.c.id)))
         .group_by(Book.id)
     )
+    search = await tiered_book_search(db, q, scope)
+    base_query = scope.where(or_(*search.conditions))
 
     # Count (one row per distinct book)
     count_sub = base_query.with_only_columns(Book.id).subquery()
@@ -785,13 +768,22 @@ async def search_books(
     # Rank by relevance so a short query like "小王子" surfaces the closest
     # titles first instead of an arbitrary UUID-ordered slice: exact title
     # match, then title prefix, then any substring; ties broken by shorter
-    # (and then alphabetical) title.
+    # (and then alphabetical) title. Fuzzy tiers rank against the same
+    # normalized views they matched on.
     title_col = func.coalesce(Book.title, Book.epub_title)
-    relevance = case(
-        (func.lower(title_col) == q.lower(), 0),
-        (title_col.ilike(f"{q}%"), 1),
-        else_=2,
-    )
+    if search.normalized_query is not None:
+        norm_title = func.beepub_norm(title_col)
+        relevance = case(
+            (norm_title == search.normalized_query, 0),
+            (norm_title.like(f"{search.normalized_query}%"), 1),
+            else_=2,
+        )
+    else:
+        relevance = case(
+            (func.lower(title_col) == q.lower(), 0),
+            (title_col.ilike(f"{q}%"), 1),
+            else_=2,
+        )
     ranked_query = base_query.order_by(
         relevance, func.length(title_col), title_col, Book.id
     )
@@ -986,9 +978,8 @@ async def list_all_books(
 
     base_query = select(Book).where(Book.id.in_(accessible_ids))
 
-    # Apply filters
-    if search:
-        base_query = base_query.where(or_(*book_search_conditions(search)))
+    # Apply filters. Search is applied last, below — its tier probe must
+    # see the fully-filtered scope.
     if author:
         base_query = base_query.where(
             or_(
@@ -1028,6 +1019,9 @@ async def list_all_books(
                 )
             )
         )
+    if search:
+        tiered = await tiered_book_search(db, search, base_query)
+        base_query = base_query.where(or_(*tiered.conditions))
 
     # Count total
     count_query = select(func.count()).select_from(base_query.subquery())

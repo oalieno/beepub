@@ -24,12 +24,12 @@ from app.database import get_db
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.models.user import User, UserRole
-from app.routers.books import book_search_conditions
 from app.routers.libraries import (
     accessible_book_ids_select,
     accessible_libraries_condition,
 )
 from app.services.auth import verify_password
+from app.services.book_search import tiered_book_search
 from app.services.credential_cache import CredentialCache
 
 # Mounted twice in main.py: /opds (the e-reader convention) and /api/opds
@@ -349,7 +349,9 @@ async def opds_search(
     from urllib.parse import quote
 
     base = _base_path(request)
-    query = _accessible_books_query(current_user).where(or_(*book_search_conditions(q)))
+    scope = _accessible_books_query(current_user)
+    tiered = await tiered_book_search(db, q, scope)
+    query = scope.where(or_(*tiered.conditions))
     return await _acquisition_feed(
         db,
         title=f"Search: {q}",
