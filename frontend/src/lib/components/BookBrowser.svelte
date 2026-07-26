@@ -231,42 +231,55 @@
     };
   }
 
+  // Rapid filter/search changes keep several fetches in flight; only the
+  // newest may write state. An older response finishing last would
+  // otherwise clear `loading` early (flashing "no books" while the newer
+  // fetch runs) or overwrite the newer results.
+  let loadGen = 0;
+
   async function loadData() {
+    const gen = ++loadGen;
     loading = true;
     try {
       if (collapse && !flatForced && fetchFeed) {
         const result = await fetchFeed(queryParams(0));
+        if (gen !== loadGen) return;
         feedItems = result.items;
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(0));
+        if (gen !== loadGen) return;
         books = result.items;
         totalBooks = result.total;
       }
       notifyStateChange();
     } catch (e) {
+      if (gen !== loadGen) return;
       toastStore.error((e as Error).message);
     } finally {
-      loading = false;
+      if (gen === loadGen) loading = false;
     }
   }
 
   async function loadMore() {
     if (loadingMore || !hasMore) return;
+    const gen = loadGen;
     loadingMore = true;
     try {
       if (collapse && !flatForced && fetchFeed) {
         const result = await fetchFeed(queryParams(feedItems.length));
+        if (gen !== loadGen) return;
         feedItems = [...feedItems, ...result.items];
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(books.length));
+        if (gen !== loadGen) return;
         books = [...books, ...result.items];
         totalBooks = result.total;
       }
       notifyStateChange();
     } catch (e) {
-      toastStore.error((e as Error).message);
+      if (gen === loadGen) toastStore.error((e as Error).message);
     } finally {
       loadingMore = false;
     }

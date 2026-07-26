@@ -49,8 +49,18 @@
 
   let selectedIndex = $state(-1);
 
+  // Debounced typing keeps several requests in flight at once; only the
+  // newest may touch the state. Without this an older request's finally
+  // cleared `loading` while the newer one was still running — the UI
+  // read "not loading + no results" and flashed the empty state — and an
+  // older response arriving last would overwrite the newer results.
+  let bookSeq = 0;
+  let contentSeq = 0;
+  let keywordSeq = 0;
+
   function doBookSearch(openFirst = false) {
     const q = query.trim();
+    const seq = ++bookSeq;
     if (!q) {
       books = createSearchState();
       return;
@@ -59,6 +69,7 @@
     booksApi
       .search(q)
       .then((resp) => {
+        if (seq !== bookSeq) return;
         books.results = resp.items;
         books.total = resp.total;
         books.forQuery = q;
@@ -68,16 +79,19 @@
         }
       })
       .catch(() => {
+        if (seq !== bookSeq) return;
         books.results = [];
         books.total = 0;
       })
       .finally(() => {
+        if (seq !== bookSeq) return;
         books.loading = false;
       });
   }
 
   function doContentSearch() {
     const q = query.trim();
+    const seq = ++contentSeq;
     if (!q) {
       content = createSearchState();
       return;
@@ -87,11 +101,13 @@
     searchApi
       .semantic(q)
       .then((resp) => {
+        if (seq !== contentSeq) return;
         content.results = resp.results;
         content.forQuery = q;
         selectedIndex = -1;
       })
       .catch((err) => {
+        if (seq !== contentSeq) return;
         content.results = [];
         // The api client localizes error messages, so match on the 503
         // the backend sends for "not configured" rather than the text.
@@ -101,12 +117,14 @@
             : m.search_unavailable();
       })
       .finally(() => {
+        if (seq !== contentSeq) return;
         content.loading = false;
       });
   }
 
   function doKeywordSearch() {
     const q = query.trim();
+    const seq = ++keywordSeq;
     if (!q) {
       keyword = createSearchState();
       return;
@@ -116,24 +134,42 @@
     searchApi
       .keyword(q)
       .then((resp) => {
+        if (seq !== keywordSeq) return;
         keyword.results = resp.results;
         keyword.total = resp.total;
         keyword.forQuery = q;
         selectedIndex = -1;
       })
       .catch(() => {
+        if (seq !== keywordSeq) return;
         keyword.results = [];
         keyword.total = 0;
         keyword.error = m.search_unavailable();
       })
       .finally(() => {
+        if (seq !== keywordSeq) return;
         keyword.loading = false;
       });
   }
 
-  function handleInput() {
+  // Not bind:value — the value write and the loading-flag write must land
+  // in one flush. As separate listeners they flushed separately, and the
+  // in-between state (query set, loading not yet) rendered the empty
+  // state for a frame.
+  function handleInput(e: Event) {
+    query = (e.currentTarget as HTMLInputElement).value;
     clearTimeout(debounceTimer);
     if (activeTab === "books") {
+      // Show the loading state through the debounce window too —
+      // otherwise "no results + not loading" renders the empty state for
+      // 300ms before the fetch even starts (BookBrowser learned the same
+      // lesson).
+      if (query.trim()) {
+        books.loading = true;
+      } else {
+        bookSeq += 1;
+        books = createSearchState();
+      }
       debounceTimer = setTimeout(doBookSearch, 300);
     }
     // Content tab: search on Enter only (embedding is expensive)
@@ -289,7 +325,7 @@
         <Search size={20} class="text-muted-foreground shrink-0" />
         <input
           bind:this={inputEl}
-          bind:value={query}
+          value={query}
           oninput={handleInput}
           placeholder={activeTab === "books"
             ? m.search_placeholder_books()
