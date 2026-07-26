@@ -127,8 +127,11 @@ export function setupIOSTouchSelection(
     if (!overlayContainer) {
       overlay = doc.createElement("div");
       overlay.id = "beepub-sel-overlay";
+      // margin:0 — the overlay is a bare div in body, so book CSS like
+      // `body>div { margin: 1em }` matches it and a margin on an abspos
+      // box shifts where left/top:0 renders.
       overlay.style.cssText =
-        "position:absolute;top:0;left:0;pointer-events:none;z-index:9999;";
+        "position:absolute;top:0;left:0;margin:0;padding:0;border:0;pointer-events:none;z-index:9999;";
       doc.body.appendChild(overlay);
       overlayContainer = overlay;
     } else {
@@ -142,14 +145,18 @@ export function setupIOSTouchSelection(
     // per-rect alpha would stack darker wherever they do.
     overlay.style.opacity = String(tint.opacity);
     const rects = lineRectsForRange(range);
-    const scrollX = win.scrollX || 0;
-    const scrollY = win.scrollY || 0;
+    // Position tiles relative to where the container actually rendered,
+    // not where top:0/left:0 nominally puts it — book CSS can still leak
+    // onto the injected div and displace it. Viewport-space difference,
+    // so it's also scroll-invariant (marks-pane anchors its highlight
+    // SVG the same way).
+    const base = overlay.getBoundingClientRect();
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i];
       const div = doc.createElement("div");
       // No border-radius: the tiles connect line-to-line, and rounded
       // corners would open pinholes at the seams (native paints square).
-      div.style.cssText = `position:absolute;left:${r.left + scrollX}px;top:${r.top + scrollY}px;width:${r.width}px;height:${r.height}px;background:rgb(${tint.rgb});`;
+      div.style.cssText = `position:absolute;margin:0;padding:0;border:0;left:${r.left - base.left}px;top:${r.top - base.top}px;width:${r.width}px;height:${r.height}px;background:rgb(${tint.rgb});`;
       overlay.appendChild(div);
     }
   }

@@ -56,8 +56,11 @@ function ensureOverlayRoot(contents: any): HTMLDivElement | null {
   if (!root) {
     root = doc.createElement("div") as HTMLDivElement;
     root.id = OVERLAY_ID;
+    // margin:0 — the root is a bare div in body, so book CSS like
+    // `body>div { margin: 1em }` matches it and a margin on an abspos
+    // box shifts where left/top:0 renders.
     root.style.cssText =
-      "position:absolute;top:0;left:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:9998;writing-mode:horizontal-tb;";
+      "position:absolute;top:0;left:0;margin:0;padding:0;border:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:9998;writing-mode:horizontal-tb;";
     doc.body.appendChild(root);
   }
   return root;
@@ -88,8 +91,11 @@ export function updateIllustrationOverlays(
     if (!root) continue;
     root.innerHTML = "";
 
-    const scrollX = win.scrollX || 0;
-    const scrollY = win.scrollY || 0;
+    // Position rects relative to where the root actually rendered, not
+    // where top:0/left:0 nominally puts it — book CSS can still leak
+    // onto the injected div and displace it. Viewport-space difference,
+    // so it's also scroll-invariant.
+    const base = root.getBoundingClientRect();
 
     for (const ill of illustrations) {
       if (ill.status !== "completed" && ill.status !== "generating") continue;
@@ -112,8 +118,8 @@ export function updateIllustrationOverlays(
           overlay.setAttribute("aria-label", overlay.title);
           overlay.style.cssText = [
             "position:absolute",
-            `left:${rect.left + scrollX}px`,
-            `top:${rect.top + scrollY}px`,
+            `left:${rect.left - base.left}px`,
+            `top:${rect.top - base.top}px`,
             `width:${rect.width}px`,
             `height:${rect.height}px`,
             `background:${GRADIENT}`,

@@ -530,3 +530,69 @@ test("a later tap elsewhere dismisses the menu", async ({
   ]);
   await expect(page.getByTestId("highlight-menu")).toBeHidden();
 });
+
+test("selection tiles stay glyph-anchored when book CSS styles bare divs", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId);
+
+  // Regression (東京大審): a book stylesheet with `body > div { margin }`
+  // also matches the injected overlay container — a margin on an abspos
+  // box shifts where top:0/left:0 renders, and every tile drifted by 1em
+  // during selection while saved highlights (marks-pane, which anchors to
+  // its element's measured position) stayed put.
+  await page.evaluate(() => {
+    const doc = (document.querySelector("iframe") as HTMLIFrameElement)
+      .contentDocument!;
+    const style = doc.createElement("style");
+    style.textContent = "body > div { margin: 1em; } body div { margin: 4px; }";
+    doc.head.appendChild(style);
+  });
+  await page.waitForTimeout(400);
+
+  const pt = await pointOnWord(page, "librarian", 0);
+  expect(pt).toBeTruthy();
+  const cdp = await context.newCDPSession(page);
+  await touchTap(cdp, pt!, 900);
+  await page.waitForTimeout(500);
+
+  const out = await page.evaluate(() => {
+    const doc = (document.querySelector("iframe") as HTMLIFrameElement)
+      .contentDocument!;
+    const el = doc.getElementById("beepub-sel-overlay");
+    if (!el || el.children.length === 0) return null;
+    const tiles = [...el.children].map((c) => {
+      const r = c.getBoundingClientRect();
+      return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+    });
+    // Recompute where the pressed word actually sits.
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const idx = (node.textContent ?? "").indexOf("librarian");
+      if (idx < 0) continue;
+      const range = doc.createRange();
+      range.setStart(node, idx);
+      range.setEnd(node, idx + "librarian".length);
+      const w = range.getBoundingClientRect();
+      return {
+        tiles,
+        word: { left: w.left, top: w.top, right: w.right, bottom: w.bottom },
+      };
+    }
+    return null;
+  });
+  expect(out).toBeTruthy();
+  // The word's line-box tile must cover the word — a displaced overlay
+  // (the pre-fix drift) misses it entirely.
+  const covering = out!.tiles.find(
+    (t) =>
+      t.left <= out!.word.left + 1 &&
+      t.right >= out!.word.right - 1 &&
+      t.top <= out!.word.top + 1 &&
+      t.bottom >= out!.word.bottom - 1,
+  );
+  expect(covering).toBeTruthy();
+});
