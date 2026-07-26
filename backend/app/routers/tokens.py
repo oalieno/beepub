@@ -73,9 +73,7 @@ async def user_for_bearer_token(db: AsyncSession, authorization: str) -> User | 
         or now - api_token.last_used_at > LAST_USED_WRITE_INTERVAL
     ):
         await db.execute(
-            update(ApiToken)
-            .where(ApiToken.id == api_token.id)
-            .values(last_used_at=now)
+            update(ApiToken).where(ApiToken.id == api_token.id).values(last_used_at=now)
         )
         await db.commit()
     return user

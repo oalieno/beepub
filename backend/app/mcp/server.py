@@ -129,9 +129,7 @@ async def _resolve_book(
     except ValueError:
         book_id = None
     if book_id is not None:
-        row = await db.scalar(
-            select(Book).where(Book.id == book_id, _accessible(user))
-        )
+        row = await db.scalar(select(Book).where(Book.id == book_id, _accessible(user)))
         return row if row is not None else {"error": f"No book with id {ref}"}
 
     scope = select(Book).where(_accessible(user))
@@ -167,9 +165,7 @@ async def _resolve_book(
                 return exact[0]
         return {
             "error": f"“{ref}” is ambiguous — pass one of these ids",
-            "candidates": [
-                {"id": str(r.id), "title": _display_title(r)} for r in rows
-            ],
+            "candidates": [{"id": str(r.id), "title": _display_title(r)} for r in rows],
         }
     return rows[0]
 
@@ -211,9 +207,7 @@ async def search_books(
             ids = [uuid.UUID(str(s["book_id"])) for s in sims]
             rows = {
                 b.id: b
-                for b in (
-                    await db.scalars(select(Book).where(Book.id.in_(ids)))
-                ).all()
+                for b in (await db.scalars(select(Book).where(Book.id.in_(ids)))).all()
             }
             books = [
                 {**_card(rows[i], None), "match_reason": "similar content/metadata"}
@@ -366,9 +360,7 @@ async def get_book(
         toc = []
         summaries: dict[int, str] = {}
         for spine, title, chars, summary in chunks:
-            is_content = chars >= CONTENT_MIN_CHARS and not is_backmatter_title(
-                title
-            )
+            is_content = chars >= CONTENT_MIN_CHARS and not is_backmatter_title(title)
             good = bool(summary) and not is_meta_echo_summary(summary)
             toc.append(
                 {
@@ -395,9 +387,9 @@ async def get_book(
             window_from = (
                 eligible[max(0, len(eligible) - SUMMARY_WINDOW)] if eligible else 0
             )
-        window = [
-            s for s in eligible if window_from <= s <= min(window_to, bound - 1)
-        ][-SUMMARY_WINDOW:]
+        window = [s for s in eligible if window_from <= s <= min(window_to, bound - 1)][
+            -SUMMARY_WINDOW:
+        ]
         omitted = len(eligible) - len(window)
 
         generating = False
@@ -424,14 +416,8 @@ async def get_book(
             if not t["is_content"]:
                 t["summary_status"] = "none"
             elif spine in summaries:
-                t["summary_status"] = (
-                    "ready" if spine < bound else "spoiler_locked"
-                )
-            elif (
-                generating
-                and current_spine is not None
-                and spine < current_spine
-            ):
+                t["summary_status"] = "ready" if spine < bound else "spoiler_locked"
+            elif generating and current_spine is not None and spine < current_spine:
                 t["summary_status"] = "generating"
             else:
                 t["summary_status"] = "missing"
@@ -478,9 +464,11 @@ async def get_book(
             "highlight_count": highlight_count,
             "toc": toc,
             "chapter_summaries": [
-                {"chapter": s, "title": next(
-                    (t["title"] for t in toc if t["chapter"] == s), None
-                ), "summary": summaries[s]}
+                {
+                    "chapter": s,
+                    "title": next((t["title"] for t in toc if t["chapter"] == s), None),
+                    "summary": summaries[s],
+                }
                 for s in window
             ],
             "summaries_omitted": omitted,

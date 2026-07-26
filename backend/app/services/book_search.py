@@ -111,9 +111,7 @@ class TieredSearch:
     tokens: list[str] | None = None
 
 
-async def tiered_book_search(
-    db: AsyncSession, q: str, scope: Select
-) -> TieredSearch:
+async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredSearch:
     """Pick search conditions for ``q`` within ``scope`` (see module doc).
 
     ``scope`` is the caller's query with every non-search filter already
@@ -143,9 +141,7 @@ async def tiered_book_search(
         # Normalize every token in one round-trip (the SQL function is
         # the single source of truth — no Python twin to drift).
         norm_row = (
-            await db.execute(
-                select(*[func.beepub_norm(t) for t in tokens])
-            )
+            await db.execute(select(*[func.beepub_norm(t) for t in tokens]))
         ).one()
         per_token = [
             or_(

@@ -298,9 +298,7 @@ async def get_book_recap(
     # Backmatter (endnotes, credits, acknowledgments) is long enough to
     # pass the length floor but isn't narrative — keep it out of the
     # recap and out of the "needs generating" set.
-    chunks = [
-        r for r in result.all() if not is_backmatter_title(r.section_title)
-    ]
+    chunks = [r for r in result.all() if not is_backmatter_title(r.section_title)]
     # Prompt-echo rows count as missing, like NULL — the summarize
     # task regenerates both.
     rows = [

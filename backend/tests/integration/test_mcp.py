@@ -51,9 +51,7 @@ async def _call(client: AsyncClient, token: str, name: str, arguments: dict) -> 
         client, token, "tools/call", {"name": name, "arguments": arguments}
     )
     assert not result.get("isError"), result
-    return result.get("structuredContent") or json.loads(
-        result["content"][0]["text"]
-    )
+    return result.get("structuredContent") or json.loads(result["content"][0]["text"])
 
 
 async def _seed_book(admin_client: AsyncClient, library_id: str) -> str:
@@ -146,9 +144,7 @@ async def test_search_books_fuzzy_and_exclusion(
     assert [b["title"] for b in out["books"]] == ["測試之書"]
 
     # Broadened keyword search reports which tokens each book matched.
-    out = await _call(
-        admin_client, token, "search_books", {"query": "測試 幽靈關鍵詞"}
-    )
+    out = await _call(admin_client, token, "search_books", {"query": "測試 幽靈關鍵詞"})
     assert out["books"][0]["match_reason"] == "matched 1/2 keywords: 測試"
 
     # A user excluded from the library sees nothing through MCP.
@@ -285,9 +281,7 @@ async def test_search_passages_and_highlights(admin_client: AsyncClient):
     await _replace_chunks(book_id, [("第一章", None), ("神秘的鳳梨事件", None)])
     token = await _pat(admin_client)
 
-    out = await _call(
-        admin_client, token, "search_passages", {"query": "神秘的鳳梨"}
-    )
+    out = await _call(admin_client, token, "search_passages", {"query": "神秘的鳳梨"})
     assert out["match"] == "exact"  # embedding not configured in tests
     assert out["passages"][0]["chapter"] == 1
     assert "神秘的鳳梨" in out["passages"][0]["snippet"]
@@ -303,9 +297,7 @@ async def test_search_passages_and_highlights(admin_client: AsyncClient):
     )
     assert response.status_code in (200, 201), response.text
 
-    out = await _call(
-        admin_client, token, "get_highlights", {"book": "測試之書"}
-    )
+    out = await _call(admin_client, token, "get_highlights", {"book": "測試之書"})
     assert len(out["highlights"]) == 1
     assert out["highlights"][0]["text"] == "神秘的鳳梨"
     assert out["highlights"][0]["note"] == "重要線索"

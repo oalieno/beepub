@@ -132,8 +132,6 @@ async def _today_in_app_timezone(db: AsyncSession) -> date:
         return datetime.now(UTC).date()
 
 
-
-
 def _require_book_file(book: Book) -> None:
     # Physical books (format="physical") have no file behind them.
     if book.file_path is None:
