@@ -7,34 +7,41 @@
 // together, so viewport heuristics never trip. The Keyboard plugin
 // events are the authority there; the visualViewport heuristic stays as
 // the mobile-web fallback (Safari shrinks only the visual viewport).
-import { readable } from "svelte/store";
+//
+// The listeners are armed once and never torn down: subscribers come and
+// go per-route (the tab bar unmounts entirely on book detail), and a
+// subscriber-scoped listener misses a hide event fired during that gap —
+// the store then replays a stale `true` to the next subscriber and the
+// nav bar stays vanished until the keyboard opens again.
+import { writable, type Readable } from "svelte/store";
 
 import { isNative } from "$lib/platform";
 
-export const keyboardVisible = readable(false, (set) => {
-  if (typeof window === "undefined") return;
+const state = writable(false);
+let armed = false;
+
+function arm() {
+  if (armed || typeof window === "undefined") return;
+  armed = true;
 
   if (isNative()) {
-    let cleanup: (() => void) | null = null;
-    let stopped = false;
     import("@capacitor/keyboard").then(({ Keyboard }) => {
-      if (stopped) return;
-      const show = Keyboard.addListener("keyboardWillShow", () => set(true));
-      const hide = Keyboard.addListener("keyboardWillHide", () => set(false));
-      cleanup = () => {
-        show.then((h) => h.remove());
-        hide.then((h) => h.remove());
-      };
+      Keyboard.addListener("keyboardWillShow", () => state.set(true));
+      Keyboard.addListener("keyboardWillHide", () => state.set(false));
     });
-    return () => {
-      stopped = true;
-      cleanup?.();
-    };
+    return;
   }
 
   const viewport = window.visualViewport;
   if (!viewport) return;
-  const onResize = () => set(viewport.height < window.innerHeight * 0.75);
-  viewport.addEventListener("resize", onResize);
-  return () => viewport.removeEventListener("resize", onResize);
-});
+  viewport.addEventListener("resize", () =>
+    state.set(viewport.height < window.innerHeight * 0.75),
+  );
+}
+
+export const keyboardVisible: Readable<boolean> = {
+  subscribe(run, invalidate) {
+    arm();
+    return state.subscribe(run, invalidate);
+  },
+};
