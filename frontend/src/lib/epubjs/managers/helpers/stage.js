@@ -347,7 +347,7 @@ class Stage {
 
       window.removeEventListener("resize", this.resizeFunc);
       window.removeEventListener(
-        "orientationChange",
+        "orientationchange",
         this.orientationChangeFunc,
       );
     }
