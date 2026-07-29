@@ -14,6 +14,11 @@ const LONG_FIXTURE = path.join(
   "fixtures",
   "e2e-vertical-long-book.epub",
 );
+const VPUNCT_FIXTURE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "e2e-vpunct-book.epub",
+);
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -142,4 +147,89 @@ test("vertical pages stay on the grid with a fractional container height", async
   for (const t of tops) {
     expect(Math.abs(t - tops[0])).toBeLessThanOrEqual(1.5);
   }
+});
+
+// iOS ships no TC font that can rotate punctuation in vertical writing, so
+// the reader injects self-hosted punctuation subsets and pins them ahead of
+// element-declared font stacks (EpubReader VPUNCT_*). The rotation itself
+// and the cross-font axis alignment are only observable on a real Apple
+// device — what CI can hold is the delivery mechanism. The fixture replays
+// the trap combo of the book that shipped the bug: OPF says zh-TW but the
+// chapter is lang="en", writing-mode is -webkit-prefixed only, and
+// `p { font-family: serif }` bypasses the themed body stack.
+test("vertical punctuation faces reach a book that bypasses the body font stack", async ({
+  page,
+}) => {
+  const libraries = await (await page.request.get("/api/libraries")).json();
+  const uploaded = await page.request.post("/api/books", {
+    multipart: {
+      file: {
+        name: "vpunct.epub",
+        mimeType: "application/epub+zip",
+        buffer: fs.readFileSync(VPUNCT_FIXTURE),
+      },
+      library_id: libraries[0].id,
+    },
+  });
+  expect(uploaded.ok()).toBeTruthy();
+  const book = await uploaded.json();
+
+  await page.goto(`/books/${book.id}/read`);
+  const frame = page.frameLocator("iframe").first();
+  await expect(frame.getByText("免費服務已終止").first()).toBeVisible({
+    timeout: 30_000,
+  });
+
+  const state = await page
+    .locator("iframe")
+    .first()
+    .evaluate((el) => {
+      const doc = (el as HTMLIFrameElement).contentDocument!;
+      const p = [...doc.querySelectorAll("p")].find((n) =>
+        n.textContent?.includes("免費服務已終止"),
+      ) as HTMLElement | undefined;
+      const kai = doc.querySelector("span.kai") as HTMLElement | null;
+      const em = doc.querySelector("em") as HTMLElement | null;
+      return {
+        writingMode: getComputedStyle(doc.documentElement).writingMode,
+        faces: doc.getElementById("beepub-vpunct")?.textContent ?? "",
+        pPin: p?.style.fontFamily ?? "",
+        kaiPin: kai?.style.fontFamily ?? "",
+        emPin: em?.style.fontFamily ?? "",
+      };
+    });
+
+  // The -webkit-prefixed-only writing-mode still routes the vertical path.
+  expect(state.writingMode).toBe("vertical-rl");
+
+  // Both faces arrive in the iframe, and the range stays curated: it must
+  // claim the bracket but not — or － (no vert forms in the subset source —
+  // claiming them would render them unrotated instead of falling through).
+  expect(state.faces).toContain('"BeePub VPunct Serif"');
+  expect(state.faces).toContain('"BeePub VPunct Sans"');
+  expect(state.faces).toContain("U+FF3B");
+  expect(state.faces).not.toContain("U+2014");
+  expect(state.faces).not.toContain("U+FF0D");
+
+  // `p { font-family: serif }` bypasses the body stack → pinned inline with
+  // the book's own stack preserved behind the face. Same for class-declared
+  // fonts. Elements that merely inherit must stay unpinned, or they would
+  // freeze the stack across reader font-setting changes.
+  expect(state.pPin).toMatch(/^"BeePub VPunct (Serif|Sans)", serif$/);
+  expect(state.kaiPin).toContain("BeePub VPunct");
+  expect(state.kaiPin).toContain("標楷體");
+  expect(state.emPin).toBe("");
+
+  // The face actually loads from the app origin and covers the bracket.
+  const bracketLoaded = await page
+    .locator("iframe")
+    .first()
+    .evaluate(async (el) => {
+      const doc = (el as HTMLIFrameElement).contentDocument!;
+      await doc.fonts.ready;
+      return doc.fonts.check('16px "BeePub VPunct Serif"', "［");
+    });
+  expect(bracketLoaded).toBe(true);
+  const woff = await page.request.get("/fonts/beepub-vpunct-serif.woff2");
+  expect(woff.ok()).toBeTruthy();
 });
