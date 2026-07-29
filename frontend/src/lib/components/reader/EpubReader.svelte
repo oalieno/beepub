@@ -342,15 +342,21 @@
   // vertical writing: iOS's PingFang has no vertical alternates for the
   // rotation-class punctuation and Songti isn't installed there, so in
   // vertical-rl books ［］「」（） render unrotated. These faces (injected
-  // per section in the content hook) grab only that punctuation and hand it
-  // to Hiragino, the one built-in family whose vert feature works on iOS.
-  // 、。！？ are deliberately excluded so they keep the TC centered style.
-  // local() resolves nowhere off Apple platforms, so leading the stacks
-  // with the face is a no-op everywhere else.
+  // per section in the content hook) are ~4KB Noto CJK TC subsets in
+  // static/fonts holding ONLY that punctuation and its vert forms
+  // (rebuild: scripts/build-vpunct-fonts.py). A physical subset rather
+  // than local() aliasing to Hiragino: Safari leaks characters outside
+  // unicode-range to a local() source (、。： came out Japanese-styled on
+  // device), and a font that only contains the rotation class has
+  // nothing to leak. 、。！？ stay on the book's fonts and keep the TC
+  // centered style; — and － are excluded because Noto has no vert forms
+  // for them. The subsets carry PingFang's hhea/OS-2 metrics, not Noto's:
+  // Safari centers cross-font runs via ascent/descent, and stock Noto
+  // metrics push the glyphs ~7% em off the column axis on iOS.
   const VPUNCT_SERIF = "BeePub VPunct Serif";
   const VPUNCT_SANS = "BeePub VPunct Sans";
   const VPUNCT_RANGE =
-    "U+2014-2015, U+2026, U+3008-3011, U+3014-301F, U+FF08-FF09, U+FF0D, U+FF3B, U+FF3D, U+FF5B, U+FF5D, U+FF5E";
+    "U+2015, U+2026, U+3008-3011, U+3014-301F, U+FF08-FF09, U+FF3B, U+FF3D, U+FF5B, U+FF5D, U+FF5E";
   const SERIF_FONTS = `"${VPUNCT_SERIF}", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif`;
   const SANS_FONTS = `"${VPUNCT_SANS}", "Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif`;
 
@@ -946,14 +952,18 @@
       if (!doc.getElementById("beepub-vpunct")) {
         const style = doc.createElement("style");
         style.id = "beepub-vpunct";
+        // Absolute URLs: the iframe's base resolves against the book's
+        // content, not the app. HTTP cache shares the ~4KB files across
+        // iframes.
+        const fonts = window.location.origin + "/fonts";
         style.textContent = `@font-face {
   font-family: "${VPUNCT_SERIF}";
-  src: local("Hiragino Mincho ProN"), local("HiraMinProN-W3");
+  src: url("${fonts}/beepub-vpunct-serif.woff2") format("woff2");
   unicode-range: ${VPUNCT_RANGE};
 }
 @font-face {
   font-family: "${VPUNCT_SANS}";
-  src: local("Hiragino Sans"), local("HiraginoSans-W3"), local("Hiragino Kaku Gothic ProN");
+  src: url("${fonts}/beepub-vpunct-sans.woff2") format("woff2");
   unicode-range: ${VPUNCT_RANGE};
 }`;
         doc.head.appendChild(style);
