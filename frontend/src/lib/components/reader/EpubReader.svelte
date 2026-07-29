@@ -338,10 +338,21 @@
     };
   }
 
-  const SERIF_FONTS =
-    '"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif';
-  const SANS_FONTS =
-    '"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif';
+  // Apple ships no Traditional-Chinese font that can rotate punctuation in
+  // vertical writing: iOS's PingFang has no vertical alternates for the
+  // rotation-class punctuation and Songti isn't installed there, so in
+  // vertical-rl books ［］「」（） render unrotated. These faces (injected
+  // per section in the content hook) grab only that punctuation and hand it
+  // to Hiragino, the one built-in family whose vert feature works on iOS.
+  // 、。！？ are deliberately excluded so they keep the TC centered style.
+  // local() resolves nowhere off Apple platforms, so leading the stacks
+  // with the face is a no-op everywhere else.
+  const VPUNCT_SERIF = "BeePub VPunct Serif";
+  const VPUNCT_SANS = "BeePub VPunct Sans";
+  const VPUNCT_RANGE =
+    "U+2014-2015, U+2026, U+3008-3011, U+3014-301F, U+FF08-FF09, U+FF0D, U+FF3B, U+FF3D, U+FF5B, U+FF5D, U+FF5E";
+  const SERIF_FONTS = `"${VPUNCT_SERIF}", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif`;
+  const SANS_FONTS = `"${VPUNCT_SANS}", "Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif`;
 
   function doPrefetch() {
     prefetchSections(epubBook, currentSectionIndex);
@@ -927,6 +938,54 @@
         );
         style.textContent = faces.join("\n");
         doc.head.appendChild(style);
+      }
+
+      // Vertical-punctuation faces (see VPUNCT_RANGE). Inert until a
+      // font-family list references them — the themed body stacks lead with
+      // them, and vertical sections re-pin below.
+      if (!doc.getElementById("beepub-vpunct")) {
+        const style = doc.createElement("style");
+        style.id = "beepub-vpunct";
+        style.textContent = `@font-face {
+  font-family: "${VPUNCT_SERIF}";
+  src: local("Hiragino Mincho ProN"), local("HiraMinProN-W3");
+  unicode-range: ${VPUNCT_RANGE};
+}
+@font-face {
+  font-family: "${VPUNCT_SANS}";
+  src: local("Hiragino Sans"), local("HiraginoSans-W3"), local("Hiragino Kaku Gothic ProN");
+  unicode-range: ${VPUNCT_RANGE};
+}`;
+        doc.head.appendChild(style);
+      }
+
+      // Book CSS that sets font-family on elements (`p { font-family:
+      // serif }` is common) bypasses the themed body stack, so those
+      // elements never consult the punctuation face. In vertical sections,
+      // prepend it to such elements' own stack via inline style — inline
+      // wins at any specificity while the book's declared fonts stay
+      // intact behind it. Elements that merely inherit are left alone;
+      // they already follow the themed body stack.
+      const writingMode: string = contents.writingMode?.() ?? "";
+      const win = doc.defaultView;
+      if (writingMode.startsWith("vertical") && doc.body && win) {
+        const punctFamily = fontFamily === "serif" ? VPUNCT_SERIF : VPUNCT_SANS;
+        const pinPunctFace = (el: Element, parentFonts: string) => {
+          for (const child of Array.from(el.children)) {
+            const fonts = win.getComputedStyle(child).fontFamily || "";
+            if (
+              fonts &&
+              fonts !== parentFonts &&
+              !fonts.includes("BeePub VPunct") &&
+              child instanceof win.HTMLElement
+            ) {
+              (child as HTMLElement).style.fontFamily =
+                `"${punctFamily}", ${fonts}`;
+            }
+            pinPunctFace(child, fonts);
+          }
+        };
+        pinPunctFace(doc.body, win.getComputedStyle(doc.body).fontFamily || "");
       }
 
       // Image zoom: long-press (500ms) on both touch and mouse
