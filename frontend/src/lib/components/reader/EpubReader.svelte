@@ -815,6 +815,11 @@
       gap: pageMargin * 2,
     });
 
+    // Debug handle, same spirit as the [split-diag] logs: reachable from a
+    // device Web Inspector on live bug reports, and the only way e2e can
+    // drive engine internals (nothing else crosses into the view manager).
+    (window as { __beepubReader?: unknown }).__beepubReader = { rendition };
+
     // Apply theme
     applyTheme();
 
@@ -1612,6 +1617,7 @@
       document.removeEventListener("visibilitychange", handleVisibility);
     rendition?.destroy();
     epubBook?.destroy();
+    delete (window as { __beepubReader?: unknown }).__beepubReader;
   });
 
   function handleBeforeUnload() {

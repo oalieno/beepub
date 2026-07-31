@@ -635,10 +635,16 @@ class DefaultViewManager {
           0,
           this.container.scrollHeight - pageStep,
         );
-        const targetTop = Math.max(
-          0,
-          Math.min(topBefore + delta, maxScrollable),
-        );
+        // When the view shrinks below the current scroll offset, the browser
+        // has already clamped scrollTop to the new extent — the delta is
+        // absorbed, and shifting by it again would double-subtract, landing
+        // pages before the chapter end. (Only reachable when a reflow arrives
+        // after the prev() show debounce; the iOS app's slower resource path
+        // gets there while web usually settles inside the debounce.)
+        const alreadyClamped = delta < 0 && topBefore >= maxScrollable - 2;
+        const targetTop = alreadyClamped
+          ? maxScrollable
+          : Math.max(0, Math.min(topBefore + delta, maxScrollable));
         const targetPage = Math.max(0, Math.floor((targetTop + 1) / pageStep));
         const snappedTop = targetPage * pageStep;
 

@@ -19,6 +19,11 @@ const VPUNCT_FIXTURE = path.join(
   "fixtures",
   "e2e-vpunct-book.epub",
 );
+const CHAPTERS_FIXTURE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "fixtures",
+  "e2e-vertical-chapters-book.epub",
+);
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -232,4 +237,135 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
   expect(bracketLoaded).toBe(true);
   const woff = await page.request.get("/fonts/beepub-vpunct-serif.woff2");
   expect(woff.ok()).toBeTruthy();
+});
+
+// Paging backward across a chapter boundary lands on the previous chapter's
+// last page — and must STAY there when the chapter reflows late. Chapters
+// over-measure on first layout and settle smaller a beat later; when that
+// shrink arrives after the show debounce, the browser has already clamped
+// scrollTop to the new extent, and counter() used to subtract the height
+// delta a second time, landing pages before the chapter end (2026-07-31 iOS
+// app report: EP04 → EP03 landed ~a dozen pages short; web only escaped by
+// settling inside the debounce). CI replays the mechanism: cross the
+// boundary, then push a shrink through the production resize chain.
+test("backward chapter jump survives a late content shrink", async ({
+  page,
+}) => {
+  const libraries = await (await page.request.get("/api/libraries")).json();
+  const uploaded = await page.request.post("/api/books", {
+    multipart: {
+      file: {
+        name: "vertical-chapters.epub",
+        mimeType: "application/epub+zip",
+        buffer: fs.readFileSync(CHAPTERS_FIXTURE),
+      },
+      library_id: libraries[0].id,
+    },
+  });
+  expect(uploaded.ok()).toBeTruthy();
+  const book = await uploaded.json();
+
+  await page.addInitScript(() =>
+    localStorage.setItem("reader-gestures-seen", "1"),
+  );
+  await page.goto(`/books/${book.id}/read`);
+  const frame = page.frameLocator("iframe").first();
+  await expect(frame.getByText("甲章首段").first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await page.waitForTimeout(1000);
+
+  // Jump to chapter 2, then page back across the boundary (ArrowRight is
+  // "previous page" in an rtl book).
+  await page.evaluate(async () => {
+    const handle = (
+      window as unknown as {
+        __beepubReader: { rendition: { display: (href: string) => Promise<void> } };
+      }
+    ).__beepubReader;
+    await handle.rendition.display("chapter2.xhtml");
+  });
+  await expect(frame.getByText("乙章開場").first()).toBeVisible();
+  await page.waitForTimeout(500);
+  await page.keyboard.press("ArrowRight");
+  await expect(frame.getByText("甲章末段").first()).toBeVisible({
+    timeout: 10_000,
+  });
+  // Let the backward-navigation show debounce fully settle.
+  await page.waitForTimeout(600);
+
+  type Snap = { scrollTop: number; scrollHeight: number; pageStep: number };
+  const measure = () =>
+    page.evaluate<Snap>(() => {
+      const mgr = (
+        window as unknown as {
+          __beepubReader: {
+            rendition: {
+              manager: {
+                container: HTMLElement;
+                getPageStep: () => number;
+              };
+            };
+          };
+        }
+      ).__beepubReader.rendition.manager;
+      return {
+        scrollTop: mgr.container.scrollTop,
+        scrollHeight: mgr.container.scrollHeight,
+        pageStep: mgr.getPageStep(),
+      };
+    });
+
+  const before = await measure();
+  // The environment must actually paginate (CJK-capable fonts).
+  test.skip(
+    before.scrollHeight < before.pageStep * 4,
+    "vertical fragmentation unavailable (no CJK fonts)",
+  );
+  // Landed on the last page of chapter 1.
+  expect(
+    Math.abs(before.scrollTop - (before.scrollHeight - before.pageStep)),
+  ).toBeLessThanOrEqual(2);
+  expect(before.scrollTop).toBeGreaterThan(0);
+
+  // Post-settle shrink, detected the way production detects reflows
+  // (resizeCheck → RESIZE → expand → reframe → counter).
+  const after = await page.evaluate<Snap>(() => {
+    const mgr = (
+      window as unknown as {
+        __beepubReader: {
+          rendition: {
+            manager: {
+              container: HTMLElement;
+              getPageStep: () => number;
+              getContents: () => {
+                document: Document;
+                resizeCheck: () => void;
+              }[];
+            };
+          };
+        };
+      }
+    ).__beepubReader.rendition.manager;
+    const contents = mgr.getContents()[0];
+    const style = contents.document.createElement("style");
+    style.textContent = "p:nth-of-type(n+31){display:none}";
+    contents.document.head.appendChild(style);
+    contents.resizeCheck();
+    return {
+      scrollTop: mgr.container.scrollTop,
+      scrollHeight: mgr.container.scrollHeight,
+      pageStep: mgr.getPageStep(),
+    };
+  });
+  // The content actually shrank, but still spans several pages — if it
+  // collapsed to one page, "last page" degenerates to 0 and the final
+  // assertion could not tell a correct landing from the double-subtract.
+  expect(after.scrollHeight).toBeLessThan(before.scrollHeight);
+  expect(after.scrollHeight).toBeGreaterThanOrEqual(after.pageStep * 3);
+  // …and the view is still on the (new) last page, not pages before it.
+  expect(after.scrollTop).toBeGreaterThan(0);
+  expect(
+    Math.abs(after.scrollTop - (after.scrollHeight - after.pageStep)),
+  ).toBeLessThanOrEqual(2);
 });
