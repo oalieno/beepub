@@ -101,6 +101,7 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
     return Promise.resolve();
   }
   fullSyncInFlight = (async () => {
+    let failures = 0;
     try {
       // Before the empty-shelf return: the reading-time ledger outlives
       // its books (read-then-deleted still counts toward the streak).
@@ -126,6 +127,7 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
           void refreshLinkedBookIds();
         } catch (err) {
           console.warn("readingSync: digest lookup failed", err);
+          failures += 1;
         }
       }
       // Sequentially — local shelves are small, and a burst of parallel
@@ -139,17 +141,39 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
           synced += 1;
         } catch (err) {
           console.warn(`readingSync: sync failed for ${book.id}`, err);
+          failures += 1;
         }
       }
-      lastFullSyncAt = Date.now();
       if (synced > 0) readingSyncStamp.update((n) => n + 1);
     } catch (err) {
       console.warn("readingSync: full sync failed", err);
+      failures += 1;
     } finally {
+      if (failures === 0) {
+        lastFullSyncAt = Date.now();
+      } else {
+        // iOS reports connectivity back seconds before DNS actually works
+        // (airplane mode off), so the first pass after a reconnect often
+        // fails wholesale. Arming the cooldown then would swallow the real
+        // retry — leave it unarmed and try again shortly instead. The
+        // retry self-stops while unreachable (canSync gates on isOnline).
+        scheduleRetry();
+      }
       fullSyncInFlight = null;
     }
   })();
   return fullSyncInFlight;
+}
+
+const RETRY_DELAY_MS = 10_000;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRetry(): void {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void linkAndSyncAll();
+  }, RETRY_DELAY_MS);
 }
 
 /** Post-import hook: try to link one book and sync it. True = linked. */
@@ -207,18 +231,18 @@ function toSyncProgress(record: LocalProgressRecord): SyncProgressIn {
   };
 }
 
+/** Throws on transport-level failure — a caller must be able to tell "the
+ *  push landed" from "the network wasn't really there yet" (iOS reports
+ *  connectivity seconds before DNS works after airplane mode). Swallowed
+ *  failures here once armed the full-pass cooldown and left a trip's
+ *  reading unpushed until the user happened to open the book. */
 async function doSync(localBookId: string): Promise<void> {
   if (!canSync()) return;
-  let serverBookId: string | null;
-  try {
-    // Unlinked books get a by-digest attempt here, so opening a book is
-    // always enough to (re)establish its link — no waiting for a full
-    // pass after the matching server book (re)appears.
-    serverBookId = await resolveLink(localBookId);
-  } catch (err) {
-    console.warn("readingSync: link lookup failed", err);
-    return;
-  }
+  // Unlinked books get a by-digest attempt here, so opening a book is
+  // always enough to (re)establish its link — no waiting for a full
+  // pass after the matching server book (re)appears. A lookup failure
+  // propagates: it means the server wasn't reachable.
+  const serverBookId = await resolveLink(localBookId);
   if (!serverBookId) return;
 
   const progress = await readLocalProgress(localBookId);
@@ -245,21 +269,16 @@ async function doSync(localBookId: string): Promise<void> {
   } catch (err) {
     const status = (err as { status?: number }).status;
     if (status !== 404 && status !== 403) {
-      console.warn("readingSync: sync failed", err);
-      return;
+      throw err;
     }
     // The linked server book is gone or access was revoked. Unlink, then
     // re-resolve by digest right away — a deleted-and-re-uploaded book
     // gets a new id, and this heals it in the same call.
     await clearLocalBookLink(localBookId);
     void refreshLinkedBookIds();
-    try {
-      const freshId = await resolveLink(localBookId);
-      if (!freshId || freshId === serverBookId) return;
-      response = await booksApi.syncReadingState(freshId, body);
-    } catch {
-      return; // Next trigger retries.
-    }
+    const freshId = await resolveLink(localBookId);
+    if (!freshId || freshId === serverBookId) return;
+    response = await booksApi.syncReadingState(freshId, body);
   }
 
   await applyHighlights(localBookId, response);
