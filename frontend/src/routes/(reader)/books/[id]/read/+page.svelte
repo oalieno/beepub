@@ -272,11 +272,13 @@
         // server book id. Cache-only read — the sync above just populated
         // the link for anything linkable (losing the 2.5s race on a
         // first-ever link only costs AI for this session).
-        const { getLocalBookLinks, updateLocalBookMeta } =
+        const { getLocalBookLinks } =
           await import("$lib/services/localLibrary");
         serverBookId = (await getLocalBookLinks())[bookId] ?? null;
-        // Entries imported before progress metadata existed upgrade from
-        // the linked server book, once, while a connection is around.
+        // Live-session adoption of the server ruler for entries the sync
+        // backfill hasn't upgraded yet — persistence is doSync's job (the
+        // bounded pull above already routed through it), this only makes
+        // THIS session measure with the real weights instead of uniform.
         if (
           serverBookId &&
           (localEntry.sectionWeights === undefined ||
@@ -285,12 +287,10 @@
           booksApi
             .get(serverBookId)
             .then((b) => {
-              isImageBook = b.is_image_book === true;
-              sectionWeights = b.section_weights ?? null;
-              void updateLocalBookMeta(bookId, {
-                isImageBook: b.is_image_book === true,
-                sectionWeights: b.section_weights ?? null,
-              });
+              if (typeof b.is_image_book === "boolean")
+                isImageBook = b.is_image_book;
+              if (b.section_weights && b.section_weights.length > 0)
+                sectionWeights = b.section_weights;
             })
             .catch(() => {});
         }

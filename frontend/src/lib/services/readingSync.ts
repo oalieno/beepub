@@ -35,6 +35,7 @@ import {
   getLocalBookLinks,
   listLocalBooks,
   setLocalBookLink,
+  updateLocalBookMeta,
   type LocalBookEntry,
 } from "$lib/services/localLibrary";
 import { getIsOnline, isOnline } from "$lib/services/network";
@@ -255,6 +256,49 @@ async function doSync(localBookId: string): Promise<void> {
   await applyHighlights(localBookId, response);
   await applyProgress(localBookId, response);
   await applyInteraction(localBookId, response);
+  await backfillEntryMeta(localBookId, serverBookId);
+}
+
+/** Entries imported before progress metadata existed measure progress with
+ *  the uniform-weights fallback — a different ruler than the server's, so
+ *  the same position reads as a different percentage depending on the
+ *  entry (69% vs 86% on a real book). Every sync route passes through
+ *  here, so one pass upgrades the entry no matter which entry point the
+ *  book is opened from. Only real server values are stamped — a pending
+ *  extraction must stay "unknown" so the next sync retries. */
+async function backfillEntryMeta(
+  localBookId: string,
+  serverBookId: string,
+): Promise<void> {
+  try {
+    const entry = await getLocalBook(localBookId);
+    if (
+      !entry ||
+      (entry.sectionWeights !== undefined && entry.isImageBook !== undefined)
+    ) {
+      return;
+    }
+    const book = await booksApi.get(serverBookId);
+    const meta: { isImageBook?: boolean; sectionWeights?: number[] } = {};
+    if (
+      entry.isImageBook === undefined &&
+      typeof book.is_image_book === "boolean"
+    ) {
+      meta.isImageBook = book.is_image_book;
+    }
+    if (
+      entry.sectionWeights === undefined &&
+      Array.isArray(book.section_weights) &&
+      book.section_weights.length > 0
+    ) {
+      meta.sectionWeights = book.section_weights;
+    }
+    if (Object.keys(meta).length > 0) {
+      await updateLocalBookMeta(localBookId, meta);
+    }
+  } catch (err) {
+    console.warn("readingSync: entry meta backfill failed", err);
+  }
 }
 
 async function applyInteraction(
