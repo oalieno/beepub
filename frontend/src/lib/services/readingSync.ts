@@ -13,7 +13,7 @@
  * cross-pollinate through sync. Acceptable for personal devices; the fix,
  * if ever needed, is user-scoping the links key.
  */
-import { get } from "svelte/store";
+import { get, writable } from "svelte/store";
 
 import { booksApi } from "$lib/api/books";
 import { hasServerUrl } from "$lib/api/client";
@@ -49,6 +49,12 @@ import type {
 } from "$lib/types";
 
 const FULL_SYNC_COOLDOWN_MS = 30_000;
+
+/** Bumps when a full sync pass finishes — progress surfaces that were
+ *  already mounted (home shelf, book detail) refetch on it. Pages opened
+ *  after the pass fetch fresh anyway; without this signal a page you are
+ *  looking at keeps pre-sync numbers until something remounts it. */
+export const readingSyncStamp = writable(0);
 
 let initialized = false;
 let fullSyncInFlight: Promise<void> | null = null;
@@ -125,15 +131,18 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
       // Sequentially — local shelves are small, and a burst of parallel
       // merges would stampede NAS-class servers for no gain. Per-book
       // isolation: one bad book must not strand the rest of the shelf.
+      let synced = 0;
       for (const book of books) {
         if (!links[book.id]) continue;
         try {
           await syncLocalBook(book.id);
+          synced += 1;
         } catch (err) {
           console.warn(`readingSync: sync failed for ${book.id}`, err);
         }
       }
       lastFullSyncAt = Date.now();
+      if (synced > 0) readingSyncStamp.update((n) => n + 1);
     } catch (err) {
       console.warn("readingSync: full sync failed", err);
     } finally {

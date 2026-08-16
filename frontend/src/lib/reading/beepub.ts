@@ -34,7 +34,6 @@ class BeepubBookSource implements BookSource {
       authHeader: hasAuth ? getAuthHeader : null,
     };
   }
-
 }
 
 /** Locator/ProgressSave → the exact wire body PUT /progress expects.

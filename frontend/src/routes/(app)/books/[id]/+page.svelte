@@ -58,6 +58,7 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Button } from "$lib/components/ui/button";
   import { isNative } from "$lib/platform";
+  import { readingSyncStamp } from "$lib/services/readingSync";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import { marked } from "marked";
   import { sanitizeDescription } from "$lib/sanitize";
@@ -172,6 +173,17 @@
     bookId;
     loadData();
     window.scrollTo(0, 0);
+  });
+
+  // A background sync just merged offline reading into the server row —
+  // the progress this page shows is stale until refetched.
+  let prevSyncStamp = $readingSyncStamp;
+  $effect(() => {
+    const stamp = $readingSyncStamp;
+    if (stamp !== prevSyncStamp) {
+      prevSyncStamp = stamp;
+      if (!loading) void loadData();
+    }
   });
 
   async function loadData() {

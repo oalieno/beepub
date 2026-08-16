@@ -9,6 +9,7 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import { isNative } from "$lib/platform";
   import { isOnline, checkServerNow } from "$lib/services/network";
+  import { readingSyncStamp } from "$lib/services/readingSync";
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import type {
@@ -124,6 +125,17 @@
   $effect(() => {
     if (!offline && !hasLoadedOnline && !loading) {
       loadOnlineData();
+    }
+  });
+
+  // A background sync just pushed offline reading to the server: the
+  // continue-reading percentages this page fetched at mount are stale now.
+  let prevSyncStamp = $readingSyncStamp;
+  $effect(() => {
+    const stamp = $readingSyncStamp;
+    if (stamp !== prevSyncStamp) {
+      prevSyncStamp = stamp;
+      if (!offline && hasLoadedOnline) void loadOnlineData();
     }
   });
 
