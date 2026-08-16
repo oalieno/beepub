@@ -29,6 +29,7 @@ from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata
 from app.models.book_locations import BookLocations
+from app.models.book_text import BookTextChunk
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
@@ -1296,6 +1297,43 @@ async def metadata_search(
     return MetadataSearchOut(candidates=candidates)
 
 
+# Spine indices come from our own extractor enumerating a real OPF spine,
+# but the dense array below is sized by the largest index — cap it so a
+# pathological row can never balloon the response.
+_MAX_SPINE_SECTIONS = 10_000
+
+
+async def _section_weights(
+    book_id: uuid.UUID, db: AsyncSession
+) -> list[int] | None:
+    """Per-section text sizes, dense by spine index, from the text chunks.
+
+    The chunks are the single source of truth — this is derived on read
+    (indexed aggregate over at most a few hundred rows), never stored.
+    None = extraction hasn't produced chunks (pending, or image-only book).
+    """
+    rows = (
+        await db.execute(
+            select(
+                BookTextChunk.spine_index,
+                func.sum(func.length(BookTextChunk.text)),
+            )
+            .where(
+                BookTextChunk.book_id == book_id,
+                BookTextChunk.spine_index < _MAX_SPINE_SECTIONS,
+            )
+            .group_by(BookTextChunk.spine_index)
+        )
+    ).all()
+    if not rows:
+        return None
+    weights = [0] * (max(idx for idx, _ in rows) + 1)
+    for idx, total in rows:
+        if idx >= 0:
+            weights[idx] = int(total or 0)
+    return weights
+
+
 @router.get("/{book_id}", response_model=BookOut)
 async def get_book(
     book_id: uuid.UUID,
@@ -1323,6 +1361,7 @@ async def get_book(
         .limit(1)
     )
     out.has_unresolved_reports = report_result.scalar_one_or_none() is not None
+    out.section_weights = await _section_weights(book_id, db)
     return out
 
 

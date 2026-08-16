@@ -47,6 +47,11 @@ class BookOut(BaseModel):
     field_sources: dict[str, str] | None = None
     word_count: int | None = None
     is_image_book: bool | None = None
+    # Per-spine-section text sizes (chars), dense by spine index. The reader
+    # interpolates reading percentage from these — position weight over total
+    # weight — instead of generating epub.js locations. None until text
+    # extraction has run; sections with no text weigh 0.
+    section_weights: list[int] | None = None
     has_unresolved_reports: bool = False
     display_title: str | None
     display_authors: list[str] | None
