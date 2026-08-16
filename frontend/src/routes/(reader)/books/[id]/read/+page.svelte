@@ -257,6 +257,8 @@
       title = localEntry.title;
       hasDbTitle = true;
       bookAuthors = localEntry.authors;
+      isImageBook = localEntry.isImageBook === true;
+      sectionWeights = localEntry.sectionWeights ?? null;
       // Pull the linked server state first so the reader restores the
       // newest position — but bounded: past 2.5s the sync continues in
       // the background and this session opens with local state.
@@ -270,9 +272,28 @@
         // server book id. Cache-only read — the sync above just populated
         // the link for anything linkable (losing the 2.5s race on a
         // first-ever link only costs AI for this session).
-        const { getLocalBookLinks } =
+        const { getLocalBookLinks, updateLocalBookMeta } =
           await import("$lib/services/localLibrary");
         serverBookId = (await getLocalBookLinks())[bookId] ?? null;
+        // Entries imported before progress metadata existed upgrade from
+        // the linked server book, once, while a connection is around.
+        if (
+          serverBookId &&
+          (localEntry.sectionWeights === undefined ||
+            localEntry.isImageBook === undefined)
+        ) {
+          booksApi
+            .get(serverBookId)
+            .then((b) => {
+              isImageBook = b.is_image_book === true;
+              sectionWeights = b.section_weights ?? null;
+              void updateLocalBookMeta(bookId, {
+                isImageBook: b.is_image_book === true,
+                sectionWeights: b.section_weights ?? null,
+              });
+            })
+            .catch(() => {});
+        }
       }
     }
     ready = true;

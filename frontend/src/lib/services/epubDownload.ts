@@ -49,6 +49,12 @@ export async function downloadEpubToLibrary(options: {
   /** Fallback title when the EPUB carries none (Content-Disposition isn't
    *  reliably surfaced by the plugin). */
   title: string;
+  /** Progress metadata the source already knows (BeePub server books) —
+   *  forwarded to the import so the entry carries authoritative values. */
+  known?: {
+    isImageBook?: boolean | null;
+    sectionWeights?: number[] | null;
+  };
   onProgress?: (pct: number | null) => void;
 }): Promise<LocalBookEntry> {
   const tempPath = `epub-dl/${crypto.randomUUID()}.epub`;
@@ -93,7 +99,7 @@ export async function downloadEpubToLibrary(options: {
     const file = new File([bytes], `${sanitizeFilename(options.title)}.epub`, {
       type: "application/epub+zip",
     });
-    return await importLocalBook(file);
+    return await importLocalBook(file, options.known);
   } finally {
     void listener.remove();
     await deleteTempQuiet(tempPath);

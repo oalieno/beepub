@@ -33,6 +33,13 @@ export interface LocalBookEntry {
   coverPath: string | null;
   fileSize: number;
   importedAt: string;
+  /** Same semantics as the server flag (text below the image-book
+   *  threshold). Absent on entries imported before the field existed. */
+  isImageBook?: boolean;
+  /** Per-spine-section text sizes for weight-interpolated progress.
+   *  Server values when the download source knew them, client-counted
+   *  otherwise. Absent on pre-upgrade entries → uniform fallback. */
+  sectionWeights?: number[] | null;
 }
 
 /** The same file (by digest) is already in the library. */
@@ -75,6 +82,21 @@ async function saveManifest(entries: LocalBookEntry[]): Promise<void> {
 
 export async function listLocalBooks(): Promise<LocalBookEntry[]> {
   return getManifest();
+}
+
+/** Patch progress metadata onto an existing entry — the upgrade path for
+ *  manifests written before isImageBook/sectionWeights existed. */
+export async function updateLocalBookMeta(
+  bookId: string,
+  meta: { isImageBook?: boolean; sectionWeights?: number[] | null },
+): Promise<void> {
+  const manifest = await getManifest();
+  const entry = manifest.find((e) => e.id === bookId);
+  if (!entry) return;
+  if (meta.isImageBook !== undefined) entry.isImageBook = meta.isImageBook;
+  if (meta.sectionWeights !== undefined)
+    entry.sectionWeights = meta.sectionWeights;
+  await saveManifest(manifest);
 }
 
 export async function getLocalBook(
@@ -163,6 +185,36 @@ interface ParsedEpub {
   language: string | null;
   identifier: string | null;
   cover: Blob | null;
+  sectionWeights: number[];
+  isImageBook: boolean;
+}
+
+// Mirrors the backend's word_count < 500 classification threshold.
+const IMAGE_BOOK_THRESHOLD = 500;
+
+/** Per-section text sizes counted from the open archive — the client-side
+ *  twin of the server's chunk aggregation. Whitespace is stripped so the
+ *  numbers track visible text, not markup indentation. */
+async function countSectionWeights(book: any): Promise<number[]> {
+  const items: any[] = book.spine?.spineItems ?? [];
+  const weights = new Array<number>(items.length).fill(0);
+  for (const item of items) {
+    if (!item?.linear) continue;
+    try {
+      await item.load(book.load.bind(book));
+      const text: string = item.document?.body?.textContent ?? "";
+      weights[item.index] = text.replace(/\s+/g, "").length;
+    } catch {
+      // Unloadable section weighs nothing.
+    } finally {
+      try {
+        item.unload?.();
+      } catch {
+        // Already unloaded.
+      }
+    }
+  }
+  return weights;
 }
 
 /**
@@ -234,6 +286,8 @@ async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
       }
     }
     if (!cover) cover = await fallbackCoverBlob(book);
+    const sectionWeights = await countSectionWeights(book);
+    const totalChars = sectionWeights.reduce((a, b) => a + b, 0);
     return {
       title: metadata.title || null,
       authors: metadata.creator ? [metadata.creator] : [],
@@ -241,6 +295,8 @@ async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
       identifier:
         book.packaging?.uniqueIdentifier || metadata.identifier || null,
       cover,
+      sectionWeights,
+      isImageBook: totalChars < IMAGE_BOOK_THRESHOLD,
     };
   } finally {
     book.destroy();
@@ -263,7 +319,15 @@ async function deleteFileQuiet(path: string): Promise<void> {
  * before the library is touched, and a failure mid-write cleans up after
  * itself, so the manifest never references a partial import.
  */
-export async function importLocalBook(file: File): Promise<LocalBookEntry> {
+export async function importLocalBook(
+  file: File,
+  /** Authoritative values from the download source (the server computed
+   *  them from the same bytes) — beats the client-side count when given. */
+  known?: {
+    isImageBook?: boolean | null;
+    sectionWeights?: number[] | null;
+  },
+): Promise<LocalBookEntry> {
   // Digest first — it reads at most 12 KiB, so duplicates are rejected
   // before any parsing or copying happens.
   const digest = await computePartialMd5(file);
@@ -320,6 +384,11 @@ export async function importLocalBook(file: File): Promise<LocalBookEntry> {
     coverPath,
     fileSize: file.size,
     importedAt: new Date().toISOString(),
+    isImageBook: known?.isImageBook ?? parsed.isImageBook,
+    sectionWeights:
+      known?.sectionWeights && known.sectionWeights.length > 0
+        ? known.sectionWeights
+        : parsed.sectionWeights,
   };
   manifest.push(entry);
   await saveManifest(manifest);

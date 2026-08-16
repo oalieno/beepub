@@ -305,3 +305,17 @@ class LocalSyncBackend implements SyncBackend {
 
 export const localSource: BookSource = new LocalBookSource();
 export const localSync: SyncBackend = new LocalSyncBackend();
+
+/** A source bound to a specific local copy — for when the route identity
+ *  is the linked server book but the bytes live on disk. openBook ignores
+ *  the caller's id (that one names the server book). */
+export function localSourceFor(localBookId: string): BookSource {
+  return {
+    kind: "local",
+    async openBook(): Promise<BookPayload> {
+      const data = await readLocalBookBytes(localBookId);
+      if (!data) throw new Error(`Local book file missing: ${localBookId}`);
+      return { kind: "bytes", data };
+    },
+  };
+}

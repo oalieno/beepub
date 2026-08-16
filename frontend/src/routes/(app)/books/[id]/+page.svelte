@@ -259,6 +259,10 @@
         url: `${apiBase()}/books/${bookId}/file`,
         headers: getAuthHeader(),
         title: book.display_title ?? book.title ?? "Untitled",
+        known: {
+          isImageBook: book.is_image_book,
+          sectionWeights: book.section_weights ?? null,
+        },
         onProgress: (pct) => {
           downloadProgress = pct ?? 0;
         },

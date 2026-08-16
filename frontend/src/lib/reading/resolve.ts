@@ -7,10 +7,14 @@
 import { hasServerUrl } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import { getKosyncAccount } from "$lib/services/kosyncAccount";
-import { getLocalBook, type LocalBookEntry } from "$lib/services/localLibrary";
+import {
+  getLocalBook,
+  getLocalBookLinks,
+  type LocalBookEntry,
+} from "$lib/services/localLibrary";
 
 import { beepubSource, beepubSync } from "./beepub";
-import { localSource, localSync } from "./local";
+import { localSource, localSourceFor, localSync } from "./local";
 import type { BookSource } from "./source";
 import type { SyncBackend } from "./sync";
 
@@ -49,6 +53,22 @@ export async function resolveReading(bookId: string): Promise<ResolvedReading> {
       }
     } catch {
       // Fall through to the server pair.
+    }
+    // Capability, not entry point: a server book with a digest-linked
+    // downloaded copy reads its bytes from disk — fast on a slow network
+    // — while progress keeps the server identity of the route.
+    try {
+      const links = await getLocalBookLinks();
+      const localId = Object.keys(links).find((k) => links[k] === bookId);
+      if (localId && (await getLocalBook(localId))) {
+        return {
+          source: localSourceFor(localId),
+          sync: beepubSync,
+          localEntry: null,
+        };
+      }
+    } catch {
+      // Fall through to streaming.
     }
   }
   return { source: beepubSource, sync: beepubSync, localEntry: null };
