@@ -18,19 +18,4 @@ export interface BookSource {
   readonly kind: "beepub" | "local" | "opds";
   /** Resolve how to open the book: whole-file bytes or a streamable root. */
   openBook(bookId: string): Promise<BookPayload>;
-  /**
-   * Shared cache of epub.js-generated locations, keyed by file fingerprint.
-   * Lives on BookSource (not SyncBackend) because locations derive from the
-   * file the source serves, not from user data. Optional capability — the
-   * method's presence is the gate; resolves to null when nobody generated
-   * them yet.
-   */
-  getSharedLocations?(
-    bookId: string,
-  ): Promise<{ fingerprint: string; locations: string } | null>;
-  putSharedLocations?(
-    bookId: string,
-    fingerprint: string,
-    locations: string,
-  ): Promise<void>;
 }

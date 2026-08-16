@@ -209,17 +209,6 @@ export const booksApi = {
     },
   ) => put(`/books/${bookId}/progress`, data),
 
-  // Shared cache of epub.js-generated locations (deterministic per book
-  // file): 204 → null, meaning no client has generated them yet.
-  getLocations: (bookId: string) =>
-    get(`/books/${bookId}/locations`) as Promise<{
-      fingerprint: string;
-      locations: string;
-    } | null>,
-
-  putLocations: (bookId: string, fingerprint: string, locations: string) =>
-    put(`/books/${bookId}/locations`, { fingerprint, locations }),
-
   getHighlights: (bookId: string) =>
     get(`/books/${bookId}/highlights`) as Promise<HighlightOut[]>,
 

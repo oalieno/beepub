@@ -35,17 +35,6 @@ class BeepubBookSource implements BookSource {
     };
   }
 
-  getSharedLocations(bookId: string) {
-    return booksApi.getLocations(bookId);
-  }
-
-  async putSharedLocations(
-    bookId: string,
-    fingerprint: string,
-    locations: string,
-  ) {
-    await booksApi.putLocations(bookId, fingerprint, locations);
-  }
 }
 
 /** Locator/ProgressSave → the exact wire body PUT /progress expects.
