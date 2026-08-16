@@ -76,7 +76,7 @@ def title_confidence(
     the same main title by someone else is a different book.
 
     CJK spacing is stylistic (盤古之白, U+3000), so EPUBs and stores
-    disagree freely — 「素人 AV 女優」 vs 「素人AV女優」 tokenizes into
+    disagree freely — 「街角 VR 食堂」 vs 「街角VR食堂」 tokenizes into
     incomparable pieces. When either side contains CJK, a
     space-insensitive view joins the comparison, under the same author
     veto."""

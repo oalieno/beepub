@@ -113,19 +113,19 @@ def test_candidates_lift_search_without_judgment():
     assert plugin.fetched == []
 
 
-# Real store listings for 平安文化《隨他們去》: the stores rewrote the
-# marketing subtitle (數百萬→千萬, extra blurb) and added 【…】 bundle
+# Invented listings modeling a real store pattern: stores rewrite the
+# marketing subtitle (數十萬→千萬, extra blurb) and add 【…】 bundle
 # markers — the plain full-title ratio lands ~50, well under the floor.
-_LET_THEM_QUERY = "隨他們去：改變數百萬人命運的心理技巧"
-_LET_THEM_AUTHORS = ["梅爾．羅賓斯"]
-_LET_THEM_KINGSTONE = "隨他們去：全球熱銷突破1000萬冊現象級巨作！改變千萬人命運的心理技巧【附放下執念明信片】"
-_LET_THEM_READMOO = "隨他們去【附放下執念明信片圖】：全球熱銷突破1000萬冊現象級巨作！改變千萬人命運的心理技巧"
+_REWRITE_QUERY = "都放下吧：改變數十萬人命運的心理練習"
+_REWRITE_AUTHORS = ["艾拉．文森"]
+_REWRITE_KINGSTONE = "都放下吧：全球熱銷突破1000萬冊現象級巨作！改變千萬人命運的心理練習【附深呼吸明信片】"
+_REWRITE_READMOO = "都放下吧【附深呼吸明信片圖】：全球熱銷突破1000萬冊現象級巨作！改變千萬人命運的心理練習"
 
 
 def test_cjk_subtitle_rewrite_clears_the_floor():
-    for listing in (_LET_THEM_KINGSTONE, _LET_THEM_READMOO):
+    for listing in (_REWRITE_KINGSTONE, _REWRITE_READMOO):
         score = title_confidence(
-            _LET_THEM_QUERY, listing, _LET_THEM_AUTHORS, _LET_THEM_AUTHORS
+            _REWRITE_QUERY, listing, _REWRITE_AUTHORS, _REWRITE_AUTHORS
         )
         assert score >= MIN_CONFIDENCE
 
@@ -137,7 +137,7 @@ def test_subtitle_overlap_distractors_stay_rejected():
         "改變百萬人命運的人際交往術",
         "他們就是我們：犯罪心理學家的人性思辨",
     ):
-        assert title_confidence(_LET_THEM_QUERY, distractor) < MIN_CONFIDENCE
+        assert title_confidence(_REWRITE_QUERY, distractor) < MIN_CONFIDENCE
 
 
 def test_series_siblings_share_main_title_but_stay_rejected():
@@ -165,26 +165,26 @@ def test_disjoint_authors_veto_the_split_view():
 
 
 def test_cjk_spacing_variants_clear_the_floor():
-    # Real store listings for 《素人AV女優》: the EPUB spaces out the
-    # words (素人 AV 女優), the stores don't, and they append (全) /
+    # Invented series modeling real store variants: the EPUB spaces out
+    # the words (街角 VR 食堂), the stores don't, and they append (全) /
     # fullwidth variants — token_sort tokenizes the two sides into
     # incomparable pieces (~48).
-    query = "素人 AV 女優 人妻篇"
-    authors = ["川本貴裕"]
+    query = "街角 VR 食堂 深夜篇"
+    authors = ["森田一樹"]
     for listing in (
-        "素人AV女優 人妻篇(全)",
-        "【電子書】素人AV女優 人妻篇(全)",
-        "素人AV女優  人妻篇(全)限",
+        "街角VR食堂 深夜篇(全)",
+        "【電子書】街角VR食堂 深夜篇(全)",
+        "街角VR食堂  深夜篇(全)限",
     ):
         assert title_confidence(query, listing, authors, authors) >= MIN_CONFIDENCE
 
     # Sibling volumes score lower than the true match, so best-candidate
     # selection still picks the right one.
-    true_score = title_confidence(query, "素人AV女優 人妻篇(全)", authors, authors)
+    true_score = title_confidence(query, "街角VR食堂 深夜篇(全)", authors, authors)
     for sibling in (
-        "素人AV女優OL篇",
-        "素人AV女優　ＯＬ篇(全)",
-        "素人AV女優 職業篇(全)",
+        "街角VR食堂OL篇",
+        "街角VR食堂　ＯＬ篇(全)",
+        "街角VR食堂 早晨篇(全)",
     ):
         assert title_confidence(query, sibling, authors, authors) < true_score
 
@@ -201,16 +201,16 @@ def test_resolve_accepts_subtitle_rewritten_listing():
         [
             SearchCandidate(
                 url="ebook",
-                title="【電子書】隨他們去【附放下執念明信片圖】",
-                authors=_LET_THEM_AUTHORS,
+                title="【電子書】都放下吧【附深呼吸明信片圖】",
+                authors=_REWRITE_AUTHORS,
             ),
             SearchCandidate(
-                url="print", title=_LET_THEM_KINGSTONE, authors=_LET_THEM_AUTHORS
+                url="print", title=_REWRITE_KINGSTONE, authors=_REWRITE_AUTHORS
             ),
         ]
     )
     record = asyncio.run(
-        plugin.resolve(BookQuery(title=_LET_THEM_QUERY, authors=_LET_THEM_AUTHORS))
+        plugin.resolve(BookQuery(title=_REWRITE_QUERY, authors=_REWRITE_AUTHORS))
     )
 
     assert record is not None

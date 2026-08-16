@@ -131,8 +131,8 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
     # The exact and normalized views are one query semantically — "this
     # text appears in the book's fields" — differing only in formatting,
     # so they are always OR-combined: an exact hit must not mask a
-    # differently-formatted sibling (e.g. 「素人AV女優 青春篇」 hiding
-    # 「素人 AV 女優 人妻篇」).
+    # differently-formatted sibling (e.g. 「街角VR食堂 早晨篇」 hiding
+    # 「街角 VR 食堂 深夜篇」).
     phrase = _substring_conditions(q, norm_q)
     if await db.scalar(select_exists(scope, phrase)):
         return TieredSearch(phrase, norm_q, fuzzy=False, mode="phrase")

@@ -18,7 +18,7 @@ Probes run with plain node from `frontend/`:
 
 ```sh
 node e2e/probes/example-alignment.mjs
-BASE_URL=http://192.168.1.105:8091 node e2e/probes/example-alignment.mjs
+BASE_URL=http://<docker-host>:8091 node e2e/probes/example-alignment.mjs   # remote docker daemon
 ```
 
 ## What lib.mjs gives you

@@ -14,8 +14,8 @@ from tests.integration.util import create_library, upload_epub
 pytestmark = pytest.mark.integration
 
 TITLES = {
-    "spaced": "素人 AV 女優 人妻篇（全）",
-    "unspaced": "素人AV女優 青春篇",
+    "spaced": "街角 VR 食堂 深夜篇（全）",
+    "unspaced": "街角VR食堂 早晨篇",
     "comma": "明日，明日，又明日",
     "short": "三體",
     "decoy": "三十歲的禮物",
@@ -53,7 +53,7 @@ async def test_formatting_variants_do_not_mask_each_other(admin_client: AsyncCli
     await _seed(admin_client)
     # The unspaced volume is an exact substring hit; the spaced sibling
     # matches only after normalization. Both must come back.
-    titles = await _search(admin_client, "素人AV女優")
+    titles = await _search(admin_client, "街角VR食堂")
     assert set(titles) == {TITLES["spaced"], TITLES["unspaced"]}
 
 
@@ -83,8 +83,8 @@ async def test_gibberish_returns_empty_not_everything(admin_client: AsyncClient)
 
 async def test_multi_keyword_narrows_then_broadens(admin_client: AsyncClient):
     await _seed(admin_client)
-    # Every-token AND: 素人 AND 人妻 keeps only the matching volume.
-    titles = await _search(admin_client, "素人 人妻")
+    # Every-token AND: 街角 AND 深夜 keeps only the matching volume.
+    titles = await _search(admin_client, "街角 深夜")
     assert titles == [TITLES["spaced"]]
     # No book has all tokens → broaden to any-token instead of empty.
     titles = await _search(admin_client, "三體 明日 不存在的關鍵詞")
@@ -112,7 +112,7 @@ async def test_library_search_uses_the_same_tiers(admin_client: AsyncClient):
     library_id = await _seed(admin_client)
     response = await admin_client.get(
         f"/api/libraries/{library_id}/books",
-        params={"search": "素人AV女優"},
+        params={"search": "街角VR食堂"},
     )
     assert response.status_code == 200, response.text
     payload = response.json()

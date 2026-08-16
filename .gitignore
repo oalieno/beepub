@@ -18,6 +18,10 @@ docker-compose.override.yml
 *.sqlite
 *.sqlite3
 
+# Ad-hoc scratch files (throwaway probe scripts, captured tool output)
+*.tmp
+*.tmp.*
+
 # Python
 __pycache__/
 *.pyc

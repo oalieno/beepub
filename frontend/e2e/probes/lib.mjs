@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import { chromium, devices, request } from "@playwright/test";
 
-export const BASE = process.env.BASE_URL ?? "http://192.168.1.105:8091";
+export const BASE = process.env.BASE_URL ?? "http://localhost:8091";
 export const ADMIN = {
   username: process.env.E2E_ADMIN_USERNAME ?? "e2e-admin",
   password: process.env.E2E_ADMIN_PASSWORD ?? "e2e-password-123",
@@ -40,7 +40,8 @@ export async function seedBook(api, title, epubPath) {
     (b.display_title ?? b.epub_title ?? "").includes(title),
   );
   if (existing) return existing.id;
-  if (!epubPath) throw new Error(`book "${title}" not on the stack and no epub given`);
+  if (!epubPath)
+    throw new Error(`book "${title}" not on the stack and no epub given`);
   const libs = await (await api.get("/api/libraries")).json();
   const uploaded = await api.post("/api/books", {
     multipart: {
@@ -61,7 +62,10 @@ export async function seedBook(api, title, epubPath) {
  * device: "iphone" (chromium + iPhone 13 descriptor — the reader's iOS paths
  * are UA-gated, and CDP still works) or a {width,height} viewport for desktop.
  */
-export async function openReader(bookId, { device, margin, fontSize, lineHeight, token } = {}) {
+export async function openReader(
+  bookId,
+  { device, margin, fontSize, lineHeight, token } = {},
+) {
   const browser = await chromium.launch();
   let ctxOpts = { baseURL: BASE };
   if (device === "iphone") {
@@ -88,9 +92,12 @@ export async function openReader(bookId, { device, margin, fontSize, lineHeight,
   await page.addInitScript(
     (s) => {
       localStorage.setItem("reader-gestures-seen", "1"); // coach mark eats the first tap
-      if (s.margin != null) localStorage.setItem("reader-margin", String(s.margin));
-      if (s.fontSize != null) localStorage.setItem("reader-size", String(s.fontSize));
-      if (s.lineHeight != null) localStorage.setItem("reader-lineheight", String(s.lineHeight));
+      if (s.margin != null)
+        localStorage.setItem("reader-margin", String(s.margin));
+      if (s.fontSize != null)
+        localStorage.setItem("reader-size", String(s.fontSize));
+      if (s.lineHeight != null)
+        localStorage.setItem("reader-lineheight", String(s.lineHeight));
     },
     { margin, fontSize, lineHeight },
   );
@@ -111,14 +118,22 @@ export async function measureAlignment(page) {
     const doc = ifr?.contentDocument;
     if (!doc) return null;
     let sc = ifr.parentElement;
-    while (sc && sc.scrollHeight <= sc.clientHeight + 1 && sc.scrollWidth <= sc.clientWidth + 1) {
+    while (
+      sc &&
+      sc.scrollHeight <= sc.clientHeight + 1 &&
+      sc.scrollWidth <= sc.clientWidth + 1
+    ) {
       sc = sc.parentElement;
     }
     const box = (sc ?? document.body).getBoundingClientRect();
     const ifrBox = ifr.getBoundingClientRect();
     const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    let minT = Infinity, maxB = -Infinity, minL = Infinity, maxR = -Infinity;
-    let cut = 0, vis = 0;
+    let minT = Infinity,
+      maxB = -Infinity,
+      minL = Infinity,
+      maxR = -Infinity;
+    let cut = 0,
+      vis = 0;
     while (walker.nextNode()) {
       const n = walker.currentNode;
       if (!n.textContent.trim()) continue;
@@ -130,19 +145,30 @@ export async function measureAlignment(page) {
         const bottom = r.bottom + ifrBox.top - box.top;
         const left = r.left + ifrBox.left - box.left;
         const right = r.right + ifrBox.left - box.left;
-        if (bottom > 1 && top < box.height - 1 && right > 1 && left < box.width - 1) {
+        if (
+          bottom > 1 &&
+          top < box.height - 1 &&
+          right > 1 &&
+          left < box.width - 1
+        ) {
           vis++;
-          minT = Math.min(minT, top); maxB = Math.max(maxB, bottom);
-          minL = Math.min(minL, left); maxR = Math.max(maxR, right);
+          minT = Math.min(minT, top);
+          maxB = Math.max(maxB, bottom);
+          minL = Math.min(minL, left);
+          maxR = Math.max(maxR, right);
           if (top < -2 || bottom > box.height + 2) cut++;
         }
       }
     }
     return {
-      topInset: Math.round(minT), bottomInset: Math.round(box.height - maxB),
-      leftInset: Math.round(minL), rightInset: Math.round(box.width - maxR),
-      cut, vis,
-      scrollTop: sc?.scrollTop ?? 0, scrollLeft: sc?.scrollLeft ?? 0,
+      topInset: Math.round(minT),
+      bottomInset: Math.round(box.height - maxB),
+      leftInset: Math.round(minL),
+      rightInset: Math.round(box.width - maxR),
+      cut,
+      vis,
+      scrollTop: sc?.scrollTop ?? 0,
+      scrollLeft: sc?.scrollLeft ?? 0,
       windowH: Math.round(box.height * 10) / 10,
     };
   });
@@ -181,7 +207,10 @@ export async function touchTap(page, pt, holdMs = 80) {
     touchPoints: [{ x: pt.x, y: pt.y }],
   });
   await new Promise((r) => setTimeout(r, holdMs));
-  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
   await cdp.detach();
 }
 
