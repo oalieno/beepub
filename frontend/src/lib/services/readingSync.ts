@@ -65,7 +65,8 @@ function canSync(): boolean {
   );
 }
 
-/** Register the reconnect trigger. Idempotent; call once at app start. */
+/** Register the background sync triggers. Idempotent; call once at app
+ *  start (browser context only). */
 export function initReadingSync(): void {
   if (initialized) return;
   initialized = true;
@@ -73,6 +74,14 @@ export function initReadingSync(): void {
   isOnline.subscribe((online) => {
     if (online && !prev) void linkAndSyncAll();
     prev = online;
+  });
+  // The transition alone is not enough: the app is often relaunched or
+  // foregrounded when connectivity is already back — the store never
+  // flips, and a trip's offline reading sat unpushed until the user
+  // happened to open the book. Converge on every foreground instead;
+  // the cooldown keeps it cheap.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") void linkAndSyncAll();
   });
 }
 
@@ -94,22 +103,34 @@ export function linkAndSyncAll(opts?: { force?: boolean }): Promise<void> {
       const links = await getLocalBookLinks();
       const unlinked = books.filter((b) => !links[b.id]);
       if (unlinked.length > 0) {
-        const { matches } = await booksApi.lookupByDigest(
-          unlinked.map((b) => b.digest),
-        );
-        for (const book of unlinked) {
-          const match = matches[book.digest];
-          if (match) {
-            await setLocalBookLink(book.id, match.id);
-            links[book.id] = match.id;
+        // Isolated: a failed lookup must not stop already-linked books
+        // below from pushing their reading state.
+        try {
+          const { matches } = await booksApi.lookupByDigest(
+            unlinked.map((b) => b.digest),
+          );
+          for (const book of unlinked) {
+            const match = matches[book.digest];
+            if (match) {
+              await setLocalBookLink(book.id, match.id);
+              links[book.id] = match.id;
+            }
           }
+          void refreshLinkedBookIds();
+        } catch (err) {
+          console.warn("readingSync: digest lookup failed", err);
         }
-        void refreshLinkedBookIds();
       }
       // Sequentially — local shelves are small, and a burst of parallel
-      // merges would stampede NAS-class servers for no gain.
+      // merges would stampede NAS-class servers for no gain. Per-book
+      // isolation: one bad book must not strand the rest of the shelf.
       for (const book of books) {
-        if (links[book.id]) await syncLocalBook(book.id);
+        if (!links[book.id]) continue;
+        try {
+          await syncLocalBook(book.id);
+        } catch (err) {
+          console.warn(`readingSync: sync failed for ${book.id}`, err);
+        }
       }
       lastFullSyncAt = Date.now();
     } catch (err) {
