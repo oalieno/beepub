@@ -203,6 +203,7 @@
   let shareModalOpen = $state(false);
   let bookAuthors = $state<string[]>([]);
   let isImageBook = $state(false);
+  let sectionWeights = $state<number[] | null>(null);
   let aiStatus = $state<AiStatus>({
     companion: false,
     tag: false,
@@ -210,7 +211,9 @@
     embedding: false,
   });
   let epubLoaded = $state(false);
-  let canScrub = $state(false);
+  // The weight-derived percentage maps both ways from the start — no
+  // locations generation to wait for.
+  let canScrub = $state(true);
   // Highlights whose anchor no longer resolves and couldn't be healed —
   // shown with a warning in the sidebar instead of silently doing nothing.
   let brokenHighlightIds = $state<Set<string>>(new Set());
@@ -307,6 +310,7 @@
       .then((book) => {
         bookAuthors = book.display_authors ?? book.epub_authors ?? [];
         isImageBook = book.is_image_book === true;
+        sectionWeights = book.section_weights ?? null;
         if (book.display_title) {
           title = book.display_title;
           hasDbTitle = true;
@@ -875,6 +879,7 @@
           {pageMargin}
           {darkMode}
           {isImageBook}
+          {sectionWeights}
           offline={!$isOnline}
           ontitle={(t) => {
             if (!hasDbTitle) title = t;
@@ -903,7 +908,6 @@
           ontap={handleReaderTap}
           onready={() => (epubLoaded = true)}
           onerror={() => (loadError = true)}
-          onlocationsready={() => (canScrub = true)}
           onkosyncposition={handleKosyncPosition}
           onrestorefallback={(pct) =>
             toastStore.info(

@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy, tick } from "svelte";
   import { booksApi } from "$lib/api/books";
-  import {
-    getCachedLocations,
-    setCachedLocations,
-  } from "$lib/services/locationsCache";
   import { toastStore } from "$lib/stores/toast";
   import { cfiOf, locatorFromCfi } from "$lib/reading/locator";
+  import {
+    percentFromPosition,
+    positionFromPercent,
+    usableWeights,
+  } from "$lib/reading/progress";
   import type { BookSource } from "$lib/reading/source";
   import type { ProgressSave, SyncBackend } from "$lib/reading/sync";
   import HighlightMenu from "./HighlightMenu.svelte";
@@ -47,6 +48,7 @@
     darkMode = false,
     isImageBook = false,
     offline = false,
+    sectionWeights = null,
     aiBookId = null,
     onprogress,
     onactivity,
@@ -61,7 +63,6 @@
     onhrefchange,
     onready,
     onerror,
-    onlocationsready,
     oncompanion,
     ontap,
     onatend,
@@ -88,6 +89,9 @@
     darkMode?: boolean;
     isImageBook?: boolean;
     offline?: boolean;
+    /** Per-spine-section text sizes (chars) from the book source; null
+     *  falls back to uniform section weights. See $lib/reading/progress. */
+    sectionWeights?: number[] | null;
     onprogress?: (detail: { cfi: string; percentage: number | null }) => void;
     /** Fires on user-driven relocations that count as active reading —
      *  the same signal the trackActivity save uses. */
@@ -103,7 +107,6 @@
     onhrefchange?: (href: string) => void;
     onready?: () => void;
     onerror?: (error: Error) => void;
-    onlocationsready?: () => void;
     oncompanion?: (detail: { cfiRange: string; text: string }) => void;
     ontap?: () => void;
     onatend?: () => void;
@@ -264,10 +267,7 @@
   let currentXpointer: string | null = null;
   let currentXpointerCfi = "";
   let lastLocation: any = null;
-  let locationsGenerated = false;
-  let generatingLocations = false;
   let restoringProgress = false;
-  let waitingForCanonicalProgress = false;
 
   // Position bridged from an e-reader (kosync), newer than the stored CFI.
   // Captured from the progress payload at open; resolved once the canonical
@@ -437,170 +437,49 @@
     };
   }
 
+  /** Dense weights sized to the spine; uniform fallback when the source
+   *  ships none (extraction pending, sideloads, image-only books). Cheap
+   *  enough to rebuild per call — spines are a few hundred entries at most. */
+  function progressWeights(): number[] {
+    return usableWeights(
+      sectionWeights,
+      epubBook?.spine?.spineItems?.length ?? 0,
+    );
+  }
+
   function calculateProgress(location: any): {
-    percentage: number | null;
+    percentage: number;
     currentPage: number;
     totalPages: number;
   } {
     const pageProgress = calculatePageProgress(location);
 
-    if (isImageBook) {
-      return location?.atEnd
-        ? { ...pageProgress, percentage: 100 }
-        : pageProgress;
-    }
-
     if (location?.atEnd) {
       return { ...pageProgress, percentage: 100 };
     }
 
-    let locationPercentage =
-      typeof location?.start?.percentage === "number"
-        ? location.start.percentage
-        : null;
-
-    if (
-      locationPercentage == null &&
-      locationsGenerated &&
-      currentCfi &&
-      epubBook?.locations
-    ) {
-      const loc = epubBook.locations.locationFromCfi(currentCfi);
-      locationPercentage =
-        typeof loc === "number" && loc >= 0
-          ? epubBook.locations.percentageFromLocation(loc)
-          : null;
+    const weights = progressWeights();
+    if (weights.length === 0) {
+      return pageProgress;
     }
-
-    if (
-      typeof locationPercentage === "number" &&
-      Number.isFinite(locationPercentage) &&
-      locationPercentage >= 0 &&
-      locationPercentage <= 1
-    ) {
-      return {
-        ...pageProgress,
-        percentage: clampPercentage(locationPercentage * 100),
-      };
-    }
-
-    return { ...pageProgress, percentage: null };
-  }
-
-  async function generateLocations() {
-    if (generatingLocations || locationsGenerated || !epubBook?.locations) {
-      return;
-    }
-    generatingLocations = true;
-    try {
-      await epubBook.ready;
-
-      // Generating locations parses every spine section (slow for large
-      // books), but the result only depends on the book file — cache it
-      // locally (IndexedDB) and share it server-side (first client to
-      // finish uploads; every other user/device just downloads).
-      const LOCATION_BREAK = 1600;
-      const fingerprint = `${epubBook.packaging?.uniqueIdentifier ?? ""}:${
-        epubBook.spine?.spineItems?.length ?? 0
-      }:${LOCATION_BREAK}`;
-      const cached = await getCachedLocations(bookId);
-      let shared: { fingerprint: string; locations: string } | null = null;
-      if (!(cached && cached.fingerprint === fingerprint) && !offline) {
-        try {
-          shared = (await source.getSharedLocations?.(bookId)) ?? null;
-        } catch {
-          // Shared cache is best-effort; fall through to generating.
-        }
-      }
-      if (cached && cached.fingerprint === fingerprint) {
-        epubBook.locations.load(cached.locations);
-      } else if (shared && shared.fingerprint === fingerprint) {
-        epubBook.locations.load(shared.locations);
-        setCachedLocations(bookId, fingerprint, shared.locations);
-      } else {
-        // Warm the HTTP cache for every linear section concurrently —
-        // generate() fetches them one at a time, so without this each
-        // section costs a full round trip.
-        warmSectionCache();
-        await epubBook.locations.generate(LOCATION_BREAK);
-        const serialized = epubBook.locations.save();
-        setCachedLocations(bookId, fingerprint, serialized);
-        if (!offline) {
-          source
-            .putSharedLocations?.(bookId, fingerprint, serialized)
-            ?.catch(() => {});
-        }
-      }
-      locationsGenerated = true;
-      onlocationsready?.();
-      if (lastLocation && currentCfi && !restoringProgress) {
-        const progress = calculateProgress(lastLocation);
-        currentPage = progress.currentPage;
-        totalPages = progress.totalPages;
-        waitingForCanonicalProgress = false;
-        if (progress.percentage != null) {
-          currentPercentage = progress.percentage;
-          emitProgress();
-          debouncedSave();
-        } else {
-          emitProgress(null);
-        }
-      }
-      await resolveRestoreFallback();
-      await resolveKosyncMarker();
-    } catch {
-      // Image-heavy or malformed EPUBs may not produce text locations.
-      waitingForCanonicalProgress = false;
-      if (isImageBook && lastLocation && currentCfi) {
-        const progress = calculatePageProgress(lastLocation);
-        currentPercentage = progress.percentage;
-        currentPage = progress.currentPage;
-        totalPages = progress.totalPages;
-        emitProgress();
-        debouncedSave();
-      }
-      await resolveRestoreFallback();
-      await resolveKosyncMarker();
-    } finally {
-      generatingLocations = false;
-    }
-  }
-
-  /**
-   * Fire-and-forget cache warmer for locations generation: fetch all linear
-   * spine sections with limited concurrency so generate()'s sequential
-   * requests hit the browser HTTP cache. Streaming books only — archived
-   * (offline/native) books read sections from the local zip already.
-   */
-  function warmSectionCache() {
-    if (epubBook?.archived) return;
-    const urls: string[] = (epubBook?.spine?.spineItems ?? [])
-      .filter((s: any) => s.linear)
-      .map((s: any) => s.url)
-      .filter(Boolean);
-    let next = 0;
-    const worker = async () => {
-      while (next < urls.length) {
-        const url = urls[next++]!;
-        try {
-          const res = await fetch(url, { headers: bookAuthHeader?.() ?? {} });
-          // Consume the body so the response is fully received and cached.
-          await res.arrayBuffer();
-        } catch {
-          // Best-effort: generate() fetches on its own anyway.
-        }
-      }
+    const sectionIndex = location?.start?.index ?? currentSectionIndex;
+    const page = Math.max(1, location?.start?.displayed?.page ?? 1);
+    const total = Math.max(1, location?.start?.displayed?.total ?? 1);
+    // Completed pages over the section's pages: monotone across the
+    // section boundary (last page < 1, next section starts at its floor).
+    const fraction = (page - 1) / total;
+    return {
+      ...pageProgress,
+      percentage: clampPercentage(
+        percentFromPosition(weights, sectionIndex, fraction),
+      ),
     };
-    const CONCURRENCY = 8;
-    for (let i = 0; i < Math.min(CONCURRENCY, urls.length); i++) {
-      void worker();
-    }
   }
 
   /**
-   * Second half of the degraded restore: apply the stored percentage now
-   * that locations exist — unless the user has already started reading
-   * from wherever the failed restore left them.
+   * Second half of the degraded restore: apply the stored percentage —
+   * unless the user has already started reading from wherever the failed
+   * restore left them.
    */
   async function resolveRestoreFallback() {
     if (restoreFallbackPct == null) return;
@@ -612,10 +491,10 @@
   }
 
   /**
-   * Act on an e-reader position bridged from kosync, once the canonical
-   * percentage is known. Never read on the web → adopt the device position
-   * outright; otherwise (positions meaningfully apart) let the parent offer
-   * the jump — the web CFI stays authoritative until the user accepts.
+   * Act on an e-reader position bridged from kosync. Never read on the
+   * web → adopt the device position outright; otherwise (positions
+   * meaningfully apart) let the parent offer the jump — the web CFI stays
+   * authoritative until the user accepts.
    */
   async function resolveKosyncMarker() {
     if (!kosyncMarker) return;
@@ -635,17 +514,17 @@
     }
     // Compare against where the reader actually sits, derived from the CFI.
     // currentPercentage can still hold the bridge-written device percentage
-    // here — the canonical recompute races locations loading from cache
-    // (archived books reliably lose it) — and marker-vs-itself is always
-    // "close enough", which ate the prompt.
+    // when no relocated has recomputed it yet — and marker-vs-itself is
+    // always "close enough", which ate the prompt. Deriving from the anchor
+    // CFI's section is coarse (section start) but bridge-independent.
     let herePct = currentPercentage;
     const anchor = currentCfi || kosyncBaselineCfi;
-    if (anchor) {
-      try {
-        const p = epubBook?.locations?.percentageFromCfi(anchor);
-        if (typeof p === "number") herePct = clampPercentage(p * 100);
-      } catch {
-        // Keep the running percentage as the fallback baseline.
+    if (!currentCfi && anchor) {
+      const index = sectionIndexFromCfi(anchor);
+      if (index != null && index >= 0) {
+        herePct = clampPercentage(
+          percentFromPosition(progressWeights(), index, 0),
+        );
       }
     }
     if (Math.abs(marker.percentage - herePct) > 1) {
@@ -682,17 +561,12 @@
         // Best-effort — fall through to the coarser anchors.
       }
     }
-    if (
-      sectionIndex != null &&
-      !isImageBook &&
-      locationsGenerated &&
-      epubBook?.locations
-    ) {
-      const fraction = Math.min(100, Math.max(0, pct)) / 100;
-      const cfi = epubBook.locations.cfiFromPercentage(fraction);
-      if (cfi && sectionIndexFromCfi(cfi) === sectionIndex) {
-        await rendition?.display(cfi);
-        return true;
+    if (sectionIndex != null && !isImageBook) {
+      // Trust the percentage only when it lands in the hinted chapter;
+      // otherwise the right chapter's start beats a wrong-chapter guess.
+      const landing = positionFromPercent(progressWeights(), pct);
+      if (landing.sectionIndex === sectionIndex) {
+        return displayPercentage(pct);
       }
       const href = epubBook?.spine?.get(sectionIndex)?.href;
       if (href) {
@@ -850,25 +724,13 @@
         return;
       }
 
-      // Persist every position change — the CFI is what restore uses and it
-      // never depends on locations. Before locations are ready the save
-      // carries percentage: null and the server keeps the stored value, so
-      // a slow (or never-finishing) generation can't lose reading progress.
+      // Persist every position change — the CFI is what restore uses.
       // Exception: while peeking at a highlight the position on screen is a
       // visit, not progress — the UI below still updates, only persistence
       // (server + localStorage) is held.
       if (!peekSaveHold) {
         debouncedSave();
         onactivity?.();
-      }
-
-      if (waitingForCanonicalProgress && !locationsGenerated) {
-        return;
-      }
-
-      if (progress.percentage == null) {
-        emitProgress(null);
-        return;
       }
 
       currentPercentage = progress.percentage;
@@ -1444,8 +1306,12 @@
           savedProgress?.cfi ?? null,
           savedProgress?.percentage ?? null,
         );
-        waitingForCanonicalProgress = !isImageBook;
-        emitProgress(null);
+        // The bar keeps showing reading progress (not the visit position)
+        // until the visitor turns a page — peek semantics.
+        if (savedProgress?.percentage != null) {
+          currentPercentage = savedProgress.percentage;
+        }
+        emitProgress();
         restoringProgress = true;
         await rendition.display(initialCfi);
         await new Promise((resolve) => requestAnimationFrame(resolve));
@@ -1463,8 +1329,9 @@
           sectionPageCounts = normalizeSectionPageCounts(
             savedProgress.section_page_counts,
           );
-        waitingForCanonicalProgress = !isImageBook;
-        emitProgress(isImageBook ? currentPercentage : null);
+        // Show the stored percentage immediately; the first relocated
+        // recomputes it from the restored position.
+        emitProgress();
 
         restoringProgress = true;
         if (
@@ -1509,8 +1376,7 @@
         restoringProgress = false;
         rendition.reportLocation?.();
       } else {
-        waitingForCanonicalProgress = !isImageBook;
-        emitProgress(null);
+        emitProgress();
         await rendition.display();
       }
     } catch {
@@ -1593,7 +1459,9 @@
     );
     window.addEventListener("beforeunload", handleBeforeUnload);
 
-    generateLocations();
+    // Both used to wait for locations generation; the weight-derived
+    // percentage is available immediately, so resolve them right away.
+    void resolveRestoreFallback().then(() => resolveKosyncMarker());
 
     // Fix layout offset when returning to the app (e.g. iOS task switcher)
     handleVisibility = () => {
@@ -1672,24 +1540,15 @@
     saveDebounceTimer = setTimeout(saveProgress, 2000);
   }
 
-  /** Text books only have a trustworthy percentage once locations exist;
-   *  image books use page-based percentages from the start. */
-  function hasCanonicalPercentage(): boolean {
-    return isImageBook || locationsGenerated;
-  }
-
   /** One builder for both the normal save and the unload beacon so the
-   *  two payloads can't drift. totalProgression left undefined tells the
-   *  backend to keep the stored percentage — never write a made-up value,
-   *  and never skip the save (the CFI must survive even when locations
-   *  generation is slow or dies). Units: reader percentage is 0..100,
-   *  locator totalProgression is 0..1. */
+   *  two payloads can't drift. The weight-derived percentage is always
+   *  available, so every save carries position and percentage together —
+   *  a stored record can no longer hold a CFI that outran its percentage.
+   *  Units: reader percentage is 0..100, locator totalProgression is 0..1. */
   function buildProgressSave(trackActivity: boolean): ProgressSave {
     return {
       locator: locatorFromCfi(currentCfi, {
-        totalProgression: hasCanonicalPercentage()
-          ? currentPercentage / 100
-          : undefined,
+        totalProgression: currentPercentage / 100,
         position: currentPage,
       }),
       fontSize,
@@ -1899,31 +1758,29 @@
     restoringProgress = false;
     userNavigated = true;
     peekSaveHold = false;
-    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
-    if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(href);
   }
 
   export async function displayPercentage(pct: number): Promise<boolean> {
     if (!rendition) return false;
-    const fraction = Math.min(100, Math.max(0, pct)) / 100;
-    // Image books produce few or no text locations, so a percentage maps
-    // poorly through them — but sections are pages there, so a spine-index
-    // jump is the faithful conversion.
-    if (isImageBook) {
-      const items = epubBook?.spine?.spineItems ?? [];
-      if (!items.length) return false;
-      const index = Math.min(
-        items.length - 1,
-        Math.round(fraction * (items.length - 1)),
-      );
-      await rendition.display(items[index].href);
-      return true;
+    const weights = progressWeights();
+    if (!weights.length) return false;
+    const { sectionIndex, fraction } = positionFromPercent(weights, pct);
+    const href = epubBook?.spine?.get(sectionIndex)?.href;
+    if (!href) return false;
+    await rendition.display(href);
+    if (fraction > 0) {
+      // Refine within the section once it has rendered: the manager knows
+      // its page count only now. Same call user paging goes through — the
+      // restore-specific _lastTargetPage machinery is not involved.
+      const total = rendition.currentLocation?.()?.start?.displayed?.total;
+      if (typeof total === "number" && total > 1) {
+        const targetPage = Math.min(total - 1, Math.floor(fraction * total));
+        if (targetPage > 0) {
+          rendition.manager?.scrollToPageIndex?.(targetPage);
+        }
+      }
     }
-    if (!locationsGenerated || !epubBook?.locations) return false;
-    const cfi = epubBook.locations.cfiFromPercentage(fraction);
-    if (!cfi) return false;
-    await rendition.display(cfi);
     return true;
   }
 
@@ -1933,22 +1790,10 @@
    *  not the seek target. */
   export function chapterAtPercentage(pct: number): string | null {
     if (!epubBook) return null;
-    const fraction = Math.min(100, Math.max(0, pct)) / 100;
-    let index: number | null;
-    if (isImageBook) {
-      const items = epubBook?.spine?.spineItems ?? [];
-      if (!items.length) return null;
-      index = Math.min(
-        items.length - 1,
-        Math.round(fraction * (items.length - 1)),
-      );
-    } else {
-      if (!locationsGenerated || !epubBook?.locations) return null;
-      const cfi = epubBook.locations.cfiFromPercentage(fraction);
-      if (!cfi) return null;
-      index = sectionIndexFromCfi(cfi);
-    }
-    if (index == null || index < 0) return null;
+    const weights = progressWeights();
+    if (!weights.length) return null;
+    const index = positionFromPercent(weights, pct).sectionIndex;
+    if (index < 0) return null;
     const href = findActiveTocHref(epubBook, null, tocData, index);
     return href ? findTocLabelForHref(tocData, href) : null;
   }
@@ -1956,8 +1801,6 @@
   export function displayCfi(cfi: string) {
     restoringProgress = false;
     userNavigated = true;
-    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
-    if (waitingForCanonicalProgress) emitProgress(null);
     rendition?.display(cfi)?.catch(() => {});
   }
 
@@ -1975,10 +1818,7 @@
    */
   export function displayHighlight(hl: HighlightOut) {
     if (!peekSaveHold) {
-      startPeek(
-        currentCfi || null,
-        hasCanonicalPercentage() ? currentPercentage : null,
-      );
+      startPeek(currentCfi || null, currentPercentage);
     }
     if (brokenHighlightIds.has(hl.id)) {
       const index = hl.section_index ?? sectionIndexFromCfi(hl.cfi_range);
@@ -1998,8 +1838,6 @@
     peekSaveHold = false;
     onpeekchange?.(null);
     restoringProgress = false;
-    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
-    if (waitingForCanonicalProgress) emitProgress(null);
     try {
       await rendition?.display(cfi);
     } catch {
@@ -2022,8 +1860,6 @@
     restoringProgress = false;
     userNavigated = true;
     peekSaveHold = false;
-    waitingForCanonicalProgress = !isImageBook && !locationsGenerated;
-    if (waitingForCanonicalProgress) emitProgress(null);
 
     clearFlashHighlight();
     await rendition?.display(cfi);

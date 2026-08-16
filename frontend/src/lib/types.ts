@@ -75,6 +75,9 @@ export interface BookOut {
   field_sources: Record<string, string> | null;
   word_count: number | null;
   is_image_book: boolean | null;
+  /** Per-spine-section text sizes; the reader interpolates reading
+   *  percentage from these. Null until text extraction has run. */
+  section_weights?: number[] | null;
   has_unresolved_reports: boolean;
   display_title: string | null;
   display_authors: string[] | null;
