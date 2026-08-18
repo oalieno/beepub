@@ -5,7 +5,6 @@
   import { authApi } from "$lib/api/auth";
   import { get } from "$lib/api/client";
   import { isNative } from "$lib/platform";
-  import { isOnline } from "$lib/services/network";
   import { toastStore } from "$lib/stores/toast";
   import { UserRole } from "$lib/types";
   import {
@@ -31,7 +30,6 @@
   import ApiTokensSection from "$lib/components/settings/ApiTokensSection.svelte";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
-  let online = $derived($isOnline);
 
   let appVersion = $state("");
   onMount(async () => {
@@ -58,11 +56,6 @@
   let showCurrentPw = $state(false);
   let showNewPw = $state(false);
   let passwordError = $state("");
-
-  function handleDisabledClick(e: Event) {
-    e.preventDefault();
-    toastStore.info(m.nav_available_when_online());
-  }
 
   async function logout() {
     await authStore.logout();
@@ -120,16 +113,15 @@
     href: string;
     label: string;
     icon: typeof BookOpen;
-    requiresOnline: boolean;
-    show?: boolean;
   }
 
+  // No online gating: offline swaps the whole app for the offline shell,
+  // which never renders this page.
   let mobileLinks = $derived<ProfileLink[]>([
     {
       href: "/highlights",
       label: m.nav_highlights(),
       icon: Highlighter,
-      requiresOnline: true,
     },
     ...(isNative()
       ? [
@@ -137,21 +129,16 @@
             href: "/catalogs",
             label: m.nav_catalogs(),
             icon: Rss,
-            // Needs the internet, not the BeePub server — isOnline tracks
-            // server reachability, which third-party catalogs don't care
-            // about. The page carries its own error states.
-            requiresOnline: false,
           } satisfies ProfileLink,
         ]
       : []),
-    { href: "/gacha", label: m.nav_gacha(), icon: Dices, requiresOnline: true },
+    { href: "/gacha", label: m.nav_gacha(), icon: Dices },
     ...(isAdmin
       ? [
           {
             href: "/admin",
             label: m.nav_admin(),
             icon: Settings,
-            requiresOnline: true,
           } satisfies ProfileLink,
         ]
       : []),
@@ -381,7 +368,6 @@
   <!-- Mobile nav links -->
   <div class="bg-card card-soft rounded-2xl overflow-hidden md:hidden">
     {#each mobileLinks as link, i}
-      {@const disabled = !online && link.requiresOnline}
       {#if i > 0}
         <div class="flex justify-center">
           <div
@@ -391,12 +377,8 @@
         </div>
       {/if}
       <a
-        href={disabled ? undefined : link.href}
-        class="flex items-center gap-3 px-4 py-3.5 transition-colors {disabled
-          ? 'opacity-25 cursor-default'
-          : 'hover:bg-secondary/50 active:bg-secondary'}"
-        aria-disabled={disabled || undefined}
-        onclick={disabled ? handleDisabledClick : undefined}
+        href={link.href}
+        class="flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-secondary/50 active:bg-secondary"
       >
         <link.icon size={20} class="text-muted-foreground shrink-0" />
         <span class="text-sm font-medium flex-1">{link.label}</span>

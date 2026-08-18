@@ -1,13 +1,9 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { isOnline } from "$lib/services/network";
-  import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import { Search, Dices } from "@lucide/svelte";
 
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
-
-  let online = $derived($isOnline);
 
   // Derive page title from route
   const titleMap = $derived<Record<string, string>>({
@@ -49,36 +45,18 @@
 
     <div class="flex items-center gap-1">
       <button
-        class="p-2 rounded-lg transition-colors {!online
-          ? 'opacity-25 cursor-default'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-        onclick={() => {
-          if (!online) {
-            toastStore.info(m.nav_available_when_online());
-            return;
-          }
-          onSearchOpen();
-        }}
+        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+        onclick={onSearchOpen}
         aria-label={m.nav_search()}
-        aria-disabled={!online || undefined}
       >
         <Search size={20} />
       </button>
       <a
-        href={!online ? undefined : "/gacha"}
-        class="p-2 rounded-lg transition-colors {!online
-          ? 'opacity-25 cursor-default'
-          : page.url.pathname === '/gacha'
-            ? 'bg-primary/10 text-primary'
-            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+        href="/gacha"
+        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
+          ? 'bg-primary/10 text-primary'
+          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
         aria-label={m.nav_gacha()}
-        aria-disabled={!online || undefined}
-        onclick={!online
-          ? (e: Event) => {
-              e.preventDefault();
-              toastStore.info(m.nav_available_when_online());
-            }
-          : undefined}
       >
         <Dices size={20} />
       </a>

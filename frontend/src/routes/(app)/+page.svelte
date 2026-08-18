@@ -7,21 +7,15 @@
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
-  import { isNative } from "$lib/platform";
-  import { isOnline, checkServerNow } from "$lib/services/network";
+  import { isOnline } from "$lib/services/network";
   import { readingSyncStamp } from "$lib/services/readingSync";
-  import { toastStore } from "$lib/stores/toast";
-  import { Button } from "$lib/components/ui/button";
   import type {
     BookWithInteractionOut,
     LibraryOut,
     ReadingStats,
   } from "$lib/types";
-  import { BookOpen, ChevronRight, HardDrive, WifiOff } from "@lucide/svelte";
+  import { BookOpen } from "@lucide/svelte";
   import { HomeSkeleton } from "$lib/components/skeletons";
-  import LocalBookCard, {
-    type LocalShelfEntry,
-  } from "$lib/components/LocalBookCard.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
@@ -29,41 +23,10 @@
   let continueReadingBooks = $state<BookWithInteractionOut[]>([]);
   let readingActivity = $state<{ date: string; seconds: number }[]>([]);
   let readingStats = $state<ReadingStats | null>(null);
-  let offline = $derived(!$isOnline && isNative());
   let currentYear = new Date().getFullYear();
   let loading = $state(true);
   let hasLoadedOnline = $state(false);
   let loadFailed = $state(false);
-  let localShelf = $state<LocalShelfEntry[]>([]);
-
-  // The offline view shows the local shelf inline — books should be one
-  // tap away, not hidden behind a navigation hop.
-  async function loadLocalShelf() {
-    try {
-      const { listLocalBooks, getLocalBookLinks, getLocalCoverSrc } =
-        await import("$lib/services/localLibrary");
-      const { readLocalProgress, readLocalInteraction } =
-        await import("$lib/reading/local");
-      const books = await listLocalBooks();
-      const links = await getLocalBookLinks();
-      localShelf = await Promise.all(
-        books.map(async (b) => ({
-          ...b,
-          coverSrc: await getLocalCoverSrc(b),
-          linked: b.id in links,
-          progressPct: (await readLocalProgress(b.id))?.percentage ?? null,
-          readingStatus:
-            (await readLocalInteraction(b.id))?.reading_status ?? null,
-        })),
-      );
-    } catch {
-      // the manage link below still gets the user there
-    }
-  }
-
-  $effect(() => {
-    if (offline) void loadLocalShelf();
-  });
 
   async function loadOnlineData() {
     try {
@@ -115,16 +78,15 @@
   }
 
   onMount(async () => {
-    if (!offline) {
-      await loadOnlineData();
-    }
+    await loadOnlineData();
     loading = false;
   });
 
-  // Re-fetch data when coming back online
+  // A mount-time failure (server blip shorter than the offline-shell
+  // damping window) heals itself once the server answers again.
   $effect(() => {
-    if (!offline && !hasLoadedOnline && !loading) {
-      loadOnlineData();
+    if ($isOnline && !hasLoadedOnline && !loading) {
+      void loadOnlineData();
     }
   });
 
@@ -135,24 +97,9 @@
     const stamp = $readingSyncStamp;
     if (stamp !== prevSyncStamp) {
       prevSyncStamp = stamp;
-      if (!offline && hasLoadedOnline) void loadOnlineData();
+      if (hasLoadedOnline) void loadOnlineData();
     }
   });
-
-  let checkingConnection = $state(false);
-
-  async function retryConnection() {
-    checkingConnection = true;
-    try {
-      const ok = await checkServerNow();
-      if (!ok) {
-        toastStore.error(m.error_server_unreachable());
-      }
-      // When reachable again, `offline` flips and the effect above reloads.
-    } finally {
-      checkingConnection = false;
-    }
-  }
 </script>
 
 <svelte:head>
@@ -162,79 +109,6 @@
 <div class="max-w-6xl mx-auto px-6 sm:px-8 py-6">
   {#if loading}
     <HomeSkeleton />
-  {:else if offline}
-    <!-- Offline mode -->
-    <section class="mb-8">
-      <div
-        role="status"
-        class="bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-4 flex items-center gap-3"
-      >
-        <WifiOff class="text-amber-500 shrink-0" size={20} />
-        <p class="text-sm text-foreground flex-1">
-          {m.home_offline_message()}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          class="shrink-0 rounded-xl"
-          disabled={checkingConnection}
-          onclick={retryConnection}
-        >
-          {checkingConnection
-            ? m.home_offline_checking()
-            : m.home_offline_retry()}
-        </Button>
-      </div>
-    </section>
-
-    {#if localShelf.length > 0}
-      <!-- The local shelf, right here — management (delete etc.) lives
-           on /local behind the see-all link. -->
-      <section>
-        <div class="flex items-end justify-between mb-6">
-          <h2 class="text-2xl font-bold text-foreground">
-            {m.nav_local_books()}
-          </h2>
-          <a
-            href="/local"
-            class="text-sm text-primary hover:text-primary/80 font-medium transition-colors"
-          >
-            {m.home_see_all()}
-          </a>
-        </div>
-        <div
-          class="grid gap-4"
-          style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
-        >
-          {#each localShelf as entry (entry.id)}
-            <LocalBookCard {entry} />
-          {/each}
-        </div>
-      </section>
-    {:else}
-      <!-- Books on the device live in the local library. -->
-      <a
-        href="/local"
-        class="block bg-card card-soft rounded-2xl p-12 text-center hover:shadow-md transition-all"
-      >
-        <HardDrive class="mx-auto text-primary/50 mb-4" size={48} />
-        <p class="text-foreground text-lg font-medium">
-          {m.nav_local_books()}
-        </p>
-        <p class="text-muted-foreground/70 text-sm mt-1">
-          {m.home_offline_local_subtitle()}
-        </p>
-        <!-- Button-shaped affordance — the bare card didn't read as
-             tappable (UIUX audit L). The anchor is the whole card; this
-             span just gives it a visible handle. -->
-        <span
-          class="mt-5 inline-flex items-center gap-1 rounded-xl px-4 py-2 text-sm font-medium bg-secondary text-secondary-foreground"
-        >
-          {m.home_go_local()}
-          <ChevronRight size={14} />
-        </span>
-      </a>
-    {/if}
   {:else}
     <!-- Continue Reading -->
     {#if continueReadingBooks.length > 0}

@@ -1,21 +1,18 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { isOnline } from "$lib/services/network";
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import { keyboardVisible } from "$lib/stores/keyboard";
-  import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import { Home, ShelvingUnit, BookCopy, Compass, User } from "@lucide/svelte";
 
-  let online = $derived($isOnline);
-
+  // No per-tab online gating: offline replaces this chrome with the
+  // offline shell entirely, so every tab rendered here is usable.
   const tabs = $derived([
     {
       href: "/",
       label: m.nav_home(),
       icon: Home,
       match: (p: string) => p === "/",
-      requiresOnline: false,
     },
     {
       href: "/bookshelves",
@@ -24,7 +21,6 @@
       // /my-books is the system-shelf detail route — keep the tab lit there.
       match: (p: string) =>
         p.startsWith("/bookshelves") || p.startsWith("/my-books"),
-      requiresOnline: true,
     },
     {
       // Calibre-style: jump straight into the active library; the cards
@@ -34,29 +30,20 @@
       icon: BookCopy,
       match: (p: string) =>
         p.startsWith("/libraries") || p.startsWith("/local"),
-      // The device shelf works offline.
-      requiresOnline: $activeLibraryHref !== "/local",
     },
     {
       href: "/discover",
       label: m.nav_discover(),
       icon: Compass,
       match: (p: string) => p.startsWith("/discover"),
-      requiresOnline: true,
     },
     {
       href: "/profile",
       label: m.nav_profile(),
       icon: User,
       match: (p: string) => p.startsWith("/profile"),
-      requiresOnline: false,
     },
   ]);
-
-  function handleDisabledClick(e: Event) {
-    e.preventDefault();
-    toastStore.info(m.nav_available_when_online());
-  }
 </script>
 
 {#if !$keyboardVisible}
@@ -68,17 +55,12 @@
     <div class="flex items-stretch">
       {#each tabs as tab}
         {@const active = tab.match(page.url.pathname)}
-        {@const disabled = !online && tab.requiresOnline}
         <a
-          href={disabled ? undefined : tab.href}
+          href={tab.href}
           aria-current={active ? "page" : undefined}
-          aria-disabled={disabled || undefined}
-          class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[44px] transition-colors {disabled
-            ? 'opacity-25 cursor-default'
-            : active
-              ? 'text-primary'
-              : 'text-muted-foreground'}"
-          onclick={disabled ? handleDisabledClick : undefined}
+          class="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 min-h-[44px] transition-colors {active
+            ? 'text-primary'
+            : 'text-muted-foreground'}"
         >
           <tab.icon size={22} />
           <span class="text-[10px] font-medium">{tab.label}</span>

@@ -3,9 +3,7 @@
   import { authStore } from "$lib/stores/auth";
   import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import { isNative } from "$lib/platform";
-  import { isOnline } from "$lib/services/network";
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
-  import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import {
     Home,
@@ -26,17 +24,17 @@
 
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
 
-  let online = $derived($isOnline);
   let collapsed = $derived($sidebarCollapsed);
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 
+  // No per-link online gating: offline replaces this chrome with the
+  // offline shell entirely, so every link rendered here is usable.
   const navLinks = $derived([
     {
       href: "/",
       label: m.nav_home(),
       icon: Home,
       active: page.url.pathname === "/",
-      requiresOnline: false,
     },
     {
       href: "/bookshelves",
@@ -46,7 +44,6 @@
       active:
         page.url.pathname.startsWith("/bookshelves") ||
         page.url.pathname.startsWith("/my-books"),
-      requiresOnline: true,
     },
     {
       // Calibre-style: jump straight into the active library; the cards
@@ -57,22 +54,18 @@
       active:
         page.url.pathname.startsWith("/libraries") ||
         page.url.pathname.startsWith("/local"),
-      // The device shelf works offline.
-      requiresOnline: $activeLibraryHref !== "/local",
     },
     {
       href: "/highlights",
       label: m.nav_highlights(),
       icon: Highlighter,
       active: page.url.pathname.startsWith("/highlights"),
-      requiresOnline: true,
     },
     {
       href: "/discover",
       label: m.nav_discover(),
       icon: Compass,
       active: page.url.pathname.startsWith("/discover"),
-      requiresOnline: true,
     },
     ...(isNative()
       ? [
@@ -81,10 +74,6 @@
             label: m.nav_catalogs(),
             icon: Rss,
             active: page.url.pathname.startsWith("/catalogs"),
-            // Needs the internet, not the BeePub server — isOnline tracks
-            // server reachability, which third-party catalogs don't care
-            // about. The page carries its own error states.
-            requiresOnline: false,
           },
         ]
       : []),
@@ -97,16 +86,10 @@
             label: m.nav_admin(),
             icon: Settings,
             active: page.url.pathname.startsWith("/admin"),
-            requiresOnline: true,
           },
         ]
       : []),
   ]);
-
-  function handleDisabledClick(e: Event) {
-    e.preventDefault();
-    toastStore.info(m.nav_available_when_online());
-  }
 </script>
 
 <nav
@@ -157,19 +140,8 @@
     <button
       class="flex items-center w-full rounded-lg text-sm transition-colors {collapsed
         ? 'justify-center px-0 py-2.5 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-        : 'gap-3 px-3 py-2 border border-sidebar-border bg-card'} {!online
-        ? 'opacity-25 cursor-default'
-        : collapsed
-          ? ''
-          : 'text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
-      onclick={() => {
-        if (!online) {
-          toastStore.info(m.nav_available_when_online());
-          return;
-        }
-        onSearchOpen();
-      }}
-      aria-disabled={!online || undefined}
+        : 'gap-3 px-3 py-2 border border-sidebar-border bg-card text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
+      onclick={onSearchOpen}
       title={collapsed ? m.nav_search() : undefined}
     >
       <SearchIcon size={collapsed ? 20 : 16} class="flex-shrink-0" />
@@ -193,24 +165,15 @@
   <!-- Nav links -->
   <div class="flex-1 px-3 flex flex-col gap-0.5 overflow-y-auto">
     {#each navLinks as link}
-      {@const disabled = !online && link.requiresOnline}
       <a
-        href={disabled ? undefined : link.href}
+        href={link.href}
         class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
           ? 'justify-center px-0'
-          : 'px-3'} {disabled
-          ? 'opacity-25 cursor-default'
-          : link.active
-            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-            : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
+          : 'px-3'} {link.active
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
         aria-current={link.active ? "page" : undefined}
-        aria-disabled={disabled || undefined}
-        title={collapsed
-          ? link.label
-          : disabled
-            ? m.nav_available_when_online()
-            : undefined}
-        onclick={disabled ? handleDisabledClick : undefined}
+        title={collapsed ? link.label : undefined}
       >
         <link.icon size={20} class="flex-shrink-0" />
         {#if !collapsed}
@@ -229,17 +192,13 @@
 
     <!-- Gacha -->
     <a
-      href={!online ? undefined : "/gacha"}
+      href="/gacha"
       class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
         ? 'justify-center px-0'
-        : 'px-3'} {!online
-        ? 'opacity-25 cursor-default'
-        : page.url.pathname === '/gacha'
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
-      aria-disabled={!online || undefined}
+        : 'px-3'} {page.url.pathname === '/gacha'
+        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+        : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
       title={collapsed ? m.nav_gacha() : undefined}
-      onclick={!online ? handleDisabledClick : undefined}
     >
       <Dices size={20} class="flex-shrink-0" />
       {#if !collapsed}
