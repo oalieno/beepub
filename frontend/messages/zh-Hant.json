@@ -822,6 +822,7 @@
   "local_native_only": "本地書庫僅在手機 app 中可用",
   "local_add": "新增書籍",
   "local_search_placeholder": "搜尋這台裝置...",
+  "local_sort_last_read": "最近閱讀",
   "local_add_file": "匯入 EPUB 檔案",
   "local_add_file_desc": "從這台裝置選擇檔案",
   "local_add_opds_desc": "從線上目錄下載書籍",

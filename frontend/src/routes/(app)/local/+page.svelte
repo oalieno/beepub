@@ -4,6 +4,7 @@
   import { isNative } from "$lib/platform";
   import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { isOnline } from "$lib/services/network";
+  import { offlineShell } from "$lib/services/offlineShell";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
@@ -41,14 +42,17 @@
   let loading = $state(true);
 
   // Client-side search/sort — the shelf is small enough to filter in memory.
+  // Recently-read first is the default: sorted this way the shelf head IS
+  // the continue-reading row, which is the whole page's job offline.
   const SORT_OPTIONS = [
+    { value: "lastRead:desc", label: () => m.local_sort_last_read() },
     { value: "importedAt:desc", label: () => m.browser_sort_newest() },
     { value: "importedAt:asc", label: () => m.browser_sort_oldest() },
     { value: "title:asc", label: () => m.browser_sort_title_asc() },
     { value: "title:desc", label: () => m.browser_sort_title_desc() },
   ];
   let searchQuery = $state("");
-  let sortValue = $state("importedAt:desc");
+  let sortValue = $state("lastRead:desc");
   let sortLabel = $derived(
     (
       SORT_OPTIONS.find((o) => o.value === sortValue) ?? SORT_OPTIONS[0]
@@ -65,6 +69,9 @@
       : entries;
     const sorted = [...filtered];
     switch (sortValue) {
+      case "importedAt:desc":
+        sorted.sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+        break;
       case "importedAt:asc":
         sorted.sort((a, b) => a.importedAt.localeCompare(b.importedAt));
         break;
@@ -75,7 +82,15 @@
         sorted.sort((a, b) => b.title.localeCompare(a.title));
         break;
       default:
-        sorted.sort((a, b) => b.importedAt.localeCompare(a.importedAt));
+        // Recently read first; never-opened books follow, newest import
+        // first.
+        sorted.sort((a, b) => {
+          if (a.lastReadAt && b.lastReadAt)
+            return b.lastReadAt.localeCompare(a.lastReadAt);
+          if (a.lastReadAt) return -1;
+          if (b.lastReadAt) return 1;
+          return b.importedAt.localeCompare(a.importedAt);
+        });
     }
     return sorted;
   });
@@ -125,6 +140,7 @@
       linked: entry.id in links,
       progressPct: progress?.percentage ?? null,
       readingStatus: interaction?.reading_status ?? null,
+      lastReadAt: progress?.last_read_at ?? null,
     };
   }
 
@@ -328,8 +344,10 @@
 <div class="px-6 sm:px-8 py-6">
   <!-- Calibre-style: the library name IS the switcher — tapping it goes
        up to the cards page. Serverless has no other libraries, hence no
-       heading (its top bar already titles the page). -->
-  {#if !localMode}
+       heading (its top bar already titles the page); in the offline
+       shell the cards page is a dead door and the shell's top bar
+       titles the page instead. -->
+  {#if !localMode && !$offlineShell}
     <div class="mb-4">
       <a
         href="/libraries"
@@ -495,25 +513,29 @@
       </div>
       <ChevronRight size={16} class="text-muted-foreground shrink-0" />
     </button>
-    <button
-      class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
-      style="-webkit-tap-highlight-color: transparent;"
-      onclick={() => {
-        addSheetOpen = false;
-        goto("/catalogs");
-      }}
-    >
-      <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
-        <Rss class="text-primary" size={18} />
-      </div>
-      <div class="flex-1 min-w-0">
-        <h3 class="font-medium text-sm text-foreground">{m.nav_catalogs()}</h3>
-        <p class="text-muted-foreground text-xs mt-0.5">
-          {m.local_add_opds_desc()}
-        </p>
-      </div>
-      <ChevronRight size={16} class="text-muted-foreground shrink-0" />
-    </button>
+    {#if !$offlineShell}
+      <button
+        class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
+        style="-webkit-tap-highlight-color: transparent;"
+        onclick={() => {
+          addSheetOpen = false;
+          goto("/catalogs");
+        }}
+      >
+        <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
+          <Rss class="text-primary" size={18} />
+        </div>
+        <div class="flex-1 min-w-0">
+          <h3 class="font-medium text-sm text-foreground">
+            {m.nav_catalogs()}
+          </h3>
+          <p class="text-muted-foreground text-xs mt-0.5">
+            {m.local_add_opds_desc()}
+          </p>
+        </div>
+        <ChevronRight size={16} class="text-muted-foreground shrink-0" />
+      </button>
+    {/if}
   </div>
 </BottomSheet>
 

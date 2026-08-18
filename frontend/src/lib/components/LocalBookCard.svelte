@@ -10,6 +10,7 @@
      *  extra Preferences reads. */
     progressPct?: number | null;
     readingStatus?: ReadingStatus | null;
+    lastReadAt?: string | null;
   };
 </script>
 

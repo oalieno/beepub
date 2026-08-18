@@ -822,6 +822,7 @@
   "local_native_only": "The local library is available in the mobile app",
   "local_add": "Add books",
   "local_search_placeholder": "Search this device...",
+  "local_sort_last_read": "Recently read",
   "local_add_file": "Import an EPUB file",
   "local_add_file_desc": "Pick a file on this device",
   "local_add_opds_desc": "Download books from an online catalog",
