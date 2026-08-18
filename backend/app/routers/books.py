@@ -28,7 +28,6 @@ from sqlalchemy.sql.functions import coalesce
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata
-from app.models.book_locations import BookLocations
 from app.models.book_text import BookTextChunk
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.reading import ReadingActivity, UserBookInteraction
@@ -41,8 +40,6 @@ from app.rate_limit import limiter
 from app.schemas.book import (
     BookCoverUpdate,
     BookLibraryUpdate,
-    BookLocationsIn,
-    BookLocationsOut,
     BookMetadataUpdate,
     BookOut,
     BookSearchResult,
@@ -1303,9 +1300,7 @@ async def metadata_search(
 _MAX_SPINE_SECTIONS = 10_000
 
 
-async def _section_weights(
-    book_id: uuid.UUID, db: AsyncSession
-) -> list[int] | None:
+async def _section_weights(book_id: uuid.UUID, db: AsyncSession) -> list[int] | None:
     """Per-section text sizes, dense by spine index, from the text chunks.
 
     The chunks are the single source of truth — this is derived on read
@@ -1363,49 +1358,6 @@ async def get_book(
     out.has_unresolved_reports = report_result.scalar_one_or_none() is not None
     out.section_weights = await _section_weights(book_id, db)
     return out
-
-
-@router.get("/{book_id}/locations", response_model=BookLocationsOut)
-async def get_book_locations(
-    book_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """Shared cache of epub.js-generated locations.
-
-    Locations are deterministic per book file, so the first client to
-    generate them serves every user and device. 204 = nobody has yet;
-    the client generates and PUTs them back.
-    """
-    await _get_book_with_access(book_id, current_user, db)
-    row = (
-        await db.execute(select(BookLocations).where(BookLocations.book_id == book_id))
-    ).scalar_one_or_none()
-    if row is None:
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-    return row
-
-
-@router.put("/{book_id}/locations")
-async def put_book_locations(
-    book_id: uuid.UUID,
-    body: BookLocationsIn,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    book = await _get_book_with_access(book_id, current_user, db)
-    _require_book_file(book)
-    row = (
-        await db.execute(select(BookLocations).where(BookLocations.book_id == book_id))
-    ).scalar_one_or_none()
-    if row is None:
-        row = BookLocations(book_id=book_id)
-        db.add(row)
-    row.fingerprint = body.fingerprint
-    row.locations = body.locations
-    row.updated_at = datetime.now(UTC)
-    await db.commit()
-    return {"status": "stored"}
 
 
 @router.get("/{book_id}/editions")

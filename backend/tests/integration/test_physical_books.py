@@ -58,12 +58,6 @@ async def test_file_endpoints_are_gated(admin_client):
         response = await admin_client.get(f"/api/books/{book['id']}/{path}")
         assert response.status_code == 409, path
 
-    response = await admin_client.put(
-        f"/api/books/{book['id']}/locations",
-        json={"fingerprint": "x", "locations": '["epubcfi(/6/2!/4/2/1:0)"]'},
-    )
-    assert response.status_code == 409
-
 
 async def test_interactions_work_without_a_file(admin_client):
     library_id = await create_library(admin_client)

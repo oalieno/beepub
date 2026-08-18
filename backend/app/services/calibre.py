@@ -386,9 +386,6 @@ async def sync_calibre_library(
                                     # File changed since last sync — drop stale
                                     # chunks and reset derived flags so the
                                     # re-extract task runs cleanly.
-                                    from app.models.book_locations import (
-                                        BookLocations,
-                                    )
                                     from app.models.book_text import (
                                         BookTextChunk,
                                     )
@@ -396,13 +393,6 @@ async def sync_calibre_library(
                                     await db.execute(
                                         BookTextChunk.__table__.delete().where(
                                             BookTextChunk.book_id == book.id
-                                        )
-                                    )
-                                    # Cached reader locations are anchored to
-                                    # the old file's DOM — regenerate.
-                                    await db.execute(
-                                        BookLocations.__table__.delete().where(
-                                            BookLocations.book_id == book.id
                                         )
                                     )
                                     book.has_text = False
