@@ -82,8 +82,10 @@
           return;
         }
       } else if (!hasServerUrl()) {
-        if (path !== "/setup") {
-          goto("/setup");
+        // Nothing configured yet — the mode page IS first-run: pick a
+        // mode (its server card leads to /setup for the URL).
+        if (path !== "/setup" && path !== "/mode") {
+          goto("/mode");
           return;
         }
       } else if (!$authStore.user && path !== "/login" && path !== "/setup") {

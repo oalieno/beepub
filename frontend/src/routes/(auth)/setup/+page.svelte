@@ -1,12 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import {
-    getServerUrl,
-    hasServerUrl,
-    isLocalMode,
-    setLocalMode,
-    setServerUrl,
-  } from "$lib/api/client";
+  import { getServerUrl, setServerUrl } from "$lib/api/client";
   import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
@@ -15,16 +9,13 @@
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
 
-  // A configured server makes this visit "check or change the server"
-  // (the pencil on /mode, the login page's server button) — not first
-  // run: show the current URL and offer a plain way back out.
-  const editingExisting = hasServerUrl();
-  let serverUrl = $state(editingExisting ? getServerUrl() : "");
+  // One face for every entry (the /mode server card — first run
+  // included — the pencil, the login page's server button): the current
+  // URL, empty when none, plus a plain way back out. Mode choices live
+  // on /mode, not here.
+  let serverUrl = $state(getServerUrl());
   let loading = $state(false);
   let error = $state("");
-  // Captured once: entering local mode below would otherwise flip the
-  // footer from "use without a server" to "back to local library" mid-tap.
-  const cameFromLocalMode = isLocalMode();
 
   function goBack() {
     // In-app entries push; leave by popping. Direct loads fall back.
@@ -33,13 +24,6 @@
     } else {
       goto("/", { replaceState: true });
     }
-  }
-
-  function handleUseLocally() {
-    // Non-destructive: any configured server just lies dormant while the
-    // app runs in local mode — switch back anytime from /mode.
-    setLocalMode(true);
-    goto("/local");
   }
 
   async function handleConnect() {
@@ -150,36 +134,14 @@
 
     {#if isNative()}
       <div class="mt-4 text-center">
-        {#if editingExisting}
-          <!-- Just checking which server this is must cost nothing:
-               back out without changing anything. Mode choices live on
-               /mode, so no "use without a server" here. -->
-          <Button
-            variant="ghost"
-            class="text-sm text-muted-foreground"
-            onclick={goBack}
-          >
-            <ArrowLeft size={16} />
-            {m.common_back()}
-          </Button>
-        {:else if cameFromLocalMode}
-          <Button
-            variant="ghost"
-            class="text-sm text-muted-foreground"
-            onclick={() => goto("/local")}
-          >
-            <ArrowLeft size={16} />
-            {m.setup_back_to_local()}
-          </Button>
-        {:else}
-          <Button
-            variant="ghost"
-            class="text-sm text-muted-foreground"
-            onclick={handleUseLocally}
-          >
-            {m.setup_local_mode()}
-          </Button>
-        {/if}
+        <Button
+          variant="ghost"
+          class="text-sm text-muted-foreground"
+          onclick={goBack}
+        >
+          <ArrowLeft size={16} />
+          {m.common_back()}
+        </Button>
       </div>
     {/if}
   </div>
