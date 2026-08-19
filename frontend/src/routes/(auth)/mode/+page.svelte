@@ -41,38 +41,47 @@
 >
   <div class="w-full max-w-sm">
     <h1
-      class="text-2xl font-bold text-center mb-2"
+      class="text-2xl font-bold text-center mb-8"
       style="font-family: var(--font-heading)"
     >
       {m.mode_switch_title()}
     </h1>
-    <p class="text-sm text-muted-foreground text-center mb-8">
-      {m.mode_switch_subtitle()}
-    </p>
 
     <div class="space-y-3">
       {#if serverUrl}
-        <button
-          class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left transition-colors {localMode
-            ? 'hover:bg-secondary/50'
-            : 'ring-2 ring-primary'}"
-          disabled={!localMode}
-          aria-current={!localMode}
-          onclick={() => switchAppMode("server")}
-        >
-          <div
-            class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
+        <div>
+          <button
+            class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left transition-colors {localMode
+              ? 'hover:bg-secondary/50'
+              : 'ring-2 ring-primary'}"
+            disabled={!localMode}
+            aria-current={!localMode}
+            onclick={() => switchAppMode("server")}
           >
-            <Server size={22} class="text-primary" />
+            <div
+              class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
+            >
+              <Server size={22} class="text-primary" />
+            </div>
+            <div class="flex-1 min-w-0">
+              <p class="font-semibold">{m.mode_server_label()}</p>
+              <p class="text-sm text-muted-foreground truncate">{serverUrl}</p>
+            </div>
+            {#if !localMode}
+              <Check size={20} class="text-primary shrink-0" />
+            {/if}
+          </button>
+          <!-- Edit entry lives with the card it edits — not stacked over
+               the footer's back button where it invites mis-taps. -->
+          <div class="flex justify-end mt-1.5">
+            <button
+              class="text-xs text-muted-foreground hover:text-foreground transition-colors px-1 py-0.5"
+              onclick={() => goto("/setup")}
+            >
+              {m.mode_change_server()}
+            </button>
           </div>
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold">{m.mode_server_label()}</p>
-            <p class="text-sm text-muted-foreground truncate">{serverUrl}</p>
-          </div>
-          {#if !localMode}
-            <Check size={20} class="text-primary shrink-0" />
-          {/if}
-        </button>
+        </div>
       {:else}
         <button
           class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left transition-colors hover:bg-secondary/50"
@@ -114,25 +123,14 @@
     </div>
 
     <div class="mt-6 text-center">
-      {#if serverUrl}
-        <Button
-          variant="ghost"
-          class="text-sm text-muted-foreground"
-          onclick={() => goto("/setup")}
-        >
-          {m.mode_change_server()}
-        </Button>
-      {/if}
-      <div>
-        <Button
-          variant="ghost"
-          class="text-sm text-muted-foreground"
-          onclick={goBack}
-        >
-          <ArrowLeft size={16} />
-          {m.common_back()}
-        </Button>
-      </div>
+      <Button
+        variant="ghost"
+        class="text-sm text-muted-foreground"
+        onclick={goBack}
+      >
+        <ArrowLeft size={16} />
+        {m.common_back()}
+      </Button>
     </div>
   </div>
 </div>

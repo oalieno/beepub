@@ -74,7 +74,6 @@
   "setup_error_unreachable": "無法連線到伺服器。請確認網址並確認伺服器正在執行。",
   "setup_local_mode": "不連接伺服器使用",
   "mode_switch_title": "切換模式",
-  "mode_switch_subtitle": "伺服器模式需要網路連線；本地模式閱讀這台裝置上的書籍。",
   "mode_server_label": "伺服器模式",
   "mode_local_label": "本地模式",
   "mode_local_desc": "已下載的書籍，離線可用",

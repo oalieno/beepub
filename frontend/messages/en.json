@@ -74,7 +74,6 @@
   "setup_error_unreachable": "Cannot reach server. Check the URL and make sure the server is running.",
   "setup_local_mode": "Use without a server",
   "mode_switch_title": "Switch mode",
-  "mode_switch_subtitle": "Server mode needs a connection. Local mode reads the books on this device.",
   "mode_server_label": "Server mode",
   "mode_local_label": "Local mode",
   "mode_local_desc": "Downloaded books — no network needed",
