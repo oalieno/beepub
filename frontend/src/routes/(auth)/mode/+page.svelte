@@ -8,7 +8,7 @@
   } from "$lib/api/client";
   import * as m from "$lib/paraglide/messages.js";
   import { isNative } from "$lib/platform";
-  import { ArrowLeft, Check, Server, Smartphone } from "@lucide/svelte";
+  import { ArrowLeft, Check, Pencil, Server, Smartphone } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
 
   // Modes are a native concept — web is served by the server it uses.
@@ -48,39 +48,45 @@
     </h1>
 
     <div class="space-y-3">
-      {#if serverUrl}
-        <div>
-          <button
-            class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left transition-colors {localMode
-              ? 'hover:bg-secondary/50'
-              : 'ring-2 ring-primary'}"
-            disabled={!localMode}
-            aria-current={!localMode}
-            onclick={() => switchAppMode("server")}
+      {#if serverUrl && localMode}
+        <button
+          class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left transition-colors hover:bg-secondary/50"
+          onclick={() => switchAppMode("server")}
+        >
+          <div
+            class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
           >
-            <div
-              class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
-            >
-              <Server size={22} class="text-primary" />
-            </div>
-            <div class="flex-1 min-w-0">
-              <p class="font-semibold">{m.mode_server_label()}</p>
-              <p class="text-sm text-muted-foreground truncate">{serverUrl}</p>
-            </div>
-            {#if !localMode}
-              <Check size={20} class="text-primary shrink-0" />
-            {/if}
-          </button>
-          <!-- Edit entry lives with the card it edits — not stacked over
-               the footer's back button where it invites mis-taps. -->
-          <div class="flex justify-end mt-1.5">
-            <button
-              class="text-xs text-muted-foreground hover:text-foreground transition-colors px-1 py-0.5"
-              onclick={() => goto("/setup")}
-            >
-              {m.mode_change_server()}
-            </button>
+            <Server size={22} class="text-primary" />
           </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold">{m.mode_server_label()}</p>
+            <p class="text-sm text-muted-foreground truncate">{serverUrl}</p>
+          </div>
+        </button>
+      {:else if serverUrl}
+        <!-- Current mode: the card isn't a switch target, so it can host
+             its subordinate action — editing the server it shows. -->
+        <div
+          class="w-full bg-card card-soft rounded-2xl p-5 flex items-center gap-4 text-left ring-2 ring-primary"
+          aria-current="true"
+        >
+          <div
+            class="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"
+          >
+            <Server size={22} class="text-primary" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold">{m.mode_server_label()}</p>
+            <p class="text-sm text-muted-foreground truncate">{serverUrl}</p>
+          </div>
+          <Check size={20} class="text-primary shrink-0" />
+          <button
+            class="p-2 -mr-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary shrink-0"
+            aria-label={m.mode_change_server()}
+            onclick={() => goto("/setup")}
+          >
+            <Pencil size={18} />
+          </button>
         </div>
       {:else}
         <button
