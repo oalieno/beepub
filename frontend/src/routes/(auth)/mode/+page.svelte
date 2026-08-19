@@ -7,8 +7,14 @@
     switchAppMode,
   } from "$lib/api/client";
   import * as m from "$lib/paraglide/messages.js";
+  import { isNative } from "$lib/platform";
   import { ArrowLeft, Check, Server, Smartphone } from "@lucide/svelte";
   import { Button } from "$lib/components/ui/button";
+
+  // Modes are a native concept — web is served by the server it uses.
+  if (typeof window !== "undefined" && !isNative()) {
+    void goto("/", { replaceState: true });
+  }
 
   // One-time reads — switching always goes through a full page load.
   const localMode = isLocalMode();

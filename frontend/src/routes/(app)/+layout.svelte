@@ -1,40 +1,27 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
   import { isLocalMode } from "$lib/api/client";
-  import { offlineShell } from "$lib/services/offlineShell";
+  import { serverDisconnected } from "$lib/services/serverDisconnect";
   import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
   import LocalTabBar from "$lib/components/LocalTabBar.svelte";
   import LocalTopBar from "$lib/components/LocalTopBar.svelte";
+  import DisconnectScreen from "$lib/components/DisconnectScreen.svelte";
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
-  import OfflineBanner from "$lib/components/OfflineBanner.svelte";
   import SearchModal from "$lib/components/SearchModal.svelte";
   import { searchModalOpen } from "$lib/stores/search";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();
 
-  // Serverless local mode gets its own chrome below. Entering/leaving the
-  // mode always routes through (auth) pages, so this layout remounts and a
-  // one-time read is enough.
+  // Local mode gets its own chrome below. Mode switches are a full page
+  // load (switchAppMode), so a one-time read is enough.
   const localMode = isLocalMode();
 
   let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
   let isBookDetail = $derived(/^\/books\/[^/]+$/.test(page.url.pathname));
-
-  // Offline shell route guard: the shell is an allowlist — the device
-  // shelf is the only surface that exists offline, everything else
-  // redirects there. The reader lives in its own layout group and is
-  // deliberately outside this guard (going offline mid-book must never
-  // interrupt reading).
-  $effect(() => {
-    if (!localMode && $offlineShell && page.url.pathname !== "/local") {
-      void goto("/local", { replaceState: true });
-    }
-  });
 </script>
 
 <svelte:window
@@ -62,21 +49,12 @@
   >
     {@render children()}
   </main>
-{:else if isAuthenticated && $offlineShell}
-  <!-- Offline shell: the app collapses to the device shelf behind a
-       minimal chrome. No tab bar, no sidebar — there is exactly one
-       surface, so the only affordances are the banner's retry and the
-       books themselves. -->
-  <LocalTopBar />
-
-  <main
-    class="pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[env(safe-area-inset-bottom,0px)]"
-  >
-    <div class="px-6 sm:px-8 pt-6">
-      <OfflineBanner />
-    </div>
-    {@render children()}
-  </main>
+{:else if isAuthenticated && $serverDisconnected}
+  <!-- Server mode needs a connection: one disconnect surface (retry /
+       switch to local mode) instead of per-page failure states. The
+       reader is in its own layout group and deliberately survives this —
+       going offline mid-book must never interrupt reading. -->
+  <DisconnectScreen />
 {:else if isAuthenticated}
   <!-- Desktop: sidebar -->
   <DesktopSidebar onSearchOpen={() => searchModalOpen.set(true)} />

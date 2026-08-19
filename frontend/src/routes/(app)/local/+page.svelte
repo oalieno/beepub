@@ -4,7 +4,6 @@
   import { isNative } from "$lib/platform";
   import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { isOnline } from "$lib/services/network";
-  import { offlineShell } from "$lib/services/offlineShell";
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
@@ -348,7 +347,7 @@
        heading (its top bar already titles the page); in the offline
        shell the cards page is a dead door and the shell's top bar
        titles the page instead. -->
-  {#if !localMode && !$offlineShell}
+  {#if !localMode}
     <div class="mb-4">
       <a
         href="/libraries"
@@ -514,29 +513,27 @@
       </div>
       <ChevronRight size={16} class="text-muted-foreground shrink-0" />
     </button>
-    {#if !$offlineShell}
-      <button
-        class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
-        style="-webkit-tap-highlight-color: transparent;"
-        onclick={() => {
-          addSheetOpen = false;
-          goto("/catalogs");
-        }}
-      >
-        <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
-          <Rss class="text-primary" size={18} />
-        </div>
-        <div class="flex-1 min-w-0">
-          <h3 class="font-medium text-sm text-foreground">
-            {m.nav_catalogs()}
-          </h3>
-          <p class="text-muted-foreground text-xs mt-0.5">
-            {m.local_add_opds_desc()}
-          </p>
-        </div>
-        <ChevronRight size={16} class="text-muted-foreground shrink-0" />
-      </button>
-    {/if}
+    <button
+      class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-secondary/50 active:bg-secondary transition-colors text-left"
+      style="-webkit-tap-highlight-color: transparent;"
+      onclick={() => {
+        addSheetOpen = false;
+        goto("/catalogs");
+      }}
+    >
+      <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
+        <Rss class="text-primary" size={18} />
+      </div>
+      <div class="flex-1 min-w-0">
+        <h3 class="font-medium text-sm text-foreground">
+          {m.nav_catalogs()}
+        </h3>
+        <p class="text-muted-foreground text-xs mt-0.5">
+          {m.local_add_opds_desc()}
+        </p>
+      </div>
+      <ChevronRight size={16} class="text-muted-foreground shrink-0" />
+    </button>
   </div>
 </BottomSheet>
 
