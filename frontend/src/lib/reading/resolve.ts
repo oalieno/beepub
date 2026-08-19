@@ -4,7 +4,7 @@
  * Local books win: their ids are client-generated UUIDs, so a local
  * manifest hit is definitive. OPDS sources slot in here when they arrive.
  */
-import { hasServerUrl } from "$lib/api/client";
+import { isLocalMode } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import { getKosyncAccount } from "$lib/services/kosyncAccount";
 import {
@@ -31,10 +31,10 @@ export async function resolveReading(bookId: string): Promise<ResolvedReading> {
     try {
       const entry = await getLocalBook(bookId);
       if (entry) {
-        // External kosync is serverless-only: a connected BeePub server IS
-        // the kosync server (readingSync bridges through it), so the
-        // account lies dormant — never cleared — until disconnect.
-        if (!hasServerUrl()) {
+        // External kosync is local-mode-only: in server mode the BeePub
+        // server IS the kosync server (readingSync bridges through it),
+        // so the account lies dormant until the user switches modes.
+        if (isLocalMode()) {
           try {
             const account = await getKosyncAccount();
             if (account) {

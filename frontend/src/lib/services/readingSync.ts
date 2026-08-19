@@ -16,7 +16,7 @@
 import { get, writable } from "svelte/store";
 
 import { booksApi } from "$lib/api/books";
-import { hasServerUrl } from "$lib/api/client";
+import { hasServerUrl, isLocalMode } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import {
   readLocalHighlightRecords,
@@ -66,6 +66,7 @@ function canSync(): boolean {
   // 401 and the api client's persistent-401 handler redirects to /login.
   return (
     isNative() &&
+    !isLocalMode() &&
     hasServerUrl() &&
     get(authStore).user !== null &&
     getIsOnline()

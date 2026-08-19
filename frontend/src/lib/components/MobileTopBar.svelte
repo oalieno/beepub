@@ -1,7 +1,8 @@
 <script lang="ts">
   import { page } from "$app/state";
   import * as m from "$lib/paraglide/messages.js";
-  import { Search, Dices } from "@lucide/svelte";
+  import { ArrowLeftRight, Search, Dices } from "@lucide/svelte";
+  import { isNative } from "$lib/platform";
 
   let { onSearchOpen }: { onSearchOpen: () => void } = $props();
 
@@ -44,6 +45,15 @@
     </h1>
 
     <div class="flex items-center gap-1">
+      {#if isNative()}
+        <a
+          href="/mode"
+          class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+          aria-label={m.mode_switch_title()}
+        >
+          <ArrowLeftRight size={20} />
+        </a>
+      {/if}
       <button
         class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
         onclick={onSearchOpen}

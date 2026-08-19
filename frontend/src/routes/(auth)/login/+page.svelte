@@ -7,7 +7,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { Eye, EyeOff, Info, Settings } from "@lucide/svelte";
   import { isNative } from "$lib/platform";
-  import { getServerUrl } from "$lib/api/client";
+  import { getServerUrl, switchAppMode } from "$lib/api/client";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
   import { Label } from "$lib/components/ui/label";
@@ -355,5 +355,20 @@
         {@render loginForm()}
       {/if}
     </div>
+
+    {#if isNative()}
+      <!-- Locked out (dead server, forgotten password, offline)? The
+           downloaded books are always one tap away — this is what makes
+           an accidental logout harmless. -->
+      <div class="mt-4 text-center">
+        <Button
+          variant="ghost"
+          class="text-sm text-muted-foreground"
+          onclick={() => switchAppMode("local")}
+        >
+          {m.mode_use_local()}
+        </Button>
+      </div>
+    {/if}
   </div>
 </div>

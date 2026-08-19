@@ -38,7 +38,14 @@
   let prevUser: unknown = null;
   $effect(() => {
     const user = $authStore.user;
-    if (browser && user && !prevUser && isNative() && hasServerUrl()) {
+    if (
+      browser &&
+      user &&
+      !prevUser &&
+      isNative() &&
+      !isLocalMode() &&
+      hasServerUrl()
+    ) {
       void linkAndSyncAll({ force: true });
     }
     prevUser = user;
@@ -51,14 +58,15 @@
     }
   });
 
-  // Serverless local mode only works on pages that don't need a server:
-  // the shelf, OPDS catalogs, setup (to connect later), and the reader for
-  // local books.
+  // Local mode only works on pages that don't need a server: the shelf,
+  // OPDS catalogs, setup (to connect later), the mode switcher, and the
+  // reader for local books.
   function isLocalPath(path: string): boolean {
     return (
       path.startsWith("/local") ||
       path.startsWith("/catalogs") ||
       path === "/setup" ||
+      path === "/mode" ||
       /^\/books\/[^/]+\/read/.test(path)
     );
   }
@@ -68,23 +76,17 @@
   $effect(() => {
     if (browser && isNative() && page.url) {
       const path = page.url.pathname;
-      if (!hasServerUrl()) {
-        if (isLocalMode()) {
-          if (!isLocalPath(path)) {
-            goto("/local");
-            return;
-          }
-        } else if (path !== "/setup") {
+      if (isLocalMode()) {
+        if (!isLocalPath(path)) {
+          goto("/local");
+          return;
+        }
+      } else if (!hasServerUrl()) {
+        if (path !== "/setup") {
           goto("/setup");
           return;
         }
-      }
-      if (
-        hasServerUrl() &&
-        !$authStore.user &&
-        path !== "/login" &&
-        path !== "/setup"
-      ) {
+      } else if (!$authStore.user && path !== "/login" && path !== "/setup") {
         goto("/login");
         return;
       }

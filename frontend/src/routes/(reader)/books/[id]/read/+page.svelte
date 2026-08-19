@@ -21,7 +21,7 @@
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import { coverUrl, hasServerUrl } from "$lib/api/client";
+  import { coverUrl, hasServerUrl, isLocalMode } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { aiApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
@@ -262,7 +262,7 @@
       // Pull the linked server state first so the reader restores the
       // newest position — but bounded: past 2.5s the sync continues in
       // the background and this session opens with local state.
-      if (hasServerUrl() && getIsOnline()) {
+      if (!isLocalMode() && hasServerUrl() && getIsOnline()) {
         const { syncLocalBook } = await import("$lib/services/readingSync");
         await Promise.race([
           syncLocalBook(bookId).catch(() => {}),

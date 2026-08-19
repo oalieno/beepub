@@ -103,6 +103,7 @@
   // eligibility is decided against the fetched library list.
   let canUploadToCloud = $derived(
     isNative() &&
+      !localMode &&
       hasServerUrl() &&
       $isOnline &&
       ($authStore.user?.role === UserRole.Admin ||

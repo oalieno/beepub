@@ -6,6 +6,7 @@
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import * as m from "$lib/paraglide/messages.js";
   import {
+    ArrowLeftRight,
     Home,
     Library,
     ShelvingUnit,
@@ -74,6 +75,12 @@
             label: m.nav_catalogs(),
             icon: Rss,
             active: page.url.pathname.startsWith("/catalogs"),
+          },
+          {
+            href: "/mode",
+            label: m.mode_switch_title(),
+            icon: ArrowLeftRight,
+            active: page.url.pathname === "/mode",
           },
         ]
       : []),

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import * as m from "$lib/paraglide/messages.js";
+  import { ArrowLeftRight } from "@lucide/svelte";
 
   // Deeper paths first — matching is prefix-based.
   const titleMap = $derived<Record<string, string>>({
@@ -25,12 +26,19 @@
   class="fixed top-0 left-0 right-0 z-40 bg-background/95 backdrop-blur-sm border-b border-border/50"
   style="padding-top: env(safe-area-inset-top, 0px); height: calc(48px + env(safe-area-inset-top, 0px));"
 >
-  <div class="h-[48px] px-4 flex items-center">
+  <div class="h-[48px] px-4 flex items-center justify-between">
     <h1
       class="text-lg font-bold tracking-tight"
       style="font-family: var(--font-heading)"
     >
       {pageTitle()}
     </h1>
+    <a
+      href="/mode"
+      class="p-2 -mr-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+      aria-label={m.mode_switch_title()}
+    >
+      <ArrowLeftRight size={20} />
+    </a>
   </div>
 </header>

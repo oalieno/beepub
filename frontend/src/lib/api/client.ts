@@ -76,13 +76,6 @@ export function setServerUrl(url: string): void {
   localStorage.removeItem(LOCAL_MODE_KEY);
 }
 
-/** Forget the configured server (switching to serverless local mode).
- *  Per-server state like the local-book link map is keyed by URL and
- *  survives untouched — reconnecting the same server brings it back. */
-export function clearServerUrl(): void {
-  localStorage.removeItem(SERVER_URL_KEY);
-}
-
 export function hasServerUrl(): boolean {
   if (typeof window !== "undefined") {
     return !!localStorage.getItem(SERVER_URL_KEY);
@@ -90,12 +83,13 @@ export function hasServerUrl(): boolean {
   return !!(import.meta.env.VITE_API_BASE as string);
 }
 
-/** Serverless local mode: the user chose to use the app without a server
- *  (native only — the choice is made on /setup). A configured server always
- *  wins over the flag. */
+/** Local (serverless) mode: the user chose to use the app without a
+ *  server — on /setup or via the mode switcher (/mode). The flag alone
+ *  decides: server credentials may lie dormant underneath, so switching
+ *  back is free. Never set on web. */
 export function isLocalMode(): boolean {
   if (typeof window === "undefined") return false;
-  return localStorage.getItem(LOCAL_MODE_KEY) === "1" && !hasServerUrl();
+  return localStorage.getItem(LOCAL_MODE_KEY) === "1";
 }
 
 export function setLocalMode(on: boolean): void {
@@ -104,6 +98,13 @@ export function setLocalMode(on: boolean): void {
   } else {
     localStorage.removeItem(LOCAL_MODE_KEY);
   }
+}
+
+/** Explicit mode switch (native): a full page load, not SPA navigation —
+ *  mode is deliberately read once per app lifetime across the tree. */
+export function switchAppMode(mode: "server" | "local"): void {
+  setLocalMode(mode === "local");
+  window.location.replace(mode === "local" ? "/local" : "/");
 }
 
 export function apiBase(): string {

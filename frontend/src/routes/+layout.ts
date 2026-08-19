@@ -1,5 +1,5 @@
 import { browser } from "$app/environment";
-import { getServerUrl } from "$lib/api/client";
+import { getServerUrl, isLocalMode } from "$lib/api/client";
 import type { LayoutLoad } from "./$types";
 
 const isCapacitor = import.meta.env.VITE_CAPACITOR === "true";
@@ -14,6 +14,9 @@ export const load: LayoutLoad = async ({ data }) => {
 
   // SPA build (Capacitor): fetch user client-side
   if (browser) {
+    // Local mode makes zero server traffic — the dormant session (if
+    // any) stays untouched until the user switches back.
+    if (isLocalMode()) return { user: null };
     const token = localStorage.getItem("token");
     if (!token) return { user: null };
     try {

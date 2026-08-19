@@ -14,7 +14,7 @@ import { Preferences } from "@capacitor/preferences";
 import { get } from "svelte/store";
 
 import { activityApi } from "$lib/api/activity";
-import { hasServerUrl } from "$lib/api/client";
+import { hasServerUrl, isLocalMode } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import { getDeviceId } from "$lib/services/deviceId";
 import { getIsOnline } from "$lib/services/network";
@@ -81,6 +81,7 @@ export async function tickReading(): Promise<void> {
 export function pushLedger(): Promise<void> {
   if (
     !isNative() ||
+    isLocalMode() ||
     !hasServerUrl() ||
     get(authStore).user === null ||
     !getIsOnline()

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { ChevronRight, RefreshCw, Rss, Server } from "@lucide/svelte";
+  import { ChevronRight, RefreshCw, Rss } from "@lucide/svelte";
   import KosyncSettingsDialog from "$lib/components/KosyncSettingsDialog.svelte";
   import LanguageSection from "$lib/components/settings/LanguageSection.svelte";
   import AppearanceSection from "$lib/components/settings/AppearanceSection.svelte";
@@ -27,7 +27,7 @@
   </div>
 
   <!-- Sync & catalogs -->
-  <div class="bg-card card-soft rounded-2xl overflow-hidden mb-4">
+  <div class="bg-card card-soft rounded-2xl overflow-hidden">
     <button
       class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
       onclick={() => (kosyncOpen = true)}
@@ -48,18 +48,6 @@
     >
       <Rss size={20} class="text-muted-foreground shrink-0" />
       <span class="text-sm font-medium flex-1">{m.nav_catalogs()}</span>
-      <ChevronRight size={16} class="text-muted-foreground/50" />
-    </button>
-  </div>
-
-  <!-- Connect a server -->
-  <div class="bg-card card-soft rounded-2xl overflow-hidden">
-    <button
-      class="flex items-center gap-3 px-4 py-3.5 w-full text-left hover:bg-secondary/50 transition-colors"
-      onclick={() => goto("/setup")}
-    >
-      <Server size={20} class="text-muted-foreground shrink-0" />
-      <span class="text-sm font-medium flex-1">{m.local_connect_server()}</span>
       <ChevronRight size={16} class="text-muted-foreground/50" />
     </button>
   </div>
