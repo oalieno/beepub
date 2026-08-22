@@ -85,11 +85,13 @@
     <div
       class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[4px] pointer-events-none"
       aria-hidden="true"
+      data-scrubber-ticks
     >
       {#each ticks as tick (tick)}
         <div
           class="absolute top-0 h-full w-[2px] -translate-x-1/2"
           style="left: {isRtl ? 100 - tick : tick}%; background: {tickColor};"
+          data-tick={tick}
         ></div>
       {/each}
     </div>

@@ -133,4 +133,12 @@ test("scrubber seek maps through the weights into the right chapter", async ({
   await expect(frame.getByText("乙章開場").first()).toBeVisible({
     timeout: 15_000,
   });
+
+  // Chapter ticks share the weight scale with the seek mapping: the
+  // two-chapter fixture gets exactly one tick, sitting on the chapter 2
+  // boundary the seek above just crossed.
+  const ticks = page.locator("[data-scrubber-ticks] [data-tick]");
+  await expect(ticks).toHaveCount(1);
+  const tickPct = parseFloat((await ticks.first().getAttribute("data-tick"))!);
+  expect(Math.abs(tickPct - (before / total) * 100)).toBeLessThan(0.5);
 });

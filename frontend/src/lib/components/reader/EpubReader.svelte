@@ -1475,7 +1475,11 @@
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
-    onticks?.(sectionTickPercents());
+    // Ticks need the spine's section count (uniform-weight books size off
+    // it) — onready can beat the spine load, so wait for it explicitly.
+    void Promise.resolve(epubBook.loaded?.spine)
+      .then(() => onticks?.(sectionTickPercents()))
+      .catch(() => {});
     onready?.();
   }
 
