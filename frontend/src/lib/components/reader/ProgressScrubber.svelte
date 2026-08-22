@@ -4,6 +4,7 @@
     darkMode = false,
     isRtl = false,
     ariaLabel = "",
+    ticks = [],
     onseek,
     getlabel,
   }: {
@@ -11,6 +12,8 @@
     darkMode?: boolean;
     isRtl?: boolean;
     ariaLabel?: string;
+    /** Chapter-start positions (percent) rendered as gaps in the track. */
+    ticks?: number[];
     onseek?: (percentage: number) => void;
     /** Chapter (or other context) for the drag bubble at a target position. */
     getlabel?: (percentage: number) => string | null;
@@ -29,6 +32,13 @@
   // Center of the bubble follows the thumb; clamped so it never bleeds past
   // the slider ends. An RTL slider fills right-to-left, so mirror the offset.
   let bubblePos = $derived(isRtl ? 100 - (preview ?? 0) : (preview ?? 0));
+
+  // Ticks read as gaps: painted in the surface color of the bar behind the
+  // scrubber, so the track looks segmented on both its filled and unfilled
+  // sides (the YouTube-chapters idiom).
+  let tickColor = $derived(
+    darkMode ? "var(--color-ink-900)" : "var(--color-background)",
+  );
 </script>
 
 <div class="relative">
@@ -69,6 +79,21 @@
       preview = null;
     }}
   />
+  <!-- After the input so the marks paint over its track pseudo-element;
+       they only span the 4px track, so the thumb still reads on top. -->
+  {#if ticks.length}
+    <div
+      class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[4px] pointer-events-none"
+      aria-hidden="true"
+    >
+      {#each ticks as tick (tick)}
+        <div
+          class="absolute top-0 h-full w-[2px] -translate-x-1/2"
+          style="left: {isRtl ? 100 - tick : tick}%; background: {tickColor};"
+        ></div>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>

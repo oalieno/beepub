@@ -62,6 +62,7 @@
     onshare,
     onhrefchange,
     onready,
+    onticks,
     onerror,
     oncompanion,
     ontap,
@@ -106,6 +107,9 @@
     onshare?: (highlight: HighlightOut) => void;
     onhrefchange?: (href: string) => void;
     onready?: () => void;
+    /** Section-start percents for scrubber chapter ticks; [] when the
+     *  spine is per-page (comics) and ticks would be noise. */
+    onticks?: (ticks: number[]) => void;
     onerror?: (error: Error) => void;
     oncompanion?: (detail: { cfiRange: string; text: string }) => void;
     ontap?: () => void;
@@ -1471,7 +1475,33 @@
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
+    onticks?.(sectionTickPercents());
     onready?.();
+  }
+
+  // A tick per spine section works for prose (one file per chapter); a
+  // comic's one-image-per-section spine would paint a picket fence, so
+  // past this count the scrubber goes tickless.
+  const MAX_SCRUBBER_TICKS = 40;
+
+  /** Section-start positions (percent) on the weight scale — the same
+   *  scale the scrubber seeks on. Zero-weight sections are skipped: their
+   *  start coincides with the next weighted one. */
+  function sectionTickPercents(): number[] {
+    const weights = progressWeights();
+    let total = 0;
+    for (const w of weights) total += w;
+    if (total <= 0) return [];
+    const out: number[] = [];
+    let before = 0;
+    for (let i = 0; i < weights.length; i++) {
+      if (i > 0 && weights[i]! > 0) {
+        const pct = (before / total) * 100;
+        if (pct > 0.5 && pct < 99.5) out.push(pct);
+      }
+      before += weights[i]!;
+    }
+    return out.length > MAX_SCRUBBER_TICKS ? [] : out;
   }
 
   onDestroy(() => {

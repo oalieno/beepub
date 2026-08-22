@@ -23,6 +23,7 @@
     offline = false,
     showAi = true,
     canSeek = false,
+    ticks = [],
     getSeekLabel,
     onpeekreturn,
     onseek,
@@ -44,6 +45,8 @@
     /** AI actions are BeePub-server features; hidden for other backends. */
     showAi?: boolean;
     canSeek?: boolean;
+    /** Chapter-start percents for the scrubber's tick marks. */
+    ticks?: number[];
     /** Chapter label for the scrubber's drag bubble. */
     getSeekLabel?: (percentage: number) => string | null;
     onpeekreturn?: () => void;
@@ -106,6 +109,7 @@
           {percentage}
           {darkMode}
           {isRtl}
+          {ticks}
           ariaLabel={m.reader_progress()}
           getlabel={getSeekLabel}
           {onseek}

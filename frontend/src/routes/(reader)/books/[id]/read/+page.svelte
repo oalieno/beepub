@@ -214,6 +214,9 @@
   // The weight-derived percentage maps both ways from the start — no
   // locations generation to wait for.
   let canScrub = $state(true);
+  // Chapter-start percents for the scrubber tick marks (from the reader,
+  // which owns the weights and the spine).
+  let sectionTicks = $state<number[]>([]);
   // Highlights whose anchor no longer resolves and couldn't be healed —
   // shown with a warning in the sidebar instead of silently doing nothing.
   let brokenHighlightIds = $state<Set<string>>(new Set());
@@ -927,6 +930,7 @@
           onshare={handleShareHighlight}
           oncompanion={handleCompanion}
           ontap={handleReaderTap}
+          onticks={(t) => (sectionTicks = t)}
           onready={() => (epubLoaded = true)}
           onerror={() => (loadError = true)}
           onkosyncposition={handleKosyncPosition}
@@ -1041,6 +1045,7 @@
                 {percentage}
                 {darkMode}
                 {isRtl}
+                ticks={sectionTicks}
                 ariaLabel={m.reader_progress()}
                 getlabel={(p) => reader?.chapterAtPercentage(p) ?? null}
                 onseek={(p) => reader?.displayPercentage(p)}
@@ -1165,6 +1170,7 @@
       {peekLabel}
       onpeekreturn={() => reader?.returnFromPeek()}
       canSeek={canScrub}
+      ticks={sectionTicks}
       getSeekLabel={(p) => reader?.chapterAtPercentage(p) ?? null}
       onseek={(p) => reader?.displayPercentage(p)}
       {darkMode}
