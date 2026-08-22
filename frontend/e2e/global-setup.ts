@@ -18,10 +18,20 @@ export default async function globalSetup(config: FullConfig) {
   const baseURL = config.projects[0].use.baseURL!;
   const anon = await request.newContext({ baseURL });
 
-  const status = await anon.get("/api/auth/registration-status");
-  if (!status.ok()) {
+  // test:e2e rebuilds the stack right before this runs, so give the
+  // freshly recreated backend time to come up instead of failing on the
+  // first probe.
+  const deadline = Date.now() + 90_000;
+  let status = await anon
+    .get("/api/auth/registration-status")
+    .catch(() => null);
+  while ((!status || !status.ok()) && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 2000));
+    status = await anon.get("/api/auth/registration-status").catch(() => null);
+  }
+  if (!status || !status.ok()) {
     throw new Error(
-      `Cannot reach ${baseURL} (${status.status()}). Is the e2e stack up? See e2e/README.md.`,
+      `Cannot reach ${baseURL} (${status ? status.status() : "no response"}). Is the e2e stack up? See e2e/README.md.`,
     );
   }
   if ((await status.json()).first_user) {

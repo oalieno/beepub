@@ -16,6 +16,12 @@ tests create users and books.
 ./e2e/stack.sh down    # tear down, volumes included
 ```
 
+`pnpm test:e2e` runs `stack.sh up` itself before the suite, so the stack
+is always the current working tree — an unchanged tree is a near-instant
+cache hit. The `up` images are baked builds: running Playwright directly
+(`pnpm exec playwright test`, fine for spec iteration) tests whatever the
+last build was, not your edits.
+
 The script pins the compose project name to `beepub-e2e`; never run the
 base compose file for testing without a `-p` — the default project name
 would replace a live beepub stack running on the same daemon.

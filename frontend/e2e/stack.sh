@@ -26,7 +26,11 @@ DEV_FILES="-f docker-compose.yml -f docker-compose.dev.yml -f frontend/e2e/stack
 case "${1:-}" in
   up)
     shift
-    exec docker compose -p beepub-e2e -f docker-compose.yml up -d --build "$@"
+    docker compose -p beepub-e2e -f docker-compose.yml up -d --build "$@"
+    # A recreated backend gets a new IP, and nginx resolves upstreams once
+    # at startup — when the reconcile touches backend but not nginx, every
+    # request 502s (the demo v0.8.0 upgrade trap). Bounce nginx last.
+    exec docker compose -p beepub-e2e -f docker-compose.yml restart nginx
     ;;
   dev)
     shift

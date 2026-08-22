@@ -9,7 +9,7 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "build:app": "node scripts/build-app.js",
     "cap:sync": "pnpm build:app && npx cap sync",
-    "test:e2e": "playwright test",
+    "test:e2e": "./e2e/stack.sh up && playwright test",
     "format": "prettier --plugin prettier-plugin-svelte --ignore-path .prettierignore --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
   },
   "devDependencies": {
