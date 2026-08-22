@@ -135,10 +135,12 @@ test("scrubber seek maps through the weights into the right chapter", async ({
   });
 
   // Chapter ticks share the weight scale with the seek mapping: the
-  // two-chapter fixture gets exactly one tick, sitting on the chapter 2
-  // boundary the seek above just crossed.
-  const ticks = page.locator("[data-scrubber-ticks] [data-tick]");
-  await expect(ticks).toHaveCount(1);
-  const tickPct = parseFloat((await ticks.first().getAttribute("data-tick"))!);
-  expect(Math.abs(tickPct - (before / total) * 100)).toBeLessThan(0.5);
+  // two-chapter fixture bakes exactly one segment gap into the track,
+  // sitting on the chapter 2 boundary the seek above just crossed.
+  await expect(scrubber).toHaveAttribute("data-ticks", /./);
+  const tickList = (await scrubber.getAttribute("data-ticks"))!
+    .split(",")
+    .map(parseFloat);
+  expect(tickList).toHaveLength(1);
+  expect(Math.abs(tickList[0]! - (before / total) * 100)).toBeLessThan(0.5);
 });

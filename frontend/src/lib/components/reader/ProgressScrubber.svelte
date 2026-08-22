@@ -33,12 +33,43 @@
   // the slider ends. An RTL slider fills right-to-left, so mirror the offset.
   let bubblePos = $derived(isRtl ? 100 - (preview ?? 0) : (preview ?? 0));
 
-  // Ticks read as gaps: painted in the surface color of the bar behind the
-  // scrubber, so the track looks segmented on both its filled and unfilled
-  // sides (the YouTube-chapters idiom).
-  let tickColor = $derived(
+  // Chapter ticks are baked into the track gradient itself as 2px gaps in
+  // the surface color (the YouTube-segments idiom). Part of the track
+  // pseudo-element, they can never paint over the thumb — and with an RTL
+  // slider the gradient runs right-to-left, so value-scale positions need
+  // no mirroring, same as the fill split.
+  let gapColor = $derived(
     darkMode ? "var(--color-ink-900)" : "var(--color-background)",
   );
+  let trackGradient = $derived.by(() => {
+    const bounds = [
+      0,
+      ...ticks.filter((t) => t > 0 && t < 100).sort((a, b) => a - b),
+      100,
+    ];
+    const parts: string[] = [];
+    for (let i = 0; i + 1 < bounds.length; i++) {
+      const a = bounds[i]!;
+      const b = bounds[i + 1]!;
+      if (i > 0) {
+        parts.push(
+          `${gapColor} calc(${a}% - 1px), ${gapColor} calc(${a}% + 1px)`,
+        );
+      }
+      const start = i === 0 ? `${a}%` : `calc(${a}% + 1px)`;
+      const end = i + 2 === bounds.length ? `${b}%` : `calc(${b}% - 1px)`;
+      if (value <= a) {
+        parts.push(`${track} ${start}, ${track} ${end}`);
+      } else if (value >= b) {
+        parts.push(`${fill} ${start}, ${fill} ${end}`);
+      } else {
+        parts.push(
+          `${fill} ${start}, ${fill} ${value}%, ${track} ${value}%, ${track} ${end}`,
+        );
+      }
+    }
+    return `linear-gradient(${gradientDir}, ${parts.join(", ")})`;
+  });
 </script>
 
 <div class="relative">
@@ -72,30 +103,14 @@
     dir={isRtl ? "rtl" : "ltr"}
     aria-label={ariaLabel}
     class="reader-scrubber w-full"
-    style="--scrub-track: linear-gradient({gradientDir}, {fill} {value}%, {track} {value}%); --scrub-thumb: {fill};"
+    data-ticks={ticks.length ? ticks.join(",") : undefined}
+    style="--scrub-track: {trackGradient}; --scrub-thumb: {fill};"
     oninput={(e) => (preview = +e.currentTarget.value)}
     onchange={(e) => {
       onseek?.(+e.currentTarget.value);
       preview = null;
     }}
   />
-  <!-- After the input so the marks paint over its track pseudo-element;
-       they only span the 4px track, so the thumb still reads on top. -->
-  {#if ticks.length}
-    <div
-      class="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[4px] pointer-events-none"
-      aria-hidden="true"
-      data-scrubber-ticks
-    >
-      {#each ticks as tick (tick)}
-        <div
-          class="absolute top-0 h-full w-[2px] -translate-x-1/2"
-          style="left: {isRtl ? 100 - tick : tick}%; background: {tickColor};"
-          data-tick={tick}
-        ></div>
-      {/each}
-    </div>
-  {/if}
 </div>
 
 <style>
