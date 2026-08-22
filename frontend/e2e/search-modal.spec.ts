@@ -56,9 +56,15 @@ test("a stale search response cannot flash the empty state", async ({
     });
   });
 
+  // The race needs request 1 (slow, empty) actually IN FLIGHT before the
+  // second keystroke — a fixed debounce sleep loses under load (both
+  // keystrokes coalesce into one request, which meets the slow stub and
+  // the results never arrive; flaked right after e2e image rebuilds).
+  const firstRequest = page.waitForRequest((r) =>
+    r.url().includes("/api/books/search"),
+  );
   await input.fill("E2");
-  // Let the debounce fire request 1 (the slow, empty one) …
-  await page.waitForTimeout(400);
+  await firstRequest;
   // … then type on so request 2 (fast, with results) races past it.
   await input.fill("E2E");
 
