@@ -446,6 +446,52 @@ export async function readLocalBookBytes(
   }
 }
 
+/**
+ * Hand a local book's EPUB to the OS share sheet (native only): save to
+ * Files, AirDrop, or open in another reader app. Shares a temp copy named
+ * after the title — the stored file is `{uuid}.epub` and receiving apps
+ * surface the filename. The copy is byte-identical, so the kosync digest
+ * survives the round trip and progress sync still matches.
+ *
+ * Rejects when the user dismisses the sheet — callers should swallow
+ * cancellations.
+ */
+export async function shareLocalBookFile(bookId: string): Promise<void> {
+  const entry = await getLocalBook(bookId);
+  if (!entry) throw new Error("Book not found");
+  const { Share } = await import("@capacitor/share");
+  const safeTitle =
+    (entry.title || "")
+      .replace(/[\\/:*?"<>|\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80) || "book";
+  const sharePath = `share/${safeTitle}.epub`;
+  await Filesystem.mkdir({
+    path: "share",
+    directory: Directory.Cache,
+    recursive: true,
+  }).catch(() => {});
+  await Filesystem.copy({
+    from: entry.filePath,
+    directory: Directory.Data,
+    to: sharePath,
+    toDirectory: Directory.Cache,
+  });
+  try {
+    const { uri } = await Filesystem.getUri({
+      path: sharePath,
+      directory: Directory.Cache,
+    });
+    await Share.share({ files: [uri] });
+  } finally {
+    await Filesystem.deleteFile({
+      path: sharePath,
+      directory: Directory.Cache,
+    }).catch(() => {});
+  }
+}
+
 /** Get a WebView-safe cover URI for an entry.
  *  Always re-derives from disk — stored URIs go stale across app restarts. */
 export async function getLocalCoverSrc(

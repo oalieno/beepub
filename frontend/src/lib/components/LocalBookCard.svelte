@@ -23,6 +23,7 @@
     CloudUpload,
     EllipsisVertical,
     Loader2,
+    Share,
     Trash2,
   } from "@lucide/svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -33,6 +34,7 @@
     entry,
     ondelete,
     onupload,
+    onexport,
     uploading = false,
   }: {
     entry: LocalShelfEntry;
@@ -41,6 +43,8 @@
     /** Offered for unlinked books only; the page owns the gate (server
      *  configured, online, can_upload). */
     onupload?: (entry: LocalShelfEntry) => void;
+    /** Share the EPUB file via the OS share sheet (native only). */
+    onexport?: (entry: LocalShelfEntry) => void;
     uploading?: boolean;
   } = $props();
 
@@ -122,7 +126,7 @@
         <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
           <Loader2 size={14} class="animate-spin" />
         </span>
-      {:else if ondelete || showUpload}
+      {:else if ondelete || showUpload || onexport}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -139,8 +143,14 @@
                 {m.local_upload()}
               </DropdownMenu.Item>
             {/if}
+            {#if onexport}
+              <DropdownMenu.Item onclick={() => onexport?.(entry)}>
+                <Share size={14} />
+                {m.local_export()}
+              </DropdownMenu.Item>
+            {/if}
             {#if ondelete}
-              {#if showUpload}
+              {#if showUpload || onexport}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

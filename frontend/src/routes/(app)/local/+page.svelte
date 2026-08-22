@@ -291,6 +291,19 @@
     }
   }
 
+  async function handleExport(entry: LocalShelfEntry) {
+    try {
+      const { shareLocalBookFile } = await import("$lib/services/localLibrary");
+      await shareLocalBookFile(entry.id);
+    } catch (err) {
+      // Dismissing the share sheet also rejects — that is not an error.
+      const msg = (err as Error).message ?? "";
+      if (!/cancel/i.test(msg)) {
+        toastStore.error(msg || m.local_export_failed());
+      }
+    }
+  }
+
   async function handleDelete(e: MouseEvent, entry: LocalShelfEntry) {
     e.stopPropagation();
     e.preventDefault();
@@ -480,6 +493,7 @@
               {entry}
               ondelete={handleDelete}
               onupload={canUploadToCloud ? startUpload : undefined}
+              onexport={isNative() ? handleExport : undefined}
               uploading={uploadingId === entry.id}
             />
           {/each}
