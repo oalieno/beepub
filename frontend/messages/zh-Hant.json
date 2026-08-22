@@ -836,6 +836,7 @@
   "local_empty_subtitle": "從裝置匯入 EPUB 檔案即可在這裡閱讀，不需要伺服器。",
   "local_upload": "上傳到雲端",
   "local_export": "匯出 EPUB",
+  "book_download_to_device": "下載到手機",
   "local_export_failed": "無法匯出檔案",
   "local_upload_success": "「{title}」已上傳到雲端書庫",
   "local_upload_no_library": "沒有可上傳的書庫（Calibre 書庫由同步管理）",

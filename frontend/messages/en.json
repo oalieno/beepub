@@ -836,6 +836,7 @@
   "local_empty_subtitle": "Import EPUB files from your device to read them here — no server needed.",
   "local_upload": "Upload to cloud",
   "local_export": "Export EPUB",
+  "book_download_to_device": "Download to phone",
   "local_export_failed": "Could not export the file",
   "local_upload_success": "Uploaded “{title}” to your cloud library",
   "local_upload_no_library": "No uploadable library (Calibre libraries are sync-managed)",

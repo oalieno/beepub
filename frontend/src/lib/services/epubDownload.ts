@@ -43,6 +43,51 @@ async function deleteTempQuiet(path: string): Promise<void> {
   }
 }
 
+/**
+ * Download an EPUB to a temp file and hand it straight to the OS share
+ * sheet — "download to the phone": save to Files, AirDrop, open in
+ * another reader app. No local-library involvement; the temp copy is
+ * deleted once the sheet closes. Rejects when the user dismisses the
+ * sheet — callers swallow cancellations.
+ */
+export async function downloadEpubToDevice(options: {
+  url: string;
+  headers: Record<string, string>;
+  /** Names the shared file — receiving apps surface the filename. */
+  title: string;
+  onProgress?: (pct: number | null) => void;
+}): Promise<void> {
+  const sharePath = `epub-share/${sanitizeFilename(options.title)}.epub`;
+  const listener = await Filesystem.addListener("progress", (status) => {
+    if (status.url !== options.url) return;
+    options.onProgress?.(
+      status.contentLength > 0
+        ? Math.min(100, Math.round((status.bytes / status.contentLength) * 100))
+        : null,
+    );
+  });
+  try {
+    await Filesystem.downloadFile({
+      url: options.url,
+      method: "GET",
+      headers: options.headers,
+      path: sharePath,
+      directory: Directory.Cache,
+      progress: true,
+      recursive: true,
+    });
+    const { uri } = await Filesystem.getUri({
+      path: sharePath,
+      directory: Directory.Cache,
+    });
+    const { Share } = await import("@capacitor/share");
+    await Share.share({ files: [uri] });
+  } finally {
+    void listener.remove();
+    await deleteTempQuiet(sharePath);
+  }
+}
+
 export async function downloadEpubToLibrary(options: {
   url: string;
   headers: Record<string, string>;

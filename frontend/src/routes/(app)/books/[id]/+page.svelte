@@ -35,6 +35,7 @@
     Trash2,
     Pencil,
     RefreshCw,
+    Share,
     FolderInput,
     ShelvingUnit,
     EllipsisVertical,
@@ -295,6 +296,49 @@
         toastStore.error(
           m.book_download_failed({ error: String((e as Error).message) }),
         );
+      }
+    } finally {
+      downloading = false;
+    }
+  }
+
+  /** "Download to phone": straight to the OS share sheet (save to Files,
+   *  AirDrop, open in Readest/Books). Independent of the local library —
+   *  a digest-linked local copy just skips the network, invisibly. */
+  async function handleDownloadToDevice() {
+    if (!book || downloading) return;
+    try {
+      if (inLocalLibrary) {
+        const { getLocalBookLinks, shareLocalBookFile } =
+          await import("$lib/services/localLibrary");
+        const links = await getLocalBookLinks();
+        const localId = Object.keys(links).find((id) => links[id] === bookId);
+        if (localId) {
+          await shareLocalBookFile(localId);
+          return;
+        }
+        // Stale link — fall through to the network copy.
+      }
+      downloading = true;
+      downloadProgress = 0;
+      const [{ downloadEpubToDevice }, { apiBase, getAuthHeader }] =
+        await Promise.all([
+          import("$lib/services/epubDownload"),
+          import("$lib/api/client"),
+        ]);
+      await downloadEpubToDevice({
+        url: `${apiBase()}/books/${bookId}/file`,
+        headers: getAuthHeader(),
+        title: book.display_title ?? book.title ?? "Untitled",
+        onProgress: (pct) => {
+          downloadProgress = pct ?? 0;
+        },
+      });
+    } catch (e) {
+      // Dismissing the share sheet also rejects — that is not an error.
+      const msg = (e as Error).message ?? "";
+      if (!/cancel/i.test(msg)) {
+        toastStore.error(msg || m.local_export_failed());
       }
     } finally {
       downloading = false;
@@ -827,6 +871,12 @@
                 />
                 {m.book_report_issue()}
               </DropdownMenu.Item>
+              {#if isNative() && !isPhysical && $authStore.user?.can_download}
+                <DropdownMenu.Item onclick={handleDownloadToDevice}>
+                  <Share size={14} />
+                  {m.book_download_to_device()}
+                </DropdownMenu.Item>
+              {/if}
               {#if isAdmin}
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item
@@ -1296,6 +1346,18 @@
       />
       {m.book_report_issue()}
     </button>
+    {#if isNative() && !isPhysical && $authStore.user?.can_download}
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          showMobileActions = false;
+          void handleDownloadToDevice();
+        }}
+      >
+        <Share size={20} class="text-muted-foreground shrink-0" />
+        {m.book_download_to_device()}
+      </button>
+    {/if}
     {#if isAdmin}
       <div class="border-t border-border my-1"></div>
       <button
