@@ -837,6 +837,7 @@
   "local_upload": "Upload to cloud",
   "local_export": "Export EPUB",
   "book_download_to_device": "Download to phone",
+  "book_open_reader_ng": "Open in the new reader (experimental)",
   "local_export_failed": "Could not export the file",
   "local_upload_success": "Uploaded “{title}” to your cloud library",
   "local_upload_no_library": "No uploadable library (Calibre libraries are sync-managed)",

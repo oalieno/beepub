@@ -54,6 +54,7 @@
     Search,
     Star,
     BookCopy,
+    FlaskConical,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -875,6 +876,16 @@
                 <DropdownMenu.Item onclick={handleDownloadToDevice}>
                   <Share size={14} />
                   {m.book_download_to_device()}
+                </DropdownMenu.Item>
+              {/if}
+              {#if !isPhysical}
+                <!-- reader-ng A/B entry (experimental route; removed when the
+                     new reader replaces /read) -->
+                <DropdownMenu.Item
+                  onclick={() => goto(`/books/${bookId}/read-ng`)}
+                >
+                  <FlaskConical size={14} />
+                  {m.book_open_reader_ng()}
                 </DropdownMenu.Item>
               {/if}
               {#if isAdmin}

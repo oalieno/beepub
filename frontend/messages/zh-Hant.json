@@ -837,6 +837,7 @@
   "local_upload": "上傳到雲端",
   "local_export": "匯出 EPUB",
   "book_download_to_device": "下載到手機",
+  "book_open_reader_ng": "用新閱讀器開啟（實驗）",
   "local_export_failed": "無法匯出檔案",
   "local_upload_success": "「{title}」已上傳到雲端書庫",
   "local_upload_no_library": "沒有可上傳的書庫（Calibre 書庫由同步管理）",
