@@ -53,3 +53,25 @@ BASE_URL=http://<docker-host>:8091 node e2e/probes/example-alignment.mjs   # rem
 - `rtl` books: keyboard `ArrowLeft` = next page.
 - Playwright WebKit needs system libs (`playwright install-deps webkit`,
   sudo); until installed, iOS behavior is emulated via chromium + UA + CDP.
+
+## reader-ng (foliate paginator) specifics
+
+- The new paginator keeps its iframe inside a **closed shadow root**:
+  `document.querySelector("iframe")` finds nothing. Go through
+  `window.__beepubReaderNG.core.getContents()[0].doc`, and
+  `doc.defaultView.frameElement` for the iframe element; its
+  `parentElement.parentElement` is the scroll container that clips.
+- Measure "peeking"/"cut" against that **container box**, not the paginator
+  host — the host also covers the margins and the neighbouring columns that
+  `overflow: hidden` removes (false positives on half the rects).
+- "Anchor still in view" is a **rect test**, not `comparePoint`: the engine's
+  visible range starts at `(p, 0)` while a paragraph fits the page and at
+  `(text, 0)` once it spans two — same place, different boundary points.
+- `ng-geometry.mjs` (kill-point metrics, `--device=iphone`) and
+  `ng-paint.mjs` (CDP screencast: counts frames that actually painted).
+- **Never touch the working tree while a probe runs against the dev stack**
+  (no `prettier --write`, no `pnpm check` — svelte-kit sync rewrites
+  `.svelte-kit/tsconfig.json`): the container's vite full-reloads every
+  connected client and the probe dies with "Execution context was
+  destroyed". zsh: redirect with `>|`, or `>` on an existing log silently
+  skips the whole command.

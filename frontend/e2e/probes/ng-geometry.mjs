@@ -4,8 +4,9 @@
 // cut by the page box on the pagination axis (no second page peeking),
 // (c) the iframe took at most one size step per change (no intermediate
 // visible state). Run from frontend/:
-//   BASE_URL=http://<docker-host>:8091 node e2e/probes/ng-geometry.mjs [book...]
-// Books: fixture/testbook names below; default runs all.
+//   BASE_URL=http://<docker-host>:8091 node e2e/probes/ng-geometry.mjs [--device=iphone] [book...]
+// Books: fixture/testbook names below; default runs all. --device=iphone
+// uses the iPhone 13 descriptor on chromium (390x664 viewport).
 import path from "node:path";
 import os from "node:os";
 import { adminApi, seedBook, openReader, BASE } from "./lib.mjs";
@@ -50,7 +51,10 @@ const STEPS = [
 const PAGES_IN = 3;
 
 async function main() {
-  const wanted = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const device =
+    args.find((a) => a.startsWith("--device="))?.split("=")[1] ?? null;
+  const wanted = args.filter((a) => !a.startsWith("--"));
   const names = wanted.length ? wanted : Object.keys(BOOKS);
   const { token, api } = await adminApi();
   const rows = [];
@@ -58,7 +62,7 @@ async function main() {
     const spec = BOOKS[name];
     if (!spec) throw new Error(`unknown book ${name}`);
     const bookId = await seedBook(api, spec.title, spec.epub);
-    const result = await probeBook(bookId, spec, token);
+    const result = await probeBook(bookId, spec, token, device);
     rows.push(...result.map((r) => ({ book: name, ...r })));
   }
   console.table(rows);
@@ -71,12 +75,34 @@ async function main() {
   process.exit(failed.length ? 1 : 0);
 }
 
-async function probeBook(bookId, spec, token) {
-  const { browser, page } = await openNg(bookId, spec, token);
+async function probeBook(bookId, spec, token, device) {
+  const { browser, page } = await openNg(bookId, spec, token, device);
   const rows = [];
   try {
-    // Page in, then let the paginator settle on a user-driven relocation
-    // (reason 'page') so the anchor is a real visible range.
+    // Start in a section with real body text — front matter and
+    // illustration pages have nothing to measure — then page in so the
+    // anchor is a user-driven visible range (reason 'page').
+    const startIndex = await page.evaluate(async () => {
+      const core = window.__beepubReaderNG.core;
+      const cur = core.lastLocation.index;
+      const n = core.book.sections.length;
+      for (let i = cur; i < Math.min(n, cur + 40); i++) {
+        const doc = await core.book.sections[i].createDocument();
+        const len = (doc.body?.textContent ?? "").replace(/\s+/g, "").length;
+        if (len > 1500) return i;
+      }
+      return cur;
+    });
+    const atIndex = await page.evaluate(
+      () => window.__beepubReaderNG.core.lastLocation.index,
+    );
+    if (startIndex !== atIndex) {
+      await page.evaluate(
+        (i) => window.__beepubReaderNG.core.goTo(i),
+        startIndex,
+      );
+      await page.waitForTimeout(300);
+    }
     for (let i = 0; i < PAGES_IN; i++) {
       await page.evaluate(() => window.__beepubReaderNG.core.next());
       await page.waitForTimeout(250);
@@ -118,10 +144,13 @@ async function probeBook(bookId, spec, token) {
   return rows;
 }
 
-async function openNg(bookId, spec, token) {
-  const { browser, context } = await openReaderContext(token);
+async function openNg(bookId, spec, token, device) {
+  const { browser, context } = await openReaderContext(token, device);
   const page = await context.newPage();
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
+  page.on("framenavigated", (f) => {
+    if (f === page.mainFrame()) console.log("  [navigated]", f.url());
+  });
   page.on("console", (m) => {
     if (m.type() === "error" || m.type() === "warning")
       console.log(`  [console.${m.type()}]`, m.text());
@@ -135,6 +164,9 @@ async function openNg(bookId, spec, token) {
   });
   if (spec.font) params.set("font", spec.font);
   await page.goto(`/books/${bookId}/read-ng?${params}`);
+  // The vite dev stack may full-reload once after discovering new deps;
+  // let the network settle so that reload lands before we start measuring.
+  await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
@@ -147,13 +179,16 @@ async function openNg(bookId, spec, token) {
 }
 
 // lib.openReader navigates to the old route; reuse only its context setup.
-async function openReaderContext(token) {
-  const { chromium } = await import("@playwright/test");
+async function openReaderContext(token, device) {
+  const { chromium, devices } = await import("@playwright/test");
   const browser = await chromium.launch();
-  const context = await browser.newContext({
-    baseURL: BASE,
-    viewport: { width: 900, height: 700 },
-  });
+  let opts = { baseURL: BASE, viewport: { width: 900, height: 700 } };
+  if (device === "iphone") {
+    // chromium + the iPhone 13 descriptor (viewport, DPR, touch, UA)
+    const { defaultBrowserType: _webkit, ...iphone } = devices["iPhone 13"];
+    opts = { baseURL: BASE, ...iphone };
+  }
+  const context = await browser.newContext(opts);
   await context.addCookies([
     {
       name: "token",
@@ -177,20 +212,39 @@ async function commitAnchor(page) {
   });
 }
 
+/** The anchor is on screen when the rect of its first character (or the
+ *  first rect of an element anchor) sits inside the clipping container on
+ *  the pagination axis. Boundary-point comparison is too strict: foliate's
+ *  visible range starts at (p, 0) when the paragraph is fully in view and
+ *  at (text, 0) once it spans a page — the same place, different points. */
 async function anchorHeld(page) {
   return page.evaluate(() => {
-    const loc = window.__beepubReaderNG.core.lastLocation;
+    const core = window.__beepubReaderNG.core;
     const a = window.__ngAnchor;
-    if (!a || !loc?.range) return null;
-    if (
-      a.startContainer.ownerDocument !== loc.range.startContainer.ownerDocument
-    )
-      return null;
-    try {
-      return loc.range.comparePoint(a.startContainer, a.startOffset) === 0;
-    } catch {
-      return null;
-    }
+    const doc = core.getContents()[0].doc;
+    if (!a || a.startContainer.ownerDocument !== doc) return null;
+    const node = a.startContainer;
+    const off = a.startOffset;
+    const r = doc.createRange();
+    const max = node.nodeType === 3 ? node.length : node.childNodes.length;
+    if (off < max) {
+      r.setStart(node, off);
+      r.setEnd(node, off + 1);
+    } else r.selectNodeContents(node);
+    const rect = Array.from(r.getClientRects()).find(
+      (x) => x.width > 0 && x.height > 0,
+    );
+    if (!rect) return null;
+    const frame = doc.defaultView.frameElement;
+    const fb = frame.getBoundingClientRect();
+    const box = frame.parentElement.parentElement.getBoundingClientRect();
+    const mid = core.vertical
+      ? (rect.top + rect.bottom) / 2 + fb.top
+      : (rect.left + rect.right) / 2 + fb.left;
+    const [lo, hi] = core.vertical
+      ? [box.top, box.bottom]
+      : [box.left, box.right];
+    return mid >= lo && mid <= hi;
   });
 }
 
