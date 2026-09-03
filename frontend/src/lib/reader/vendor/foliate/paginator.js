@@ -630,14 +630,17 @@ export class Paginator extends HTMLElement {
             case 'flow':
                 this.render()
                 break
-            case 'gap':
-            case 'margin':
             case 'max-block-size':
             case 'max-column-count':
                 this.#top.style.setProperty('--_' + name, value)
                 break
+            case 'gap':
+            case 'margin':
             case 'max-inline-size':
                 // needs explicit `render()` as it doesn't necessarily resize
+                // BeePub: gap/margin too — under a max-inline-size/max-block-size
+                // cap the container keeps its size, the ResizeObserver never
+                // fires, and the new value would wait for the next resize.
                 this.#top.style.setProperty('--_' + name, value)
                 this.render()
                 break

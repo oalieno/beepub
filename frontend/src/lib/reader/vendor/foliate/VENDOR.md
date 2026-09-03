@@ -37,3 +37,4 @@ Deliberately not taken: `view.js` (glue; replaced by `../../core.ts`), `reader.j
 ## Changelog
 
 - 2026-09-03 · all · initial import of the four files above, unmodified.
+- 2026-09-03 · paginator.js · `attributeChangedCallback`: `gap` and `margin` call `render()` like `max-inline-size` · under a max-size cap the container does not resize, so the observer never applied the new value (found by the G0 probe on a 900px viewport).
