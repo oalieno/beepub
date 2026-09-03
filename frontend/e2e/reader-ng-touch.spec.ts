@@ -259,18 +259,26 @@ test("a horizontal swipe turns the page", async ({ page, context }) => {
   expect(back.fraction).toBeCloseTo(start.fraction, 3);
 });
 
-test("a plain tap toggles the chrome", async ({ page, context }) => {
+test("a plain tap neither turns the page nor opens the menu", async ({
+  page,
+  context,
+}) => {
   const bookId = await seedBook(page.request);
   await openBook(page, bookId);
   const cdp = await context.newCDPSession(page);
   const header = page.getByTestId("ng-chrome");
   await expect(header).toBeVisible();
+  const before = await location(page);
 
   // Middle of the page, clear of the edge zones; a quick tap arrives as
-  // touchstart + touchend + the browser's synthesized click.
+  // touchstart + touchend + the browser's synthesized click. It reaches
+  // BookReader's ontap and nothing else — in particular it must not reflow
+  // the page (read-ng leaves ontap unwired: an in-flow header toggling on
+  // every tap made the text jump on device).
   await touchTap(cdp, { x: 195, y: 420 }, 60);
-  await expect(header).toBeHidden();
-  await touchTap(cdp, { x: 195, y: 420 }, 60);
+  await page.waitForTimeout(500);
+  expect(await location(page)).toEqual(before);
+  await expect(page.getByTestId("highlight-menu")).toBeHidden();
   await expect(header).toBeVisible();
 });
 

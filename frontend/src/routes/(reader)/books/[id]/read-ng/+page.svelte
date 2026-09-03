@@ -69,6 +69,11 @@
   );
   // "Chrome" = an in-flow 48px header. Toggling it changes the container
   // height, the same geometry change hiding/pinning the top bar would make.
+  // It is an instrument only (the panel switch): a tap on the page must
+  // NOT toggle it — an in-flow bar reflows the text on every tap (owner,
+  // 09-04, on device). What a tap does to the chrome is the pin/chrome
+  // design question, answered separately; BookReader's ontap stays
+  // unwired here until then.
   let chromeBar = $state(true);
   let showPanel = $state(q.get("panel") !== "0");
   let jumpIndex = $state(0);
@@ -221,7 +226,6 @@
         {darkMode}
         {layout}
         {pageTurn}
-        ontap={() => (chromeBar = !chromeBar)}
         onbook={(b) => (book = b)}
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
