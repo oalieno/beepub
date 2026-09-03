@@ -16,6 +16,16 @@ export interface IOSTouchCallbacks {
   /** Called on horizontal swipe (dx > threshold) */
   onswipeleft: () => void;
   onswiperight: () => void;
+  /**
+   * Finger-follow paging (optional). Once a touch is classified as a swipe,
+   * every move reports the finger delta (previous − current, px) and the
+   * release reports the velocity (px/ms). onswipeend returns true when it
+   * consumed the gesture (the caller scrolled with the finger and snaps);
+   * otherwise the threshold swipe fires onswipeleft/right as usual, so the
+   * mode can change at any time without re-attaching.
+   */
+  onswipemove?: (dx: number, dy: number) => void;
+  onswipeend?: (vx: number, vy: number) => boolean | void;
   /** Called on quick tap while menu is visible */
   ontapdismiss: () => void;
   /** Whether the highlight menu is currently shown */
@@ -189,6 +199,12 @@ export function setupIOSTouchSelection(
   let anchorNode: Node | null = null;
   let anchorOffset = 0;
   let didDragSelect = false;
+  // Finger-follow bookkeeping (only used when onswipemove is provided)
+  let lastX = 0;
+  let lastY = 0;
+  let lastT = 0;
+  let vx = 0;
+  let vy = 0;
   let currentRange: Range | null = null;
   let currentRangeText = "";
 
@@ -290,6 +306,11 @@ export function setupIOSTouchSelection(
       const t = e.touches[0];
       startX = t.clientX;
       startY = t.clientY;
+      lastX = startX;
+      lastY = startY;
+      lastT = e.timeStamp;
+      vx = 0;
+      vy = 0;
       touchState = "waiting";
 
       lpTimer = setTimeout(() => {
@@ -324,6 +345,17 @@ export function setupIOSTouchSelection(
           }
           touchState = "swiping";
         }
+      }
+      if (touchState === "swiping" && callbacks.onswipemove) {
+        const dt = Math.max(1, e.timeStamp - lastT);
+        const dx = lastX - t.clientX;
+        const dy = lastY - t.clientY;
+        vx = dx / dt;
+        vy = dy / dt;
+        lastX = t.clientX;
+        lastY = t.clientY;
+        lastT = e.timeStamp;
+        callbacks.onswipemove(dx, dy);
       } else if (touchState === "selecting") {
         if (
           Math.abs(t.clientX - startX) > DRAG_THRESHOLD ||
@@ -353,7 +385,9 @@ export function setupIOSTouchSelection(
         suppressClickUntil = Date.now() + 700;
         if (didDragSelect) emitCurrentRange();
       } else if (touchState === "swiping") {
-        if (Math.abs(dx) > SWIPE_THRESHOLD) {
+        if (callbacks.onswipeend?.(vx, vy)) {
+          // consumed by finger-follow paging
+        } else if (Math.abs(dx) > SWIPE_THRESHOLD) {
           if (dx < 0) {
             callbacks.onswipeleft();
           } else {

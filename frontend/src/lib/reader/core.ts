@@ -69,6 +69,11 @@ export interface PaginatorElement extends HTMLElement {
   next(distance?: number): Promise<void>;
   setStyles(styles: string | [string, string]): void;
   getContents(): { index: number; doc: Document; overlayer?: unknown }[];
+  /** Finger-follow paging: the paginator overrides Element.scrollBy(dx, dy)
+   *  to move the page by a finger delta (previous − current, px) within the
+   *  section's bounds; snap() then settles on the nearest page, biased by
+   *  the release velocity (px/ms). */
+  snap(vx: number, vy: number): void;
   scrollToAnchor(
     anchor: Range | Element | number,
     select?: boolean,
@@ -103,6 +108,11 @@ export interface LayoutParams {
   maxBlockSize?: number;
   maxColumnCount?: number;
 }
+
+/** How a page turn moves: instant jump (BeePub's historical behaviour),
+ *  a 300ms slide, or the page following the finger and snapping on
+ *  release (the slide also applies to that snap). */
+export type PageTurnMode = "instant" | "animated" | "follow";
 
 export interface ReaderCoreHandlers {
   onload?: (detail: { doc: Document; index: number }) => void;
@@ -161,6 +171,7 @@ export class ReaderCore {
   lastLocation: Relocation | null = null;
   /** Writing mode of the current section, from its computed style. */
   vertical = false;
+  pageTurn: PageTurnMode = "instant";
 
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
@@ -169,7 +180,7 @@ export class ReaderCore {
     this.#handlers = handlers;
     this.paginator = document.createElement(
       "foliate-paginator",
-    ) as PaginatorElement;
+    ) as unknown as PaginatorElement;
     this.paginator.addEventListener("load", (e) =>
       this.#onLoad((e as CustomEvent).detail),
     );
@@ -238,6 +249,22 @@ export class ReaderCore {
 
   goRight() {
     return this.#backwardIsRight() ? this.prev() : this.next();
+  }
+
+  setPageTurn(mode: PageTurnMode) {
+    this.pageTurn = mode;
+    // The paginator animates page turns and snaps only while `animated`
+    // is present; finger-follow wants the animated snap on release.
+    this.paginator.toggleAttribute("animated", mode !== "instant");
+  }
+
+  /** Finger-follow paging passthroughs (see PageTurnMode). */
+  scrollBy(dx: number, dy: number) {
+    this.paginator.scrollBy(dx, dy);
+  }
+
+  snap(vx: number, vy: number) {
+    this.paginator.snap(vx, vy);
   }
 
   /** CSS injected into every section. A pair is [before, after]: `before`

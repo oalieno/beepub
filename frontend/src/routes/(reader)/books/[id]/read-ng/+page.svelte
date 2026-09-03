@@ -11,7 +11,12 @@
   import { booksApi } from "$lib/api/books";
   import { resolveReading } from "$lib/reading/resolve";
   import type { BookSource } from "$lib/reading/source";
-  import type { Book, LayoutParams, Relocation } from "$lib/reader/core";
+  import type {
+    Book,
+    LayoutParams,
+    PageTurnMode,
+    Relocation,
+  } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -58,10 +63,14 @@
   let margin = $state(num("margin", 48));
   let maxInlineSize = $state(num("inline", 720));
   let maxColumnCount = $state(num("cols", 1));
+  const turnParam = q.get("turn");
+  let pageTurn = $state<PageTurnMode>(
+    turnParam === "animated" || turnParam === "follow" ? turnParam : "instant",
+  );
   // "Chrome" = an in-flow 48px header. Toggling it changes the container
   // height, the same geometry change hiding/pinning the top bar would make.
   let chromeBar = $state(true);
-  let showPanel = $state(true);
+  let showPanel = $state(q.get("panel") !== "0");
   let jumpIndex = $state(0);
   let layout = $derived<LayoutParams>({
     gap,
@@ -211,6 +220,8 @@
         {lineHeight}
         {darkMode}
         {layout}
+        {pageTurn}
+        ontap={() => (chromeBar = !chromeBar)}
         onbook={(b) => (book = b)}
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
@@ -355,6 +366,19 @@
           />
           <Label for="ng-sans">sans</Label>
         </div>
+      </div>
+
+      <div class="mt-2 flex items-center gap-2">
+        <Label for="ng-turn">page turn</Label>
+        <select
+          id="ng-turn"
+          bind:value={pageTurn}
+          class="rounded-md border border-input bg-background px-1.5 py-0.5"
+        >
+          <option value="instant">instant</option>
+          <option value="animated">animated</option>
+          <option value="follow">follow finger</option>
+        </select>
       </div>
 
       <div class="mt-2 flex items-center gap-2">
