@@ -1369,6 +1369,19 @@
         {m.book_download_to_device()}
       </button>
     {/if}
+    {#if !isPhysical}
+      <!-- reader-ng A/B entry, mirrored from the desktop menu -->
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          showMobileActions = false;
+          goto(`/books/${bookId}/read-ng`);
+        }}
+      >
+        <FlaskConical size={20} class="text-muted-foreground shrink-0" />
+        {m.book_open_reader_ng()}
+      </button>
+    {/if}
     {#if isAdmin}
       <div class="border-t border-border my-1"></div>
       <button
