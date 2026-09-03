@@ -11,5 +11,9 @@
     "moduleResolution": "bundler",
     "skipLibCheck": true
   },
-  "exclude": ["src/lib/epubjs/**", "node_modules/**"]
+  "exclude": [
+    "src/lib/epubjs/**",
+    "src/lib/reader/vendor/**",
+    "node_modules/**"
+  ]
 }
