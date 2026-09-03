@@ -67,11 +67,22 @@ async function seedBook(request: APIRequestContext): Promise<string> {
   return (await uploaded.json()).id;
 }
 
-async function openBook(page: Page, bookId: string) {
+async function openBook(
+  page: Page,
+  bookId: string,
+  overrides: Record<string, string> = {},
+) {
   // panel=0: the geometry instrument would sit over the lower right.
-  await page.goto(
-    `/books/${bookId}/read-ng?size=18&lh=1.8&gap=7&margin=48&cols=1&panel=0`,
-  );
+  const params = new URLSearchParams({
+    size: "18",
+    lh: "1.8",
+    gap: "7",
+    margin: "48",
+    cols: "1",
+    panel: "0",
+    ...overrides,
+  });
+  await page.goto(`/books/${bookId}/read-ng?${params}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
@@ -202,24 +213,19 @@ function overlayState(page: Page) {
   });
 }
 
-test("edge tap zones turn the page and are sized to the gap", async ({
+test("tap zones: left quarter back, right quarter forward, independent of the gap", async ({
   page,
+  context,
 }) => {
   const bookId = await seedBook(page.request);
-  await openBook(page, bookId);
-
-  // The header carries same-named buttons; the zones live in the reader.
-  const reader = page.getByTestId("book-reader");
-  const prevZone = reader.getByRole("button", { name: "Previous page" });
-  const nextZone = reader.getByRole("button", { name: "Next page" });
-  // min(48px, 7%) of a 390px reader ≈ 27px: the page's own inset, so the
-  // zone never sits on text.
-  const box = await nextZone.boundingBox();
-  expect(box!.width).toBeGreaterThan(25);
-  expect(box!.width).toBeLessThan(30);
+  // gap=0: no page margin at all. Tap zones used to be parent-document
+  // buttons sized to the margin, so a zero margin left nothing to tap.
+  await openBook(page, bookId, { gap: "0" });
+  const cdp = await context.newCDPSession(page);
+  const vw = await page.evaluate(() => window.innerWidth);
 
   const start = await location(page);
-  await nextZone.click();
+  await touchTap(cdp, { x: vw * 0.875, y: 420 }, 60);
   await expect.poll(() => location(page)).toMatchObject({ reason: "page" });
   // The paginator holds a 100ms lock after each turn (its double-tap
   // guard); a second input inside it is dropped by design.
@@ -229,11 +235,17 @@ test("edge tap zones turn the page and are sized to the gap", async ({
     true,
   );
 
-  await prevZone.click();
-  await page.waitForTimeout(300);
+  await touchTap(cdp, { x: vw * 0.125, y: 420 }, 60);
+  await page.waitForTimeout(400);
   const back = await location(page);
   expect(back.index).toBe(start.index);
   expect(back.fraction).toBeCloseTo(start.fraction, 3);
+
+  // Nothing overlays the page any more: long-press selection reaches the
+  // edges (covered by the selection tests) and there are no zone buttons.
+  await expect(
+    page.getByTestId("book-reader").getByRole("button", { name: /page/i }),
+  ).toHaveCount(0);
 });
 
 test("a horizontal swipe turns the page", async ({ page, context }) => {

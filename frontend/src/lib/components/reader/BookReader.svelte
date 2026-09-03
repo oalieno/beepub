@@ -2,8 +2,7 @@
   /**
    * BookReader — the thinnest Svelte container around ReaderCore. Mounts
    * the paginator into a full-size div, feeds it theme CSS and layout
-   * parameters, forwards relocations, and owns the gesture layer: edge tap
-   * zones, swipe, the page-turn mode, and text selection with its menu.
+   * parameters, forwards relocations, and owns the gesture layer: tap zones, swipe, the page-turn mode, and text selection with its menu.
    * Product-shaped state (progress, saved highlights, sidebars) is layered
    * on top of this in later gates; this component stays engine-facing.
    *
@@ -164,15 +163,24 @@ ${darkOverrides}
     void (side === "left" ? c.goLeft() : c.goRight());
   }
 
-  // Tap-to-turn zones live in the parent document, so touches there never
-  // reach the iframe. Sized to the page's own inset (foliate's outer
-  // half-gap plus the inner padding come to roughly gap% of the reader)
-  // and capped at 48px, so they never sit on text.
-  let zonePercent = $derived(layout.gap ?? 7);
+  // Tap zones: the left and right quarters of the reader turn the page,
+  // the middle is the chrome tap. Decided in the section document from the
+  // tap's own click, so they are independent of the page margins (a zero
+  // margin used to leave nothing to tap) and never block long-press
+  // selection at the edges — the state machine already tells a tap from a
+  // hold. Links in a zone still win.
+  const TAP_ZONE = 0.25;
 
-  function edgeTap(side: "left" | "right") {
-    if (showMenu) return;
-    turn(side);
+  function tapZone(
+    clientX: number,
+    frame: Element | null,
+  ): "left" | "right" | "middle" {
+    const wr = wrapper.getBoundingClientRect();
+    const frameLeft = frame?.getBoundingClientRect().left ?? wr.left;
+    const x = clientX + frameLeft - wr.left;
+    if (x < wr.width * TAP_ZONE) return "left";
+    if (x > wr.width * (1 - TAP_ZONE)) return "right";
+    return "middle";
   }
 
   function handleKey(e: KeyboardEvent) {
@@ -315,17 +323,22 @@ ${darkOverrides}
     const c = core;
     if (!c) return;
 
-    // The click that follows a touch: a long-press selection's residue is
-    // swallowed upstream (capture listener in ios-touch-selection); what
-    // reaches here is a deliberate tap — dismiss the menu, or toggle chrome.
-    doc.addEventListener("click", () => {
+    // The click that follows a touch (or a mouse click): a long-press
+    // selection's residue is swallowed upstream (capture listener in
+    // ios-touch-selection); what reaches here is a deliberate tap — dismiss
+    // the menu, or act on its zone.
+    doc.addEventListener("click", (e: MouseEvent) => {
       const now = Date.now();
       if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
       if (showMenu) {
         if (!hasLiveSelection(win)) dismissMenu();
         return;
       }
-      ontap?.();
+      if (hasLiveSelection(win)) return;
+      if ((e.target as Element | null)?.closest?.("a[href]")) return;
+      const zone = tapZone(e.clientX, win.frameElement);
+      if (zone === "middle") ontap?.();
+      else turn(zone);
     });
 
     const swipe = {
@@ -453,21 +466,6 @@ ${darkOverrides}
   style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
 >
   <div bind:this={container} class="h-full w-full"></div>
-
-  <button
-    type="button"
-    class="absolute inset-y-0 left-0 z-10"
-    style="width: min(48px, {zonePercent}%)"
-    aria-label={m.reader_prev_page()}
-    onclick={() => edgeTap("left")}
-  ></button>
-  <button
-    type="button"
-    class="absolute inset-y-0 right-0 z-10"
-    style="width: min(48px, {zonePercent}%)"
-    aria-label={m.reader_next_page()}
-    onclick={() => edgeTap("right")}
-  ></button>
 
   {#if showMenu}
     <div
