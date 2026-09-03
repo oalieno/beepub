@@ -161,7 +161,8 @@
 >
   {#if chromeBar}
     <header
-      class="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2 text-foreground"
+      class="flex min-h-12 shrink-0 items-center gap-1 border-b border-border px-2 text-foreground"
+      style="padding-top: env(safe-area-inset-top, 0px);"
       data-testid="ng-chrome"
     >
       <Button
@@ -258,7 +259,8 @@
       <Button
         variant="secondary"
         size="icon"
-        class="absolute left-2 top-2 z-10 opacity-70"
+        class="absolute left-2 z-10 opacity-70"
+        style="top: max(0.5rem, env(safe-area-inset-top, 0px));"
         aria-label="Show header"
         onclick={() => (chromeBar = true)}
       >
@@ -269,7 +271,8 @@
 
   {#if showPanel}
     <aside
-      class="fixed bottom-4 right-4 z-20 w-72 rounded-lg border border-border bg-card p-3 text-xs text-card-foreground shadow-lg"
+      class="fixed right-4 z-20 w-72 rounded-lg border border-border bg-card p-3 text-xs text-card-foreground shadow-lg"
+      style="bottom: max(1rem, env(safe-area-inset-bottom, 0px));"
       data-testid="ng-panel"
     >
       <div class="mb-2 flex items-center justify-between">
