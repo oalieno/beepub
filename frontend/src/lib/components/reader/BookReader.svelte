@@ -2,9 +2,11 @@
   /**
    * BookReader — the thinnest Svelte container around ReaderCore. Mounts
    * the paginator into a full-size div, feeds it theme CSS and layout
-   * parameters, forwards relocations, and owns the gesture layer: tap zones, swipe, the page-turn mode, and text selection with its menu.
-   * Product-shaped state (progress, saved highlights, sidebars) is layered
-   * on top of this in later gates; this component stays engine-facing.
+   * parameters, forwards relocations, and owns the gesture layer: tap
+   * zones, swipe, the page-turn mode, text selection with its menu, and
+   * the saved highlights drawn on the section overlayer. Product-shaped
+   * state above that (progress, sidebars) is layered on in later gates;
+   * this component stays engine-facing.
    *
    * Must sit inside the reader root div: .reader-light / .reader-dark
    * scope the theme tokens the chrome around it uses.
@@ -18,10 +20,21 @@
     ReaderCore,
     Relocation,
   } from "$lib/reader/core";
+  import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
+  import { verifyAnchors } from "$lib/reader/anchor";
   import type { BookSource } from "$lib/reading/source";
+  import type { SyncBackend } from "$lib/reading/sync";
+  import type { HighlightOut } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import HighlightMenu from "./HighlightMenu.svelte";
+  import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
+  import { sectionIndexFromCfi } from "./highlight-anchor";
+  import {
+    HIGHLIGHT_COLORS,
+    HIGHLIGHT_LINE_COLORS,
+    parseHighlightColor,
+  } from "./highlight-style";
   import { setupIOSTouchSelection } from "./ios-touch-selection";
   import { isIOSDevice, setupSwipeNavigation } from "./touch-navigation";
   import { snapRangeToWordBounds } from "./word-snap";
@@ -29,6 +42,7 @@
   let {
     bookId,
     source,
+    sync,
     initialCfi = null,
     fontFamily = "serif",
     fontSize = 16,
@@ -41,9 +55,14 @@
     onerror,
     onrelocate,
     ontap,
+    onhighlightschange,
+    onbrokenhighlights,
+    onshare,
   }: {
     bookId: string;
     source: BookSource;
+    /** Where the user's highlights (and, later, progress) live. */
+    sync: SyncBackend;
     initialCfi?: string | null;
     fontFamily?: string;
     fontSize?: number;
@@ -58,6 +77,10 @@
     onrelocate?: (location: Relocation) => void;
     /** A plain tap on the page (no selection, no menu) — the chrome toggle. */
     ontap?: () => void;
+    onhighlightschange?: (highlights: HighlightOut[]) => void;
+    /** Highlights whose anchor no longer resolves and could not be healed. */
+    onbrokenhighlights?: (ids: string[]) => void;
+    onshare?: (highlight: HighlightOut) => void;
   } = $props();
 
   let wrapper: HTMLDivElement;
@@ -168,7 +191,7 @@ ${darkOverrides}
   // tap's own click, so they are independent of the page margins (a zero
   // margin used to leave nothing to tap) and never block long-press
   // selection at the edges — the state machine already tells a tap from a
-  // hold. Links in a zone still win.
+  // hold. Links and saved highlights in a zone still win.
   const TAP_ZONE = 0.25;
 
   function tapZone(
@@ -217,6 +240,254 @@ ${darkOverrides}
     }
   }
 
+  // ---------------------------------------------------------- highlights
+
+  let highlights: HighlightOut[] = $state([]);
+  // Anchors that neither resolve nor heal — a jump goes to the section.
+  let brokenHighlightIds = new Set<string>();
+  let noteEditorHighlight: HighlightOut | null = $state(null);
+  let layer: AnnotationLayer | null = null;
+  let healAbort: AbortController | null = null;
+
+  // Last-used color+style (raw encoded, e.g. "blue:underline") — the plain
+  // highlighter button repeats it, the picker row overrides it. Same key
+  // as the current reader: one preference for both.
+  const HIGHLIGHT_STYLE_KEY = "reader-highlight-style";
+  let lastHighlightRaw = $state("yellow");
+
+  function rememberHighlightRaw(raw: string) {
+    lastHighlightRaw = raw;
+    try {
+      localStorage.setItem(HIGHLIGHT_STYLE_KEY, raw);
+    } catch {
+      // private mode etc. — losing the preference is fine
+    }
+  }
+
+  // The stored color string may carry a style suffix ("yellow:underline",
+  // see highlight-style.ts); resolve it to what the overlayer paints.
+  function annotationOf(h: HighlightOut): Annotation {
+    const { color, style } = parseHighlightColor(h.color);
+    const palette =
+      style === "highlight" ? HIGHLIGHT_COLORS : HIGHLIGHT_LINE_COLORS;
+    return {
+      key: h.id,
+      cfi: h.cfi_range,
+      style: { kind: style, color: palette[color] ?? palette.yellow },
+    };
+  }
+
+  function sectionIndexOf(
+    h: Pick<HighlightOut, "cfi_range" | "section_index">,
+  ) {
+    return h.section_index ?? sectionIndexFromCfi(h.cfi_range);
+  }
+
+  function applyHighlights(list: HighlightOut[]) {
+    highlights = list;
+    layer?.replaceAll(list.map(annotationOf));
+    onhighlightschange?.(list);
+  }
+
+  /**
+   * Verify every highlight's anchor against the book and heal the ones the
+   * file rewrite moved: redraw, persist the new anchor, and report the
+   * rest as broken so the list can say so.
+   */
+  async function healHighlights() {
+    const c = core;
+    const book = c?.book;
+    if (!c || !book || highlights.length === 0) return;
+    healAbort?.abort();
+    const controller = new AbortController();
+    healAbort = controller;
+    const liveDocs = new Map<number, Document>();
+    for (const { index, doc } of c.getContents()) liveDocs.set(index, doc);
+    try {
+      const report = await verifyAnchors(
+        book,
+        highlights.map((h) => ({
+          id: h.id,
+          cfi: h.cfi_range,
+          text: h.text,
+          prefix: h.prefix,
+          suffix: h.suffix,
+          sectionIndex: h.section_index,
+        })),
+        { liveDocs, signal: controller.signal },
+      );
+      if (controller.signal.aborted || destroyed) return;
+      for (const heal of report.healed) {
+        const h = highlights.find((x) => x.id === heal.id);
+        if (!h) continue;
+        h.cfi_range = heal.cfi;
+        h.section_index = heal.sectionIndex;
+        layer?.set(annotationOf(h));
+        // Silent by design: the writeback can 404 when the highlight was
+        // deleted elsewhere meanwhile; the healed anchor still draws.
+        sync
+          .updateHighlight(bookId, heal.id, {
+            cfi_range: heal.cfi,
+            section_index: heal.sectionIndex,
+          })
+          .catch(() => {});
+      }
+      if (report.healed.length) {
+        highlights = [...highlights];
+        onhighlightschange?.(highlights);
+      }
+      brokenHighlightIds = new Set(report.broken);
+      if (report.broken.length) onbrokenhighlights?.(report.broken);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  const QUOTE_CONTEXT = 48;
+
+  /** W3C TextQuoteSelector-style context around a selection, taken from
+   *  the boundary text nodes — what re-anchors a highlight whose CFI
+   *  stops resolving after the book file is rewritten. */
+  function quoteContext(range: Range): { prefix: string; suffix: string } {
+    let prefix = "";
+    let suffix = "";
+    const sc = range.startContainer;
+    if (sc.nodeType === Node.TEXT_NODE) {
+      const t = sc.textContent ?? "";
+      prefix = t.slice(
+        Math.max(0, range.startOffset - QUOTE_CONTEXT),
+        range.startOffset,
+      );
+    }
+    const ec = range.endContainer;
+    if (ec.nodeType === Node.TEXT_NODE) {
+      const t = ec.textContent ?? "";
+      suffix = t.slice(range.endOffset, range.endOffset + QUOTE_CONTEXT);
+    }
+    return { prefix, suffix };
+  }
+
+  async function handleHighlight(raw?: string): Promise<HighlightOut | null> {
+    const cfi = selectedCfi;
+    const text = selectedText;
+    const prefix = selectedPrefix;
+    const suffix = selectedSuffix;
+    const index = core?.currentIndex() ?? null;
+    dismissMenu();
+    if (!cfi || !text) return null;
+    const colorRaw = raw ?? lastHighlightRaw;
+    rememberHighlightRaw(colorRaw);
+    try {
+      const created = await sync.createHighlight(bookId, {
+        cfi_range: cfi,
+        text,
+        color: colorRaw,
+        prefix: prefix || null,
+        suffix: suffix || null,
+        section_index: index ?? sectionIndexFromCfi(cfi),
+      });
+      highlights = [...highlights, created];
+      layer?.set(annotationOf(created));
+      onhighlightschange?.(highlights);
+      toastStore.success(m.highlight_saved());
+      return created;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+      return null;
+    }
+  }
+
+  /** Change color/style of the existing highlight under the menu. */
+  async function handleRestyle(raw: string) {
+    const target = existingHighlight;
+    dismissMenu();
+    if (!target || target.color === raw) return;
+    rememberHighlightRaw(raw);
+    try {
+      const updated = await sync.updateHighlight(bookId, target.id, {
+        color: raw,
+      });
+      highlights = highlights.map((h) => (h.id === updated.id ? updated : h));
+      layer?.set(annotationOf(updated));
+      onhighlightschange?.(highlights);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function handleNote() {
+    if (existingHighlight) {
+      const target = existingHighlight;
+      dismissMenu();
+      noteEditorHighlight = target;
+      return;
+    }
+    // New selection: create the highlight first, then attach the note.
+    const created = await handleHighlight();
+    if (created) noteEditorHighlight = created;
+  }
+
+  async function handleNoteSave(note: string) {
+    const target = noteEditorHighlight;
+    if (!target) return;
+    try {
+      // Empty string clears the note (backend excludes only None).
+      const updated = await sync.updateHighlight(bookId, target.id, { note });
+      highlights = highlights.map((h) => (h.id === updated.id ? updated : h));
+      onhighlightschange?.(highlights);
+      toastStore.success(m.highlight_note_saved());
+      noteEditorHighlight = null;
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function handleShare() {
+    const target = existingHighlight;
+    dismissMenu();
+    if (target) onshare?.(target);
+  }
+
+  async function handleRemoveHighlight() {
+    const target = existingHighlight;
+    dismissMenu();
+    if (!target) return;
+    try {
+      await removeHighlight(target);
+      toastStore.success(m.book_highlight_removed());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  /** Delete a highlight: the mark and the list entry go first and come
+   *  back if the delete fails (the error is rethrown for the caller). */
+  export async function removeHighlight(hl: HighlightOut) {
+    const prev = highlights;
+    highlights = highlights.filter((h) => h.id !== hl.id);
+    layer?.delete(hl.id);
+    onhighlightschange?.(highlights);
+    try {
+      await sync.deleteHighlight(bookId, hl.id);
+    } catch (e) {
+      highlights = prev;
+      layer?.set(annotationOf(hl));
+      onhighlightschange?.(highlights);
+      throw e;
+    }
+  }
+
+  /** Jump to a highlight. One known to be un-anchorable jumps to its
+   *  section instead. */
+  export function displayHighlight(hl: HighlightOut) {
+    dismissMenu();
+    if (brokenHighlightIds.has(hl.id)) {
+      const index = sectionIndexOf(hl);
+      if (index != null) return core?.goTo(index);
+    }
+    return core?.goTo(hl.cfi_range);
+  }
+
   // --------------------------------------------------- selection + menu
 
   let showMenu = $state(false);
@@ -229,8 +500,16 @@ ${darkOverrides}
   let menuDismissedAt = 0;
   let selectedText = $state("");
   let selectedRange: Range | null = null;
-  // Height fallback before the first render (single action bar).
+  let selectedCfi = "";
+  let selectedPrefix = "";
+  let selectedSuffix = "";
+  /** The saved highlight the menu is on (restyle/remove), or null for a
+   *  fresh selection. */
+  let existingHighlight: HighlightOut | null = $state(null);
+  // Height fallbacks before the first render: the single action bar, or
+  // the two-pill stack (picker + actions) shown on an existing highlight.
   const MENU_H = 44;
+  const MENU_H_STACKED = 96;
 
   function setClampedMenuPosition(x: number, y: number) {
     const cw = wrapper?.clientWidth ?? window.innerWidth;
@@ -239,22 +518,44 @@ ${darkOverrides}
     menuX =
       menuW > 0 ? Math.max(menuW / 2 + 8, Math.min(cw - menuW / 2 - 8, x)) : x;
     // Above the viewport → show below the selection instead.
-    const menuH = menuEl?.offsetHeight || MENU_H;
+    const fallbackH = existingHighlight ? MENU_H_STACKED : MENU_H;
+    const menuH = menuEl?.offsetHeight || fallbackH;
     menuY = y < menuH + 8 ? y + menuH + 16 : y;
   }
 
   /** Show the menu above a range in a section document. Range rects are in
    *  iframe coordinates; the iframe element's rect (which already reflects
-   *  the container's scroll) maps them into the wrapper. */
-  function showMenuFor(doc: Document, range: Range, text: string) {
+   *  the container's scroll) maps them into the wrapper. `existing` is the
+   *  saved highlight the range belongs to; a fresh selection that exactly
+   *  matches a saved one counts as that one. */
+  function showMenuFor(
+    doc: Document,
+    range: Range,
+    text: string,
+    existing: HighlightOut | null = null,
+  ) {
     const frame = doc.defaultView?.frameElement;
     const fr = frame?.getBoundingClientRect();
     const wr = wrapper.getBoundingClientRect();
     const rect = range.getBoundingClientRect();
     const x = rect.left + rect.width / 2 + (fr?.left ?? 0) - wr.left;
     const y = rect.top - 8 + (fr?.top ?? 0) - wr.top;
+    const c = core;
+    const index = c?.currentIndex();
+    let cfi = "";
+    try {
+      cfi = c && index != null ? c.cfiOf(index, range) : "";
+    } catch {
+      cfi = "";
+    }
     selectedRange = range;
     selectedText = text;
+    selectedCfi = cfi;
+    const ctx = quoteContext(range);
+    selectedPrefix = ctx.prefix;
+    selectedSuffix = ctx.suffix;
+    existingHighlight =
+      existing ?? highlights.find((h) => h.cfi_range === cfi) ?? null;
     setClampedMenuPosition(x, y);
     showMenu = true;
     menuShownAt = Date.now();
@@ -294,6 +595,7 @@ ${darkOverrides}
     menuDismissedAt = Date.now();
     showMenu = false;
     selectedRange = null;
+    existingHighlight = null;
     clearSelectionIn(core?.getContents()[0]?.doc);
   }
 
@@ -309,13 +611,16 @@ ${darkOverrides}
     }
   }
 
-  // Saving highlights, notes and the AI actions arrive with the pipeline
-  // gate (G2); until then the menu offers copy.
-  function notYet() {
-    dismissMenu();
-  }
-
   // ------------------------------------------------------------ gestures
+
+  /** The saved highlight under a point of the section document, if any. */
+  function highlightAt(x: number, y: number) {
+    const key = layer?.hitTest(x, y);
+    if (!key) return null;
+    const hl = highlights.find((h) => h.id === key);
+    const range = layer?.rangeOf(key);
+    return hl && range ? { hl, range } : null;
+  }
 
   function attachGestures(doc: Document) {
     const win = doc.defaultView;
@@ -325,16 +630,21 @@ ${darkOverrides}
 
     // The click that follows a touch (or a mouse click): a long-press
     // selection's residue is swallowed upstream (capture listener in
-    // ios-touch-selection); what reaches here is a deliberate tap — dismiss
-    // the menu, or act on its zone.
+    // ios-touch-selection); what reaches here is a deliberate tap — open
+    // the menu on a saved highlight, dismiss the menu, or act on its zone.
     doc.addEventListener("click", (e: MouseEvent) => {
       const now = Date.now();
       if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
-      if (showMenu) {
-        if (!hasLiveSelection(win)) dismissMenu();
+      if (hasLiveSelection(win)) return;
+      const hit = highlightAt(e.clientX, e.clientY);
+      if (hit) {
+        showMenuFor(doc, hit.range, hit.hl.text, hit.hl);
         return;
       }
-      if (hasLiveSelection(win)) return;
+      if (showMenu) {
+        dismissMenu();
+        return;
+      }
       if ((e.target as Element | null)?.closest?.("a[href]")) return;
       const zone = tapZone(e.clientX, win.frameElement);
       if (zone === "middle") ontap?.();
@@ -375,6 +685,12 @@ ${darkOverrides}
       doc.addEventListener("mouseup", () =>
         setTimeout(() => tryShowMenuFromSelection(doc, win), 0),
       );
+      // Saved highlights are click targets: say so with the cursor.
+      doc.addEventListener("mousemove", (e: MouseEvent) => {
+        if (!doc.body) return;
+        const over = !!layer?.hitTest(e.clientX, e.clientY);
+        doc.body.style.cursor = over ? "pointer" : "";
+      });
     }
   }
 
@@ -387,6 +703,11 @@ ${darkOverrides}
   // ------------------------------------------------------------ lifecycle
 
   onMount(async () => {
+    try {
+      lastHighlightRaw = localStorage.getItem(HIGHLIGHT_STYLE_KEY) ?? "yellow";
+    } catch {
+      // storage unavailable: the default stands
+    }
     // Dynamic import: the paginator registers a custom element at module
     // evaluation, which has no meaning during SSR.
     const { ReaderCore } = await import("$lib/reader/core");
@@ -394,18 +715,28 @@ ${darkOverrides}
     const c = new ReaderCore(container, {
       onload: handleLoad,
       onrelocate: (location) => onrelocate?.(location),
+      onoverlayer: ({ doc, index, overlayer }) =>
+        layer?.attach(overlayer, doc, index),
     });
     core = c;
+    layer = new AnnotationLayer((cfi) => c.resolve(cfi));
     // Debug handle — the only way e2e probes and a device Web Inspector
     // reach engine internals (same convention as __beepubReader).
     (window as unknown as { __beepubReaderNG?: unknown }).__beepubReaderNG = {
       core: c,
       paginator: c.paginator,
+      annotations: layer,
     };
     try {
       const payload = await source.openBook(bookId);
       const { loaderFromPayload } = await import("$lib/reader/loaders/server");
       const loader = loaderFromPayload(payload);
+      // The list loads alongside the book; a failure leaves the page
+      // readable without marks rather than blocking it.
+      const listing = sync.listHighlights(bookId).catch((e: unknown) => {
+        console.error(e);
+        return [] as HighlightOut[];
+      });
       c.setLayout(layout);
       c.setPageTurn(pageTurn);
       c.setStyles(styles());
@@ -413,6 +744,10 @@ ${darkOverrides}
       if (destroyed) return;
       onbook?.(book);
       onready?.();
+      const list = await listing;
+      if (destroyed) return;
+      applyHighlights(list);
+      void healHighlights();
     } catch (e) {
       console.error(e);
       onerror?.(e instanceof Error ? e : new Error(String(e)));
@@ -436,6 +771,9 @@ ${darkOverrides}
 
   onDestroy(() => {
     destroyed = true;
+    healAbort?.abort();
+    layer?.detach();
+    layer = null;
     core?.destroy();
     core = null;
   });
@@ -475,13 +813,26 @@ ${darkOverrides}
       style="left: {menuX}px; top: {menuY}px;"
     >
       <HighlightMenu
-        hasExisting={false}
+        hasExisting={!!existingHighlight}
+        activeRaw={existingHighlight?.color ?? lastHighlightRaw}
         showAi={false}
+        onhighlight={handleHighlight}
+        onrestyle={handleRestyle}
+        onnote={handleNote}
+        onremove={handleRemoveHighlight}
         oncopy={handleCopy}
-        onhighlight={notYet}
-        onnote={notYet}
-        onshare={notYet}
+        onshare={handleShare}
       />
     </div>
+  {/if}
+
+  {#if noteEditorHighlight}
+    <HighlightNoteEditor
+      note={noteEditorHighlight.note ?? ""}
+      text={noteEditorHighlight.text}
+      {darkMode}
+      onsave={handleNoteSave}
+      onclose={() => (noteEditorHighlight = null)}
+    />
   {/if}
 </div>

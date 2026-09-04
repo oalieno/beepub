@@ -14,7 +14,10 @@
 import "./vendor/foliate/paginator.js";
 import { EPUB } from "./vendor/foliate/epub.js";
 import * as CFI from "./vendor/foliate/epubcfi.js";
+import { Overlayer } from "./vendor/foliate/overlayer.js";
 import type { BookLoader } from "./loaders/server";
+
+export type OverlayerInstance = InstanceType<typeof Overlayer>;
 
 // ---------------------------------------------------------------- contracts
 
@@ -68,7 +71,11 @@ export interface PaginatorElement extends HTMLElement {
   prev(distance?: number): Promise<void>;
   next(distance?: number): Promise<void>;
   setStyles(styles: string | [string, string]): void;
-  getContents(): { index: number; doc: Document; overlayer?: unknown }[];
+  getContents(): {
+    index: number;
+    doc: Document;
+    overlayer?: OverlayerInstance;
+  }[];
   /** Finger-follow paging: the paginator overrides Element.scrollBy(dx, dy)
    *  to move the page by a finger delta (previous − current, px) within the
    *  section's bounds; snap() then settles on the nearest page, biased by
@@ -117,6 +124,14 @@ export type PageTurnMode = "instant" | "animated" | "follow";
 export interface ReaderCoreHandlers {
   onload?: (detail: { doc: Document; index: number }) => void;
   onrelocate?: (detail: Relocation) => void;
+  /** A section's overlayer (SVG over the iframe, redrawn by the paginator
+   *  after every expand) is ready — fires after `onload` for the same
+   *  section. */
+  onoverlayer?: (detail: {
+    doc: Document;
+    index: number;
+    overlayer: OverlayerInstance;
+  }) => void;
 }
 
 /** number = section index · string = CFI or href · object = section +
@@ -186,6 +201,9 @@ export class ReaderCore {
     );
     this.paginator.addEventListener("relocate", (e) =>
       this.#onRelocate((e as CustomEvent).detail),
+    );
+    this.paginator.addEventListener("create-overlayer", (e) =>
+      this.#onCreateOverlayer((e as CustomEvent).detail),
     );
     container.append(this.paginator);
   }
@@ -298,6 +316,11 @@ export class ReaderCore {
     return this.lastLocation?.cfi ?? null;
   }
 
+  /** Index of the section on screen (null before the first render). */
+  currentIndex(): number | null {
+    return this.paginator.getContents()[0]?.index ?? null;
+  }
+
   getContents() {
     return this.paginator.getContents();
   }
@@ -321,6 +344,20 @@ export class ReaderCore {
     this.vertical = !!writingMode && writingMode.startsWith("vertical");
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
+  }
+
+  #onCreateOverlayer({
+    doc,
+    index,
+    attach,
+  }: {
+    doc: Document;
+    index: number;
+    attach: (overlayer: OverlayerInstance) => void;
+  }) {
+    const overlayer = new Overlayer();
+    attach(overlayer);
+    this.#handlers.onoverlayer?.({ doc, index, overlayer });
   }
 
   #handleLinks(doc: Document, index: number) {

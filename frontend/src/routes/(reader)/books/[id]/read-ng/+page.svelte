@@ -4,13 +4,19 @@
    * G0). Loads a book through BookReader and wraps it in a geometry
    * instrument panel: every slider is a layout input, and the readout
    * shows whether the anchor survived the resulting reflow. The panel is
-   * a measuring device, not product UI; it goes before G1.
+   * a measuring device, not product UI; the settings sheet (G2) replaces it.
+   * Highlights are product-shaped already: list, jump, delete, share.
    */
   import { onMount } from "svelte";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { resolveReading } from "$lib/reading/resolve";
   import type { BookSource } from "$lib/reading/source";
+  import type { SyncBackend } from "$lib/reading/sync";
+  import type { HighlightOut } from "$lib/types";
+  import { confirmDialog } from "$lib/stores/confirm";
+  import { toastStore } from "$lib/stores/toast";
+  import * as m from "$lib/paraglide/messages.js";
   import type {
     Book,
     LayoutParams,
@@ -18,6 +24,8 @@
     Relocation,
   } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
+  import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
+  import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
   import { Label } from "$lib/components/ui/label";
@@ -26,6 +34,7 @@
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
+    Highlighter,
     Moon,
     PanelTop,
     SlidersHorizontal,
@@ -37,12 +46,36 @@
   let initialCfi = $derived(page.url.searchParams.get("cfi"));
 
   let source = $state<BookSource | null>(null);
+  let sync = $state<SyncBackend | null>(null);
   let title = $state("");
+  let authors = $state<string[]>([]);
   let ready = $state(false);
   let rendered = $state(false);
   let loadError = $state<string | null>(null);
   let reader: BookReader | undefined = $state();
   let book = $state<Book | null>(null);
+
+  // Highlights: BookReader owns the list and the marks; the page shows
+  // the sidebar and the share card.
+  let highlights = $state<HighlightOut[]>([]);
+  let brokenHighlightIds = $state<Set<string>>(new Set());
+  let showHighlights = $state(false);
+  let shareHighlight = $state<HighlightOut | null>(null);
+
+  async function deleteHighlight(hl: HighlightOut) {
+    if (
+      !(await confirmDialog({
+        title: m.highlights_delete_confirm(),
+        destructive: true,
+      }))
+    )
+      return;
+    try {
+      await reader?.removeHighlight(hl);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
 
   // Instrument inputs. Defaults mirror the paginator's own except a single
   // column: BeePub reads single-column, spread none.
@@ -128,13 +161,16 @@
     try {
       const resolved = await resolveReading(bookId);
       source = resolved.source;
+      sync = resolved.sync;
       if (resolved.localEntry) {
         title = resolved.localEntry.title;
+        authors = resolved.localEntry.authors ?? [];
       } else {
         booksApi
           .get(bookId)
           .then((b) => {
             title = b.display_title ?? b.title ?? b.epub_title ?? "";
+            authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
           })
           .catch(() => {});
       }
@@ -198,6 +234,14 @@
       <Button
         variant="ghost"
         size="icon"
+        aria-label={m.reader_highlights()}
+        onclick={() => (showHighlights = true)}
+      >
+        <Highlighter />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
         aria-label="Toggle theme"
         onclick={() => (darkMode = !darkMode)}
       >
@@ -215,11 +259,12 @@
   {/if}
 
   <div class="relative min-h-0 flex-1">
-    {#if ready && source}
+    {#if ready && source && sync}
       <BookReader
         bind:this={reader}
         {bookId}
         {source}
+        {sync}
         {initialCfi}
         {fontFamily}
         {fontSize}
@@ -231,6 +276,9 @@
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
         onrelocate={handleRelocate}
+        onhighlightschange={(list) => (highlights = list)}
+        onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
+        onshare={(hl) => (shareHighlight = hl)}
       />
     {/if}
 
@@ -268,6 +316,30 @@
       </Button>
     {/if}
   </div>
+
+  {#if showHighlights}
+    <HighlightSidebar
+      {highlights}
+      {bookId}
+      {darkMode}
+      brokenIds={brokenHighlightIds}
+      onselect={(hl) => {
+        showHighlights = false;
+        void reader?.displayHighlight(hl);
+      }}
+      ondelete={deleteHighlight}
+      onshare={(hl) => (shareHighlight = hl)}
+      onclose={() => (showHighlights = false)}
+    />
+  {/if}
+
+  <ShareHighlightModal
+    open={shareHighlight !== null}
+    highlight={shareHighlight}
+    bookTitle={title}
+    bookAuthors={authors}
+    onclose={() => (shareHighlight = null)}
+  />
 
   {#if showPanel}
     <aside
