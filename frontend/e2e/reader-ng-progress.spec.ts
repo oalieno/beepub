@@ -1,9 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
-import { openBook, seedBook } from "./ng-helpers";
+import {
+  CHAPTERS_BOOK,
+  openBook,
+  resetProgress,
+  seedBook,
+  seedFixture,
+} from "./ng-helpers";
 
 /**
  * reader-ng G2 ②: reading progress on the new engine — restore to the
@@ -17,46 +20,11 @@ test.use({ storageState: ADMIN_STATE });
 // The first open after a stack switch pays vite's cold transform.
 test.setTimeout(60_000);
 
-/** Page 1 of the touch fixture's only section. */
-const PAGE_ONE_CFI = "epubcfi(/6/2!/4/2/1:0)";
-
 // The fixture is shared with the selection specs (both readers'), which
 // assume it opens on its first page: leave its progress there.
 test.afterEach(async ({ page }) => {
-  const bookId = await seedBook(page.request);
-  await page.request.put(`/api/books/${bookId}/progress`, {
-    data: {
-      cfi: PAGE_ONE_CFI,
-      percentage: 0,
-      section_index: 0,
-      section_page: 1,
-    },
-  });
+  await resetProgress(page.request, await seedBook(page.request));
 });
-
-// Two chapters with a ~15:1 text-size ratio (reader-progress.spec): the
-// weight scale has a shape uniform section counting could not fake.
-const CHAPTERS_FIXTURE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "e2e-vertical-chapters-book.epub",
-);
-
-async function uploadChaptersBook(page: Page): Promise<string> {
-  const libraries = await (await page.request.get("/api/libraries")).json();
-  const uploaded = await page.request.post("/api/books", {
-    multipart: {
-      file: {
-        name: "ng-progress-chapters.epub",
-        mimeType: "application/epub+zip",
-        buffer: fs.readFileSync(CHAPTERS_FIXTURE),
-      },
-      library_id: libraries[0].id,
-    },
-  });
-  expect(uploaded.ok()).toBeTruthy();
-  return (await uploaded.json()).id;
-}
 
 /** The worker extracts text shortly after upload; weights ride the book
  *  detail. Until then the reader falls back to uniform weights. */
@@ -185,8 +153,9 @@ test("a stored CFI that no longer resolves degrades to the stored percentage", a
 test("percentage follows the weights and the scrubber seeks on their scale", async ({
   page,
 }) => {
-  const bookId = await uploadChaptersBook(page);
+  const bookId = await seedFixture(page.request, CHAPTERS_BOOK);
   const weights = await waitForWeights(page, bookId);
+  await resetProgress(page.request, bookId);
   expect(weights.filter((w) => w > 0)).toHaveLength(2);
   const total = weights.reduce((a, b) => a + b, 0);
   let before = 0;

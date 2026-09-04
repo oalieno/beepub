@@ -55,7 +55,29 @@ export const ANCHOR_BOOK: Fixture = {
   readyText: "lighthouse keeper",
 };
 
-/** Upload the fixture into the E2E library once; return its book id. */
+export const VERTICAL_BOOK: Fixture = {
+  file: "e2e-vertical-book.epub",
+  title: "縱書測試之卷",
+  readyText: "話說天下大勢",
+};
+
+export const VPUNCT_BOOK: Fixture = {
+  file: "e2e-vpunct-book.epub",
+  title: "E2E 直排標點測試",
+  readyText: "免費服務已終止",
+};
+
+/** Two chapters with a ~15:1 text-size ratio: the weight scale has a
+ *  shape uniform section counting could not fake. */
+export const CHAPTERS_BOOK: Fixture = {
+  file: "e2e-vertical-chapters-book.epub",
+  title: "直書跨章格線",
+  readyText: "甲章首段",
+};
+
+/** Upload the fixture into the E2E library once; return its book id.
+ *  Seeding by title keeps re-runs from piling copies into the persistent
+ *  e2e database (which skews the search ranking other specs rely on). */
 export async function seedFixture(
   request: APIRequestContext,
   fixture: Fixture,
@@ -88,6 +110,19 @@ export async function seedFixture(
 
 export function seedBook(request: APIRequestContext) {
   return seedFixture(request, TOUCH_BOOK);
+}
+
+/** Put a book's saved position back on its first page (progress rows
+ *  persist across runs; the reader restores them). */
+export async function resetProgress(
+  request: APIRequestContext,
+  bookId: string,
+  cfi = "epubcfi(/6/2!/4/2/1:0)",
+) {
+  const res = await request.put(`/api/books/${bookId}/progress`, {
+    data: { cfi, percentage: 0, section_index: 0, section_page: 1 },
+  });
+  expect(res.ok()).toBeTruthy();
 }
 
 /** Open read-ng at a fixed geometry and wait for the first section.

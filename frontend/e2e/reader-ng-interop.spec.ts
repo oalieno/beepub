@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
-import { openBook, seedBook } from "./ng-helpers";
+import { openBook, resetProgress, seedBook } from "./ng-helpers";
 
 /**
  * reader-ng ↔ current reader interop: the two readers share one progress
@@ -13,20 +13,10 @@ import { openBook, seedBook } from "./ng-helpers";
 test.use({ storageState: ADMIN_STATE });
 test.setTimeout(60_000);
 
-const PAGE_ONE_CFI = "epubcfi(/6/2!/4/2/1:0)";
-
 // The fixture is shared with the selection specs, which assume it opens
 // on its first page: leave its progress there.
 test.afterEach(async ({ page }) => {
-  const bookId = await seedBook(page.request);
-  await page.request.put(`/api/books/${bookId}/progress`, {
-    data: {
-      cfi: PAGE_ONE_CFI,
-      percentage: 0,
-      section_index: 0,
-      section_page: 1,
-    },
-  });
+  await resetProgress(page.request, await seedBook(page.request));
 });
 
 function progressPut(page: Page) {

@@ -1,9 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
-import { marks } from "./ng-helpers";
+import {
+  VERTICAL_BOOK,
+  VPUNCT_BOOK,
+  marks,
+  resetProgress,
+  seedFixture,
+} from "./ng-helpers";
 
 /**
  * reader-ng: vertical-rl (直排) on the new engine — the two engine-agnostic
@@ -11,9 +14,6 @@ import { marks } from "./ng-helpers";
  * about the old fork's pageStep; read-ng's geometry is covered by
  * reader-ng.spec.ts.
  */
-
-const fixture = (name: string) =>
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", name);
 
 test.use({ storageState: ADMIN_STATE });
 
@@ -23,23 +23,8 @@ declare global {
   }
 }
 
-async function seed(page: Page, file: string, name: string) {
-  const libraries = await (await page.request.get("/api/libraries")).json();
-  const uploaded = await page.request.post("/api/books", {
-    multipart: {
-      file: {
-        name: `${name}.epub`,
-        mimeType: "application/epub+zip",
-        buffer: fs.readFileSync(file),
-      },
-      library_id: libraries[0].id,
-    },
-  });
-  expect(uploaded.ok()).toBeTruthy();
-  return (await uploaded.json()).id as string;
-}
-
 async function openNg(page: Page, bookId: string, text: string, font: string) {
+  await resetProgress(page.request, bookId);
   await page.goto(`/books/${bookId}/read-ng?font=${font}&panel=0`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
@@ -60,11 +45,7 @@ async function openNg(page: Page, bookId: string, text: string, font: string) {
 }
 
 test("vertical book renders vertical-rl in read-ng", async ({ page }) => {
-  const bookId = await seed(
-    page,
-    fixture("e2e-vertical-book.epub"),
-    "ng-vertical",
-  );
+  const bookId = await seedFixture(page.request, VERTICAL_BOOK);
   await openNg(page, bookId, "話說天下大勢", "sans");
   const state = await page.evaluate(() => {
     const core = window.__beepubReaderNG.core;
@@ -96,7 +77,7 @@ test("vertical book renders vertical-rl in read-ng", async ({ page }) => {
 test("vertical punctuation faces reach a book that bypasses the body font stack", async ({
   page,
 }) => {
-  const bookId = await seed(page, fixture("e2e-vpunct-book.epub"), "ng-vpunct");
+  const bookId = await seedFixture(page.request, VPUNCT_BOOK);
   await openNg(page, bookId, "免費服務已終止", "serif");
 
   const state = await page.evaluate(() => {
@@ -150,11 +131,12 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
 test("highlights follow the vertical line: fill along the run, underline on its right", async ({
   page,
 }) => {
-  const bookId = await seed(
-    page,
-    fixture("e2e-vertical-book.epub"),
-    "e2e-vertical-highlights",
-  );
+  const bookId = await seedFixture(page.request, VERTICAL_BOOK);
+  for (const h of await (
+    await page.request.get(`/api/books/${bookId}/highlights`)
+  ).json()) {
+    await page.request.delete(`/api/books/${bookId}/highlights/${h.id}`);
+  }
   await openNg(page, bookId, "話說天下大勢", "serif");
 
   // Anchor two runs of the first sentence through the engine's own CFI

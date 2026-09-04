@@ -66,7 +66,11 @@ test("a stale search response cannot flash the empty state", async ({
   await input.fill("E2");
   await firstRequest;
   // … then type on so request 2 (fast, with results) races past it.
-  await input.fill("E2E");
+  // A query only the test book matches: the search ranks prefix matches
+  // shorter-title-first, and the fixtures other specs upload every run
+  // (the shorter "E2E 直排標點測試") pile up in this persistent database
+  // until they fill the 20-result page on a bare "E2E".
+  await input.fill("E2E Test");
 
   // The fast response's results appear …
   await expect(
