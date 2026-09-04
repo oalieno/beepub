@@ -90,13 +90,16 @@ export function seedBook(request: APIRequestContext) {
   return seedFixture(request, TOUCH_BOOK);
 }
 
-/** Open read-ng at a fixed geometry and wait for the first section. */
+/** Open read-ng at a fixed geometry and wait for the first section.
+ *  `overrides` are query params, plus `restore: "1"` to keep the reader's
+ *  own restored position instead of resetting to the first page. */
 export async function openBook(
   page: Page,
   bookId: string,
   overrides: Record<string, string> = {},
   fixture: Fixture = TOUCH_BOOK,
 ) {
+  const { restore, ...query } = overrides;
   // panel=0: the geometry instrument would sit over the lower right.
   const params = new URLSearchParams({
     size: "18",
@@ -105,7 +108,7 @@ export async function openBook(
     margin: "48",
     cols: "1",
     panel: "0",
-    ...overrides,
+    ...query,
   });
   await page.goto(`/books/${bookId}/read-ng?${params}`);
   await page.waitForFunction(
@@ -121,6 +124,19 @@ export async function openBook(
       }, fixture.readyText),
     )
     .toBe(true);
+  // The reader restores saved progress; the specs assume the section's
+  // first page unless they asked for a target themselves.
+  if (!query.cfi && !restore) {
+    await page.evaluate(() => window.__beepubReaderNG.core.goTo(0));
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const l = window.__beepubReaderNG.core.lastLocation;
+          return l.index === 0 && l.fraction === 0;
+        }),
+      )
+      .toBe(true);
+  }
   await page.waitForTimeout(500);
 }
 
