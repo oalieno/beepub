@@ -1,15 +1,17 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { test, expect } from "@playwright/test";
+import { ADMIN_STATE } from "./helpers";
 import {
-  test,
-  expect,
-  devices,
-  type APIRequestContext,
-  type CDPSession,
-  type Page,
-} from "@playwright/test";
-import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
+  armMenuWatcher,
+  iphone,
+  location,
+  menuTimeline,
+  openBook,
+  overlayState,
+  pointOnWord,
+  seedBook,
+  swipe,
+  touchTap,
+} from "./ng-helpers";
 
 /**
  * reader-ng G1: the gesture layer on the new engine, on an emulated
@@ -18,200 +20,11 @@ import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
  *
  * Covers what G1 owns — edge tap zones, swipe, tap-to-toggle chrome — and
  * re-runs the iOS highlight-menu flicker regressions (b27e913, d09d440)
- * against read-ng. Saved-highlight (mark) cases arrive with G2.
+ * against read-ng. Saved-highlight (mark) cases live in
+ * reader-ng-highlights.spec.ts.
  */
 
-const FIXTURE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "e2e-touch-book.epub",
-);
-const BOOK_TITLE = "Flicker Repro Book";
-
-const { defaultBrowserType: _webkit, ...iphone } = devices["iPhone 13"];
 test.use({ storageState: ADMIN_STATE, ...iphone });
-
-declare global {
-  interface Window {
-    __beepubReaderNG?: any;
-    __menuLog?: string[];
-    __menuT0?: number;
-    __menuFrames?: { left: string; l: number; r: number }[];
-  }
-}
-
-async function seedBook(request: APIRequestContext): Promise<string> {
-  const libraries = await (await request.get("/api/libraries")).json();
-  const library = libraries.find(
-    (l: { name: string }) => l.name === LIBRARY_NAME,
-  );
-  expect(library).toBeTruthy();
-  const books = await (
-    await request.get(`/api/libraries/${library.id}/books?limit=100`)
-  ).json();
-  const existing = books.items?.find((b: Record<string, string>) =>
-    (b.display_title ?? b.epub_title ?? "").includes(BOOK_TITLE),
-  );
-  if (existing) return existing.id;
-  const uploaded = await request.post("/api/books", {
-    multipart: {
-      file: {
-        name: "e2e-touch-book.epub",
-        mimeType: "application/epub+zip",
-        buffer: fs.readFileSync(FIXTURE),
-      },
-      library_id: library.id,
-    },
-  });
-  expect(uploaded.ok()).toBeTruthy();
-  return (await uploaded.json()).id;
-}
-
-async function openBook(
-  page: Page,
-  bookId: string,
-  overrides: Record<string, string> = {},
-) {
-  // panel=0: the geometry instrument would sit over the lower right.
-  const params = new URLSearchParams({
-    size: "18",
-    lh: "1.8",
-    gap: "7",
-    margin: "48",
-    cols: "1",
-    panel: "0",
-    ...overrides,
-  });
-  await page.goto(`/books/${bookId}/read-ng?${params}`);
-  await page.waitForFunction(
-    () => !!window.__beepubReaderNG?.core?.lastLocation,
-    null,
-    { timeout: 30_000 },
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
-        return doc.body?.textContent?.includes("starship librarian") ?? false;
-      }),
-    )
-    .toBe(true);
-  await page.waitForTimeout(500);
-}
-
-function location(page: Page) {
-  return page.evaluate(() => {
-    const l = window.__beepubReaderNG.core.lastLocation;
-    return {
-      index: l.index as number,
-      fraction: l.fraction as number,
-      reason: l.reason as string,
-    };
-  });
-}
-
-async function armMenuWatcher(page: Page) {
-  await page.evaluate(() => {
-    window.__menuLog = [];
-    window.__menuT0 = performance.now();
-    let visible = !!document.querySelector('[data-testid="highlight-menu"]');
-    new MutationObserver(() => {
-      const v = !!document.querySelector('[data-testid="highlight-menu"]');
-      if (v === visible) return;
-      visible = v;
-      window.__menuLog!.push(
-        `${Math.round(performance.now() - window.__menuT0!)}ms ${v ? "SHOW" : "HIDE"}`,
-      );
-    }).observe(document.body, { childList: true, subtree: true });
-  });
-}
-
-function menuTimeline(page: Page): Promise<string[]> {
-  return page.evaluate(() => window.__menuLog ?? []);
-}
-
-async function touchTap(
-  cdp: CDPSession,
-  pt: { x: number; y: number },
-  holdMs: number,
-) {
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: pt.x, y: pt.y }],
-  });
-  await new Promise((resolve) => setTimeout(resolve, holdMs));
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-}
-
-async function swipe(
-  cdp: CDPSession,
-  from: { x: number; y: number },
-  to: { x: number; y: number },
-) {
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: from.x, y: from.y }],
-  });
-  for (const f of [0.25, 0.5, 0.75, 1]) {
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: [
-        { x: from.x + (to.x - from.x) * f, y: from.y + (to.y - from.y) * f },
-      ],
-    });
-  }
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-}
-
-/** Viewport point of a word inside the section iframe (nth occurrence).
- *  The iframe lives in a closed shadow root: reach it through the engine. */
-async function pointOnWord(page: Page, word: string, occurrence: number) {
-  return page.evaluate(
-    ([word, occurrence]) => {
-      const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
-      const io = (
-        doc.defaultView!.frameElement as HTMLIFrameElement
-      ).getBoundingClientRect();
-      const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-      let hits = 0;
-      while (walker.nextNode()) {
-        const node = walker.currentNode;
-        const idx = (node.textContent ?? "").indexOf(word as string);
-        if (idx < 0 || hits++ < (occurrence as number)) continue;
-        const range = doc.createRange();
-        range.setStart(node, idx + 1);
-        range.setEnd(node, idx + (word as string).length - 1);
-        const rect = range.getBoundingClientRect();
-        return {
-          x: io.left + rect.left + rect.width / 2,
-          y: io.top + rect.top + rect.height / 2,
-        };
-      }
-      return null;
-    },
-    [word, occurrence] as const,
-  );
-}
-
-function overlayState(page: Page) {
-  return page.evaluate(() => {
-    const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
-    const el = doc.getElementById("beepub-sel-overlay");
-    const child = el?.firstElementChild;
-    if (!el || !child) return null;
-    return {
-      opacity: getComputedStyle(el).opacity,
-      fill: getComputedStyle(child).backgroundColor,
-    };
-  });
-}
 
 test("tap zones: left quarter back, right quarter forward, independent of the gap", async ({
   page,

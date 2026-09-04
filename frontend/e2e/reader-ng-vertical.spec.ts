@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
+import { marks } from "./ng-helpers";
 
 /**
  * reader-ng: vertical-rl (直排) on the new engine — the two engine-agnostic
@@ -144,4 +145,78 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
   expect(bracketLoaded).toBe(true);
   const woff = await page.request.get("/fonts/beepub-vpunct-serif.woff2");
   expect(woff.ok()).toBeTruthy();
+});
+
+test("highlights follow the vertical line: fill along the run, underline on its right", async ({
+  page,
+}) => {
+  const bookId = await seed(
+    page,
+    fixture("e2e-vertical-book.epub"),
+    "e2e-vertical-highlights",
+  );
+  await openNg(page, bookId, "話說天下大勢", "serif");
+
+  // Anchor two runs of the first sentence through the engine's own CFI
+  // writer, the way a selection would.
+  const runs = await page.evaluate(() => {
+    const core = window.__beepubReaderNG.core;
+    const doc: Document = core.getContents()[0].doc;
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    let node: Node | null = null;
+    while (walker.nextNode()) {
+      if ((walker.currentNode.textContent ?? "").length >= 12) {
+        node = walker.currentNode;
+        break;
+      }
+    }
+    if (!node) return null;
+    const run = (from: number, to: number) => {
+      const range = doc.createRange();
+      range.setStart(node!, from);
+      range.setEnd(node!, to);
+      const r = range.getBoundingClientRect();
+      return {
+        cfi: core.cfiOf(core.currentIndex(), range) as string,
+        text: range.toString(),
+        rect: { x: r.left, y: r.top, w: r.width, h: r.height },
+      };
+    };
+    return { fill: run(2, 6), line: run(8, 12) };
+  });
+  expect(runs).toBeTruthy();
+  // A four-character vertical run is taller than it is wide.
+  expect(runs!.fill.rect.h).toBeGreaterThan(runs!.fill.rect.w * 2);
+
+  for (const [run, color] of [
+    [runs!.fill, "yellow"],
+    [runs!.line, "blue:underline"],
+  ] as const) {
+    const created = await page.request.post(`/api/books/${bookId}/highlights`, {
+      data: { cfi_range: run.cfi, text: run.text, color },
+    });
+    expect(created.ok()).toBeTruthy();
+  }
+
+  await openNg(page, bookId, "話說天下大勢", "serif");
+  await expect.poll(() => marks(page)).toHaveLength(2);
+  const drawn = await marks(page);
+
+  const fill = drawn.find((m) => m.fill === "#fef08a")!;
+  expect(fill).toBeTruthy();
+  const fr = fill.rects[0];
+  const want = runs!.fill.rect;
+  expect(Math.abs(fr.y - want.y)).toBeLessThan(1.5);
+  expect(Math.abs(fr.h - want.h)).toBeLessThan(1.5);
+  expect(fr.h).toBeGreaterThan(fr.w * 2);
+
+  // Underline in vertical writing: a 2px bar down the right side of the run.
+  const line = drawn.find((m) => m.fill === "#3b82f6")!;
+  expect(line).toBeTruthy();
+  const lr = line.rects[0];
+  const lw = runs!.line.rect;
+  expect(lr.w).toBe(2);
+  expect(Math.abs(lr.x + lr.w - (lw.x + lw.w))).toBeLessThan(1.5);
+  expect(Math.abs(lr.y - lw.y)).toBeLessThan(1.5);
+  expect(Math.abs(lr.h - lw.h)).toBeLessThan(1.5);
 });
