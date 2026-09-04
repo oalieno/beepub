@@ -88,3 +88,27 @@ export function positionFromPercent(
   // target === total (the 100% case) falls out of the loop.
   return { sectionIndex: lastWeighted, fraction: 1 };
 }
+
+/** A tick per spine section works for prose (one file per chapter); a
+ *  comic's one-image-per-section spine would paint a picket fence, so
+ *  past this count the scrubber goes tickless. */
+export const MAX_SCRUBBER_TICKS = 40;
+
+/** Section-start positions (percent) on the weight scale — the same scale
+ *  the scrubber seeks on. Zero-weight sections are skipped: their start
+ *  coincides with the next weighted one. [] past MAX_SCRUBBER_TICKS. */
+export function sectionTickPercents(weights: readonly number[]): number[] {
+  let total = 0;
+  for (const w of weights) total += w;
+  if (total <= 0) return [];
+  const out: number[] = [];
+  let before = 0;
+  for (let i = 0; i < weights.length; i++) {
+    if (i > 0 && weights[i]! > 0) {
+      const pct = (before / total) * 100;
+      if (pct > 0.5 && pct < 99.5) out.push(pct);
+    }
+    before += weights[i]!;
+  }
+  return out.length > MAX_SCRUBBER_TICKS ? [] : out;
+}

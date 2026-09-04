@@ -3,10 +3,10 @@
    * BookReader — the thinnest Svelte container around ReaderCore. Mounts
    * the paginator into a full-size div, feeds it theme CSS and layout
    * parameters, forwards relocations, and owns the gesture layer: tap
-   * zones, swipe, the page-turn mode, text selection with its menu, and
-   * the saved highlights drawn on the section overlayer. Product-shaped
-   * state above that (progress, sidebars) is layered on in later gates;
-   * this component stays engine-facing.
+   * zones, swipe, the page-turn mode, text selection with its menu, the
+   * saved highlights drawn on the section overlayer, and reading progress
+   * (restore, weight-interpolated percentage, saves, peek, the kosync
+   * marker). Sidebars and the rest of the chrome live in the page.
    *
    * Must sit inside the reader root div: .reader-light / .reader-dark
    * scope the theme tokens the chrome around it uses.
@@ -22,14 +22,30 @@
   } from "$lib/reader/core";
   import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
   import { verifyAnchors } from "$lib/reader/anchor";
+  import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
+  import {
+    percentFromPosition,
+    positionFromPercent,
+    sectionTickPercents,
+    usableWeights,
+  } from "$lib/reading/progress";
   import type { BookSource } from "$lib/reading/source";
-  import type { SyncBackend } from "$lib/reading/sync";
+  import type {
+    ProgressSave,
+    ProgressState,
+    SyncBackend,
+  } from "$lib/reading/sync";
   import type { HighlightOut } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
   import { sectionIndexFromCfi } from "./highlight-anchor";
+  import {
+    parseKosyncXpointer,
+    resolveXpointerRange,
+    xpointerFromRange,
+  } from "./kosync-xpointer";
   import {
     HIGHLIGHT_COLORS,
     HIGHLIGHT_LINE_COLORS,
@@ -50,6 +66,7 @@
     darkMode = false,
     layout = {},
     pageTurn = "instant",
+    sectionWeights = null,
     onbook,
     onready,
     onerror,
@@ -58,11 +75,21 @@
     onhighlightschange,
     onbrokenhighlights,
     onshare,
+    onprogress,
+    onactivity,
+    onticks,
+    ondirection,
+    onkosyncposition,
+    onrestorefallback,
+    onpeekchange,
+    onatend,
   }: {
     bookId: string;
     source: BookSource;
-    /** Where the user's highlights (and, later, progress) live. */
+    /** Where the user's progress and highlights live. */
     sync: SyncBackend;
+    /** Explicit jump target (a highlight from the detail page): a visit
+     *  that keeps the saved position and offers the way back. */
     initialCfi?: string | null;
     fontFamily?: string;
     fontSize?: number;
@@ -81,6 +108,34 @@
     /** Highlights whose anchor no longer resolves and could not be healed. */
     onbrokenhighlights?: (ids: string[]) => void;
     onshare?: (highlight: HighlightOut) => void;
+    /** Per-spine-section text sizes for weight-interpolated progress; null
+     *  falls back to uniform section weights. See $lib/reading/progress. */
+    sectionWeights?: number[] | null;
+    onprogress?: (detail: { cfi: string; percentage: number | null }) => void;
+    /** A user-driven page move — the signal the ledger ticks on for books
+     *  whose saves carry no track_activity. */
+    onactivity?: () => void;
+    /** Section-start percents for scrubber chapter ticks; [] when the
+     *  spine is per-page (comics) and ticks would be noise. */
+    onticks?: (ticks: number[]) => void;
+    /** Whether the book advances leftward (vertical-rl or rtl). */
+    ondirection?: (rtl: boolean) => void;
+    /** A newer position bridged from an e-reader: adopted outright when
+     *  the book was never read here (autoJumped), otherwise offered. */
+    onkosyncposition?: (detail: {
+      percentage: number;
+      device: string | null;
+      sectionIndex: number | null;
+      xpointer: string | null;
+      autoJumped: boolean;
+      localPercentage?: number;
+    }) => void;
+    /** The saved CFI no longer resolved; the reader resumed near the
+     *  stored percentage instead. */
+    onrestorefallback?: (percentage: number) => void;
+    onpeekchange?: (peek: { percentage: number | null } | null) => void;
+    /** The last page of the last section came on screen. */
+    onatend?: () => void;
   } = $props();
 
   let wrapper: HTMLDivElement;
@@ -239,6 +294,490 @@ ${darkOverrides}
         break;
     }
   }
+
+  // ------------------------------------------------------------ progress
+
+  // Position and progress are two things: the position is the CFI
+  // (precise — restore, highlights, kosync), the progress is the
+  // percentage interpolated from spine weights ($lib/reading/progress).
+  // Every relocation updates both and every save carries both, so a
+  // stored record can't hold a CFI that outran its percentage.
+  let currentCfi = "";
+  let currentIndex = 0;
+  let currentSectionPage = 1;
+  let sectionPageCounts: number[] = [];
+  let currentPage = 0;
+  let totalPages = 0;
+  let currentPercentage = 0;
+  let isAtEnd = false;
+  // The restore's own relocation must not be persisted back (a fresh
+  // timestamp on an unchanged position would win a later LWW merge).
+  let restoringProgress = false;
+  // Set on any user move. Decides whether an e-reader position found at
+  // open still gets adopted outright or is only offered.
+  let userNavigated = false;
+  // Peek: a highlight jump is a visit, not a move. Remember where the
+  // reader was (the pill offers the way back) and hold saves until they
+  // return or start reading here (a page turn).
+  let peekReturn: { cfi: string; percentage: number | null } | null = null;
+  let peekSaveHold = false;
+  // Position bridged from an e-reader (kosync), newer than the stored CFI.
+  let kosyncMarker: {
+    percentage: number;
+    device: string | null;
+    sectionIndex: number | null;
+    xpointer: string | null;
+  } | null = null;
+  let kosyncAutoJump = false;
+  // crengine-style xpointer for the current position, computed from the
+  // pristine section DOM (the rendered one carries injected overlays that
+  // would skew child indices) and shipped with saves so e-readers pulling
+  // through kosync land on the paragraph. The cfi tag keeps a stale one
+  // from ever being shipped.
+  let currentXpointer: string | null = null;
+  let currentXpointerCfi = "";
+  const pristineDocs = new Map<number, Promise<Document | null>>();
+  let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let progressTimer: ReturnType<typeof setInterval> | null = null;
+  const SAVE_DEBOUNCE_MS = 2000;
+  // Backup save without activity credit — the debounce covers moves.
+  const PROGRESS_SAVE_INTERVAL_MS = 30_000;
+  // Shared with the current reader: either one resumes from the other's
+  // last position when the API is unreachable.
+  const progressCacheKey = () => `reader-progress-${bookId}`;
+
+  /** Dense weights sized to the spine; uniform fallback when the source
+   *  ships none (extraction pending, sideloads, image-only books). */
+  function progressWeights(): number[] {
+    return usableWeights(sectionWeights, core?.book?.sections.length ?? 0);
+  }
+
+  function clampPercentage(value: number): number {
+    return Math.min(100, Math.max(0, Math.round(value)));
+  }
+
+  function emitProgress(percentage: number | null = currentPercentage) {
+    onprogress?.({ cfi: currentCfi, percentage });
+  }
+
+  /** Synthetic whole-book page numbers (the wire's current_page and
+   *  total_pages): the sections rendered so far count their pages, the
+   *  rest are estimated at their average. */
+  function pageNumbers(index: number, page: number) {
+    const count = core?.book?.sections.length ?? 1;
+    let knownTotal = 0;
+    let knownCount = 0;
+    for (const n of sectionPageCounts) {
+      if (n > 0) {
+        knownTotal += n;
+        knownCount += 1;
+      }
+    }
+    const estimate =
+      knownCount > 0 ? Math.max(1, Math.round(knownTotal / knownCount)) : 1;
+    let before = 0;
+    let total = 0;
+    for (let i = 0; i < count; i++) {
+      const n = sectionPageCounts[i] || estimate;
+      if (i < index) before += n;
+      total += n;
+    }
+    return { currentPage: before + page, totalPages: total };
+  }
+
+  /** The section's parsed, unrendered document — the DOM kosync xpointers
+   *  are written against and read from. Cached per section. */
+  function pristineDoc(index: number): Promise<Document | null> {
+    let pending = pristineDocs.get(index);
+    if (!pending) {
+      const section = core?.book?.sections[index];
+      pending = (section ? section.createDocument() : Promise.resolve(null))
+        .then((doc) => doc ?? null)
+        .catch(() => null);
+      pristineDocs.set(index, pending);
+    }
+    return pending;
+  }
+
+  function rangeIn(doc: Document, cfi: string): Range | null {
+    const target = core?.resolve(cfi);
+    const anchor =
+      target && typeof target.anchor === "function" ? target.anchor(doc) : null;
+    return anchor && typeof anchor === "object" && "startContainer" in anchor
+      ? (anchor as Range)
+      : null;
+  }
+
+  async function updateCurrentXpointer(cfi: string, index: number) {
+    try {
+      const doc = await pristineDoc(index);
+      const range = doc ? rangeIn(doc, cfi) : null;
+      const xp = range ? xpointerFromRange(range, index) : null;
+      // Another relocation may have raced this; only publish for the
+      // position we computed for.
+      if (cfi === currentCfi) {
+        currentXpointer = xp;
+        currentXpointerCfi = cfi;
+      }
+    } catch {
+      if (cfi === currentCfi) currentXpointer = null;
+    }
+  }
+
+  /** Resolve a device xpointer through the section document to a CFI. */
+  async function xpointerToCfi(xpointer: string): Promise<string | null> {
+    const c = core;
+    const parsed = parseKosyncXpointer(xpointer);
+    if (!c || !parsed) return null;
+    const doc = await pristineDoc(parsed.sectionIndex);
+    const range = doc ? resolveXpointerRange(doc, parsed) : null;
+    return range ? c.cfiOf(parsed.sectionIndex, range) : null;
+  }
+
+  function handleRelocate(r: Relocation) {
+    onrelocate?.(r);
+    const c = core;
+    if (!c) return;
+    // The paginator reports user moves as page/snap/scroll; navigation,
+    // anchor and selection are ours.
+    const userMove =
+      r.reason === "page" || r.reason === "snap" || r.reason === "scroll";
+    // The position is the point where the visible text starts — the same
+    // shape the current reader stores, so either reader restores the
+    // other's rows.
+    currentCfi = r.startCfi;
+    currentIndex = r.index;
+    // fraction = completed pages over the section's pages, size = one page.
+    const pages = r.size ? Math.max(1, Math.round(1 / r.size)) : 1;
+    const page = r.size
+      ? Math.min(pages, Math.round(r.fraction / r.size) + 1)
+      : 1;
+    currentSectionPage = page;
+    if (sectionPageCounts[r.index] !== pages) {
+      const next = sectionPageCounts.slice();
+      next[r.index] = pages;
+      sectionPageCounts = next;
+    }
+    const numbers = pageNumbers(r.index, page);
+    currentPage = numbers.currentPage;
+    totalPages = numbers.totalPages;
+    void updateCurrentXpointer(r.cfi, r.index);
+
+    if (userMove) {
+      userNavigated = true;
+      peekSaveHold = false;
+    }
+    const wasAtEnd = isAtEnd;
+    isAtEnd = r.index === c.lastLinearIndex() && page >= pages;
+    currentPercentage = isAtEnd
+      ? 100
+      : clampPercentage(
+          percentFromPosition(progressWeights(), r.index, r.fraction),
+        );
+    emitProgress();
+    if (isAtEnd && !wasAtEnd) onatend?.();
+
+    if (restoringProgress || peekSaveHold) return;
+    debouncedSave();
+    if (userMove) onactivity?.();
+    try {
+      localStorage.setItem(
+        progressCacheKey(),
+        JSON.stringify({
+          cfi: currentCfi,
+          percentage: currentPercentage,
+          currentPage,
+          totalPages,
+          sectionIndex: currentIndex,
+          sectionPage: currentSectionPage,
+          sectionPageCounts,
+          fontSize,
+        }),
+      );
+    } catch {
+      // storage full or unavailable
+    }
+  }
+
+  function debouncedSave() {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = setTimeout(() => void saveProgress(), SAVE_DEBOUNCE_MS);
+  }
+
+  /** One builder for the normal save and the unload beacon so the two
+   *  payloads can't drift. Units: reader percentage 0..100, locator
+   *  totalProgression 0..1. */
+  function buildProgressSave(trackActivity: boolean): ProgressSave {
+    return {
+      locator: locatorFromCfi(currentCfi, {
+        totalProgression: currentPercentage / 100,
+        position: currentPage,
+      }),
+      fontSize,
+      sectionIndex: currentIndex,
+      sectionPage: currentSectionPage,
+      sectionPageCounts: sectionPageCounts.map((n) => (n > 0 ? n : 0)),
+      totalPages,
+      // Only the xpointer computed for exactly this CFI; absent → the
+      // server degrades to chapter-start synthesis.
+      xpointer: currentXpointerCfi === currentCfi ? currentXpointer : null,
+      trackActivity,
+    };
+  }
+
+  function canSave() {
+    return !!currentCfi && !peekSaveHold;
+  }
+
+  async function saveProgress(trackActivity = true) {
+    if (!canSave()) return;
+    try {
+      await sync.saveProgress(bookId, buildProgressSave(trackActivity));
+    } catch {
+      // the next move or the interval retries
+    }
+  }
+
+  /** Parent-triggered save (manual sync buttons): cancel the debounce and
+   *  persist the current position right now. */
+  export async function flushProgress(): Promise<void> {
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    await saveProgress(false);
+  }
+
+  function handleBeforeUnload() {
+    if (!canSave()) return;
+    sync.saveProgressBeacon(bookId, buildProgressSave(false));
+  }
+
+  interface SavedProgress {
+    cfi: string | null;
+    percentage: number | null;
+    sectionPageCounts: number[];
+    devicePosition: ProgressState["devicePosition"];
+  }
+
+  async function loadSavedProgress(): Promise<SavedProgress | null> {
+    try {
+      const state = await sync.getProgress(bookId);
+      if (!state) return null;
+      const total = state.locator?.locations.totalProgression;
+      return {
+        cfi: state.locator ? cfiOfLocator(state.locator) : null,
+        percentage: total == null ? null : total * 100,
+        sectionPageCounts: state.sectionPageCounts ?? [],
+        devicePosition: state.devicePosition,
+      };
+    } catch {
+      // API unreachable (an iOS PWA resumed offline): the local cache.
+      try {
+        const cached = localStorage.getItem(progressCacheKey());
+        if (cached) {
+          const p = JSON.parse(cached);
+          return {
+            cfi: typeof p.cfi === "string" ? p.cfi : null,
+            percentage: typeof p.percentage === "number" ? p.percentage : null,
+            sectionPageCounts: Array.isArray(p.sectionPageCounts)
+              ? p.sectionPageCounts
+              : [],
+            devicePosition: null,
+          };
+        }
+      } catch {
+        // unreadable cache
+      }
+      return null;
+    }
+  }
+
+  /** Programmatic navigation that must not count as reading. Resolves to
+   *  whether the target was reached. */
+  async function navigateQuietly(target: NavInput): Promise<boolean> {
+    const c = core;
+    if (!c) return false;
+    restoringProgress = true;
+    try {
+      return (await c.goTo(target)) != null;
+    } catch {
+      return false;
+    } finally {
+      restoringProgress = false;
+    }
+  }
+
+  /** Open at the saved position: the explicit target as a visit, else the
+   *  saved CFI, else (the file was rewritten since it was recorded) the
+   *  stored percentage, else the first section. */
+  async function restorePosition(c: ReaderCore, saved: SavedProgress | null) {
+    sectionPageCounts = (saved?.sectionPageCounts ?? []).map((n) =>
+      typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0,
+    );
+    if (saved?.percentage != null) {
+      currentPercentage = clampPercentage(saved.percentage);
+    }
+    emitProgress();
+    if (initialCfi) {
+      startPeek(saved?.cfi ?? null, saved?.percentage ?? null);
+      if (await navigateQuietly(initialCfi)) return;
+      // A dead jump target gets no percentage fallback: progress isn't
+      // where they asked to go.
+      await navigateQuietly(c.firstLinearIndex());
+      return;
+    }
+    if (saved?.cfi) {
+      if (await navigateQuietly(saved.cfi)) return;
+      if (
+        saved.percentage != null &&
+        (await displayPercentage(saved.percentage))
+      ) {
+        onrestorefallback?.(saved.percentage);
+        return;
+      }
+    }
+    await navigateQuietly(c.firstLinearIndex());
+  }
+
+  /** Seek to a percentage on the weight scale: the section it lands in,
+   *  then the page at that fraction of it. */
+  export async function displayPercentage(pct: number): Promise<boolean> {
+    const c = core;
+    if (!c?.book) return false;
+    const weights = progressWeights();
+    if (!weights.length) return false;
+    const { sectionIndex, fraction } = positionFromPercent(weights, pct);
+    dismissMenu();
+    try {
+      return (await c.goTo({ index: sectionIndex, fraction })) != null;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The scrubber: a seek is the reader choosing to read elsewhere. */
+  export function seekPercentage(pct: number): Promise<boolean> {
+    userNavigated = true;
+    peekSaveHold = false;
+    return displayPercentage(pct);
+  }
+
+  /** Navigate as the reader (TOC, search): ends a peek, counts as a move. */
+  export function displayCfi(target: NavInput) {
+    userNavigated = true;
+    peekSaveHold = false;
+    dismissMenu();
+    return core?.goTo(target).catch(() => null);
+  }
+
+  export function getCurrentCfi(): string {
+    return currentCfi;
+  }
+
+  function startPeek(cfi: string | null, percentage: number | null) {
+    if (!cfi) return; // nothing to lose — the book has no position yet
+    peekReturn = { cfi, percentage };
+    peekSaveHold = true;
+    onpeekchange?.({ percentage });
+  }
+
+  export async function returnFromPeek() {
+    const c = core;
+    if (!peekReturn || !c) return;
+    const { cfi, percentage } = peekReturn;
+    peekReturn = null;
+    peekSaveHold = false;
+    onpeekchange?.(null);
+    dismissMenu();
+    let landed = false;
+    try {
+      landed = (await c.goTo(cfi)) != null;
+    } catch {
+      landed = false;
+    }
+    if (!landed && percentage != null) await displayPercentage(percentage);
+  }
+
+  /**
+   * Act on an e-reader position bridged from kosync. Never read here →
+   * adopt the device position outright; otherwise (positions meaningfully
+   * apart) let the page offer the jump — the local CFI stays authoritative
+   * until the user accepts.
+   */
+  async function resolveKosyncMarker() {
+    if (!kosyncMarker) return;
+    const marker = kosyncMarker;
+    kosyncMarker = null;
+    if (kosyncAutoJump && !userNavigated) {
+      if (
+        await displayKosyncPosition(
+          marker.percentage,
+          marker.sectionIndex,
+          marker.xpointer,
+        )
+      ) {
+        onkosyncposition?.({ ...marker, autoJumped: true });
+      }
+      return;
+    }
+    // currentPercentage is CFI-derived by now (the restore's relocation
+    // recomputed it), not the bridge-written stored value.
+    if (Math.abs(marker.percentage - currentPercentage) > 1) {
+      onkosyncposition?.({
+        ...marker,
+        autoJumped: false,
+        localPercentage: currentPercentage,
+      });
+    }
+  }
+
+  /**
+   * Jump to an e-reader position, best anchor first: the device xpointer
+   * walked through the section DOM (paragraph-level), the percentage when
+   * it lands in the hinted chapter, that chapter's start, the raw
+   * percentage.
+   */
+  export async function displayKosyncPosition(
+    pct: number,
+    sectionIndex: number | null,
+    xpointer: string | null = null,
+  ): Promise<boolean> {
+    const c = core;
+    if (!c) return false;
+    if (xpointer) {
+      try {
+        const cfi = await xpointerToCfi(xpointer);
+        if (cfi && (await c.goTo(cfi))) return true;
+      } catch {
+        // best-effort — fall through to the coarser anchors
+      }
+    }
+    if (sectionIndex != null) {
+      const landing = positionFromPercent(progressWeights(), pct);
+      if (landing.sectionIndex === sectionIndex) return displayPercentage(pct);
+      try {
+        if (await c.goTo(sectionIndex)) return true;
+      } catch {
+        // fall through
+      }
+    }
+    return displayPercentage(pct);
+  }
+
+  // Weights can arrive after the first render (the page fetches them
+  // alongside the book): re-measure the current position on the new ruler.
+  $effect(() => {
+    const weights = sectionWeights;
+    const c = core;
+    const loc = c?.lastLocation;
+    if (!c || !loc) return;
+    const ruler = usableWeights(weights, c.book?.sections.length ?? 0);
+    if (!isAtEnd) {
+      currentPercentage = clampPercentage(
+        percentFromPosition(ruler, loc.index, loc.fraction),
+      );
+      emitProgress();
+    }
+    onticks?.(sectionTickPercents(ruler));
+  });
 
   // ---------------------------------------------------------- highlights
 
@@ -477,15 +1016,18 @@ ${darkOverrides}
     }
   }
 
-  /** Jump to a highlight. One known to be un-anchorable jumps to its
-   *  section instead. */
+  /** Jump to a highlight as a visit: the pre-jump position stays the
+   *  saved progress (and the pill's return target) until the reader turns
+   *  a page. One known to be un-anchorable jumps to its section instead. */
   export function displayHighlight(hl: HighlightOut) {
     dismissMenu();
+    if (!peekSaveHold) startPeek(currentCfi || null, currentPercentage);
+    userNavigated = true;
     if (brokenHighlightIds.has(hl.id)) {
       const index = sectionIndexOf(hl);
-      if (index != null) return core?.goTo(index);
+      if (index != null) return core?.goTo(index).catch(() => null);
     }
-    return core?.goTo(hl.cfi_range);
+    return core?.goTo(hl.cfi_range).catch(() => null);
   }
 
   // --------------------------------------------------- selection + menu
@@ -697,6 +1239,7 @@ ${darkOverrides}
   function handleLoad({ doc }: { doc: Document }) {
     doc.addEventListener("keydown", handleKey);
     if (core?.vertical) pinVerticalPunctuation(doc);
+    ondirection?.(!!core?.vertical || core?.book?.dir === "rtl");
     attachGestures(doc);
   }
 
@@ -714,7 +1257,7 @@ ${darkOverrides}
     if (destroyed) return;
     const c = new ReaderCore(container, {
       onload: handleLoad,
-      onrelocate: (location) => onrelocate?.(location),
+      onrelocate: handleRelocate,
       onoverlayer: ({ doc, index, overlayer }) =>
         layer?.attach(overlayer, doc, index),
     });
@@ -740,10 +1283,32 @@ ${darkOverrides}
       c.setLayout(layout);
       c.setPageTurn(pageTurn);
       c.setStyles(styles());
-      const book = await c.open(loader, initialCfi);
+      const [book, saved] = await Promise.all([
+        c.load(loader),
+        loadSavedProgress(),
+      ]);
       if (destroyed) return;
       onbook?.(book);
+      const devicePos = saved?.devicePosition;
+      if (!initialCfi && typeof devicePos?.percentage === "number") {
+        kosyncMarker = {
+          percentage: devicePos.percentage,
+          device: devicePos.device ?? null,
+          sectionIndex: devicePos.sectionIndex ?? null,
+          xpointer: devicePos.xpointer ?? null,
+        };
+        kosyncAutoJump = !saved?.cfi;
+      }
+      await restorePosition(c, saved);
+      if (destroyed) return;
       onready?.();
+      onticks?.(sectionTickPercents(progressWeights()));
+      progressTimer = setInterval(
+        () => void saveProgress(false),
+        PROGRESS_SAVE_INTERVAL_MS,
+      );
+      window.addEventListener("beforeunload", handleBeforeUnload);
+      void resolveKosyncMarker();
       const list = await listing;
       if (destroyed) return;
       applyHighlights(list);
@@ -771,6 +1336,10 @@ ${darkOverrides}
 
   onDestroy(() => {
     destroyed = true;
+    if (progressTimer) clearInterval(progressTimer);
+    if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+    void saveProgress(false);
     healAbort?.abort();
     layer?.detach();
     layer = null;

@@ -98,7 +98,11 @@ export interface Relocation {
   /** One page as a fraction of the section (paginated only). */
   size?: number;
   range: Range | null;
+  /** Range CFI of the visible text. */
   cfi: string;
+  /** Point CFI of where the visible text starts — the reading position
+   *  as the current reader stores it. */
+  startCfi: string;
 }
 
 /** Layout parameters. Each maps to one paginator attribute, which the
@@ -208,9 +212,9 @@ export class ReaderCore {
     container.append(this.paginator);
   }
 
-  /** Parse the book through `loader`, hand it to the paginator, and show
-   *  `target` (default: the first linear section). */
-  async open(loader: BookLoader, target?: NavInput | null): Promise<Book> {
+  /** Parse the book through `loader` and hand it to the paginator.
+   *  Nothing is displayed until goTo(). */
+  async load(loader: BookLoader): Promise<Book> {
     // sha1 undefined = foliate's WebCrypto default (font deobfuscation keys)
     const book = (await new EPUB({
       ...loader,
@@ -219,6 +223,13 @@ export class ReaderCore {
     this.book = book;
     this.#language = languageInfo(book.metadata?.language);
     this.paginator.open(book);
+    return book;
+  }
+
+  /** load() then show `target`, falling back to the first linear section
+   *  when the target does not resolve. */
+  async open(loader: BookLoader, target?: NavInput | null): Promise<Book> {
+    const book = await this.load(loader);
     const resolved = target != null ? this.resolve(target) : null;
     await this.paginator.goTo(resolved ?? { index: this.firstLinearIndex() });
     return book;
@@ -229,17 +240,39 @@ export class ReaderCore {
     return i < 0 ? 0 : i;
   }
 
+  lastLinearIndex(): number {
+    const sections = this.book?.sections ?? [];
+    for (let i = sections.length - 1; i >= 0; i--) {
+      if (sections[i].linear !== "no") return i;
+    }
+    return Math.max(0, sections.length - 1);
+  }
+
+  /** null when the target names nothing in this book (unknown section,
+   *  href, or a CFI whose spine step no longer matches). */
   resolve(target: NavInput): NavTarget | null {
     const book = this.book;
     if (!book) return null;
-    if (typeof target === "number") return { index: target };
-    if (typeof target === "object") {
-      return { index: target.index, anchor: target.fraction ?? 0 };
-    }
-    if (CFI.isCFI.test(target)) return book.resolveCFI(target);
-    return book.resolveHref(target);
+    let resolved: NavTarget | null;
+    if (typeof target === "number") resolved = { index: target };
+    else if (typeof target === "object") {
+      resolved = { index: target.index, anchor: target.fraction ?? 0 };
+    } else if (CFI.isCFI.test(target)) {
+      try {
+        resolved = book.resolveCFI(target);
+      } catch {
+        resolved = null;
+      }
+    } else resolved = book.resolveHref(target);
+    if (!resolved) return null;
+    const { index } = resolved;
+    if (!Number.isInteger(index) || index < 0 || index >= book.sections.length)
+      return null;
+    return resolved;
   }
 
+  /** Rejects when the target resolves to a section but not to a place in
+   *  it (a CFI whose in-document path no longer exists). */
   async goTo(target: NavInput): Promise<NavTarget | null> {
     const resolved = this.resolve(target);
     if (!resolved) return null;
@@ -303,6 +336,16 @@ export class ReaderCore {
       if (this.paginator.getAttribute(attr) !== next) {
         this.paginator.setAttribute(attr, next);
       }
+    }
+  }
+
+  /** The point CFI at the start of a range CFI (a point CFI is returned
+   *  as-is). */
+  collapseCFI(cfi: string): string {
+    try {
+      return CFI.collapse(cfi);
+    } catch {
+      return cfi;
     }
   }
 
@@ -385,13 +428,15 @@ export class ReaderCore {
     range?: Range | null;
   }) {
     const range = detail.range ?? null;
+    const cfi = this.cfiOf(detail.index, range);
     const location: Relocation = {
       reason: detail.reason,
       index: detail.index,
       fraction: detail.fraction ?? 0,
       size: detail.size,
       range,
-      cfi: this.cfiOf(detail.index, range),
+      cfi,
+      startCfi: this.collapseCFI(cfi),
     };
     this.lastLocation = location;
     this.#handlers.onrelocate?.(location);

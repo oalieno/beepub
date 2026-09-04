@@ -5,14 +5,20 @@
    * instrument panel: every slider is a layout input, and the readout
    * shows whether the anchor survived the resulting reflow. The panel is
    * a measuring device, not product UI; the settings sheet (G2) replaces it.
-   * Highlights are product-shaped already: list, jump, delete, share.
+   * Highlights and progress are product-shaped already: the sidebar, the
+   * share card, the percentage with its desktop scrubber, the peek pill,
+   * the kosync offer, and the local-first sync triggers around a session.
    */
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
+  import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { resolveReading } from "$lib/reading/resolve";
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
+  import type { LocalBookEntry } from "$lib/services/localLibrary";
+  import { getIsOnline } from "$lib/services/network";
   import type { HighlightOut } from "$lib/types";
   import { confirmDialog } from "$lib/stores/confirm";
   import { toastStore } from "$lib/stores/toast";
@@ -25,6 +31,7 @@
   } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
+  import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -39,6 +46,7 @@
     PanelTop,
     SlidersHorizontal,
     Sun,
+    Undo2,
     X,
   } from "@lucide/svelte";
 
@@ -47,8 +55,11 @@
 
   let source = $state<BookSource | null>(null);
   let sync = $state<SyncBackend | null>(null);
+  let localEntry = $state<LocalBookEntry | null>(null);
+  let isBeepub = $derived(sync?.kind === "beepub");
   let title = $state("");
   let authors = $state<string[]>([]);
+  let sectionWeights = $state<number[] | null>(null);
   let ready = $state(false);
   let rendered = $state(false);
   let loadError = $state<string | null>(null);
@@ -61,6 +72,58 @@
   let brokenHighlightIds = $state<Set<string>>(new Set());
   let showHighlights = $state(false);
   let shareHighlight = $state<HighlightOut | null>(null);
+
+  // Progress: the reader owns position and percentage; the page shows
+  // them (header, desktop scrubber) and the peek pill's way back.
+  let percentage = $state<number | null>(null);
+  let isRtl = $state(false);
+  let sectionTicks = $state<number[]>([]);
+  let peekReturn = $state<{ percentage: number | null } | null>(null);
+  const peekLabel = $derived(
+    peekReturn
+      ? peekReturn.percentage != null
+        ? m.reader_peek_return_pct({
+            percentage: Math.round(peekReturn.percentage),
+          })
+        : m.reader_peek_return()
+      : null,
+  );
+
+  // Progress bridged from an e-reader (KOReader/Readest via kosync). The
+  // reader auto-jumps when the book was never read here; otherwise the
+  // jump is a real decision tied to opening the book, so it gets a dialog
+  // (the KOReader/Readest convention), not a dismissable toast.
+  async function handleKosyncPosition(detail: {
+    percentage: number;
+    device: string | null;
+    sectionIndex: number | null;
+    xpointer: string | null;
+    autoJumped: boolean;
+    localPercentage?: number;
+  }) {
+    const device = detail.device || "KOReader";
+    const pct = Math.round(detail.percentage);
+    if (detail.autoJumped) {
+      toastStore.info(m.reader_kosync_jumped({ device, percentage: pct }));
+      return;
+    }
+    const jump = await confirmDialog({
+      title: m.reader_kosync_dialog_title(),
+      description: m.reader_kosync_dialog_body({
+        device,
+        remote: pct,
+        local: Math.round(detail.localPercentage ?? percentage ?? 0),
+      }),
+      confirmLabel: m.reader_kosync_jump(),
+      cancelLabel: m.reader_kosync_dialog_stay(),
+    });
+    if (jump)
+      void reader?.displayKosyncPosition(
+        detail.percentage,
+        detail.sectionIndex,
+        detail.xpointer,
+      );
+  }
 
   async function deleteHighlight(hl: HighlightOut) {
     if (
@@ -162,15 +225,47 @@
       const resolved = await resolveReading(bookId);
       source = resolved.source;
       sync = resolved.sync;
-      if (resolved.localEntry) {
-        title = resolved.localEntry.title;
-        authors = resolved.localEntry.authors ?? [];
+      localEntry = resolved.localEntry;
+      if (localEntry) {
+        // Local imports carry their own display metadata; there is no
+        // server record to fetch it from.
+        title = localEntry.title;
+        authors = localEntry.authors ?? [];
+        sectionWeights = localEntry.sectionWeights ?? null;
+        // Pull the linked server state first so the reader restores the
+        // newest position — but bounded: past 2.5s the sync continues in
+        // the background and this session opens with local state.
+        if (!isLocalMode() && hasServerUrl() && getIsOnline()) {
+          const { syncLocalBook } = await import("$lib/services/readingSync");
+          await Promise.race([
+            syncLocalBook(bookId).catch(() => {}),
+            new Promise((resolve) => setTimeout(resolve, 2500)),
+          ]);
+          // Live-session adoption of the server ruler for entries the
+          // sync backfill hasn't upgraded yet (persistence is doSync's
+          // job); this only makes THIS session measure with real weights.
+          if (localEntry.sectionWeights === undefined) {
+            const { getLocalBookLinks } =
+              await import("$lib/services/localLibrary");
+            const serverBookId = (await getLocalBookLinks())[bookId] ?? null;
+            if (serverBookId) {
+              booksApi
+                .get(serverBookId)
+                .then((b) => {
+                  if (b.section_weights && b.section_weights.length > 0)
+                    sectionWeights = b.section_weights;
+                })
+                .catch(() => {});
+            }
+          }
+        }
       } else {
         booksApi
           .get(bookId)
           .then((b) => {
             title = b.display_title ?? b.title ?? b.epub_title ?? "";
             authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
+            sectionWeights = b.section_weights ?? null;
           })
           .catch(() => {});
       }
@@ -178,6 +273,30 @@
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
+  });
+
+  onDestroy(() => {
+    if (!browser || !localEntry) return;
+    // Push this session's reading state. The delay sequences the sync
+    // after the reader's final save (parent/child onDestroy ordering
+    // isn't contractual).
+    const id = bookId;
+    const kind = sync?.kind;
+    setTimeout(() => {
+      void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+        syncLocalBook(id).catch(() => {}),
+      );
+      // The session's reading time is final — ship the ledger window.
+      void import("$lib/services/readingLedger").then(({ pushLedger }) =>
+        pushLedger(),
+      );
+      // Closing the book shouldn't wait out the push throttle.
+      if (kind === "kosync") {
+        void import("$lib/reading/kosync").then(({ flushKosyncPushes }) =>
+          flushKosyncPushes(),
+        );
+      }
+    }, 600);
   });
 
   function shortCfi(cfi: string | null): string {
@@ -210,9 +329,12 @@
         <ArrowLeft />
       </Button>
       <div class="min-w-0 flex-1 truncate text-sm">{title}</div>
-      {#if loc}
-        <span class="text-xs text-muted-foreground tabular-nums">
-          §{loc.index} · {Math.round(loc.fraction * 100)}%
+      {#if percentage != null}
+        <span
+          class="text-xs text-muted-foreground tabular-nums"
+          data-testid="ng-percent"
+        >
+          {percentage}%
         </span>
       {/if}
       <Button
@@ -272,6 +394,7 @@
         {darkMode}
         {layout}
         {pageTurn}
+        {sectionWeights}
         onbook={(b) => (book = b)}
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
@@ -279,7 +402,89 @@
         onhighlightschange={(list) => (highlights = list)}
         onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
         onshare={(hl) => (shareHighlight = hl)}
+        onprogress={(p) => (percentage = p.percentage)}
+        onactivity={() => {
+          // beepub-kind saves carry track_activity — the server credits
+          // the 'web' device row itself. Local/kosync books tick the
+          // device ledger instead.
+          if (!isBeepub)
+            void import("$lib/services/readingLedger").then(({ tickReading }) =>
+              tickReading(),
+            );
+        }}
+        onticks={(t) => (sectionTicks = t)}
+        ondirection={(rtl) => (isRtl = rtl)}
+        onkosyncposition={handleKosyncPosition}
+        onrestorefallback={(pct) =>
+          toastStore.info(
+            m.reader_restore_fallback({ percentage: Math.round(pct) }),
+          )}
+        onpeekchange={(peek) => (peekReturn = peek)}
       />
+    {/if}
+
+    <!-- Bottom progress (desktop; the header carries the number on
+         phones). Collapsed: a hair-thin line at the bottom edge. Hovering
+         the bottom strip (or an active peek, whose return link must be
+         discoverable) expands the scrubber + info row as an overlay — no
+         layout change, so the text never reflows. -->
+    {#if rendered && percentage != null}
+      <div
+        class="hidden md:block absolute bottom-0 left-0 right-0 z-20 h-4 group"
+        data-testid="ng-progress"
+      >
+        <div
+          class="absolute bottom-0 left-0 right-0 h-[3px] overflow-hidden transition-opacity {peekLabel
+            ? 'opacity-0'
+            : 'group-hover:opacity-0'} {darkMode
+            ? 'bg-ink-800'
+            : 'bg-secondary'}"
+        >
+          <div
+            class="h-full transition-[width] duration-300 {darkMode
+              ? 'bg-ink-500'
+              : 'bg-primary'} {isRtl ? 'ml-auto' : ''}"
+            style="width: {percentage}%;"
+          ></div>
+        </div>
+        <div
+          class="absolute bottom-0 left-0 right-0 flex-col items-center gap-0 px-8 pb-3 pt-8 bg-gradient-to-t to-transparent {darkMode
+            ? 'from-ink-900 via-ink-900/85'
+            : 'from-white via-white/85'} {peekLabel
+            ? 'flex'
+            : 'hidden group-hover:flex'}"
+        >
+          <div class="w-full max-w-xl">
+            <ProgressScrubber
+              {percentage}
+              {darkMode}
+              {isRtl}
+              ticks={sectionTicks}
+              ariaLabel={m.reader_progress()}
+              onseek={(p) => reader?.seekPercentage(p)}
+            />
+          </div>
+          <div
+            class="flex items-center gap-2.5 text-sm min-w-0 max-w-xl {darkMode
+              ? 'text-ink-400'
+              : 'text-muted-foreground'}"
+          >
+            <span class="shrink-0">{percentage}%</span>
+            {#if peekLabel}
+              <span class="opacity-50">·</span>
+              <button
+                type="button"
+                class="flex items-center gap-1.5 underline underline-offset-4 text-primary transition-opacity hover:opacity-80"
+                data-testid="ng-peek-return"
+                onclick={() => reader?.returnFromPeek()}
+              >
+                <Undo2 size={14} />
+                {peekLabel}
+              </button>
+            {/if}
+          </div>
+        </div>
+      </div>
     {/if}
 
     {#if !rendered && !loadError}
