@@ -14,6 +14,10 @@ const CHAPTERS_FIXTURE = path.join(
 );
 
 test.use({ storageState: ADMIN_STATE });
+// Text extraction is queued behind each earlier upload's metadata fetch
+// (seconds each, against external sources), so after the suite's burst
+// of uploads a fresh book's weights can take a minute or more.
+test.setTimeout(180_000);
 
 async function uploadChaptersBook(page: Page): Promise<{ id: string }> {
   const libraries = await (await page.request.get("/api/libraries")).json();
@@ -43,7 +47,7 @@ async function waitForWeights(page: Page, bookId: string): Promise<number[]> {
         ).json();
         return detail.section_weights;
       },
-      { timeout: 30_000, message: "text extraction never produced weights" },
+      { timeout: 120_000, message: "text extraction never produced weights" },
     )
     .not.toBeNull();
   const detail = await (await page.request.get(`/api/books/${bookId}`)).json();

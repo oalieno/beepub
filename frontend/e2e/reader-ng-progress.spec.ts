@@ -27,14 +27,16 @@ test.afterEach(async ({ page }) => {
 });
 
 /** The worker extracts text shortly after upload; weights ride the book
- *  detail. Until then the reader falls back to uniform weights. */
+ *  detail. Until then the reader falls back to uniform weights. The
+ *  extraction queues behind earlier uploads' metadata fetches (seconds
+ *  each, external sources), so a fresh database can take a minute. */
 async function waitForWeights(page: Page, bookId: string): Promise<number[]> {
   await expect
     .poll(
       async () =>
         (await (await page.request.get(`/api/books/${bookId}`)).json())
           .section_weights,
-      { timeout: 30_000, message: "text extraction never produced weights" },
+      { timeout: 120_000, message: "text extraction never produced weights" },
     )
     .not.toBeNull();
   return (await (await page.request.get(`/api/books/${bookId}`)).json())
@@ -153,6 +155,7 @@ test("a stored CFI that no longer resolves degrades to the stored percentage", a
 test("percentage follows the weights and the scrubber seeks on their scale", async ({
   page,
 }) => {
+  test.slow(); // the first run on a fresh database waits for extraction
   const bookId = await seedFixture(page.request, CHAPTERS_BOOK);
   const weights = await waitForWeights(page, bookId);
   await resetProgress(page.request, bookId);
