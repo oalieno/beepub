@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   NOTES_BOOK,
+  TOUCH_BOOK,
   VERTICAL_LONG_BOOK,
   iphone,
   location,
@@ -205,4 +206,27 @@ test.describe("phone", () => {
     await touchTap(cdp, { x: 195, y: 420 }, 60);
     await expect(bar).toBeHidden();
   });
+});
+
+test("the scroll wheel turns pages on desktop", async ({ page }) => {
+  const bookId = await seedFixture(page.request, TOUCH_BOOK);
+  await openBook(page, bookId);
+  const box = (await page.getByTestId("book-reader").boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+
+  // One notch down: the next page (one turn per gesture, however many
+  // events a trackpad sends).
+  await page.mouse.wheel(0, 120);
+  await expect
+    .poll(async () => (await location(page)).fraction)
+    .toBeGreaterThan(0);
+  const after = await location(page);
+  await page.mouse.wheel(0, 120);
+  await page.waitForTimeout(100);
+  expect((await location(page)).fraction).toBe(after.fraction);
+
+  // Past the debounce, a notch up comes back.
+  await page.waitForTimeout(400);
+  await page.mouse.wheel(0, -120);
+  await expect.poll(async () => (await location(page)).fraction).toBe(0);
 });

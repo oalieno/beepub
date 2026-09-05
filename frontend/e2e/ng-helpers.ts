@@ -121,6 +121,15 @@ export const NOTES_BOOK: Fixture = {
   readyText: "almanac opens with lanterns",
 };
 
+/** Four short chapters; chapters 2–4 each open on a plate (an <img>, an
+ *  SVG <image>, an <img>) under OEBPS/images, referenced with `../` from
+ *  OEBPS/text — the shape the image prefetch has to resolve. */
+export const PLATES_BOOK: Fixture = {
+  file: "e2e-plates-book.epub",
+  title: "Copperplate Weather Journal",
+  readyText: "frost ledger kept by a lighthouse cook",
+};
+
 /** Upload the fixture into the E2E library once; return its book id.
  *  Seeding by title keeps re-runs from piling copies into the persistent
  *  e2e database (which skews the search ranking other specs rely on). */
