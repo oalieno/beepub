@@ -49,9 +49,12 @@ export const TOUCH_BOOK: Fixture = {
   readyText: "starship librarian",
 };
 
+/** Two chapters of unique sentences (the heal tests need unambiguous
+ *  quotes), padded past the server's 500-word image-book threshold so the
+ *  chrome shows the highlights entry. */
 export const ANCHOR_BOOK: Fixture = {
   file: "e2e-anchor-book.epub",
-  title: "Anchor Drift Book",
+  title: "Anchor Drift Ledger",
   readyText: "lighthouse keeper",
 };
 
@@ -71,7 +74,7 @@ export const VPUNCT_BOOK: Fixture = {
 export const VERTICAL_LONG_BOOK: Fixture = {
   file: "e2e-vertical-long-book.epub",
   title: "直書均勻格線",
-  readyText: "長卷話說天下大勢",
+  readyText: "話說天下大勢分久必合",
 };
 
 /** Two chapters with a ~15:1 text-size ratio: the weight scale has a
@@ -80,6 +83,15 @@ export const CHAPTERS_BOOK: Fixture = {
   file: "e2e-vertical-chapters-book.epub",
   title: "直書跨章格線",
   readyText: "甲章首段",
+};
+
+/** Nested TOC with fragment entries, a same-file footnote, a cross-file
+ *  note reference, a plain cross-file link, one unique search token
+ *  ("quillstorm") and one frequent one ("lantern"). */
+export const NOTES_BOOK: Fixture = {
+  file: "e2e-notes-book.epub",
+  title: "Margin Notes Almanac",
+  readyText: "almanac opens with lanterns",
 };
 
 /** Upload the fixture into the E2E library once; return its book id.
@@ -132,6 +144,18 @@ export async function resetProgress(
   expect(res.ok()).toBeTruthy();
 }
 
+/** The one-time gesture coach mark (shared key with the current reader)
+ *  would sit over the page and eat the first tap of every fresh context. */
+export function seedGesturesSeen(page: Page) {
+  return page.addInitScript(() => {
+    try {
+      localStorage.setItem("reader-gestures-seen", "1");
+    } catch {
+      // storage unavailable — the hint shows, which only matters on device
+    }
+  });
+}
+
 /** Open read-ng at a fixed geometry and wait for the first section.
  *  `overrides` are query params, plus `restore: "1"` to keep the reader's
  *  own restored position instead of resetting to the first page. */
@@ -151,22 +175,16 @@ export async function openBook(
     my: "48",
     ...query,
   });
+  await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read-ng?${params}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
     { timeout: 30_000 },
   );
-  await expect
-    .poll(() =>
-      page.evaluate((text) => {
-        const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
-        return doc.body?.textContent?.includes(text) ?? false;
-      }, fixture.readyText),
-    )
-    .toBe(true);
-  // The reader restores saved progress; the specs assume the section's
-  // first page unless they asked for a target themselves.
+  // The reader restores saved progress (possibly another section, left by
+  // an earlier test); the specs assume the first section's first page
+  // unless they asked for a target themselves.
   if (!query.cfi && !restore) {
     await page.evaluate(() => window.__beepubReaderNG.core.goTo(0));
     await expect
@@ -178,6 +196,14 @@ export async function openBook(
       )
       .toBe(true);
   }
+  await expect
+    .poll(() =>
+      page.evaluate((text) => {
+        const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
+        return doc.body?.textContent?.includes(text) ?? false;
+      }, fixture.readyText),
+    )
+    .toBe(true);
   await page.waitForTimeout(500);
 }
 

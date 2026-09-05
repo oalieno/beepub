@@ -290,6 +290,7 @@ test("removing from the menu deletes the mark and the row", async ({
 
 test("anchors that stopped resolving are healed by their quote, or reported", async ({
   page,
+  context,
 }) => {
   const bookId = await seedFixture(page.request, ANCHOR_BOOK);
   await deleteHighlights(page.request, bookId, () => true);
@@ -360,8 +361,14 @@ test("anchors that stopped resolving are healed by their quote, or reported", as
   );
   expect(covers).toBe(true);
 
-  // The unhealable one is flagged in the list.
-  await page.getByRole("button", { name: "Highlights" }).click();
+  // The unhealable one is flagged in the list. Phone layout: the list's
+  // entry lives in the tap-toggled bottom bar (a tap low on the page, clear
+  // of every mark; the iPhone 13 viewport is 664px tall).
+  const cdp = await context.newCDPSession(page);
+  await touchTap(cdp, { x: 195, y: 600 }, 60);
+  const bar = page.getByRole("toolbar", { name: "Reading controls" });
+  await expect(bar).toBeVisible();
+  await bar.getByRole("button", { name: /^Highlights/ }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(

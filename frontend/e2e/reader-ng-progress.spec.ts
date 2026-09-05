@@ -6,6 +6,7 @@ import {
   resetProgress,
   seedBook,
   seedFixture,
+  seedGesturesSeen,
 } from "./ng-helpers";
 
 /**
@@ -64,8 +65,14 @@ function docHasText(page: Page, text: string) {
   }, text);
 }
 
+/** The chrome's percentage — the desktop toolbar and the phone top bar
+ *  both render one; only the current layout's is visible. */
+function percentInChrome(page: Page) {
+  return page.locator('[data-testid="reader-percent"]:visible');
+}
+
 async function readPercent(page: Page): Promise<number> {
-  const text = await page.getByTestId("ng-percent").textContent();
+  const text = await percentInChrome(page).textContent();
   return parseInt(text ?? "0", 10);
 }
 
@@ -166,6 +173,7 @@ test("percentage follows the weights and the scrubber seeks on their scale", asy
   const chapter2Start = (before / total) * 100;
   expect(chapter2Start).toBeGreaterThan(80); // the fixture's 15:1 shape
 
+  await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read-ng`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
@@ -173,7 +181,7 @@ test("percentage follows the weights and the scrubber seeks on their scale", asy
     { timeout: 30_000 },
   );
   await expect.poll(() => docHasText(page, "甲章首段")).toBe(true);
-  await expect(page.getByTestId("ng-percent")).toBeVisible();
+  await expect(percentInChrome(page)).toBeVisible();
 
   // Degenerate-fragmentation guard (no CJK fonts → one giant page).
   const first = await location(page);

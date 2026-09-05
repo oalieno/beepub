@@ -4,6 +4,7 @@ import {
   TOUCH_BOOK,
   VERTICAL_LONG_BOOK,
   seedFixture,
+  seedGesturesSeen,
   type Fixture,
 } from "./ng-helpers";
 
@@ -66,6 +67,7 @@ async function openNg(page: Page, bookId: string, font: string) {
     my: "48",
     font,
   });
+  await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read-ng?${params}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,

@@ -27,6 +27,7 @@ test.beforeEach(async ({ page }) => {
       window as unknown as { CapacitorCustomPlatform: { name: string } }
     ).CapacitorCustomPlatform = { name: "ios" };
     localStorage.setItem("localMode", "1");
+    localStorage.setItem("reader-gestures-seen", "1");
     // The stack is plain http, so the page is not a secure context and
     // lacks crypto.randomUUID (the import mints ids with it). The app
     // itself always runs in one (capacitor:// / https).
@@ -105,8 +106,9 @@ test("an imported book opens through the zip loader and keeps its place on the d
   await importFixture(page, TOUCH_BOOK);
   const bookId = await openFromShelf(page);
   expect(await readLocation(page)).toEqual({ index: 0, fraction: 0 });
-  const back = page.getByRole("link", { name: "Back" });
-  await expect(back).toHaveAttribute("href", "/local");
+  // The toolbar's back control (a local book returns to its shelf).
+  const back = page.getByRole("button", { name: "Go back" });
+  await expect(back).toBeVisible();
 
   // Turn a page and let the debounced save land in the device record.
   await page.evaluate(() => window.__beepubReaderNG.core.next());

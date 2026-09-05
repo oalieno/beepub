@@ -10,6 +10,7 @@ import {
   type Page,
 } from "@playwright/test";
 import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
+import { resetProgress } from "./ng-helpers";
 
 /**
  * Regression tests for the iOS highlight-menu flicker pair (b27e913,
@@ -71,6 +72,9 @@ async function openBook(page: Page, bookId: string) {
   await page.addInitScript(() =>
     localStorage.setItem("reader-gestures-seen", "1"),
   );
+  // The fixture is shared with the new reader's specs, which page through
+  // it; every test here assumes its first page.
+  await resetProgress(page.request, bookId);
   await page.goto(`/books/${bookId}/read`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("starship librarian").first()).toBeVisible({
@@ -222,10 +226,9 @@ test("tapping an existing highlight opens the menu once, without a blink", async
       (h: { cfi_range: string }) => h.cfi_range === HIGHLIGHT_CFI,
     )
   ) {
-    const created = await page.request.post(
-      `/api/books/${bookId}/highlights`,
-      { data: { cfi_range: HIGHLIGHT_CFI, text: "librarian", color: "yellow" } },
-    );
+    const created = await page.request.post(`/api/books/${bookId}/highlights`, {
+      data: { cfi_range: HIGHLIGHT_CFI, text: "librarian", color: "yellow" },
+    });
     expect(created.ok()).toBeTruthy();
   }
 
@@ -391,8 +394,11 @@ test("menu opened near the screen edge is clamped from the first frame", async (
 
   const frames = await page.evaluate(
     () =>
-      (window as unknown as { __menuFrames: { left: string; l: number; r: number }[] })
-        .__menuFrames,
+      (
+        window as unknown as {
+          __menuFrames: { left: string; l: number; r: number }[];
+        }
+      ).__menuFrames,
   );
   expect(frames.length).toBeGreaterThan(0);
   // Painted at a single position — no overflow-then-jump …
@@ -416,10 +422,9 @@ test("changing the page margin realigns highlights and resizes tap zones", async
       (h: { cfi_range: string }) => h.cfi_range === HIGHLIGHT_CFI,
     )
   ) {
-    const created = await page.request.post(
-      `/api/books/${bookId}/highlights`,
-      { data: { cfi_range: HIGHLIGHT_CFI, text: "librarian", color: "yellow" } },
-    );
+    const created = await page.request.post(`/api/books/${bookId}/highlights`, {
+      data: { cfi_range: HIGHLIGHT_CFI, text: "librarian", color: "yellow" },
+    });
     expect(created.ok()).toBeTruthy();
   }
   await openBook(page, bookId);
@@ -491,10 +496,7 @@ test("changing the page margin realigns highlights and resizes tap zones", async
 // happens, so a broken watcher can't make them pass vacuously. It also
 // pins the flip side of the just-shown grace — a deliberate tap after it
 // expires must still close the menu.
-test("a later tap elsewhere dismisses the menu", async ({
-  page,
-  context,
-}) => {
+test("a later tap elsewhere dismisses the menu", async ({ page, context }) => {
   const bookId = await seedBook(page.request);
   await openBook(page, bookId);
 

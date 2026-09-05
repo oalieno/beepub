@@ -160,7 +160,7 @@ test("theme and page-turn mode persist", async ({ page }) => {
   const bookId = await seedFixture(page.request, TOUCH_BOOK);
   await openBook(page, bookId);
   await openSheet(page);
-  await page.getByRole("button", { name: "Dark" }).click();
+  await page.getByRole("button", { name: "Dark", exact: true }).click();
   await expect(page.locator(".reader-dark")).toHaveCount(1);
   await page.getByRole("button", { name: "Slide" }).click();
   await expect

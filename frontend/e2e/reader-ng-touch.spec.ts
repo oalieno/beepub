@@ -97,14 +97,21 @@ test("a plain tap neither turns the page nor opens the menu", async ({
 
   // Middle of the page, clear of the edge zones; a quick tap arrives as
   // touchstart + touchend + the browser's synthesized click. It reaches
-  // BookReader's ontap and nothing else — in particular it must not reflow
-  // the page (read-ng leaves ontap unwired: an in-flow header toggling on
-  // every tap made the text jump on device).
+  // BookReader's ontap and nothing else: the page toggles the phone bottom
+  // bar — a fixed overlay — and the text must not reflow (an in-flow
+  // header toggling on every tap made the text jump on device).
+  const bar = page.getByRole("toolbar", { name: "Reading controls" });
+  await expect(bar).toBeHidden();
   await touchTap(cdp, { x: 195, y: 420 }, 60);
   await page.waitForTimeout(500);
   expect(await location(page)).toEqual(before);
   await expect(page.getByTestId("highlight-menu")).toBeHidden();
   await expect(header).toBeVisible();
+  await expect(bar).toBeVisible();
+  // And the same tap puts it away.
+  await touchTap(cdp, { x: 195, y: 420 }, 60);
+  await expect(bar).toBeHidden();
+  expect(await location(page)).toEqual(before);
 });
 
 test("long-press selection survives the synthesized click that follows", async ({
@@ -146,6 +153,10 @@ test("long-press selection survives the synthesized click that follows", async (
   await expect(page.getByTestId("highlight-menu")).toBeVisible();
   // The page did not turn under the long press.
   expect((await location(page)).reason).not.toBe("page");
+  // Nor did the swallowed click reach the chrome toggle.
+  await expect(
+    page.getByRole("toolbar", { name: "Reading controls" }),
+  ).toBeHidden();
 
   // Theme-tinted solid rects under one group opacity (light theme).
   expect(await overlayState(page)).toEqual({
