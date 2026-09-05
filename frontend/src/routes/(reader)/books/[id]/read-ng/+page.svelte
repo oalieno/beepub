@@ -1,13 +1,19 @@
 <script lang="ts">
   /**
-   * read-ng — the experimental route for the new reader engine (reader-ng
-   * G0). Loads a book through BookReader and wraps it in a geometry
-   * instrument panel: every slider is a layout input, and the readout
-   * shows whether the anchor survived the resulting reflow. The panel is
-   * a measuring device, not product UI; the settings sheet (G2) replaces it.
-   * Highlights and progress are product-shaped already: the sidebar, the
-   * share card, the percentage with its desktop scrubber, the peek pill,
-   * the kosync offer, and the local-first sync triggers around a session.
+   * read-ng — the route for the new reader engine (reader-ng). Loads a
+   * book through BookReader and wraps it in the product chrome that
+   * exists so far: a header with the percentage and the highlights /
+   * settings entries, the settings sheet, the highlight sidebar and share
+   * card, the desktop scrubber with the peek pill, the kosync offer, and
+   * the local-first sync triggers around a session.
+   *
+   * Settings persist under the reader-* keys the epub.js reader uses
+   * (font, size, line height, theme are shared; the two gutters, letter
+   * spacing and page-turn mode have their own keys, and the old single
+   * margin seeds both gutters). Query params override for this session
+   * only — probes and e2e open at a known geometry — and are not written
+   * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
+   * &turn=instant|animated|follow.
    */
   import { onDestroy, onMount } from "svelte";
   import { browser } from "$app/environment";
@@ -23,31 +29,22 @@
   import { confirmDialog } from "$lib/stores/confirm";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import type {
-    Book,
-    LayoutParams,
-    PageTurnMode,
-    Relocation,
-  } from "$lib/reader/core";
+  import type { PageTurnMode } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
+  import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
+  import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
-  import { Label } from "$lib/components/ui/label";
-  import { Switch } from "$lib/components/ui/switch";
   import {
     ArrowLeft,
     ChevronLeft,
     ChevronRight,
     Highlighter,
-    Moon,
-    PanelTop,
-    SlidersHorizontal,
-    Sun,
+    Settings,
     Undo2,
-    X,
   } from "@lucide/svelte";
 
   let bookId = $derived(page.params.id as string);
@@ -64,7 +61,6 @@
   let rendered = $state(false);
   let loadError = $state<string | null>(null);
   let reader: BookReader | undefined = $state();
-  let book = $state<Book | null>(null);
 
   // Highlights: BookReader owns the list and the marks; the page shows
   // the sidebar and the share card.
@@ -88,6 +84,136 @@
         : m.reader_peek_return()
       : null,
   );
+
+  let showSettings = $state(false);
+  let showGestureHint = $state(false);
+
+  // ------------------------------------------------------------ settings
+
+  const KEY = {
+    font: "reader-font",
+    size: "reader-size",
+    lineHeight: "reader-lineheight",
+    letterSpacing: "reader-letter-spacing",
+    marginX: "reader-margin-x",
+    marginY: "reader-margin-y",
+    /** The epub.js reader's single inline-padding preset; seeds both
+     *  gutters when the split keys are absent. */
+    legacyMargin: "reader-margin",
+    pageTurn: "reader-page-turn",
+    dark: "reader-dark",
+  } as const;
+
+  function stored(key: string): string | null {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null; // private browsing
+    }
+  }
+  function store(key: string, value: string) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {
+      /* private browsing — the setting holds for this session */
+    }
+  }
+
+  const q = page.url.searchParams;
+  function queryNum(key: string): number | null {
+    if (!q.has(key)) return null;
+    const v = Number(q.get(key));
+    return Number.isFinite(v) ? v : null;
+  }
+  function storedNum(key: string): number | null {
+    const raw = stored(key);
+    if (raw == null) return null;
+    const v = Number(raw);
+    return Number.isFinite(v) ? v : null;
+  }
+  function pick(queryKey: string, keys: string[], fallback: number): number {
+    const fromQuery = queryNum(queryKey);
+    if (fromQuery != null) return fromQuery;
+    for (const key of keys) {
+      const v = storedNum(key);
+      if (v != null) return v;
+    }
+    return fallback;
+  }
+
+  function initialFont(): string {
+    const fromQuery = q.get("font");
+    if (fromQuery === "sans") return "sans-serif";
+    if (fromQuery === "serif") return "serif";
+    return stored(KEY.font) ?? "serif";
+  }
+  function initialPageTurn(): PageTurnMode {
+    const raw = q.get("turn") ?? stored(KEY.pageTurn);
+    return raw === "animated" || raw === "follow" ? raw : "instant";
+  }
+  // Synchronous (fall back to the app theme) so dark-mode readers don't
+  // get a white flash before onMount runs.
+  function initialDark(): boolean {
+    if (!browser) return false;
+    if (q.has("dark")) return q.get("dark") === "1";
+    const saved = stored(KEY.dark);
+    if (saved !== null) return saved === "1";
+    return document.documentElement.classList.contains("dark");
+  }
+
+  let fontFamily = $state(browser ? initialFont() : "serif");
+  let fontSize = $state(browser ? pick("size", [KEY.size], 16) : 16);
+  let lineHeight = $state(browser ? pick("lh", [KEY.lineHeight], 1.8) : 1.8);
+  let letterSpacing = $state(browser ? pick("ls", [KEY.letterSpacing], 0) : 0);
+  let marginX = $state(
+    browser ? pick("mx", [KEY.marginX, KEY.legacyMargin], 32) : 32,
+  );
+  let marginY = $state(
+    browser ? pick("my", [KEY.marginY, KEY.legacyMargin], 32) : 32,
+  );
+  let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
+  let darkMode = $state(initialDark());
+
+  function handleFontToggle() {
+    fontFamily = fontFamily === "serif" ? "sans-serif" : "serif";
+    store(KEY.font, fontFamily);
+  }
+  function handleFontIncrease() {
+    if (fontSize >= 32) return;
+    fontSize += 2;
+    store(KEY.size, String(fontSize));
+  }
+  function handleFontDecrease() {
+    if (fontSize <= 10) return;
+    fontSize -= 2;
+    store(KEY.size, String(fontSize));
+  }
+  function handleLineHeightChange(value: number) {
+    lineHeight = value;
+    store(KEY.lineHeight, String(value));
+  }
+  function handleLetterSpacingChange(value: number) {
+    letterSpacing = value;
+    store(KEY.letterSpacing, String(value));
+  }
+  function handleMarginXChange(value: number) {
+    marginX = value;
+    store(KEY.marginX, String(value));
+  }
+  function handleMarginYChange(value: number) {
+    marginY = value;
+    store(KEY.marginY, String(value));
+  }
+  function handlePageTurnChange(value: PageTurnMode) {
+    pageTurn = value;
+    store(KEY.pageTurn, value);
+  }
+  function handleThemeToggle() {
+    darkMode = !darkMode;
+    store(KEY.dark, darkMode ? "1" : "0");
+  }
+
+  // ------------------------------------------------------------ kosync
 
   // Progress bridged from an e-reader (KOReader/Readest via kosync). The
   // reader auto-jumps when the book was never read here; otherwise the
@@ -140,85 +266,7 @@
     }
   }
 
-  // Instrument inputs. Defaults mirror the paginator's own except a single
-  // column: BeePub reads single-column, spread none.
-  // Query params seed the inputs so probes start from a known geometry
-  // (?font=sans&size=20&lh=1.8&gap=7&margin=48&inline=720&cols=1&dark=1).
-  const q = page.url.searchParams;
-  const num = (key: string, fallback: number) => {
-    const v = Number(q.get(key));
-    return q.has(key) && Number.isFinite(v) ? v : fallback;
-  };
-  let fontFamily = $state<"serif" | "sans">(
-    q.get("font") === "sans" ? "sans" : "serif",
-  );
-  let fontSize = $state(num("size", 18));
-  let lineHeight = $state(num("lh", 1.8));
-  let darkMode = $state(q.get("dark") === "1");
-  let gap = $state(num("gap", 7));
-  let margin = $state(num("margin", 48));
-  let maxInlineSize = $state(num("inline", 720));
-  let maxColumnCount = $state(num("cols", 1));
-  const turnParam = q.get("turn");
-  let pageTurn = $state<PageTurnMode>(
-    turnParam === "animated" || turnParam === "follow" ? turnParam : "instant",
-  );
-  // "Chrome" = an in-flow 48px header. Toggling it changes the container
-  // height, the same geometry change hiding/pinning the top bar would make.
-  // It is an instrument only (the panel switch): a tap on the page must
-  // NOT toggle it — an in-flow bar reflows the text on every tap (owner,
-  // 09-04, on device). What a tap does to the chrome is the pin/chrome
-  // design question, answered separately; BookReader's ontap stays
-  // unwired here until then.
-  let chromeBar = $state(true);
-  let showPanel = $state(q.get("panel") !== "0");
-  let jumpIndex = $state(0);
-  let layout = $derived<LayoutParams>({
-    gap,
-    margin,
-    maxInlineSize,
-    maxColumnCount,
-  });
-
-  // Readout. The paginator re-derives position from its anchor after any
-  // layout change (relocate reason "anchor"); the invariant under test is
-  // that the previous visible-range start lies inside the new visible
-  // range. Track it live so the owner sees ✓/✗ while dragging a slider.
-  let loc = $state<Relocation | null>(null);
-  let anchorRange: Range | null = null;
-  let anchorCfi = $state<string | null>(null);
-  let anchorHeld = $state<boolean | null>(null);
-  let reflowCount = $state(0);
-
-  function handleRelocate(r: Relocation) {
-    loc = r;
-    if (r.reason !== "anchor") {
-      anchorRange = r.range?.cloneRange() ?? null;
-      anchorCfi = r.cfi;
-      anchorHeld = null;
-      reflowCount = 0;
-      return;
-    }
-    reflowCount += 1;
-    const doc = r.range?.startContainer.ownerDocument;
-    if (
-      !anchorRange ||
-      !r.range ||
-      anchorRange.startContainer.ownerDocument !== doc
-    ) {
-      anchorHeld = null;
-      return;
-    }
-    try {
-      anchorHeld =
-        r.range.comparePoint(
-          anchorRange.startContainer,
-          anchorRange.startOffset,
-        ) === 0;
-    } catch {
-      anchorHeld = null;
-    }
-  }
+  // ------------------------------------------------------------ lifecycle
 
   onMount(async () => {
     try {
@@ -298,11 +346,6 @@
       }
     }, 600);
   });
-
-  function shortCfi(cfi: string | null): string {
-    if (!cfi) return "—";
-    return cfi.length > 46 ? cfi.slice(0, 22) + "…" + cfi.slice(-22) : cfi;
-  }
 </script>
 
 <svelte:head>
@@ -314,71 +357,63 @@
     ? 'reader-dark bg-ink-900'
     : 'reader-light bg-background'}"
 >
-  {#if chromeBar}
-    <header
-      class="flex min-h-12 shrink-0 items-center gap-1 border-b border-border px-2 text-foreground"
-      style="padding-top: env(safe-area-inset-top, 0px);"
-      data-testid="ng-chrome"
+  <header
+    class="flex min-h-12 shrink-0 items-center gap-1 border-b border-border px-2 text-foreground"
+    style="padding-top: env(safe-area-inset-top, 0px);"
+    data-testid="ng-chrome"
+  >
+    <Button
+      variant="ghost"
+      size="icon"
+      href={`/books/${bookId}`}
+      aria-label="Back"
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        href={`/books/${bookId}`}
-        aria-label="Back"
+      <ArrowLeft />
+    </Button>
+    <div class="min-w-0 flex-1 truncate text-sm">{title}</div>
+    {#if percentage != null}
+      <span
+        class="text-xs text-muted-foreground tabular-nums"
+        data-testid="ng-percent"
       >
-        <ArrowLeft />
-      </Button>
-      <div class="min-w-0 flex-1 truncate text-sm">{title}</div>
-      {#if percentage != null}
-        <span
-          class="text-xs text-muted-foreground tabular-nums"
-          data-testid="ng-percent"
-        >
-          {percentage}%
-        </span>
-      {/if}
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Previous page"
-        onclick={() => reader?.prev()}
-      >
-        <ChevronLeft />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Next page"
-        onclick={() => reader?.next()}
-      >
-        <ChevronRight />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label={m.reader_highlights()}
-        onclick={() => (showHighlights = true)}
-      >
-        <Highlighter />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Toggle theme"
-        onclick={() => (darkMode = !darkMode)}
-      >
-        {#if darkMode}<Sun />{:else}<Moon />{/if}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        aria-label="Toggle panel"
-        onclick={() => (showPanel = !showPanel)}
-      >
-        <SlidersHorizontal />
-      </Button>
-    </header>
-  {/if}
+        {percentage}%
+      </span>
+    {/if}
+    <Button
+      variant="ghost"
+      size="icon"
+      class="hidden md:inline-flex"
+      aria-label="Previous page"
+      onclick={() => reader?.prev()}
+    >
+      <ChevronLeft />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      class="hidden md:inline-flex"
+      aria-label="Next page"
+      onclick={() => reader?.next()}
+    >
+      <ChevronRight />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={m.reader_highlights()}
+      onclick={() => (showHighlights = true)}
+    >
+      <Highlighter />
+    </Button>
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={m.reader_settings_title()}
+      onclick={() => (showSettings = true)}
+    >
+      <Settings />
+    </Button>
+  </header>
 
   <div class="relative min-h-0 flex-1">
     {#if ready && source && sync}
@@ -391,14 +426,14 @@
         {fontFamily}
         {fontSize}
         {lineHeight}
+        {letterSpacing}
+        {marginX}
+        {marginY}
         {darkMode}
-        {layout}
         {pageTurn}
         {sectionWeights}
-        onbook={(b) => (book = b)}
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
-        onrelocate={handleRelocate}
         onhighlightschange={(list) => (highlights = list)}
         onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
         onshare={(hl) => (shareHighlight = hl)}
@@ -508,17 +543,12 @@
       </div>
     {/if}
 
-    {#if !chromeBar}
-      <Button
-        variant="secondary"
-        size="icon"
-        class="absolute left-2 z-10 opacity-70"
-        style="top: max(0.5rem, env(safe-area-inset-top, 0px));"
-        aria-label="Show header"
-        onclick={() => (chromeBar = true)}
-      >
-        <PanelTop />
-      </Button>
+    {#if showGestureHint}
+      <GestureHintOverlay
+        {darkMode}
+        {isRtl}
+        onclose={() => (showGestureHint = false)}
+      />
     {/if}
   </div>
 
@@ -546,178 +576,25 @@
     onclose={() => (shareHighlight = null)}
   />
 
-  {#if showPanel}
-    <aside
-      class="fixed right-4 z-20 w-72 rounded-lg border border-border bg-card p-3 text-xs text-card-foreground shadow-lg"
-      style="bottom: max(1rem, env(safe-area-inset-bottom, 0px));"
-      data-testid="ng-panel"
-    >
-      <div class="mb-2 flex items-center justify-between">
-        <span class="font-medium">Geometry</span>
-        <Button
-          variant="ghost"
-          size="icon"
-          class="size-6"
-          aria-label="Close panel"
-          onclick={() => (showPanel = false)}
-        >
-          <X class="size-3.5" />
-        </Button>
-      </div>
-
-      <!-- Native range inputs: the installed ui set has no slider, and this
-           panel is torn out before G1. -->
-      <div
-        class="grid grid-cols-[5.5rem_1fr_3rem] items-center gap-x-2 gap-y-1.5"
-      >
-        <Label for="ng-gap">gap %</Label>
-        <input
-          id="ng-gap"
-          type="range"
-          min="0"
-          max="20"
-          step="0.5"
-          bind:value={gap}
-        />
-        <span class="text-right tabular-nums">{gap}</span>
-
-        <Label for="ng-margin">margin px</Label>
-        <input
-          id="ng-margin"
-          type="range"
-          min="0"
-          max="120"
-          step="4"
-          bind:value={margin}
-        />
-        <span class="text-right tabular-nums">{margin}</span>
-
-        <Label for="ng-size">font px</Label>
-        <input
-          id="ng-size"
-          type="range"
-          min="12"
-          max="32"
-          step="1"
-          bind:value={fontSize}
-        />
-        <span class="text-right tabular-nums">{fontSize}</span>
-
-        <Label for="ng-lh">line-height</Label>
-        <input
-          id="ng-lh"
-          type="range"
-          min="1.2"
-          max="2.6"
-          step="0.1"
-          bind:value={lineHeight}
-        />
-        <span class="text-right tabular-nums">{lineHeight.toFixed(1)}</span>
-
-        <Label for="ng-inline">max inline</Label>
-        <input
-          id="ng-inline"
-          type="range"
-          min="360"
-          max="2000"
-          step="20"
-          bind:value={maxInlineSize}
-        />
-        <span class="text-right tabular-nums">{maxInlineSize}</span>
-
-        <Label for="ng-cols">columns</Label>
-        <input
-          id="ng-cols"
-          type="range"
-          min="1"
-          max="2"
-          step="1"
-          bind:value={maxColumnCount}
-        />
-        <span class="text-right tabular-nums">{maxColumnCount}</span>
-      </div>
-
-      <div class="mt-2 flex items-center justify-between gap-2">
-        <div class="flex items-center gap-2">
-          <Switch id="ng-chrome" bind:checked={chromeBar} />
-          <Label for="ng-chrome">header (48px)</Label>
-        </div>
-        <div class="flex items-center gap-2">
-          <Switch
-            id="ng-sans"
-            checked={fontFamily === "sans"}
-            onCheckedChange={(v) => (fontFamily = v ? "sans" : "serif")}
-          />
-          <Label for="ng-sans">sans</Label>
-        </div>
-      </div>
-
-      <div class="mt-2 flex items-center gap-2">
-        <Label for="ng-turn">page turn</Label>
-        <select
-          id="ng-turn"
-          bind:value={pageTurn}
-          class="rounded-md border border-input bg-background px-1.5 py-0.5"
-        >
-          <option value="instant">instant</option>
-          <option value="animated">animated</option>
-          <option value="follow">follow finger</option>
-        </select>
-      </div>
-
-      <div class="mt-2 flex items-center gap-2">
-        <Label for="ng-jump">section</Label>
-        <input
-          id="ng-jump"
-          type="number"
-          min="0"
-          max={book ? book.sections.length - 1 : 0}
-          bind:value={jumpIndex}
-          class="w-16 rounded-md border border-input bg-background px-1.5 py-0.5 tabular-nums"
-        />
-        <span class="text-muted-foreground"
-          >/ {book ? book.sections.length - 1 : "—"}</span
-        >
-        <Button
-          variant="outline"
-          size="sm"
-          class="ml-auto h-6 px-2 text-xs"
-          onclick={() => reader?.goTo(jumpIndex)}
-        >
-          go
-        </Button>
-      </div>
-
-      <dl
-        class="mt-2 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-0.5 border-t border-border pt-2 tabular-nums"
-      >
-        <dt class="text-muted-foreground">section</dt>
-        <dd>{loc ? loc.index : "—"} {book?.dir ? `· ${book.dir}` : ""}</dd>
-        <dt class="text-muted-foreground">fraction</dt>
-        <dd>
-          {loc ? loc.fraction.toFixed(3) : "—"}{loc?.size
-            ? ` · page ${Math.round(loc.fraction / loc.size) + 1}/${Math.round(1 / loc.size)}`
-            : ""}
-        </dd>
-        <dt class="text-muted-foreground">last reason</dt>
-        <dd>{loc?.reason ?? "—"}</dd>
-        <dt class="text-muted-foreground">anchor</dt>
-        <dd class="truncate" title={anchorCfi ?? ""}>{shortCfi(anchorCfi)}</dd>
-        <dt class="text-muted-foreground">visible start</dt>
-        <dd class="truncate" title={loc?.cfi ?? ""}>
-          {shortCfi(loc?.cfi ?? null)}
-        </dd>
-        <dt class="text-muted-foreground">reflows</dt>
-        <dd>
-          {reflowCount}
-          {#if anchorHeld === true}<span class="text-primary"
-              >· anchor held ✓</span
-            >
-          {:else if anchorHeld === false}<span class="text-destructive"
-              >· anchor lost ✗</span
-            >{/if}
-        </dd>
-      </dl>
-    </aside>
-  {/if}
+  <ReaderSettingsSheet
+    bind:open={showSettings}
+    {fontFamily}
+    {fontSize}
+    {lineHeight}
+    {letterSpacing}
+    {marginX}
+    {marginY}
+    {pageTurn}
+    {darkMode}
+    onfontToggle={handleFontToggle}
+    onfontIncrease={handleFontIncrease}
+    onfontDecrease={handleFontDecrease}
+    onthemeToggle={handleThemeToggle}
+    onlineHeightChange={handleLineHeightChange}
+    onletterSpacingChange={handleLetterSpacingChange}
+    onmarginXChange={handleMarginXChange}
+    onmarginYChange={handleMarginYChange}
+    onpageTurnChange={handlePageTurnChange}
+    onhelp={() => (showGestureHint = true)}
+  />
 </div>

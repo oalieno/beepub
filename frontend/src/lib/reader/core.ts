@@ -109,7 +109,9 @@ export interface Relocation {
  *  paginator turns into a CSS custom property it reads back at render —
  *  JS declares, CSS decides. */
 export interface LayoutParams {
-  /** Inline padding and column gap, percent of the container. */
+  /** Inline-axis padding (and the column gap), px. The paginator also
+   *  accepts a percent of the container; BeePub always sends px so the
+   *  value survives container resizes without a re-push. */
   gap?: number;
   /** Block-axis outer margin, px. */
   margin?: number;
@@ -173,8 +175,6 @@ const ATTR_FOR: Record<keyof LayoutParams, string> = {
 
 function attrValue(key: keyof LayoutParams, value: number): string {
   switch (key) {
-    case "gap":
-      return `${value}%`;
     case "maxColumnCount":
       return String(value);
     default:

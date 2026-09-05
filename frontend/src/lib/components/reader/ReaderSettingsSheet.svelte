@@ -11,12 +11,22 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
+  /**
+   * The reader's settings sheet. Rows appear when their handler is
+   * given, so the two readers share one sheet: the epub.js reader has a
+   * single margin preset row (its block axis is fixed), the new engine
+   * has two px gutters, letter spacing and a page-turn mode.
+   */
   let {
     open = $bindable(false),
     fontFamily = "serif",
     fontSize = 16,
     lineHeight = 1.8,
+    letterSpacing = 0,
     pageMargin = 32,
+    marginX = 32,
+    marginY = 32,
+    pageTurn = "instant",
     darkMode = false,
     isImageBook = false,
     showSync = false,
@@ -26,7 +36,11 @@
     onfontDecrease,
     onthemeToggle,
     onlineHeightChange,
+    onletterSpacingChange,
     onmarginChange,
+    onmarginXChange,
+    onmarginYChange,
+    onpageTurnChange,
     onhelp,
     onsyncpull,
     onsyncpush,
@@ -35,7 +49,15 @@
     fontFamily?: string;
     fontSize?: number;
     lineHeight?: number;
+    /** px; row shown when `onletterSpacingChange` is given. */
+    letterSpacing?: number;
+    /** Single inline-padding preset (epub.js reader). */
     pageMargin?: number;
+    /** Screen-space gutters, px (new engine); rows shown when their
+     *  handlers are given. */
+    marginX?: number;
+    marginY?: number;
+    pageTurn?: "instant" | "animated" | "follow";
     darkMode?: boolean;
     isImageBook?: boolean;
     /** Kosync-backed books get manual pull/push controls. */
@@ -46,7 +68,11 @@
     onfontDecrease?: () => void;
     onthemeToggle?: () => void;
     onlineHeightChange?: (value: number) => void;
+    onletterSpacingChange?: (value: number) => void;
     onmarginChange?: (value: number) => void;
+    onmarginXChange?: (value: number) => void;
+    onmarginYChange?: (value: number) => void;
+    onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
     onhelp?: () => void;
     onsyncpull?: () => void;
     onsyncpush?: () => void;
@@ -66,8 +92,8 @@
   const textClass = $derived(darkMode ? "text-ink-200" : "text-foreground");
   const btnClass = $derived(
     darkMode
-      ? "border-ink-700 text-ink-300 hover:bg-ink-800"
-      : "border-border text-foreground hover:bg-secondary",
+      ? "border-ink-700 text-ink-300 hover:bg-ink-800 disabled:opacity-40"
+      : "border-border text-foreground hover:bg-secondary disabled:opacity-40",
   );
   // The sheet sits inside the reader root, so bg-primary resolves to the
   // .reader-dark gold — a solid selected state to match the light theme's,
@@ -92,9 +118,71 @@
     { value: 32, label: m.reader_margin_normal },
     { value: 56, label: m.reader_margin_wide },
   ];
+  const pageTurnOptions: {
+    value: "instant" | "animated" | "follow";
+    label: () => string;
+  }[] = [
+    { value: "instant", label: m.reader_page_turn_instant },
+    { value: "animated", label: m.reader_page_turn_slide },
+    { value: "follow", label: m.reader_page_turn_follow },
+  ];
+
+  // Gutters step in 8px; letter spacing in half pixels (sub-pixel
+  // spacing renders fine — text is positioned at sub-pixel precision).
+  const MARGIN_STEP = 8;
+  const MARGIN_MAX = 96;
+  const LETTER_STEP = 0.5;
+  const LETTER_MAX = 4;
+
+  function stepTo(value: number, step: number, dir: 1 | -1, max: number) {
+    // Snap to the grid first so a migrated or odd stored value lands on
+    // a step rather than drifting beside it.
+    const next = (Math.round(value / step) + dir) * step;
+    return Math.min(max, Math.max(0, Math.round(next * 100) / 100));
+  }
+
+  const showGutters = $derived(!!onmarginXChange || !!onmarginYChange);
 </script>
 
 <svelte:window onkeydown={open ? handleKeydown : undefined} />
+
+{#snippet stepper(opts: {
+  name: string;
+  testid: string;
+  value: number;
+  display: string;
+  step: number;
+  max: number;
+  onchange: (value: number) => void;
+})}
+  <div class="flex items-center justify-between">
+    <span class="text-sm {labelClass}">{opts.name}</span>
+    <div class="flex items-center gap-3">
+      <button
+        class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
+        onclick={() =>
+          opts.onchange(stepTo(opts.value, opts.step, -1, opts.max))}
+        disabled={opts.value <= 0}
+        aria-label={m.reader_step_down({ setting: opts.name })}
+      >
+        <Minus size={14} />
+      </button>
+      <span
+        class="text-sm font-medium w-12 text-center tabular-nums {textClass}"
+        data-testid={opts.testid}>{opts.display}</span
+      >
+      <button
+        class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
+        onclick={() =>
+          opts.onchange(stepTo(opts.value, opts.step, 1, opts.max))}
+        disabled={opts.value >= opts.max}
+        aria-label={m.reader_step_up({ setting: opts.name })}
+      >
+        <Plus size={14} />
+      </button>
+    </div>
+  </div>
+{/snippet}
 
 {#if open}
   <div
@@ -138,8 +226,9 @@
               >
                 <Minus size={14} />
               </button>
-              <span class="text-sm font-medium w-10 text-center {textClass}"
-                >{fontSize}px</span
+              <span
+                class="text-sm font-medium w-12 text-center tabular-nums {textClass}"
+                data-testid="setting-font-size">{fontSize}px</span
               >
               <button
                 class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
@@ -161,7 +250,9 @@
                 'sans-serif'
                   ? activeBtnClass
                   : inactiveBtnClass}"
-                onclick={() => onfontToggle?.()}
+                onclick={() => {
+                  if (fontFamily !== "sans-serif") onfontToggle?.();
+                }}
               >
                 {m.reader_font_sans()}
               </button>
@@ -170,12 +261,27 @@
                 'serif'
                   ? activeBtnClass
                   : inactiveBtnClass}"
-                onclick={() => onfontToggle?.()}
+                onclick={() => {
+                  if (fontFamily !== "serif") onfontToggle?.();
+                }}
               >
                 {m.reader_font_serif()}
               </button>
             </div>
           </div>
+
+          {#if onletterSpacingChange}
+            {@render stepper({
+              name: m.reader_letter_spacing(),
+              testid: "setting-letter-spacing",
+              value: letterSpacing,
+              display: `${letterSpacing}px`,
+              step: LETTER_STEP,
+              max: LETTER_MAX,
+              onchange: onletterSpacingChange,
+            })}
+          {/if}
+
           <!-- Line spacing -->
           <div class="flex items-center justify-between">
             <span class="text-sm {labelClass}">{m.reader_line_height()}</span>
@@ -194,17 +300,61 @@
             </div>
           </div>
 
-          <!-- Margins -->
+          {#if showGutters}
+            {#if onmarginYChange}
+              {@render stepper({
+                name: m.reader_margin_y(),
+                testid: "setting-margin-y",
+                value: marginY,
+                display: `${marginY}px`,
+                step: MARGIN_STEP,
+                max: MARGIN_MAX,
+                onchange: onmarginYChange,
+              })}
+            {/if}
+            {#if onmarginXChange}
+              {@render stepper({
+                name: m.reader_margin_x(),
+                testid: "setting-margin-x",
+                value: marginX,
+                display: `${marginX}px`,
+                step: MARGIN_STEP,
+                max: MARGIN_MAX,
+                onchange: onmarginXChange,
+              })}
+            {/if}
+          {:else if onmarginChange}
+            <!-- Margins (single inline-padding preset) -->
+            <div class="flex items-center justify-between">
+              <span class="text-sm {labelClass}">{m.reader_margin()}</span>
+              <div class="flex gap-1">
+                {#each marginOptions as option}
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageMargin ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    onclick={() => onmarginChange?.(option.value)}
+                  >
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+        {/if}
+
+        {#if onpageTurnChange}
           <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">{m.reader_margin()}</span>
+            <span class="text-sm {labelClass}">{m.reader_page_turn()}</span>
             <div class="flex gap-1">
-              {#each marginOptions as option}
+              {#each pageTurnOptions as option}
                 <button
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageMargin ===
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageTurn ===
                   option.value
                     ? activeBtnClass
                     : inactiveBtnClass}"
-                  onclick={() => onmarginChange?.(option.value)}
+                  onclick={() => onpageTurnChange?.(option.value)}
                 >
                   {option.label()}
                 </button>
@@ -276,16 +426,18 @@
         {/if}
 
         <!-- Gesture help -->
-        <button
-          class="flex items-center gap-2 text-sm {labelClass}"
-          onclick={() => {
-            close();
-            onhelp?.();
-          }}
-        >
-          <CircleHelp size={16} />
-          {m.reader_gesture_help()}
-        </button>
+        {#if onhelp}
+          <button
+            class="flex items-center gap-2 text-sm {labelClass}"
+            onclick={() => {
+              close();
+              onhelp?.();
+            }}
+          >
+            <CircleHelp size={16} />
+            {m.reader_gesture_help()}
+          </button>
+        {/if}
       </div>
     </div>
   </div>

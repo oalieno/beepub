@@ -487,6 +487,19 @@ export class Paginator extends HTMLElement {
                 --_max-column-count-spread: var(--_max-column-count-portrait);
                 --_max-width: var(--_max-block-size);
                 --_max-height: calc(var(--_max-inline-size) * var(--_max-column-count-spread));
+                /* BeePub: the gutters follow the writing mode — the gap
+                   (inline padding) moves to the rows, the margin (block
+                   outer margin) to the columns. */
+                grid-template-columns:
+                    minmax(var(--_margin), 1fr)
+                    minmax(0, var(--_max-width))
+                    minmax(var(--_margin), 1fr);
+                grid-template-rows:
+                    minmax(var(--_half-gap), 1fr)
+                    var(--_half-gap)
+                    minmax(0, calc(var(--_max-height) - var(--_gap)))
+                    var(--_half-gap)
+                    minmax(var(--_half-gap), 1fr);
             }
             @container (orientation: portrait) {
                 & {
@@ -510,6 +523,24 @@ export class Paginator extends HTMLElement {
             grid-column: 1 / -1;
             grid-row: 1 / -1;
             overflow: auto;
+        }
+        /* BeePub: placements in the writing-mode-following vertical grid */
+        :host(:not([flow="scrolled"])) #top.vertical #container {
+            grid-column: 2;
+            grid-row: 2 / 5;
+        }
+        #top.vertical #header {
+            grid-column: 1;
+            grid-row: 1 / -1;
+        }
+        #top.vertical #footer {
+            grid-column: 3;
+            grid-row: 1 / -1;
+            align-self: stretch;
+        }
+        #top.vertical :is(#header, #footer) {
+            height: auto;
+            width: var(--_margin);
         }
         #header {
             grid-column: 3 / 4;
@@ -689,7 +720,8 @@ export class Paginator extends HTMLElement {
         const margin = parseFloat(style.getPropertyValue('--_margin'))
         this.#margin = margin
 
-        const g = parseFloat(style.getPropertyValue('--_gap')) / 100
+        const gapValue = style.getPropertyValue('--_gap').trim()
+        const g = parseFloat(gapValue) / 100
         // The gap will be a percentage of the #container, not the whole view.
         // This means the outer padding will be bigger than the column gap. Let
         // `a` be the gap percentage. The actual percentage for the column gap
@@ -707,7 +739,9 @@ export class Paginator extends HTMLElement {
         //     f(x) = x / (1 + x).
         // But we want to keep the outer padding, and make the inner gap bigger.
         // So we apply the inverse, f⁻¹ = -x / (x - 1) to the column gap.
-        const gap = -g / (g - 1) * size
+        // BeePub: a px gap is taken literally — the outer padding and the
+        // column gap both equal the value, no evening-out needed.
+        const gap = gapValue.endsWith('px') ? parseFloat(gapValue) : -g / (g - 1) * size
 
         const flow = this.getAttribute('flow')
         if (flow === 'scrolled') {

@@ -64,7 +64,9 @@
     fontSize = 16,
     lineHeight = 1.8,
     darkMode = false,
-    layout = {},
+    marginX = 32,
+    marginY = 32,
+    letterSpacing = 0,
     pageTurn = "instant",
     sectionWeights = null,
     onbook,
@@ -95,7 +97,14 @@
     fontSize?: number;
     lineHeight?: number;
     darkMode?: boolean;
-    layout?: LayoutParams;
+    /** Screen-space gutters, px: left/right and top/bottom between the
+     *  reader's edge and the text. Which one is the engine's inline
+     *  padding and which its block margin depends on the section's
+     *  writing mode; that mapping lives here, not in the caller. */
+    marginX?: number;
+    marginY?: number;
+    /** Body letter-spacing, px (applies to vertical text too). */
+    letterSpacing?: number;
     pageTurn?: PageTurnMode;
     onbook?: (book: Book) => void;
     /** First section rendered. */
@@ -192,6 +201,7 @@ body {
   font-family: ${fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS};
   font-size: ${fontSize}px !important;
   line-height: ${lineHeight};
+  letter-spacing: ${letterSpacing}px;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   color: ${dark ? "#ece5da" : "#1a1a1a"};
@@ -230,6 +240,34 @@ ${darkOverrides}
       }
     };
     pin(doc.body, win.getComputedStyle(doc.body).fontFamily || "");
+  }
+
+  // ------------------------------------------------------------ layout
+
+  // BeePub reads single-column; the text measure caps at 720px like the
+  // paginator's own default. Neither is a user setting.
+  const MAX_INLINE_SIZE = 720;
+  const MAX_COLUMN_COUNT = 1;
+
+  // The current section's writing mode. The paginator's gap is inline
+  // padding and its margin the block outer margin, and (vendored) its
+  // grid follows the writing mode — so the screen-space gutters swap
+  // roles between horizontal and vertical sections.
+  let vertical = $state(false);
+
+  function layoutFor(isVertical: boolean): LayoutParams {
+    return {
+      gap: isVertical ? marginY : marginX,
+      margin: isVertical ? marginX : marginY,
+      maxInlineSize: MAX_INLINE_SIZE,
+      maxColumnCount: MAX_COLUMN_COUNT,
+    };
+  }
+
+  /** Declare the layout for the current writing mode. Only changed
+   *  attributes are written, so re-pushing the same layout is free. */
+  function pushLayout(c: ReaderCore | null = core) {
+    c?.setLayout(layoutFor(vertical));
   }
 
   // ------------------------------------------------------------ paging
@@ -1238,6 +1276,11 @@ ${darkOverrides}
 
   function handleLoad({ doc }: { doc: Document }) {
     doc.addEventListener("keydown", handleKey);
+    // Synchronous on purpose: the paginator fires load before it renders
+    // the section, so a writing-mode flip lands in the grid ahead of the
+    // first layout instead of a render later.
+    vertical = !!core?.vertical;
+    pushLayout();
     if (core?.vertical) pinVerticalPunctuation(doc);
     ondirection?.(!!core?.vertical || core?.book?.dir === "rtl");
     attachGestures(doc);
@@ -1280,7 +1323,7 @@ ${darkOverrides}
         console.error(e);
         return [] as HighlightOut[];
       });
-      c.setLayout(layout);
+      pushLayout(c);
       c.setPageTurn(pageTurn);
       c.setStyles(styles());
       const [book, saved] = await Promise.all([
@@ -1326,8 +1369,11 @@ ${darkOverrides}
     core?.setStyles(css);
   });
   $effect(() => {
-    const next = { ...layout };
-    core?.setLayout(next);
+    // Tracked: the two gutters and the writing mode.
+    void marginX;
+    void marginY;
+    void vertical;
+    pushLayout();
   });
   $effect(() => {
     const mode = pageTurn;
