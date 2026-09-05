@@ -102,6 +102,16 @@ export const VERTICAL_MIXED_UNDECLARED_BOOK: Fixture = {
   readyText: "卷一其1",
 };
 
+/** Built like the Japanese publishers' ebpaj template: the one linked
+ *  stylesheet is a shell of @import rules, and the writing mode, fonts
+ *  and classes live in the imported sheets (one of which imports again).
+ *  Nothing renders right unless the whole @import chain is resolved. */
+export const IMPORT_SHELL_BOOK: Fixture = {
+  file: "e2e-import-shell-book.epub",
+  title: "縱組範本試驗帖",
+  readyText: "縱組範本首行",
+};
+
 /** Nested TOC with fragment entries, a same-file footnote, a cross-file
  *  note reference, a plain cross-file link, one unique search token
  *  ("quillstorm") and one frequent one ("lantern"). */

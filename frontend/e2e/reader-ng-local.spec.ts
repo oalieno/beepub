@@ -1,7 +1,12 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
-import { TOUCH_BOOK, VERTICAL_BOOK, type Fixture } from "./ng-helpers";
+import {
+  IMPORT_SHELL_BOOK,
+  TOUCH_BOOK,
+  VERTICAL_BOOK,
+  type Fixture,
+} from "./ng-helpers";
 
 /**
  * reader-ng on a device-local book (G2 ④): the whole-file payload goes
@@ -157,4 +162,60 @@ test("stylesheets and resources come out of the archive", async ({ page }) => {
       };
     }),
   ).toEqual({ vertical: true, stylesheet: "blob", writingMode: "vertical-rl" });
+});
+
+test("an @import-shell stylesheet (the ebpaj template) resolves through every level", async ({
+  page,
+}) => {
+  await importFixture(page, IMPORT_SHELL_BOOK);
+  await openFromShelf(page, IMPORT_SHELL_BOOK);
+  // The parser rewrites url() and @import inside every stylesheet to the
+  // blob: URLs it minted before handing the sheet to the document, so the
+  // WebView never resolves a relative import itself (the failure that
+  // once broke these books in the iOS app). Prove it end to end: the
+  // writing mode comes from the first imported sheet, a class colour from
+  // the second, another from a sheet imported by an imported sheet — and
+  // the CSSOM shows the import rules pointing at blob: URLs with rules.
+  const seen = await page.evaluate(() => {
+    const core = window.__beepubReaderNG.core;
+    const doc: Document = core.getContents()[0].doc;
+    const color = (sel: string) =>
+      getComputedStyle(doc.querySelector(sel)!).color;
+    const imports: { href: string; rules: number }[] = [];
+    const walk = (sheet: CSSStyleSheet) => {
+      for (const rule of Array.from(sheet.cssRules)) {
+        if (rule.type === CSSRule.IMPORT_RULE) {
+          const r = rule as CSSImportRule;
+          imports.push({
+            href: r.href.split(":")[0],
+            rules: r.styleSheet?.cssRules.length ?? 0,
+          });
+          if (r.styleSheet) walk(r.styleSheet);
+        }
+      }
+    };
+    for (const sheet of Array.from(doc.styleSheets)) {
+      // XHTML keeps element names lowercase.
+      if ((sheet.ownerNode as Element | null)?.localName === "link")
+        walk(sheet);
+    }
+    return {
+      vertical: core.vertical as boolean,
+      writingMode: getComputedStyle(doc.documentElement).writingMode,
+      level2: color(".gfont"),
+      level3: color(".deep"),
+      imports,
+    };
+  });
+  expect(seen.vertical).toBe(true);
+  expect(seen.writingMode).toBe("vertical-rl");
+  expect(seen.level2).toBe("rgb(200, 30, 30)");
+  expect(seen.level3).toBe("rgb(30, 90, 200)");
+  // reset, standard, advance (+ check nested under advance): four imports,
+  // every one a blob: URL that loaded rules.
+  expect(seen.imports).toHaveLength(4);
+  for (const imp of seen.imports) {
+    expect(imp.href).toBe("blob");
+    expect(imp.rules).toBeGreaterThan(0);
+  }
 });
