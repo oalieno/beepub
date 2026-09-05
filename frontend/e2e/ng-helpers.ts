@@ -85,6 +85,15 @@ export const CHAPTERS_BOOK: Fixture = {
   readyText: "甲章首段",
 };
 
+/** A vertical-rl book (page progression rtl) with a horizontal-tb
+ *  illustration plate between its two chapters — the shape that made
+ *  page turns loop at every chapter start. */
+export const VERTICAL_MIXED_BOOK: Fixture = {
+  file: "e2e-vertical-mixed-book.epub",
+  title: "直書夾橫幅插畫卷",
+  readyText: "卷一其1",
+};
+
 /** Nested TOC with fragment entries, a same-file footnote, a cross-file
  *  note reference, a plain cross-file link, one unique search token
  *  ("quillstorm") and one frequent one ("lantern"). */
