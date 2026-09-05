@@ -43,13 +43,15 @@
     ProgressState,
     SyncBackend,
   } from "$lib/reading/sync";
-  import type { HighlightOut } from "$lib/types";
+  import { booksApi } from "$lib/api/books";
+  import type { HighlightOut, IllustrationOut } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import type { SearchResult } from "./EpubReader.svelte";
   import FootnotePopup from "./FootnotePopup.svelte";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
+  import ImageViewer from "./ImageViewer.svelte";
   import { sectionIndexFromCfi } from "./highlight-anchor";
   import {
     parseKosyncXpointer,
@@ -80,6 +82,7 @@
     pageTurn = "instant",
     sectionWeights = null,
     showAi = false,
+    aiBookId = null,
     offline = false,
     onbook,
     onready,
@@ -100,6 +103,10 @@
     onrestorefallback,
     onpeekchange,
     onatend,
+    onbookend,
+    onillustrate,
+    onillustrationschange,
+    onillustrationclick,
   }: {
     bookId: string;
     source: BookSource;
@@ -123,6 +130,9 @@
     pageTurn?: PageTurnMode;
     /** AI actions in the selection menu (BeePub-server books only). */
     showAi?: boolean;
+    /** Server identity for the AI illustrations (the book's own id, or
+     *  the linked id of a local copy); null leaves them off. */
+    aiBookId?: string | null;
     offline?: boolean;
     onbook?: (book: Book) => void;
     /** First section rendered. */
@@ -172,6 +182,13 @@
     onpeekchange?: (peek: { percentage: number | null } | null) => void;
     /** The last page of the last section came on screen. */
     onatend?: () => void;
+    /** A forward move on the last page — the book is over. */
+    onbookend?: () => void;
+    /** "Illustrate" on a selection or a saved highlight. */
+    onillustrate?: (detail: { cfiRange: string; text: string }) => void;
+    onillustrationschange?: (illustrations: IllustrationOut[]) => void;
+    /** A completed illustration's marker was tapped. */
+    onillustrationclick?: (illustration: IllustrationOut) => void;
   } = $props();
 
   let wrapper: HTMLDivElement;
@@ -299,12 +316,34 @@ ${darkOverrides}
 
   // ------------------------------------------------------------ paging
 
-  function turn(side: "left" | "right") {
+  // Every forward move funnels through goNext so the last page's turn
+  // reports the end of the book instead of doing nothing.
+  function goNext() {
     const c = core;
     if (!c) return;
     dismissMenu();
     showFootnote = false;
-    void (side === "left" ? c.goLeft() : c.goRight());
+    if (isAtEnd) {
+      onbookend?.();
+      return;
+    }
+    void c.next();
+  }
+
+  function goPrev() {
+    const c = core;
+    if (!c) return;
+    dismissMenu();
+    showFootnote = false;
+    void c.prev();
+  }
+
+  function turn(side: "left" | "right") {
+    const c = core;
+    if (!c) return;
+    const forward = (side === "right") !== c.advancesLeftward();
+    if (forward) goNext();
+    else goPrev();
   }
 
   // Tap zones: the left and right quarters of the reader turn the page,
@@ -336,9 +375,21 @@ ${darkOverrides}
       (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
     )
       return;
+    // The overlays own Escape through window listeners, which a key
+    // pressed while the section document has focus never reaches: put
+    // the topmost one away from here for that path.
+    if (e.key === "Escape") {
+      if (e.view === window) return;
+      if (zoomImageSrc) zoomImageSrc = null;
+      else if (showFootnote) showFootnote = false;
+      else if (showMenu) dismissMenu();
+      else return;
+      e.preventDefault();
+      return;
+    }
     // A footnote is on top of the page: the first paging key puts it
-    // away instead of turning under it (Escape is the popup's own).
-    if (showFootnote && e.key !== "Escape") {
+    // away instead of turning under it.
+    if (showFootnote) {
       e.preventDefault();
       showFootnote = false;
       return;
@@ -355,15 +406,13 @@ ${darkOverrides}
       case "ArrowUp":
       case "PageUp":
         e.preventDefault();
-        dismissMenu();
-        void c.prev();
+        goPrev();
         break;
       case "ArrowDown":
       case "PageDown":
       case " ":
         e.preventDefault();
-        dismissMenu();
-        void c.next();
+        goNext();
         break;
     }
   }
@@ -1214,6 +1263,13 @@ ${darkOverrides}
     if (cfiRange && text) oncompanion?.({ cfiRange, text });
   }
 
+  function handleIllustrate() {
+    const cfiRange = selectedCfi;
+    const text = selectedText;
+    dismissMenu();
+    if (cfiRange && text) onillustrate?.({ cfiRange, text });
+  }
+
   async function handleRemoveHighlight() {
     const target = existingHighlight;
     dismissMenu();
@@ -1380,6 +1436,66 @@ ${darkOverrides}
     }
   }
 
+  // ------------------------------------------------------- illustrations
+
+  // AI illustrations attached to passages — a BeePub-server feature (not
+  // part of SyncBackend), addressed by aiBookId. Drawn as markers on the
+  // same layer as the highlights; the page owns the viewer and the
+  // generation flow, this component owns the marks and the taps.
+  let illustrations: IllustrationOut[] = $state([]);
+  const ILLUSTRATION_KEY = "ill:";
+
+  function illustrationAnnotation(ill: IllustrationOut): Annotation {
+    return {
+      key: ILLUSTRATION_KEY + ill.id,
+      cfi: ill.cfi_range,
+      style: {
+        kind: "illustration",
+        color: "",
+        pulse: ill.status === "generating",
+      },
+    };
+  }
+
+  /** Markers for the completed and the generating ones; failed and
+   *  pending rows stay in the list (the sidebar shows them) unmarked. */
+  function markable(ill: IllustrationOut) {
+    return ill.status === "completed" || ill.status === "generating";
+  }
+
+  function applyIllustrations(list: IllustrationOut[]) {
+    const l = layer;
+    if (l) {
+      for (const ill of illustrations)
+        if (!list.some((x) => x.id === ill.id))
+          l.delete(ILLUSTRATION_KEY + ill.id);
+      for (const ill of list) {
+        if (markable(ill)) l.set(illustrationAnnotation(ill));
+        else l.delete(ILLUSTRATION_KEY + ill.id);
+      }
+    }
+    illustrations = list;
+    onillustrationschange?.(list);
+  }
+
+  /** Add or update one (a new generation, a poll result). */
+  export function addIllustrationAnnotation(ill: IllustrationOut) {
+    const exists = illustrations.some((x) => x.id === ill.id);
+    applyIllustrations(
+      exists
+        ? illustrations.map((x) => (x.id === ill.id ? ill : x))
+        : [...illustrations, ill],
+    );
+  }
+
+  export function removeIllustrationAnnotation(cfiRange: string) {
+    applyIllustrations(illustrations.filter((x) => x.cfi_range !== cfiRange));
+  }
+
+  export function updateIllustrations(list: IllustrationOut[]) {
+    applyIllustrations(list);
+  }
+
   // ------------------------------------------------------------ gestures
 
   /** The saved highlight under a point of the section document, if any. */
@@ -1391,11 +1507,92 @@ ${darkOverrides}
     return hl && range ? { hl, range } : null;
   }
 
+  /** The illustration whose marker is under a point (markers sit above
+   *  the marks in the layer's hit test). */
+  function illustrationAt(x: number, y: number) {
+    const key = layer?.hitTest(x, y);
+    if (!key?.startsWith(ILLUSTRATION_KEY)) return null;
+    const id = key.slice(ILLUSTRATION_KEY.length);
+    return illustrations.find((ill) => ill.id === id) ?? null;
+  }
+
+  // Scroll wheel / trackpad paging on desktop: one page per gesture
+  // (debounced — a trackpad fling sends dozens of events). Horizontal
+  // deltas follow the book's reading direction.
+  let wheelAt = 0;
+  const WHEEL_DEBOUNCE_MS = 300;
+  function handleWheel(e: WheelEvent) {
+    const c = core;
+    if (!c) return;
+    e.preventDefault();
+    const now = Date.now();
+    if (now - wheelAt < WHEEL_DEBOUNCE_MS) return;
+    wheelAt = now;
+    const leftward = c.advancesLeftward();
+    const nextByX = leftward ? e.deltaX < 0 : e.deltaX > 0;
+    const prevByX = leftward ? e.deltaX > 0 : e.deltaX < 0;
+    if (e.deltaY > 0 || nextByX) goNext();
+    else if (e.deltaY < 0 || prevByX) goPrev();
+  }
+
+  // A long press (touch or mouse) on a picture opens it full-screen, as
+  // the current reader does; the click that follows the release must not
+  // turn the page under the viewer.
+  let zoomImageSrc = $state<string | null>(null);
+  let imageZoomAt = 0;
+  const IMAGE_HOLD_MS = 500;
+
+  function imageSrcOf(target: EventTarget | null, doc: Document) {
+    const el = target as Element | null;
+    if (!el || typeof el.closest !== "function") return null;
+    const img = el.closest("img");
+    if (img) return (img as HTMLImageElement).src || null;
+    // SVG-wrapped art: the <image> itself or anywhere on its <svg>.
+    const image =
+      el.closest("image") ?? el.closest("svg")?.querySelector("image");
+    if (!image) return null;
+    const href =
+      image.getAttribute("href") ??
+      image.getAttributeNS("http://www.w3.org/1999/xlink", "href");
+    if (!href) return null;
+    try {
+      return new URL(href, doc.baseURI).href;
+    } catch {
+      return null;
+    }
+  }
+
   function attachGestures(doc: Document) {
     const win = doc.defaultView;
     if (!win) return;
     const c = core;
     if (!c) return;
+
+    let holdTimer: ReturnType<typeof setTimeout> | null = null;
+    const cancelHold = () => {
+      if (holdTimer) clearTimeout(holdTimer);
+      holdTimer = null;
+    };
+    const startHold = (target: EventTarget | null) => {
+      const src = imageSrcOf(target, doc);
+      if (!src) return;
+      cancelHold();
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        imageZoomAt = Date.now();
+        dismissMenu();
+        zoomImageSrc = src;
+      }, IMAGE_HOLD_MS);
+    };
+    doc.addEventListener("touchstart", (e) => startHold(e.target), {
+      passive: true,
+    });
+    doc.addEventListener("touchmove", cancelHold, { passive: true });
+    doc.addEventListener("touchend", cancelHold);
+    doc.addEventListener("touchcancel", cancelHold);
+    doc.addEventListener("mousedown", (e) => startHold(e.target));
+    doc.addEventListener("mousemove", cancelHold);
+    doc.addEventListener("mouseup", cancelHold);
 
     // The click that follows a touch (or a mouse click): a long-press
     // selection's residue is swallowed upstream (capture listener in
@@ -1404,7 +1601,15 @@ ${darkOverrides}
     doc.addEventListener("click", (e: MouseEvent) => {
       const now = Date.now();
       if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
+      if (now - imageZoomAt < 700) return;
       if (hasLiveSelection(win)) return;
+      const ill = illustrationAt(e.clientX, e.clientY);
+      if (ill) {
+        // A generating one is a wait cursor, not a target.
+        dismissMenu();
+        if (ill.status === "completed") onillustrationclick?.(ill);
+        return;
+      }
       const hit = highlightAt(e.clientX, e.clientY);
       if (hit) {
         showMenuFor(doc, hit.range, hit.hl.text, hit.hl);
@@ -1456,11 +1661,18 @@ ${darkOverrides}
       doc.addEventListener("mouseup", () =>
         setTimeout(() => tryShowMenuFromSelection(doc, win), 0),
       );
-      // Saved highlights are click targets: say so with the cursor.
+      doc.addEventListener("wheel", handleWheel, { passive: false });
+      // Saved highlights and illustration markers are click targets: say
+      // so with the cursor (a generating illustration says "wait").
       doc.addEventListener("mousemove", (e: MouseEvent) => {
         if (!doc.body) return;
-        const over = !!layer?.hitTest(e.clientX, e.clientY);
-        doc.body.style.cursor = over ? "pointer" : "";
+        const ill = illustrationAt(e.clientX, e.clientY);
+        const over = ill || !!layer?.hitTest(e.clientX, e.clientY);
+        doc.body.style.cursor = !over
+          ? ""
+          : ill && ill.status !== "completed"
+            ? "wait"
+            : "pointer";
       });
     }
   }
@@ -1515,6 +1727,9 @@ ${darkOverrides}
         console.error(e);
         return [] as HighlightOut[];
       });
+      const illustrationListing: Promise<IllustrationOut[]> = aiBookId
+        ? booksApi.getIllustrations(aiBookId).catch(() => [])
+        : Promise.resolve([]);
       pushLayout(c);
       c.setPageTurn(pageTurn);
       c.setStyles(styles());
@@ -1552,6 +1767,9 @@ ${darkOverrides}
       if (destroyed) return;
       applyHighlights(list);
       void healHighlights();
+      const ills = await illustrationListing;
+      if (destroyed) return;
+      if (ills.length > 0) applyIllustrations(ills);
     } catch (e) {
       console.error(e);
       onerror?.(e instanceof Error ? e : new Error(String(e)));
@@ -1591,12 +1809,10 @@ ${darkOverrides}
   });
 
   export function prev() {
-    dismissMenu();
-    return core?.prev();
+    goPrev();
   }
   export function next() {
-    dismissMenu();
-    return core?.next();
+    goNext();
   }
   export function goTo(target: NavInput) {
     dismissMenu();
@@ -1635,6 +1851,7 @@ ${darkOverrides}
         onremove={handleRemoveHighlight}
         oncopy={handleCopy}
         onshare={handleShare}
+        onillustrate={onillustrate ? handleIllustrate : undefined}
         oncompanion={handleCompanion}
       />
     </div>
@@ -1659,6 +1876,14 @@ ${darkOverrides}
       {darkMode}
       onsave={handleNoteSave}
       onclose={() => (noteEditorHighlight = null)}
+    />
+  {/if}
+
+  {#if zoomImageSrc}
+    <ImageViewer
+      src={zoomImageSrc}
+      {darkMode}
+      onclose={() => (zoomImageSrc = null)}
     />
   {/if}
 </div>

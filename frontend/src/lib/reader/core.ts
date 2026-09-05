@@ -18,6 +18,7 @@ import { Overlayer } from "./vendor/foliate/overlayer.js";
 import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
+import { ImagePrefetcher } from "./prefetch";
 
 export type OverlayerInstance = InstanceType<typeof Overlayer>;
 
@@ -260,6 +261,9 @@ export class ReaderCore {
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
   #pristineDocs = new Map<number, Promise<Document | null>>();
+  /** Warms the images of the sections around the one on screen. */
+  #prefetch: ImagePrefetcher | null = null;
+  #prefetchIndex = -1;
   /** Direction inferred for a book that declares no page progression:
    *  leftward once vertical text (or rtl columns) has been seen — in its
    *  stylesheets or first section at load, or in any section rendered
@@ -288,16 +292,24 @@ export class ReaderCore {
   /** Parse the book through `loader` and hand it to the paginator.
    *  Nothing is displayed until goTo(). */
   async load(loader: BookLoader): Promise<Book> {
+    // The parser reads through the prefetcher: bytes it warmed for the
+    // sections ahead are answered from memory when the paginator turns
+    // into them.
+    this.#prefetch?.destroy();
+    const prefetch = new ImagePrefetcher(loader);
+    this.#prefetch = prefetch;
+    this.#prefetchIndex = -1;
     // sha1 undefined = foliate's WebCrypto default (font deobfuscation keys)
     const book = (await new EPUB({
-      ...loader,
+      ...prefetch.loader,
       sha1: undefined,
     }).init()) as unknown as Book;
     this.book = book;
+    prefetch.open(book.sections);
     this.#language = languageInfo(book.metadata?.language);
     this.#inferredLeftward = false;
     if (book.dir !== "rtl" && book.dir !== "ltr")
-      void this.#inferDirection(loader);
+      void this.#inferDirection(prefetch.loader);
     this.paginator.open(book);
     return book;
   }
@@ -580,6 +592,8 @@ export class ReaderCore {
     }
     this.paginator.remove();
     this.#pristineDocs.clear();
+    this.#prefetch?.destroy();
+    this.#prefetch = null;
     this.book?.destroy?.();
     this.book = null;
   }
@@ -658,6 +672,10 @@ export class ReaderCore {
       startCfi: range ? this.cfiOf(detail.index, textStart(range)) : cfi,
     };
     this.lastLocation = location;
+    if (detail.index !== this.#prefetchIndex) {
+      this.#prefetchIndex = detail.index;
+      this.#prefetch?.around(detail.index);
+    }
     this.#handlers.onrelocate?.(location);
   }
 }

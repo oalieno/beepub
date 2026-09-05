@@ -4,11 +4,15 @@
    * book through BookReader and wraps it in the product chrome the
    * current reader has: the desktop toolbar and the phone top bar, the
    * tap-toggled phone bottom bar, the four sidebars (TOC with recap,
-   * search, highlights, AI companion), the settings sheet with the kosync
-   * pull/push row, the share card, the desktop scrubber with the peek
-   * pill, the kosync offer, and the local-first sync triggers around a
-   * session. Every piece of chrome is the shared component the current
-   * reader renders; only the engine behind it differs.
+   * search, highlights + illustrations, AI companion), the settings sheet
+   * with the kosync pull/push row, the share card, the desktop scrubber
+   * with the peek pill, the kosync offer, the AI illustration flow
+   * (prompt modal, generation poll, viewer), the automatic reading status
+   * (currently reading after a while, finished at the end, both undoable),
+   * the book-end overlay with series navigation, the load-error screen,
+   * and the local-first sync triggers around a session. Every piece of
+   * chrome is the shared component the current reader renders; only the
+   * engine behind it differs.
    *
    * Settings persist under the reader-* keys the epub.js reader uses
    * (font, size, line height, theme are shared; the two gutters, letter
@@ -23,7 +27,14 @@
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { aiApi } from "$lib/api/bookshelves";
-  import { hasServerUrl, isLocalMode } from "$lib/api/client";
+  import { coverUrl, hasServerUrl, isLocalMode } from "$lib/api/client";
+  import { authedSrc } from "$lib/actions/authedSrc";
+  import {
+    emptyLocalInteraction,
+    readLocalInteraction,
+    setLocalReadingStatus,
+    type LocalInteractionRecord,
+  } from "$lib/reading/local";
   import { resolveReading } from "$lib/reading/resolve";
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
@@ -32,13 +43,23 @@
   import { authStore } from "$lib/stores/auth";
   import { confirmDialog } from "$lib/stores/confirm";
   import { toastStore } from "$lib/stores/toast";
-  import { UserRole, type AiStatus, type HighlightOut } from "$lib/types";
+  import {
+    UserRole,
+    type AiStatus,
+    type HighlightOut,
+    type IllustrationOut,
+    type InteractionOut,
+    type SeriesNeighborsOut,
+    type StylePromptOut,
+  } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
   import type { PageTurnMode, TocItem } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
+  import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
+  import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
   import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
   import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
@@ -48,8 +69,7 @@
   import Toolbar from "$lib/components/reader/Toolbar.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Undo2 } from "@lucide/svelte";
+  import { BookX, Check, Undo2 } from "@lucide/svelte";
 
   let bookId = $derived(page.params.id as string);
   let initialCfi = $derived(page.url.searchParams.get("cfi"));
@@ -74,13 +94,69 @@
     embedding: false,
   });
   let title = $state("");
+  // The record's display title wins over the file's own.
+  let hasDbTitle = false;
   let authors = $state<string[]>([]);
   let isImageBook = $state(false);
   let sectionWeights = $state<number[] | null>(null);
   let ready = $state(false);
   let rendered = $state(false);
-  let loadError = $state<string | null>(null);
+  let loadError = $state(false);
   let reader: BookReader | undefined = $state();
+  // Retry remounts the reader; the watchdog turns a book that never
+  // renders into the error state instead of an endless spinner.
+  let readerKey = $state(0);
+  const LOAD_TIMEOUT_MS = 30_000;
+  $effect(() => {
+    void readerKey;
+    if (!ready || rendered || loadError) return;
+    const timer = setTimeout(() => {
+      loadError = true;
+    }, LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  });
+  function retryLoad() {
+    loadError = false;
+    rendered = false;
+    readerKey += 1;
+  }
+
+  // Auto reading status. Beepub books track it on the server interaction;
+  // local books keep a device record that LWW-syncs once linked (and just
+  // accumulates while serverless).
+  let interaction: InteractionOut | null = $state(null);
+  let localInteraction = $state<LocalInteractionRecord | null>(null);
+  let readingTimer: ReturnType<typeof setTimeout> | null = null;
+  let destroyed = false;
+  const READING_DEBOUNCE_MS = 2 * 60 * 1000; // 2 minutes
+  let autoReadTriggered = false;
+  // Set when the user undoes an auto-"read" mark: they've said no, so don't
+  // auto-mark again for the rest of this reading session.
+  let autoReadSuppressed = false;
+  let reachedEnd = $state(false);
+
+  // Book-end overlay: shown when paging past the last page. Carries the
+  // "marked as finished" feedback (a toast here would sit on top of the
+  // text and fight the safe area) plus series navigation when available.
+  let seriesNeighbors: SeriesNeighborsOut | null = $state(null);
+  let seriesFetchPromise: Promise<void> | null = null;
+  let showEndOverlay = $state(false);
+  // Set when auto-mark-as-read fires; lets the end overlay offer undo.
+  let autoReadUndo = $state<{
+    status: InteractionOut["reading_status"];
+    startedAt: string | null;
+    finishedAt: string | null;
+  } | null>(null);
+  let autoReadReverted = $state(false);
+
+  // AI illustrations: the reader draws the markers and reports the list;
+  // the page runs the prompt modal, the generation poll and the viewer.
+  let illustrations = $state<IllustrationOut[]>([]);
+  let stylePrompts = $state<StylePromptOut[]>([]);
+  let showIllustrationModal = $state(false);
+  let illustrationModalCfi = $state("");
+  let illustrationModalText = $state("");
+  let viewingIllustration = $state<IllustrationOut | null>(null);
 
   // Table of contents: the reader parses it and tracks which entry the
   // page is under; the page shows both.
@@ -146,7 +222,10 @@
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (e.key !== "Escape" || e.defaultPrevented) return;
     if (showSettings || shareHighlight || showGestureHint) return;
-    if (activeSidebar) activeSidebar = null;
+    if (viewingIllustration) viewingIllustration = null;
+    else if (showIllustrationModal) showIllustrationModal = false;
+    else if (showEndOverlay) showEndOverlay = false;
+    else if (activeSidebar) activeSidebar = null;
   }
 
   // One-time gesture coach mark on the first book open (shared key with
@@ -392,6 +471,320 @@
     }
   }
 
+  // ------------------------------------------------------ reading status
+
+  async function fetchInteractionAndStartTimer() {
+    try {
+      interaction = await booksApi.getInteraction(bookId);
+    } catch {
+      /* ignore */
+    }
+    // Only escalate none / want_to_read.
+    if (
+      !interaction?.reading_status ||
+      interaction.reading_status === "want_to_read"
+    ) {
+      readingTimer = setTimeout(async () => {
+        const prevStatus = interaction?.reading_status ?? null;
+        const prevStartedAt = interaction?.started_at ?? null;
+        const today = new Date().toISOString().slice(0, 10);
+        try {
+          await booksApi.updateReadingStatus(bookId, {
+            reading_status: "currently_reading",
+            started_at: today,
+          });
+          if (interaction) {
+            interaction.reading_status = "currently_reading";
+            interaction.started_at = today;
+          }
+          toastStore.info(m.reader_auto_marked_reading(), {
+            duration: 6000,
+            action: {
+              label: m.common_undo(),
+              onclick: () =>
+                revertStatus(
+                  prevStatus,
+                  prevStartedAt,
+                  interaction?.finished_at ?? null,
+                ),
+            },
+          });
+        } catch {
+          /* ignore */
+        }
+      }, READING_DEBOUNCE_MS);
+    }
+  }
+
+  // Fire-and-forget push of a local status edit; serverless/unlinked is a
+  // silent no-op inside syncLocalBook and the stamped record ships on the
+  // next sync opportunity instead.
+  function pushLocalInteraction() {
+    void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+      syncLocalBook(bookId).catch(() => {}),
+    );
+  }
+
+  function startLocalReadingTimer() {
+    // Same rule as the beepub timer: only escalate none/want_to_read.
+    const status = localInteraction?.reading_status;
+    if (status && status !== "want_to_read") return;
+    readingTimer = setTimeout(async () => {
+      const prev = localInteraction ?? emptyLocalInteraction();
+      const today = new Date().toISOString().slice(0, 10);
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        "currently_reading",
+        today,
+        null,
+      );
+      pushLocalInteraction();
+      toastStore.info(m.reader_auto_marked_reading(), {
+        duration: 6000,
+        action: {
+          label: m.common_undo(),
+          onclick: () =>
+            revertStatus(
+              prev.reading_status,
+              prev.started_at,
+              prev.finished_at,
+            ),
+        },
+      });
+    }, READING_DEBOUNCE_MS);
+  }
+
+  async function revertStatus(
+    status: InteractionOut["reading_status"],
+    startedAt: string | null,
+    finishedAt: string | null,
+  ) {
+    if (localEntry) {
+      // The undo is itself a device edit — it gets a fresh stamp and
+      // propagates like any other.
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        status,
+        startedAt,
+        finishedAt,
+      );
+      pushLocalInteraction();
+      return;
+    }
+    try {
+      await booksApi.updateReadingStatus(bookId, {
+        reading_status: status,
+        started_at: startedAt,
+        finished_at: finishedAt,
+      });
+      if (interaction) {
+        interaction.reading_status = status;
+        interaction.started_at = startedAt;
+        interaction.finished_at = finishedAt;
+      }
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function autoMarkAsRead() {
+    const current = localEntry ? localInteraction : interaction;
+    if (!current) return;
+    if (
+      current.reading_status === "read" ||
+      current.reading_status === "did_not_finish"
+    )
+      return;
+    const prevStatus = current.reading_status;
+    const prevStartedAt = current.started_at ?? null;
+    const prevFinishedAt = current.finished_at ?? null;
+    const today = new Date().toISOString().slice(0, 10);
+    if (localEntry) {
+      localInteraction = await setLocalReadingStatus(
+        bookId,
+        "read",
+        current.started_at || today,
+        today,
+      );
+      pushLocalInteraction();
+    } else {
+      try {
+        await booksApi.updateReadingStatus(bookId, {
+          reading_status: "read",
+          started_at: current.started_at || today,
+          finished_at: today,
+        });
+        if (interaction) {
+          interaction.reading_status = "read";
+          interaction.finished_at = today;
+        }
+      } catch {
+        return;
+      }
+    }
+    // No toast — the book-end overlay surfaces this with an undo.
+    autoReadUndo = {
+      status: prevStatus,
+      startedAt: prevStartedAt,
+      finishedAt: prevFinishedAt,
+    };
+    autoReadReverted = false;
+  }
+
+  function undoAutoRead() {
+    if (!autoReadUndo) return;
+    autoReadSuppressed = true;
+    void revertStatus(
+      autoReadUndo.status,
+      autoReadUndo.startedAt,
+      autoReadUndo.finishedAt,
+    );
+    autoReadReverted = true;
+  }
+
+  // Auto-mark as read when the estimated progress hits 99% (covers books
+  // that end with a colophon/back matter the reader never turns to) OR the
+  // actual last page is reached (covers books whose estimate stalls below
+  // 99%). False positives are recoverable via the undo in the overlay.
+  $effect(() => {
+    if (
+      ((percentage != null && percentage >= 99) || reachedEnd) &&
+      !autoReadTriggered &&
+      !autoReadSuppressed &&
+      (localEntry ? localInteraction : interaction)
+    ) {
+      autoReadTriggered = true;
+      if (readingTimer) {
+        clearTimeout(readingTimer);
+        readingTimer = null;
+      }
+      void autoMarkAsRead();
+    }
+  });
+
+  // ------------------------------------------------------------ book end
+
+  function prefetchSeriesNeighbors() {
+    if (!isBeepub) return; // series live on the server
+    if (seriesNeighbors || seriesFetchPromise) return;
+    seriesFetchPromise = booksApi
+      .getSeriesNeighbors(bookId)
+      .then((data) => {
+        seriesNeighbors = data;
+      })
+      .catch(() => {
+        // Silently fail — no series panel if the prefetch fails
+      });
+  }
+
+  function formatSeriesIndex(idx: number | null | undefined): string {
+    return idx == null ? "" : String(idx);
+  }
+
+  function seriesDisplayTotal(): string {
+    return formatSeriesIndex(
+      seriesNeighbors?.progress?.max_series_index ??
+        seriesNeighbors?.progress?.total_in_library,
+    );
+  }
+
+  async function handleBookEnd() {
+    if (seriesFetchPromise) await seriesFetchPromise;
+    showEndOverlay = true;
+  }
+
+  /** The same reader route for another book (this page, whatever path
+   *  it is mounted at). A full load: the reader's state is per book. */
+  function openBookHere(id: string) {
+    window.location.href = page.url.pathname.replace(bookId, id);
+  }
+
+  // ------------------------------------------------------- illustrations
+
+  async function handleIllustrate(detail: { cfiRange: string; text: string }) {
+    illustrationModalCfi = detail.cfiRange;
+    illustrationModalText = detail.text;
+    if (stylePrompts.length === 0) {
+      try {
+        stylePrompts = await booksApi.getStylePrompts(aiBookId ?? bookId);
+      } catch {
+        /* ignore */
+      }
+    }
+    showIllustrationModal = true;
+  }
+
+  async function handleCreateIllustration(detail: {
+    style_prompt?: string;
+    custom_prompt?: string;
+    reference_images?: Array<{ source: "epub" | "illustration"; path: string }>;
+  }) {
+    showIllustrationModal = false;
+    try {
+      const ill = await booksApi.createIllustration(aiBookId ?? bookId, {
+        cfi_range: illustrationModalCfi,
+        text: illustrationModalText,
+        ...detail,
+      });
+      reader?.addIllustrationAnnotation(ill);
+      toastStore.success(m.illustration_generating());
+      void pollIllustration(ill.id);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function pollIllustration(illustrationId: string) {
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      if (destroyed) return;
+      try {
+        const ill = await booksApi.getIllustration(
+          aiBookId ?? bookId,
+          illustrationId,
+        );
+        if (ill.status === "completed") {
+          reader?.addIllustrationAnnotation(ill);
+          toastStore.success(m.illustration_ready());
+          return;
+        }
+        if (ill.status === "failed") {
+          reader?.addIllustrationAnnotation(ill);
+          const msg = ill.error_message ?? "";
+          const friendly =
+            msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
+              ? "Content was blocked by safety filters. Try a different text selection."
+              : msg.includes("ReadTimeout")
+                ? "API request timed out. Please try again later."
+                : msg.includes("500")
+                  ? "API server error. Please try again later."
+                  : msg || "Unknown error";
+          toastStore.error(`Generation failed: ${friendly}`);
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+    toastStore.error(m.illustration_timeout());
+  }
+
+  async function handleDeleteIllustration(ill: IllustrationOut) {
+    try {
+      await booksApi.deleteIllustration(aiBookId ?? bookId, ill.id);
+      reader?.removeIllustrationAnnotation(ill.cfi_range);
+      toastStore.success(m.illustration_deleted());
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  function handleSelectIllustration(ill: IllustrationOut) {
+    void reader?.displayCfi(ill.cfi_range);
+    activeSidebar = null;
+    viewingIllustration = ill;
+  }
+
   async function deleteHighlight(hl: HighlightOut) {
     if (
       !(await confirmDialog({
@@ -409,7 +802,16 @@
 
   // ------------------------------------------------------------ lifecycle
 
+  let prevHtmlOverflow = "";
+  let prevBodyOverflow = "";
+
   onMount(async () => {
+    // The reader is the whole viewport: nothing behind it may scroll
+    // (rubber-banding on iOS drags the page with the finger otherwise).
+    prevHtmlOverflow = document.documentElement.style.overflow;
+    prevBodyOverflow = document.body.style.overflow;
+    document.documentElement.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
     try {
       const resolved = await resolveReading(bookId);
       source = resolved.source;
@@ -419,6 +821,7 @@
         // Local imports carry their own display metadata; there is no
         // server record to fetch it from.
         title = localEntry.title;
+        hasDbTitle = true;
         authors = localEntry.authors ?? [];
         isImageBook = localEntry.isImageBook === true;
         sectionWeights = localEntry.sectionWeights ?? null;
@@ -437,10 +840,16 @@
           // Live-session adoption of the server ruler for entries the
           // sync backfill hasn't upgraded yet (persistence is doSync's
           // job); this only makes THIS session measure with real weights.
-          if (serverBookId && localEntry.sectionWeights === undefined) {
+          if (
+            serverBookId &&
+            (localEntry.sectionWeights === undefined ||
+              localEntry.isImageBook === undefined)
+          ) {
             booksApi
               .get(serverBookId)
               .then((b) => {
+                if (typeof b.is_image_book === "boolean")
+                  isImageBook = b.is_image_book;
                 if (b.section_weights && b.section_weights.length > 0)
                   sectionWeights = b.section_weights;
               })
@@ -451,10 +860,13 @@
         booksApi
           .get(bookId)
           .then((b) => {
-            title = b.display_title ?? b.title ?? b.epub_title ?? "";
             authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
             isImageBook = b.is_image_book === true;
             sectionWeights = b.section_weights ?? null;
+            if (b.display_title) {
+              title = b.display_title;
+              hasDbTitle = true;
+            }
           })
           .catch(() => {});
       }
@@ -467,13 +879,32 @@
           .then((s) => (aiStatus = s))
           .catch(() => {});
       }
+      // Reading status lives with the book's identity: the server
+      // interaction for beepub books, the device record for local ones
+      // (a beepub API write there would be a second writer fighting the
+      // LWW merge).
+      if (resolved.sync.kind === "beepub") {
+        void fetchInteractionAndStartTimer();
+      } else if (localEntry) {
+        // Read after the opening sync above, so a fresher web-set status
+        // is already folded into the record.
+        localInteraction =
+          (await readLocalInteraction(bookId)) ?? emptyLocalInteraction();
+        startLocalReadingTimer();
+      }
     } catch (e) {
-      loadError = e instanceof Error ? e.message : String(e);
+      console.error(e);
+      loadError = true;
     }
   });
 
   onDestroy(() => {
-    if (!browser || !localEntry) return;
+    if (!browser) return;
+    destroyed = true;
+    document.documentElement.style.overflow = prevHtmlOverflow;
+    document.body.style.overflow = prevBodyOverflow;
+    if (readingTimer) clearTimeout(readingTimer);
+    if (!localEntry) return;
     // Push this session's reading state. The delay sequences the sync
     // after the reader's final save (parent/child onDestroy ordering
     // isn't contractual).
@@ -498,7 +929,7 @@
 </script>
 
 <svelte:head>
-  <title>{title ? `${title} · read-ng` : "read-ng"}</title>
+  <title>{m.reader_page_title({ title: title || "Reading" })}</title>
 </svelte:head>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
@@ -522,6 +953,7 @@
         {isRtl}
         {isImageBook}
         highlightCount={highlights.length}
+        illustrationCount={illustrations.length}
         offline={!$isOnline}
         backHref={localEntry ? "/local" : null}
         showAi={aiEnabled}
@@ -549,63 +981,74 @@
   <!-- md:pb reserves a sliver for the collapsed progress line so book text
        can never sit on it, even with the gutters at their minimum. -->
   <div class="relative min-h-0 flex-1 md:pb-2.5">
-    {#if ready && source && sync}
-      <BookReader
-        bind:this={reader}
-        {bookId}
-        {source}
-        {sync}
-        {initialCfi}
-        {fontFamily}
-        {fontSize}
-        {lineHeight}
-        {letterSpacing}
-        {marginX}
-        {marginY}
-        {darkMode}
-        {pageTurn}
-        {sectionWeights}
-        showAi={aiEnabled}
-        offline={!$isOnline}
-        onbook={(b) => {
-          // The file's own title until (unless) the record supplies one.
-          if (!title && typeof b.metadata?.title === "string")
-            title = b.metadata.title;
-        }}
-        onready={() => (rendered = true)}
-        onerror={(e) => (loadError = e.message)}
-        ontap={handleReaderTap}
-        ontoc={(t) => (toc = t)}
-        onchapter={(c) => {
-          currentHref = c.href ?? "";
-          chapterLabel = c.label;
-        }}
-        onhighlightschange={(list) => (highlights = list)}
-        onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
-        onshare={(hl) => (shareHighlight = hl)}
-        oncompanion={openCompanion}
-        onprogress={(p) => (percentage = p.percentage)}
-        onactivity={() => {
-          // beepub-kind saves carry track_activity — the server credits
-          // the 'web' device row itself. Local/kosync books tick the
-          // device ledger instead.
-          if (!isBeepub)
-            void import("$lib/services/readingLedger").then(({ tickReading }) =>
-              tickReading(),
-            );
-        }}
-        onticks={(t) => (sectionTicks = t)}
-        ondirection={(rtl, vertical) => {
-          isRtl = rtl;
-          isVertical = vertical;
-        }}
-        onkosyncposition={handleKosyncPosition}
-        onrestorefallback={(pct) =>
-          toastStore.info(
-            m.reader_restore_fallback({ percentage: Math.round(pct) }),
-          )}
-        onpeekchange={(peek) => (peekReturn = peek)}
-      />
+    {#if ready && source && sync && !loadError}
+      {#key readerKey}
+        <BookReader
+          bind:this={reader}
+          {bookId}
+          {source}
+          {sync}
+          {initialCfi}
+          {fontFamily}
+          {fontSize}
+          {lineHeight}
+          {letterSpacing}
+          {marginX}
+          {marginY}
+          {darkMode}
+          {pageTurn}
+          {sectionWeights}
+          showAi={aiEnabled}
+          aiBookId={aiEnabled ? aiBookId : null}
+          offline={!$isOnline}
+          onbook={(b) => {
+            // The file's own title unless the record supplied one.
+            if (!hasDbTitle && typeof b.metadata?.title === "string")
+              title = b.metadata.title;
+          }}
+          onready={() => (rendered = true)}
+          onerror={() => (loadError = true)}
+          ontap={handleReaderTap}
+          ontoc={(t) => (toc = t)}
+          onchapter={(c) => {
+            currentHref = c.href ?? "";
+            chapterLabel = c.label;
+          }}
+          onhighlightschange={(list) => (highlights = list)}
+          onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
+          onshare={(hl) => (shareHighlight = hl)}
+          oncompanion={openCompanion}
+          onillustrate={handleIllustrate}
+          onillustrationschange={(list) => (illustrations = list)}
+          onillustrationclick={(ill) => (viewingIllustration = ill)}
+          onprogress={(p) => (percentage = p.percentage)}
+          onactivity={() => {
+            // beepub-kind saves carry track_activity — the server credits
+            // the 'web' device row itself. Local/kosync books tick the
+            // device ledger instead.
+            if (!isBeepub)
+              void import("$lib/services/readingLedger").then(
+                ({ tickReading }) => tickReading(),
+              );
+          }}
+          onticks={(t) => (sectionTicks = t)}
+          ondirection={(rtl, vertical) => {
+            isRtl = rtl;
+            isVertical = vertical;
+          }}
+          onkosyncposition={handleKosyncPosition}
+          onrestorefallback={(pct) =>
+            toastStore.info(
+              m.reader_restore_fallback({ percentage: Math.round(pct) }),
+            )}
+          onpeekchange={(peek) => (peekReturn = peek)}
+          onatend={() => {
+            reachedEnd = true;
+            prefetchSeriesNeighbors();
+          }}
+          onbookend={handleBookEnd}
+        />
+      {/key}
     {/if}
 
     <!-- Bottom progress (desktop; the top bar carries the number on
@@ -677,24 +1120,61 @@
       </div>
     {/if}
 
-    {#if !rendered && !loadError}
-      <div
-        class="pointer-events-none absolute inset-0 flex items-center justify-center"
-      >
-        <Spinner />
-      </div>
-    {/if}
-
     {#if loadError}
       <div
-        class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background px-8 text-center text-foreground"
+        class="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 px-8 text-center {darkMode
+          ? 'bg-ink-900'
+          : 'bg-background'}"
       >
-        <p class="text-sm">The new reader could not open this book.</p>
-        <pre
-          class="max-w-full overflow-x-auto rounded-md bg-muted p-3 text-left text-xs">{loadError}</pre>
-        <Button variant="outline" href={`/books/${bookId}/read`}
-          >Open in the current reader</Button
-        >
+        <BookX
+          size={48}
+          class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
+        />
+        <div class="space-y-1">
+          <p
+            class="text-base font-medium {darkMode
+              ? 'text-ink-200'
+              : 'text-foreground'}"
+          >
+            {m.reader_load_error_title()}
+          </p>
+          <p
+            class="text-sm {darkMode
+              ? 'text-ink-400'
+              : 'text-muted-foreground'}"
+          >
+            {m.reader_load_error_desc()}
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
+              ? 'bg-ink-100 text-ink-900 hover:bg-white'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'}"
+            onclick={retryLoad}
+          >
+            {m.common_retry()}
+          </button>
+          <a
+            href={localEntry ? "/local" : `/books/${bookId}`}
+            class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
+              ? 'text-ink-300 hover:bg-ink-800'
+              : 'text-muted-foreground hover:bg-secondary'}"
+          >
+            {m.reader_back_to_detail()}
+          </a>
+        </div>
+      </div>
+    {:else if !rendered}
+      <!-- Covers the first paint until the position is restored: the
+           reader lands on the saved page under this, not in front of
+           the user. -->
+      <div
+        class="absolute inset-0 z-10 flex items-center justify-center {darkMode
+          ? 'bg-ink-900'
+          : 'bg-white'}"
+      >
+        <Spinner size="lg" class={darkMode ? "border-ink-400" : ""} />
       </div>
     {/if}
 
@@ -738,7 +1218,8 @@
     {#if activeSidebar === "highlights" && !isImageBook}
       <HighlightSidebar
         {highlights}
-        {bookId}
+        {illustrations}
+        bookId={aiBookId ?? bookId}
         {darkMode}
         brokenIds={brokenHighlightIds}
         onselect={(hl) => {
@@ -747,6 +1228,8 @@
         }}
         ondelete={deleteHighlight}
         onshare={(hl) => (shareHighlight = hl)}
+        onillustrationselect={handleSelectIllustration}
+        onillustrationdelete={handleDeleteIllustration}
         onclose={() => (activeSidebar = null)}
       />
     {/if}
@@ -829,4 +1312,193 @@
     onsyncpull={handleKosyncPull}
     onsyncpush={handleKosyncPush}
   />
+
+  {#if showIllustrationModal}
+    <IllustrationPromptModal
+      text={illustrationModalText}
+      styles={stylePrompts}
+      {darkMode}
+      bookId={aiBookId ?? bookId}
+      {aiStatus}
+      isAdmin={$authStore.user?.role === UserRole.Admin}
+      completedIllustrations={illustrations.filter(
+        (x) => x.status === "completed",
+      )}
+      oncreate={handleCreateIllustration}
+      onclose={() => (showIllustrationModal = false)}
+    />
+  {/if}
+
+  {#if viewingIllustration}
+    <IllustrationViewer
+      illustration={viewingIllustration}
+      bookId={aiBookId ?? bookId}
+      {darkMode}
+      onclose={() => (viewingIllustration = null)}
+    />
+  {/if}
+
+  {#if showEndOverlay}
+    {@const seriesNext = seriesNeighbors?.next}
+    {@const seriesProgress = seriesNeighbors?.progress}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      data-testid="book-end"
+      onkeydown={(e) => {
+        if (e.key === "Escape") showEndOverlay = false;
+      }}
+      onclick={(e) => {
+        if (e.target === e.currentTarget) showEndOverlay = false;
+      }}
+    >
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <div
+        class="mx-3 sm:mx-4 w-full max-w-[85vw] sm:max-w-sm md:max-w-md overflow-hidden rounded-2xl shadow-2xl {darkMode
+          ? 'bg-ink-800 text-ink-100'
+          : 'bg-white text-ink-900'}"
+        onclick={(e) => e.stopPropagation()}
+      >
+        {#if seriesNext}
+          <!-- Cover as hero banner -->
+          <div
+            class="relative flex items-center justify-center py-10 {darkMode
+              ? 'bg-ink-900/60'
+              : 'bg-ink-50'}"
+          >
+            {#if seriesNext.cover_path}
+              <img
+                use:authedSrc={coverUrl(seriesNext.id)}
+                alt={seriesNext.title ?? "Next book"}
+                class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
+              />
+            {:else}
+              <div
+                class="h-52 sm:h-64 md:h-96 w-48 rounded-md shadow-xl flex items-center justify-center {darkMode
+                  ? 'bg-ink-700 text-ink-400'
+                  : 'bg-ink-200 text-muted-foreground'}"
+              >
+                {m.reader_no_cover()}
+              </div>
+            {/if}
+          </div>
+
+          <!-- Info + actions -->
+          <div class="px-6 py-6">
+            <p
+              class="text-center text-xs font-medium uppercase tracking-widest {darkMode
+                ? 'text-ink-500'
+                : 'text-muted-foreground'}"
+            >
+              {m.reader_series_up_next({
+                series: seriesNeighbors?.series_name ?? "",
+              })}
+            </p>
+            <p class="mt-3 text-center text-xl font-semibold">
+              {seriesNext.title ?? "Untitled"}
+            </p>
+            {#if seriesNext.series_index != null}
+              <p
+                class="mt-1 text-center text-sm {darkMode
+                  ? 'text-ink-400'
+                  : 'text-muted-foreground'}"
+              >
+                {m.reader_series_book_of({
+                  index: formatSeriesIndex(seriesNext.series_index),
+                  total: seriesDisplayTotal() || "?",
+                })}
+              </p>
+            {/if}
+            <div class="mt-6 flex gap-3">
+              <button
+                class="flex-1 rounded-lg px-4 py-3 font-medium transition-colors {darkMode
+                  ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                  : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
+                onclick={() => (showEndOverlay = false)}
+              >
+                {m.common_close()}
+              </button>
+              <button
+                class="flex-1 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                onclick={() => openBookHere(seriesNext.id)}
+              >
+                {m.reader_start_reading()}
+              </button>
+            </div>
+          </div>
+        {:else if seriesProgress}
+          <div class="flex flex-col items-center gap-6 px-10 py-14">
+            <span class="text-6xl">🎉</span>
+            <div class="text-center">
+              <p class="text-2xl font-semibold">{m.reader_series_complete()}</p>
+              <p
+                class="mt-2 {darkMode
+                  ? 'text-ink-400'
+                  : 'text-muted-foreground'}"
+              >
+                {m.reader_series_complete_msg({
+                  count: String(seriesProgress.total_in_library),
+                  series: seriesNeighbors?.series_name ?? "",
+                })}
+              </p>
+            </div>
+            <button
+              class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
+                ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
+              onclick={() => (showEndOverlay = false)}
+            >
+              {m.common_close()}
+            </button>
+          </div>
+        {:else}
+          <div class="flex flex-col items-center gap-6 px-10 py-14">
+            <span class="text-6xl">🎉</span>
+            <div class="text-center">
+              <p class="text-2xl font-semibold">{m.reader_finished_title()}</p>
+              {#if title}
+                <p
+                  class="mt-2 {darkMode
+                    ? 'text-ink-400'
+                    : 'text-muted-foreground'}"
+                >
+                  {title}
+                </p>
+              {/if}
+            </div>
+            <button
+              class="rounded-lg px-8 py-3 font-medium transition-colors {darkMode
+                ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
+                : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
+              onclick={() => (showEndOverlay = false)}
+            >
+              {m.common_close()}
+            </button>
+          </div>
+        {/if}
+
+        {#if autoReadUndo}
+          <div
+            class="flex items-center justify-center gap-2 border-t px-6 py-3.5 text-sm {darkMode
+              ? 'border-ink-700 text-ink-400'
+              : 'border-ink-100 text-muted-foreground'}"
+          >
+            {#if autoReadReverted}
+              <span>{m.reader_marked_read_undone()}</span>
+            {:else}
+              <Check size={14} class="text-primary" />
+              <span>{m.reader_auto_marked_read()}</span>
+              <button
+                type="button"
+                class="text-primary underline underline-offset-4"
+                onclick={undoAutoRead}
+              >
+                {m.common_undo()}
+              </button>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
 </div>
