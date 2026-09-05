@@ -60,6 +60,7 @@ export interface Book {
     [key: string]: unknown;
   };
   rendition?: { layout?: string };
+  resources?: { manifest?: { href: string; mediaType?: string }[] };
   resolveCFI(cfi: string): NavTarget;
   resolveHref(href: string): NavTarget | null;
   isExternal?(href: string): boolean;
@@ -259,6 +260,13 @@ export class ReaderCore {
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
   #pristineDocs = new Map<number, Promise<Document | null>>();
+  /** Direction inferred for a book that declares no page progression:
+   *  leftward once vertical text (or rtl columns) has been seen — in its
+   *  stylesheets or first section at load, or in any section rendered
+   *  since. Sticky for the session, so a horizontal illustration plate
+   *  cannot flip the mapping back (and forth) the way a per-section
+   *  reading did. */
+  #inferredLeftward = false;
 
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
@@ -287,8 +295,41 @@ export class ReaderCore {
     }).init()) as unknown as Book;
     this.book = book;
     this.#language = languageInfo(book.metadata?.language);
+    this.#inferredLeftward = false;
+    if (book.dir !== "rtl" && book.dir !== "ltr")
+      void this.#inferDirection(loader);
     this.paginator.open(book);
     return book;
+  }
+
+  /** Look for vertical text before anything renders: the manifest's
+   *  stylesheets and the first linear section's markup (inline styles).
+   *  A book that opens on a horizontal plate is thereby read leftward
+   *  from its first page turn. Sections rendered later refine this. */
+  async #inferDirection(loader: BookLoader) {
+    const book = this.book;
+    if (!book) return;
+    const sheets = (book.resources?.manifest ?? []).filter(
+      (item) => item.mediaType === "text/css",
+    );
+    const first = book.sections[this.firstLinearIndex()];
+    const hrefs = [...sheets.map((item) => item.href), first?.id].filter(
+      (href): href is string => !!href,
+    );
+    for (const href of hrefs) {
+      if (this.book !== book) return; // destroyed or reopened meanwhile
+      let text: string | null = null;
+      try {
+        text = await loader.loadText(href);
+      } catch {
+        text = null;
+      }
+      if (text && /writing-mode\s*:\s*vertical-rl/i.test(text)) {
+        this.#inferredLeftward = true;
+        this.#applyPageTurn();
+        return;
+      }
+    }
   }
 
   /** load() then show `target`, falling back to the first linear section
@@ -358,14 +399,15 @@ export class ReaderCore {
    * every gesture and arrow maps through. The book's declared page
    * progression rules for all of it (a vertical-rl novel's horizontal
    * illustration page still turns leftward; the epub.js reader and
-   * upstream foliate do the same); only a book that declares nothing
-   * falls back to the section on screen.
+   * upstream foliate do the same). A book that declares nothing gets one
+   * book-level inference for the session (see #inferredLeftward) — never
+   * a per-section reading, which flips at every plate.
    */
   advancesLeftward(): boolean {
     const dir = this.book?.dir;
     if (dir === "rtl") return true;
     if (dir === "ltr") return false;
-    return this.sectionAdvancesLeftward();
+    return this.#inferredLeftward;
   }
 
   /** Whether the section on screen is laid out to advance leftward
@@ -552,6 +594,7 @@ export class ReaderCore {
     // Mirrors the paginator's own getDirection() — read here because the
     // load event precedes the render that stamps the paginator's `dir`.
     this.sectionRtl = doc.body.dir === "rtl" || style?.direction === "rtl";
+    if (this.vertical || this.sectionRtl) this.#inferredLeftward = true;
     this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
