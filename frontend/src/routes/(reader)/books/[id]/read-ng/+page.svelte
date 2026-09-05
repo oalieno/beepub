@@ -1,11 +1,14 @@
 <script lang="ts">
   /**
    * read-ng — the route for the new reader engine (reader-ng). Loads a
-   * book through BookReader and wraps it in the product chrome that
-   * exists so far: a header with the percentage and the highlights /
-   * settings entries, the settings sheet, the highlight sidebar and share
-   * card, the desktop scrubber with the peek pill, the kosync offer, and
-   * the local-first sync triggers around a session.
+   * book through BookReader and wraps it in the product chrome the
+   * current reader has: the desktop toolbar and the phone top bar, the
+   * tap-toggled phone bottom bar, the four sidebars (TOC with recap,
+   * search, highlights, AI companion), the settings sheet with the kosync
+   * pull/push row, the share card, the desktop scrubber with the peek
+   * pill, the kosync offer, and the local-first sync triggers around a
+   * session. Every piece of chrome is the shared component the current
+   * reader renders; only the engine behind it differs.
    *
    * Settings persist under the reader-* keys the epub.js reader uses
    * (font, size, line height, theme are shared; the two gutters, letter
@@ -19,33 +22,34 @@
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
+  import { aiApi } from "$lib/api/bookshelves";
   import { hasServerUrl, isLocalMode } from "$lib/api/client";
   import { resolveReading } from "$lib/reading/resolve";
   import type { BookSource } from "$lib/reading/source";
   import type { SyncBackend } from "$lib/reading/sync";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import { getIsOnline } from "$lib/services/network";
-  import type { HighlightOut } from "$lib/types";
+  import { getIsOnline, isOnline } from "$lib/services/network";
+  import { authStore } from "$lib/stores/auth";
   import { confirmDialog } from "$lib/stores/confirm";
   import { toastStore } from "$lib/stores/toast";
+  import { UserRole, type AiStatus, type HighlightOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
-  import type { PageTurnMode } from "$lib/reader/core";
+  import type { PageTurnMode, TocItem } from "$lib/reader/core";
   import BookReader from "$lib/components/reader/BookReader.svelte";
+  import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
+  import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
   import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
+  import ReaderTopBar from "$lib/components/reader/ReaderTopBar.svelte";
+  import SearchSidebar from "$lib/components/reader/SearchSidebar.svelte";
+  import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
+  import Toolbar from "$lib/components/reader/Toolbar.svelte";
   import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
   import { Button } from "$lib/components/ui/button";
-  import {
-    ArrowLeft,
-    ChevronLeft,
-    ChevronRight,
-    Highlighter,
-    Settings,
-    Undo2,
-  } from "@lucide/svelte";
+  import { Undo2 } from "@lucide/svelte";
 
   let bookId = $derived(page.params.id as string);
   let initialCfi = $derived(page.url.searchParams.get("cfi"));
@@ -54,19 +58,40 @@
   let sync = $state<SyncBackend | null>(null);
   let localEntry = $state<LocalBookEntry | null>(null);
   let isBeepub = $derived(sync?.kind === "beepub");
+  let isKosync = $derived(sync?.kind === "kosync");
+  let kosyncBusy = $state<"pull" | "push" | null>(null);
+  // Digest-linked server identity of a local book — AI features keep
+  // working on downloaded/imported copies while online.
+  let serverBookId = $state<string | null>(null);
+  let aiEnabled = $derived(
+    isBeepub || (!!localEntry && $isOnline && !!serverBookId),
+  );
+  let aiBookId = $derived(isBeepub ? bookId : serverBookId);
+  let aiStatus = $state<AiStatus>({
+    companion: false,
+    tag: false,
+    image: false,
+    embedding: false,
+  });
   let title = $state("");
   let authors = $state<string[]>([]);
+  let isImageBook = $state(false);
   let sectionWeights = $state<number[] | null>(null);
   let ready = $state(false);
   let rendered = $state(false);
   let loadError = $state<string | null>(null);
   let reader: BookReader | undefined = $state();
 
+  // Table of contents: the reader parses it and tracks which entry the
+  // page is under; the page shows both.
+  let toc = $state<TocItem[]>([]);
+  let currentHref = $state("");
+  let chapterLabel = $state<string | null>(null);
+
   // Highlights: BookReader owns the list and the marks; the page shows
   // the sidebar and the share card.
   let highlights = $state<HighlightOut[]>([]);
   let brokenHighlightIds = $state<Set<string>>(new Set());
-  let showHighlights = $state(false);
   let shareHighlight = $state<HighlightOut | null>(null);
 
   // Progress: the reader owns position and percentage; the page shows
@@ -85,8 +110,62 @@
       : null,
   );
 
+  // One sidebar at a time; opening one folds the phone bottom bar.
+  type Sidebar = "highlights" | "toc" | "search" | "companion";
+  let activeSidebar = $state<Sidebar | null>(null);
+  let showMobileBottomBar = $state(false);
   let showSettings = $state(false);
+  let companionSelectedText = $state<string | null>(null);
+  let companionSelectedCfi = $state<string | null>(null);
+
+  function toggleSidebar(name: Sidebar) {
+    activeSidebar = activeSidebar === name ? null : name;
+    if (activeSidebar) showMobileBottomBar = false;
+  }
+
+  function openCompanion(selection?: { cfiRange: string; text: string }) {
+    companionSelectedText = selection?.text ?? null;
+    companionSelectedCfi = selection?.cfiRange ?? null;
+    activeSidebar = "companion";
+    showMobileBottomBar = false;
+  }
+
+  // A plain tap on the page (not a page turn, not a selection) shows and
+  // hides the phone bottom bar — a fixed overlay, so the text never
+  // reflows under it.
+  function handleReaderTap() {
+    if (activeSidebar) return;
+    showMobileBottomBar = !showMobileBottomBar;
+  }
+
+  // Escape closes the topmost page-level overlay. The settings sheet,
+  // share modal and gesture hint own their Escape handling, as do the
+  // footnote popup and highlight menu inside the reader.
+  function handleGlobalKeydown(e: KeyboardEvent) {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    if (showSettings || shareHighlight || showGestureHint) return;
+    if (activeSidebar) activeSidebar = null;
+  }
+
+  // One-time gesture coach mark on the first book open (shared key with
+  // the current reader: seen there is seen here).
   let showGestureHint = $state(false);
+  $effect(() => {
+    if (!rendered) return;
+    try {
+      if (!localStorage.getItem("reader-gestures-seen")) showGestureHint = true;
+    } catch {
+      // private browsing — skip the hint
+    }
+  });
+  function dismissGestureHint() {
+    showGestureHint = false;
+    try {
+      localStorage.setItem("reader-gestures-seen", "1");
+    } catch {
+      /* ignore */
+    }
+  }
 
   // ------------------------------------------------------------ settings
 
@@ -251,6 +330,66 @@
       );
   }
 
+  function kosyncErrorToast(err: unknown) {
+    // Manual actions get visible errors, unlike the silent auto path.
+    void import("$lib/kosync/client").then(({ KosyncError }) => {
+      toastStore.error(
+        err instanceof KosyncError && err.kind === "auth"
+          ? m.kosync_error_auth()
+          : m.kosync_error_network(),
+      );
+    });
+  }
+
+  async function handleKosyncPull() {
+    const entry = localEntry;
+    if (!entry || kosyncBusy) return;
+    kosyncBusy = "pull";
+    try {
+      const { getKosyncAccount } = await import("$lib/services/kosyncAccount");
+      const account = await getKosyncAccount();
+      if (!account) return;
+      const { manualKosyncPull } = await import("$lib/reading/kosync");
+      const result = await manualKosyncPull(account, entry.digest);
+      if (result.kind === "none") {
+        toastStore.info(m.kosync_pull_none());
+      } else if (result.kind === "own") {
+        toastStore.info(m.kosync_pull_own());
+      } else {
+        showSettings = false;
+        await handleKosyncPosition({
+          percentage: result.position.percentage ?? 0,
+          device: result.position.device,
+          sectionIndex: result.position.sectionIndex,
+          xpointer: result.position.xpointer,
+          autoJumped: false,
+        });
+      }
+    } catch (err) {
+      kosyncErrorToast(err);
+    } finally {
+      kosyncBusy = null;
+    }
+  }
+
+  async function handleKosyncPush() {
+    const entry = localEntry;
+    if (!entry || kosyncBusy) return;
+    kosyncBusy = "push";
+    try {
+      // Land the current position in the backend first, then force it out.
+      await reader?.flushProgress();
+      const { manualKosyncPush } = await import("$lib/reading/kosync");
+      const pushed = await manualKosyncPush(entry.digest);
+      if (pushed) toastStore.success(m.kosync_pushed());
+      else toastStore.info(m.kosync_push_not_ready());
+    } catch (err) {
+      kosyncErrorToast(err);
+    } finally {
+      kosyncBusy = null;
+    }
+  }
+
   async function deleteHighlight(hl: HighlightOut) {
     if (
       !(await confirmDialog({
@@ -279,6 +418,7 @@
         // server record to fetch it from.
         title = localEntry.title;
         authors = localEntry.authors ?? [];
+        isImageBook = localEntry.isImageBook === true;
         sectionWeights = localEntry.sectionWeights ?? null;
         // Pull the linked server state first so the reader restores the
         // newest position — but bounded: past 2.5s the sync continues in
@@ -289,22 +429,20 @@
             syncLocalBook(bookId).catch(() => {}),
             new Promise((resolve) => setTimeout(resolve, 2500)),
           ]);
+          const { getLocalBookLinks } =
+            await import("$lib/services/localLibrary");
+          serverBookId = (await getLocalBookLinks())[bookId] ?? null;
           // Live-session adoption of the server ruler for entries the
           // sync backfill hasn't upgraded yet (persistence is doSync's
           // job); this only makes THIS session measure with real weights.
-          if (localEntry.sectionWeights === undefined) {
-            const { getLocalBookLinks } =
-              await import("$lib/services/localLibrary");
-            const serverBookId = (await getLocalBookLinks())[bookId] ?? null;
-            if (serverBookId) {
-              booksApi
-                .get(serverBookId)
-                .then((b) => {
-                  if (b.section_weights && b.section_weights.length > 0)
-                    sectionWeights = b.section_weights;
-                })
-                .catch(() => {});
-            }
+          if (serverBookId && localEntry.sectionWeights === undefined) {
+            booksApi
+              .get(serverBookId)
+              .then((b) => {
+                if (b.section_weights && b.section_weights.length > 0)
+                  sectionWeights = b.section_weights;
+              })
+              .catch(() => {});
           }
         }
       } else {
@@ -313,11 +451,20 @@
           .then((b) => {
             title = b.display_title ?? b.title ?? b.epub_title ?? "";
             authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
+            isImageBook = b.is_image_book === true;
             sectionWeights = b.section_weights ?? null;
           })
           .catch(() => {});
       }
       ready = true;
+      // AI status is account-level, not book-level — fetch it whenever AI
+      // could be shown (beepub books, or a linked local book).
+      if (resolved.sync.kind === "beepub" || serverBookId) {
+        aiApi
+          .getStatus()
+          .then((s) => (aiStatus = s))
+          .catch(() => {});
+      }
     } catch (e) {
       loadError = e instanceof Error ? e.message : String(e);
     }
@@ -352,70 +499,54 @@
   <title>{title ? `${title} · read-ng` : "read-ng"}</title>
 </svelte:head>
 
+<svelte:window onkeydown={handleGlobalKeydown} />
+
 <div
   class="flex h-[100dvh] min-h-0 flex-col {darkMode
     ? 'reader-dark bg-ink-900'
     : 'reader-light bg-background'}"
 >
-  <header
-    class="flex min-h-12 shrink-0 items-center gap-1 border-b border-border px-2 text-foreground"
-    style="padding-top: env(safe-area-inset-top, 0px);"
-    data-testid="ng-chrome"
-  >
-    <Button
-      variant="ghost"
-      size="icon"
-      href={localEntry ? "/local" : `/books/${bookId}`}
-      aria-label="Back"
-    >
-      <ArrowLeft />
-    </Button>
-    <div class="min-w-0 flex-1 truncate text-sm">{title}</div>
-    {#if percentage != null}
-      <span
-        class="text-xs text-muted-foreground tabular-nums"
-        data-testid="ng-percent"
-      >
-        {percentage}%
-      </span>
-    {/if}
-    <Button
-      variant="ghost"
-      size="icon"
-      class="hidden md:inline-flex"
-      aria-label="Previous page"
-      onclick={() => reader?.prev()}
-    >
-      <ChevronLeft />
-    </Button>
-    <Button
-      variant="ghost"
-      size="icon"
-      class="hidden md:inline-flex"
-      aria-label="Next page"
-      onclick={() => reader?.next()}
-    >
-      <ChevronRight />
-    </Button>
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={m.reader_highlights()}
-      onclick={() => (showHighlights = true)}
-    >
-      <Highlighter />
-    </Button>
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={m.reader_settings_title()}
-      onclick={() => (showSettings = true)}
-    >
-      <Settings />
-    </Button>
-  </header>
+  <!-- The chrome above the page: the desktop toolbar, or the phone's
+       always-visible top bar (its actions live in the tap-toggled bottom
+       bar). One wrapper so probes can toggle the whole thing. -->
+  <div class="shrink-0" data-testid="ng-chrome">
+    <div class="hidden md:block">
+      <Toolbar
+        {bookId}
+        {title}
+        {percentage}
+        {chapterLabel}
+        {darkMode}
+        {isRtl}
+        {isImageBook}
+        highlightCount={highlights.length}
+        offline={!$isOnline}
+        backHref={localEntry ? "/local" : null}
+        showAi={aiEnabled}
+        onprev={() => reader?.prev()}
+        onnext={() => reader?.next()}
+        onthemeToggle={handleThemeToggle}
+        onhighlights={() => toggleSidebar("highlights")}
+        oncompanion={() => openCompanion()}
+        onsearch={() => toggleSidebar("search")}
+        ontoc_toggle={() => toggleSidebar("toc")}
+        onsettings={() => (showSettings = true)}
+        onhelp={() => (showGestureHint = true)}
+      />
+    </div>
+    <ReaderTopBar
+      {bookId}
+      {title}
+      {percentage}
+      {chapterLabel}
+      {darkMode}
+      backHref={localEntry ? "/local" : null}
+    />
+  </div>
 
-  <div class="relative min-h-0 flex-1">
+  <!-- md:pb reserves a sliver for the collapsed progress line so book text
+       can never sit on it, even with the gutters at their minimum. -->
+  <div class="relative min-h-0 flex-1 md:pb-2.5">
     {#if ready && source && sync}
       <BookReader
         bind:this={reader}
@@ -432,11 +563,25 @@
         {darkMode}
         {pageTurn}
         {sectionWeights}
+        showAi={aiEnabled}
+        offline={!$isOnline}
+        onbook={(b) => {
+          // The file's own title until (unless) the record supplies one.
+          if (!title && typeof b.metadata?.title === "string")
+            title = b.metadata.title;
+        }}
         onready={() => (rendered = true)}
         onerror={(e) => (loadError = e.message)}
+        ontap={handleReaderTap}
+        ontoc={(t) => (toc = t)}
+        onchapter={(c) => {
+          currentHref = c.href ?? "";
+          chapterLabel = c.label;
+        }}
         onhighlightschange={(list) => (highlights = list)}
         onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
         onshare={(hl) => (shareHighlight = hl)}
+        oncompanion={openCompanion}
         onprogress={(p) => (percentage = p.percentage)}
         onactivity={() => {
           // beepub-kind saves carry track_activity — the server credits
@@ -458,7 +603,7 @@
       />
     {/if}
 
-    <!-- Bottom progress (desktop; the header carries the number on
+    <!-- Bottom progress (desktop; the top bar carries the number on
          phones). Collapsed: a hair-thin line at the bottom edge. Hovering
          the bottom strip (or an active peek, whose return link must be
          discoverable) expands the scrubber + info row as an overlay — no
@@ -496,6 +641,7 @@
               {isRtl}
               ticks={sectionTicks}
               ariaLabel={m.reader_progress()}
+              getlabel={(p) => reader?.chapterAtPercentage(p) ?? null}
               onseek={(p) => reader?.seekPercentage(p)}
             />
           </div>
@@ -505,6 +651,10 @@
               : 'text-muted-foreground'}"
           >
             <span class="shrink-0">{percentage}%</span>
+            {#if chapterLabel}
+              <span class="opacity-50 shrink-0">·</span>
+              <span class="truncate">{chapterLabel}</span>
+            {/if}
             {#if peekLabel}
               <span class="opacity-50">·</span>
               <button
@@ -544,27 +694,98 @@
     {/if}
 
     {#if showGestureHint}
-      <GestureHintOverlay
+      <GestureHintOverlay {darkMode} {isRtl} onclose={dismissGestureHint} />
+    {/if}
+
+    {#if activeSidebar === "toc"}
+      <TocSidebar
+        {toc}
         {darkMode}
-        {isRtl}
-        onclose={() => (showGestureHint = false)}
+        {currentHref}
+        loadRecap={aiBookId && !isImageBook
+          ? () => booksApi.getRecap(aiBookId!, reader?.getCurrentCfi() ?? "")
+          : null}
+        onchapter={(href) => {
+          void reader?.displayChapter(href);
+          activeSidebar = null;
+        }}
+        onspine={(spineIndex) => {
+          void reader?.displayChapter(spineIndex);
+          activeSidebar = null;
+        }}
+        onclose={() => (activeSidebar = null)}
+      />
+    {/if}
+
+    {#if activeSidebar === "search" && !isImageBook}
+      <SearchSidebar
+        {darkMode}
+        onselect={(cfi) => {
+          void reader?.displaySearchResult(cfi);
+          activeSidebar = null;
+        }}
+        onclose={() => (activeSidebar = null)}
+        onsearch={(query, onResults, signal) =>
+          reader?.searchBook(query, onResults, signal) ?? Promise.resolve()}
+      />
+    {/if}
+
+    {#if activeSidebar === "highlights" && !isImageBook}
+      <HighlightSidebar
+        {highlights}
+        {bookId}
+        {darkMode}
+        brokenIds={brokenHighlightIds}
+        onselect={(hl) => {
+          activeSidebar = null;
+          void reader?.displayHighlight(hl);
+        }}
+        ondelete={deleteHighlight}
+        onshare={(hl) => (shareHighlight = hl)}
+        onclose={() => (activeSidebar = null)}
+      />
+    {/if}
+
+    {#if activeSidebar === "companion" && !isImageBook}
+      <CompanionSidebar
+        bookId={aiBookId ?? bookId}
+        {darkMode}
+        {aiStatus}
+        isAdmin={$authStore.user?.role === UserRole.Admin}
+        selectedText={companionSelectedText}
+        selectedCfi={companionSelectedCfi}
+        getCurrentCfi={() => reader?.getCurrentCfi() ?? ""}
+        onclose={() => (activeSidebar = null)}
       />
     {/if}
   </div>
 
-  {#if showHighlights}
-    <HighlightSidebar
-      {highlights}
-      {bookId}
+  <!-- Phone bottom bar (tap to toggle; a fixed overlay, never in flow) -->
+  {#if showMobileBottomBar}
+    <ReaderBottomBar
+      {percentage}
+      {peekLabel}
+      onpeekreturn={() => reader?.returnFromPeek()}
+      canSeek={true}
+      ticks={sectionTicks}
+      getSeekLabel={(p) => reader?.chapterAtPercentage(p) ?? null}
+      onseek={(p) => reader?.seekPercentage(p)}
       {darkMode}
-      brokenIds={brokenHighlightIds}
-      onselect={(hl) => {
-        showHighlights = false;
-        void reader?.displayHighlight(hl);
+      {isRtl}
+      {isImageBook}
+      highlightCount={highlights.length}
+      offline={!$isOnline}
+      showAi={aiEnabled}
+      onprev={() => reader?.prev()}
+      onnext={() => reader?.next()}
+      ontoc={() => toggleSidebar("toc")}
+      onsearch={() => toggleSidebar("search")}
+      onhighlights={() => toggleSidebar("highlights")}
+      oncompanion={() => openCompanion()}
+      onsettings={() => {
+        showSettings = true;
+        showMobileBottomBar = false;
       }}
-      ondelete={deleteHighlight}
-      onshare={(hl) => (shareHighlight = hl)}
-      onclose={() => (showHighlights = false)}
     />
   {/if}
 
@@ -586,6 +807,9 @@
     {marginY}
     {pageTurn}
     {darkMode}
+    {isImageBook}
+    showSync={isKosync}
+    syncBusy={kosyncBusy}
     onfontToggle={handleFontToggle}
     onfontIncrease={handleFontIncrease}
     onfontDecrease={handleFontDecrease}
@@ -596,5 +820,7 @@
     onmarginYChange={handleMarginYChange}
     onpageTurnChange={handlePageTurnChange}
     onhelp={() => (showGestureHint = true)}
+    onsyncpull={handleKosyncPull}
+    onsyncpush={handleKosyncPush}
   />
 </div>

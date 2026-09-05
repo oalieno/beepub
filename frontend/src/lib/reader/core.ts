@@ -15,6 +15,8 @@ import "./vendor/foliate/paginator.js";
 import { EPUB } from "./vendor/foliate/epub.js";
 import * as CFI from "./vendor/foliate/epubcfi.js";
 import { Overlayer } from "./vendor/foliate/overlayer.js";
+import { searchMatcher } from "./vendor/foliate/search.js";
+import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
 
 export type OverlayerInstance = InstanceType<typeof Overlayer>;
@@ -138,6 +140,22 @@ export interface ReaderCoreHandlers {
     index: number;
     overlayer: OverlayerInstance;
   }) => void;
+  /** An internal link was activated in section `index` (`href` already
+   *  resolved against the section). Return true to take it over;
+   *  otherwise the core navigates to it. External links open in a new
+   *  tab and never reach this. */
+  onlink?: (detail: {
+    href: string;
+    index: number;
+    anchor: HTMLAnchorElement;
+  }) => boolean | void;
+}
+
+/** One search hit: where it is and the text around it. */
+export interface SearchHit {
+  index: number;
+  cfi: string;
+  excerpt: string;
 }
 
 /** number = section index · string = CFI or href · object = section +
@@ -163,6 +181,49 @@ function languageInfo(lang: string | string[] | undefined) {
   } catch {
     return {};
   }
+}
+
+/**
+ * The point at the first non-whitespace character at or after the start
+ * of `range` (its start as-is when that is not a text node, or only
+ * whitespace follows). A visible range routinely starts on the space a
+ * line broke at, whose zero-width box hangs at the end of the previous
+ * page: a position recorded there — or navigated to — lands one page
+ * early. Positions are recorded and restored through this.
+ */
+function textStart(range: Range): Range {
+  const point = range.cloneRange();
+  point.collapse(true);
+  const node = point.startContainer;
+  if (node.nodeType !== Node.TEXT_NODE) return point;
+  const text = node.textContent ?? "";
+  let i = point.startOffset;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (i > point.startOffset && i < text.length) {
+    point.setStart(node, i);
+    point.collapse(true);
+  }
+  return point;
+}
+
+/** A navigation target whose anchor resolves to a collapsed Range is
+ *  moved off leading whitespace (see textStart). */
+function withTextStart(target: NavTarget): NavTarget {
+  const { anchor } = target;
+  if (typeof anchor !== "function") return target;
+  return {
+    ...target,
+    anchor: (doc) => {
+      const result = anchor(doc);
+      // Cross-realm: the section's Range class is not this window's.
+      return result &&
+        typeof result === "object" &&
+        "collapsed" in result &&
+        (result as Range).collapsed
+        ? textStart(result as Range)
+        : result;
+    },
+  };
 }
 
 const ATTR_FOR: Record<keyof LayoutParams, string> = {
@@ -194,6 +255,7 @@ export class ReaderCore {
 
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
+  #pristineDocs = new Map<number, Promise<Document | null>>();
 
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
@@ -276,7 +338,7 @@ export class ReaderCore {
   async goTo(target: NavInput): Promise<NavTarget | null> {
     const resolved = this.resolve(target);
     if (!resolved) return null;
-    await this.paginator.goTo(resolved);
+    await this.paginator.goTo(withTextStart(resolved));
     return resolved;
   }
 
@@ -368,6 +430,65 @@ export class ReaderCore {
     return this.paginator.getContents();
   }
 
+  /** A section's parsed, unrendered document — the DOM that kosync
+   *  xpointers, footnote lookups and anything else structural read,
+   *  free of the styles and overlays the rendered copy carries. Parsed
+   *  once per section; null when the section fails to load. */
+  pristineDocument(index: number): Promise<Document | null> {
+    let pending = this.#pristineDocs.get(index);
+    if (!pending) {
+      const section = this.book?.sections[index];
+      pending = (section ? section.createDocument() : Promise.resolve(null))
+        .then((doc) => doc ?? null)
+        .catch(() => null);
+      this.#pristineDocs.set(index, pending);
+    }
+    return pending;
+  }
+
+  /**
+   * Search the whole book, one section per step: each yield carries a
+   * section's hits (possibly none) so a consumer can show results as they
+   * come. Matching is foliate's — case- and diacritic-insensitive,
+   * grapheme-granular, in the book's language. Ranges come from a fresh
+   * parse of each section (not the pristine cache: a full-book search
+   * should not pin every document in memory) and are reported as CFIs,
+   * which resolve identically in the rendered copy.
+   */
+  async *search(
+    query: string,
+    signal?: AbortSignal,
+  ): AsyncGenerator<{ index: number; hits: SearchHit[] }> {
+    const book = this.book;
+    if (!book) return;
+    const matcher = searchMatcher(textWalker, {
+      defaultLocale: this.#language.canonical ?? "en",
+      matchCase: false,
+      matchDiacritics: false,
+      matchWholeWords: false,
+    });
+    for (let index = 0; index < book.sections.length; index++) {
+      if (signal?.aborted) return;
+      let doc: Document | null = null;
+      try {
+        doc = await book.sections[index].createDocument();
+      } catch {
+        doc = null;
+      }
+      if (!doc?.body) continue;
+      const hits: SearchHit[] = [];
+      for (const { range, excerpt } of matcher(doc, query)) {
+        if (signal?.aborted) return;
+        hits.push({
+          index,
+          cfi: this.cfiOf(index, range),
+          excerpt: `${excerpt.pre}${excerpt.match}${excerpt.post}`,
+        });
+      }
+      yield { index, hits };
+    }
+  }
+
   destroy() {
     try {
       this.paginator.destroy();
@@ -375,6 +496,7 @@ export class ReaderCore {
       // destroy() before the first section loaded has no view to tear down
     }
     this.paginator.remove();
+    this.#pristineDocs.clear();
     this.book?.destroy?.();
     this.book = null;
   }
@@ -414,9 +536,17 @@ export class ReaderCore {
       const href = section?.resolveHref?.(raw) ?? raw;
       if (book?.isExternal?.(href)) {
         globalThis.open(raw, "_blank");
-      } else {
-        this.goTo(href).catch((err) => console.error(err));
+        return;
       }
+      if (
+        this.#handlers.onlink?.({
+          href,
+          index,
+          anchor: a as HTMLAnchorElement,
+        })
+      )
+        return;
+      this.goTo(href).catch((err) => console.error(err));
     });
   }
 
@@ -436,7 +566,7 @@ export class ReaderCore {
       size: detail.size,
       range,
       cfi,
-      startCfi: this.collapseCFI(cfi),
+      startCfi: range ? this.cfiOf(detail.index, textStart(range)) : cfi,
     };
     this.lastLocation = location;
     this.#handlers.onrelocate?.(location);

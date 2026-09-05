@@ -16,12 +16,20 @@
     Book,
     LayoutParams,
     NavInput,
+    NavTarget,
     PageTurnMode,
     ReaderCore,
     Relocation,
+    TocItem,
   } from "$lib/reader/core";
   import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
   import { verifyAnchors } from "$lib/reader/anchor";
+  import {
+    activeTocEntry,
+    flattenToc,
+    tocLabelForSection,
+    type TocEntry,
+  } from "$lib/reader/toc";
   import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
   import {
     percentFromPosition,
@@ -38,6 +46,8 @@
   import type { HighlightOut } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
+  import type { SearchResult } from "./EpubReader.svelte";
+  import FootnotePopup from "./FootnotePopup.svelte";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
   import { sectionIndexFromCfi } from "./highlight-anchor";
@@ -69,14 +79,19 @@
     letterSpacing = 0,
     pageTurn = "instant",
     sectionWeights = null,
+    showAi = false,
+    offline = false,
     onbook,
     onready,
     onerror,
     onrelocate,
     ontap,
+    ontoc,
+    onchapter,
     onhighlightschange,
     onbrokenhighlights,
     onshare,
+    oncompanion,
     onprogress,
     onactivity,
     onticks,
@@ -106,6 +121,9 @@
     /** Body letter-spacing, px (applies to vertical text too). */
     letterSpacing?: number;
     pageTurn?: PageTurnMode;
+    /** AI actions in the selection menu (BeePub-server books only). */
+    showAi?: boolean;
+    offline?: boolean;
     onbook?: (book: Book) => void;
     /** First section rendered. */
     onready?: () => void;
@@ -113,10 +131,17 @@
     onrelocate?: (location: Relocation) => void;
     /** A plain tap on the page (no selection, no menu) — the chrome toggle. */
     ontap?: () => void;
+    /** The book's table of contents, once parsed. */
+    ontoc?: (toc: TocItem[]) => void;
+    /** The TOC entry the visible page is under changed (both null before
+     *  the first entry or in a book without a TOC). */
+    onchapter?: (detail: { href: string | null; label: string | null }) => void;
     onhighlightschange?: (highlights: HighlightOut[]) => void;
     /** Highlights whose anchor no longer resolves and could not be healed. */
     onbrokenhighlights?: (ids: string[]) => void;
     onshare?: (highlight: HighlightOut) => void;
+    /** "Ask about this" on a selection or a saved highlight. */
+    oncompanion?: (detail: { cfiRange: string; text: string }) => void;
     /** Per-spine-section text sizes for weight-interpolated progress; null
      *  falls back to uniform section weights. See $lib/reading/progress. */
     sectionWeights?: number[] | null;
@@ -276,6 +301,7 @@ ${darkOverrides}
     const c = core;
     if (!c) return;
     dismissMenu();
+    showFootnote = false;
     void (side === "left" ? c.goLeft() : c.goRight());
   }
 
@@ -308,6 +334,13 @@ ${darkOverrides}
       (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)
     )
       return;
+    // A footnote is on top of the page: the first paging key puts it
+    // away instead of turning under it (Escape is the popup's own).
+    if (showFootnote && e.key !== "Escape") {
+      e.preventDefault();
+      showFootnote = false;
+      return;
+    }
     switch (e.key) {
       case "ArrowLeft":
         e.preventDefault();
@@ -374,7 +407,6 @@ ${darkOverrides}
   // from ever being shipped.
   let currentXpointer: string | null = null;
   let currentXpointerCfi = "";
-  const pristineDocs = new Map<number, Promise<Document | null>>();
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   const SAVE_DEBOUNCE_MS = 2000;
@@ -424,17 +456,9 @@ ${darkOverrides}
   }
 
   /** The section's parsed, unrendered document — the DOM kosync xpointers
-   *  are written against and read from. Cached per section. */
+   *  are written against and read from (the core caches it per section). */
   function pristineDoc(index: number): Promise<Document | null> {
-    let pending = pristineDocs.get(index);
-    if (!pending) {
-      const section = core?.book?.sections[index];
-      pending = (section ? section.createDocument() : Promise.resolve(null))
-        .then((doc) => doc ?? null)
-        .catch(() => null);
-      pristineDocs.set(index, pending);
-    }
-    return pending;
+    return core?.pristineDocument(index) ?? Promise.resolve(null);
   }
 
   function rangeIn(doc: Document, cfi: string): Range | null {
@@ -500,6 +524,7 @@ ${darkOverrides}
     currentPage = numbers.currentPage;
     totalPages = numbers.totalPages;
     void updateCurrentXpointer(r.cfi, r.index);
+    trackChapter(r.index, r.range);
 
     if (userMove) {
       userNavigated = true;
@@ -800,6 +825,161 @@ ${darkOverrides}
     return displayPercentage(pct);
   }
 
+  // ------------------------------------------------------- table of contents
+
+  // TOC entries resolved to spine indices once per book; the active entry
+  // is re-derived on every relocation from the visible range.
+  let tocEntries: TocEntry[] = [];
+  let activeTocHref: string | null = null;
+
+  function trackChapter(index: number, range: Range | null) {
+    const entry = activeTocEntry(tocEntries, index, range);
+    const href = entry?.href ?? null;
+    if (href === activeTocHref) return;
+    activeTocHref = href;
+    onchapter?.({ href, label: entry?.label ?? null });
+  }
+
+  /** TOC navigation: a TOC href, or a spine index (the recap's sections). */
+  export function displayChapter(target: NavInput) {
+    return displayCfi(target);
+  }
+
+  /** TOC label of the chapter a seek to `pct` would land in — the
+   *  scrubber's drag bubble. Section-level: the seek target has no
+   *  rendered page to refine fragment entries against. */
+  export function chapterAtPercentage(pct: number): string | null {
+    const weights = progressWeights();
+    if (!weights.length) return null;
+    return tocLabelForSection(
+      tocEntries,
+      positionFromPercent(weights, pct).sectionIndex,
+    );
+  }
+
+  // --------------------------------------------------------------- search
+
+  const SEARCH_FLASH_KEY = "__search-flash";
+  let flashTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** Search the book, reporting the results found so far after every
+   *  section with hits (the sidebar's progressive list). */
+  export async function searchBook(
+    query: string,
+    onResults: (results: SearchResult[]) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const c = core;
+    if (!c?.book) return;
+    const all: SearchResult[] = [];
+    for await (const { index, hits } of c.search(query, signal)) {
+      if (signal?.aborted) return;
+      if (!hits.length) continue;
+      const sectionLabel =
+        tocLabelForSection(tocEntries, index) ?? `Section ${index + 1}`;
+      for (const hit of hits) {
+        all.push({
+          cfi: hit.cfi,
+          excerpt: hit.excerpt,
+          sectionLabel,
+          sectionIndex: index,
+        });
+      }
+      onResults([...all]);
+    }
+    if (!signal?.aborted) onResults([...all]);
+  }
+
+  /** Jump to a hit and flash the matched text so the eye finds it. The
+   *  flash is a transient mark on the highlight layer — it reflows with
+   *  the page like any highlight and never touches the section DOM. */
+  export async function displaySearchResult(cfi: string) {
+    clearSearchFlash();
+    await displayCfi(cfi);
+    if (destroyed) return;
+    layer?.set({
+      key: SEARCH_FLASH_KEY,
+      cfi,
+      style: { kind: "highlight", color: HIGHLIGHT_COLORS.orange },
+    });
+    flashTimer = setTimeout(clearSearchFlash, 3000);
+  }
+
+  function clearSearchFlash() {
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = null;
+    layer?.delete(SEARCH_FLASH_KEY);
+  }
+
+  // ------------------------------------------------------------ footnotes
+
+  let showFootnote = $state(false);
+  let footnoteContent = $state("");
+  // The section the note came from: links inside the popup resolve
+  // against it.
+  let footnoteSourcePath = $state("");
+
+  const EPUB_NS = "http://www.idpf.org/2007/ops";
+  const NOTE_REF_TYPES = ["noteref", "biblioref", "glossref"];
+  const NOTE_REF_ROLES = ["doc-noteref", "doc-biblioref", "doc-glossref"];
+
+  /** What the link declares itself to be (EPUB structural semantics /
+   *  DPUB-ARIA); both the namespaced and the HTML-parsed attribute forms. */
+  function linkKinds(a: HTMLAnchorElement) {
+    const typeAttr =
+      a.getAttributeNS(EPUB_NS, "type") ?? a.getAttribute("epub:type") ?? "";
+    const types = new Set(typeAttr.split(/\s+/));
+    const roles = new Set((a.getAttribute("role") ?? "").split(/\s+/));
+    return {
+      noteref:
+        NOTE_REF_TYPES.some((t) => types.has(t)) ||
+        NOTE_REF_ROLES.some((r) => roles.has(r)),
+      backlink: types.has("backlink") || roles.has("doc-backlink"),
+    };
+  }
+
+  /**
+   * An internal link in a section. A fragment link within the same
+   * section, or one declared as a note reference (endnotes usually live
+   * in their own file), shows its target in a popup — unless the target
+   * is a bare marker (a number, a return arrow), which is a jump. Whole-
+   * file links, other cross-section links and declared backlinks navigate.
+   */
+  function handleLink(detail: {
+    href: string;
+    index: number;
+    anchor: HTMLAnchorElement;
+  }): boolean {
+    const c = core;
+    if (!c || !detail.href.includes("#")) return false;
+    const kinds = linkKinds(detail.anchor);
+    if (kinds.backlink) return false;
+    const target = c.resolve(detail.href);
+    if (!target || typeof target.anchor !== "function") return false;
+    if (target.index !== detail.index && !kinds.noteref) return false;
+    void openFootnote(detail.href, target);
+    return true;
+  }
+
+  async function openFootnote(href: string, target: NavTarget) {
+    const c = core;
+    const doc = c ? await c.pristineDocument(target.index) : null;
+    const anchor = typeof target.anchor === "function" ? target.anchor : null;
+    const el = doc && anchor ? anchor(doc) : null;
+    const element =
+      el && typeof el === "object" && "innerHTML" in el
+        ? (el as Element)
+        : null;
+    if (!element || (element.textContent ?? "").trim().length < 2) {
+      void displayCfi(href);
+      return;
+    }
+    footnoteSourcePath = c?.book?.sections[target.index]?.id ?? "";
+    footnoteContent = element.innerHTML;
+    dismissMenu();
+    showFootnote = true;
+  }
+
   // Weights can arrive after the first render (the page fetches them
   // alongside the book): re-measure the current position on the new ruler.
   $effect(() => {
@@ -1023,6 +1203,13 @@ ${darkOverrides}
     const target = existingHighlight;
     dismissMenu();
     if (target) onshare?.(target);
+  }
+
+  function handleCompanion() {
+    const cfiRange = selectedCfi;
+    const text = selectedText;
+    dismissMenu();
+    if (cfiRange && text) oncompanion?.({ cfiRange, text });
   }
 
   async function handleRemoveHighlight() {
@@ -1303,6 +1490,7 @@ ${darkOverrides}
       onrelocate: handleRelocate,
       onoverlayer: ({ doc, index, overlayer }) =>
         layer?.attach(overlayer, doc, index),
+      onlink: handleLink,
     });
     core = c;
     layer = new AnnotationLayer((cfi) => c.resolve(cfi));
@@ -1332,6 +1520,10 @@ ${darkOverrides}
       ]);
       if (destroyed) return;
       onbook?.(book);
+      // Before the first relocation, so the restore already reports the
+      // chapter it lands in.
+      tocEntries = flattenToc(book, book.toc);
+      ontoc?.(book.toc ?? []);
       const devicePos = saved?.devicePosition;
       if (!initialCfi && typeof devicePos?.percentage === "number") {
         kosyncMarker = {
@@ -1384,6 +1576,7 @@ ${darkOverrides}
     destroyed = true;
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+    if (flashTimer) clearTimeout(flashTimer);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     void saveProgress(false);
     healAbort?.abort();
@@ -1430,15 +1623,29 @@ ${darkOverrides}
       <HighlightMenu
         hasExisting={!!existingHighlight}
         activeRaw={existingHighlight?.color ?? lastHighlightRaw}
-        showAi={false}
+        {showAi}
+        {offline}
         onhighlight={handleHighlight}
         onrestyle={handleRestyle}
         onnote={handleNote}
         onremove={handleRemoveHighlight}
         oncopy={handleCopy}
         onshare={handleShare}
+        oncompanion={handleCompanion}
       />
     </div>
+  {/if}
+
+  {#if showFootnote}
+    <FootnotePopup
+      content={footnoteContent}
+      {darkMode}
+      {fontSize}
+      isRtl={vertical}
+      sourcePath={footnoteSourcePath}
+      onclose={() => (showFootnote = false)}
+      onnavigate={(href) => void displayCfi(href)}
+    />
   {/if}
 
   {#if noteEditorHighlight}

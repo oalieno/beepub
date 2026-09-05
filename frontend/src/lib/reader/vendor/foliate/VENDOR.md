@@ -14,12 +14,15 @@
 | `epub.js` | 1083 | EPUB parser → `book` contract; takes a `{ loadText, loadBlob, getSize, sha1? }` loader |
 | `epubcfi.js` | 349 | CFI parse / compare / fromRange / toRange |
 | `overlayer.js` | 175 | SVG overlay layer for highlights (add / remove / redraw / hitTest) |
+| `search.js` | 130 | In-book text search: `searchMatcher` (Intl.Segmenter / collator matching, excerpts) |
+| `text-walker.js` | 43 | Text-node walker that turns match offsets back into Ranges |
 
 Deliberately not taken: `view.js` (glue; replaced by `../../core.ts`), `reader.js` and `ui/`,
 `mobi.js` / `fb2.js` / `comic-book.js` / `pdf.js` (formats are handled server-side),
 `vendor/zip.js` (local books use the existing `jszip` dependency), `tts.js`, `dict.js`,
-`opds.js`, `progress.js`, `footnotes.js`. `search.js` + `text-walker.js` and
-`fixed-layout.js` may be added later; record them here when they are.
+`opds.js`, `progress.js`, `footnotes.js` (its noteref/backlink heuristics are
+re-implemented in `BookReader.svelte` against the pristine section document).
+`fixed-layout.js` may be added later; record it here when it is.
 
 ## Rules
 
@@ -41,3 +44,4 @@ Deliberately not taken: `view.js` (glue; replaced by `../../core.ts`), `reader.j
 - 2026-09-03 · paginator.js · removed `#onTouchStart/Move/End`, their listener registration and the `#touchState`/`#touchScrolled` fields · gestures are the integration layer's (tap zones, swipe, iOS long-press selection arbitration); `scrollBy()`/`snap()` stay public for the finger-follow page-turn mode.
 - 2026-09-05 · paginator.js · `#beforeRender`: a `gap` given in px is used as-is (the `%` form keeps the evening-out transform) · the settings sheet sets margins in px; a % of the container would need re-pushing on every container resize.
 - 2026-09-05 · paginator.js · host CSS: in `.vertical` the grid swaps axes — gap (inline padding) on the rows, margin (block outer margin) on the columns; `#container`/`#header`/`#footer` placed accordingly (scrolled flow untouched) · upstream keeps margin on the rows in every writing mode (for running heads, which BeePub does not use), so a vertical book's top/bottom gutter was margin + gap/2 and its sides gap/2 only; now "top/bottom" and "left/right" map to one engine value each in both writing modes. CSS only — `columnize`/`expand`/`#scrollToAnchor` untouched; paged-mode scroll math never reads the margin, so which tracks bound the container does not matter to it.
+- 2026-09-05 · search.js, text-walker.js · added, unmodified (upstream at the pinned commit) · in-book search for read-ng (G2 ⑤); `ReaderCore.search()` replaces the `view.js` glue around them.

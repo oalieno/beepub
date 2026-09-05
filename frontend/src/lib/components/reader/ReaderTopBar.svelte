@@ -66,6 +66,7 @@
         class="text-xs shrink-0 {darkMode
           ? 'text-ink-500'
           : 'text-muted-foreground'}"
+        data-testid="reader-percent"
       >
         {percentage}%
       </span>

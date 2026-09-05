@@ -162,7 +162,9 @@
       </button>
     {/if}
 
-    {#if showAi}
+    <!-- Each AI action shows only when its handler is wired: the new
+         reader offers the companion before it has illustrations. -->
+    {#if showAi && onillustrate}
       <div class="w-px h-4 bg-border"></div>
       <button
         class="p-0.5 transition-colors transform {offline
@@ -182,7 +184,9 @@
       >
         <Sparkles size={14} />
       </button>
+    {/if}
 
+    {#if showAi && oncompanion}
       <div class="w-px h-4 bg-border"></div>
       <button
         class="p-0.5 transition-colors transform {offline

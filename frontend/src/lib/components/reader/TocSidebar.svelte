@@ -1,5 +1,9 @@
 <script lang="ts" module>
-  type TocItem = { label: string; href: string; subitems?: TocItem[] };
+  type TocItem = {
+    label: string;
+    href: string;
+    subitems?: TocItem[] | null;
+  };
 </script>
 
 <script lang="ts">

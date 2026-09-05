@@ -98,6 +98,7 @@
   <button
     class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
     title={m.reader_toc()}
+    aria-label={m.reader_toc()}
     onclick={() => ontoc_toggle?.()}
   >
     <List size={18} />
@@ -108,6 +109,7 @@
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
       title={m.reader_search_in_book()}
+      aria-label={m.reader_search_in_book()}
       onclick={() => onsearch?.()}
     >
       <Search size={18} />
@@ -119,6 +121,7 @@
         darkMode,
       )}"
       title={m.reader_highlights()}
+      aria-label={m.reader_highlights()}
       onclick={() => onhighlights?.()}
     >
       <Highlighter size={18} />
@@ -142,6 +145,7 @@
           ? 'opacity-40'
           : btnClass(darkMode)}"
         title={offline ? m.reader_ai_offline() : m.reader_ai_companion()}
+        aria-label={m.reader_ai_companion()}
         aria-disabled={offline || undefined}
         onclick={() => {
           if (offline) {
@@ -167,7 +171,9 @@
           : 'text-muted-foreground'} items-center gap-1.5 min-w-0"
       >
         {#if percentage != null}
-          <span class="shrink-0">{percentage}%</span>
+          <span class="shrink-0" data-testid="reader-percent"
+            >{percentage}%</span
+          >
         {/if}
         {#if percentage != null && chapterLabel}
           <span class="opacity-50 shrink-0">·</span>
@@ -195,6 +201,7 @@
     <button
       class="p-1.5 rounded-md transition-colors {btnClass(darkMode)}"
       title={m.reader_settings_title()}
+      aria-label={m.reader_settings_title()}
       onclick={() => onsettings?.()}
     >
       <Settings size={16} />
