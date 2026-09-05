@@ -365,7 +365,7 @@
     <Button
       variant="ghost"
       size="icon"
-      href={`/books/${bookId}`}
+      href={localEntry ? "/local" : `/books/${bookId}`}
       aria-label="Back"
     >
       <ArrowLeft />

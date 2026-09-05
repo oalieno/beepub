@@ -22,6 +22,7 @@
     Cloud,
     CloudUpload,
     EllipsisVertical,
+    FlaskConical,
     Loader2,
     Share,
     Trash2,
@@ -35,6 +36,7 @@
     ondelete,
     onupload,
     onexport,
+    onopenng,
     uploading = false,
   }: {
     entry: LocalShelfEntry;
@@ -45,6 +47,9 @@
     onupload?: (entry: LocalShelfEntry) => void;
     /** Share the EPUB file via the OS share sheet (native only). */
     onexport?: (entry: LocalShelfEntry) => void;
+    /** reader-ng A/B entry (experimental route; removed when the new
+     *  reader replaces /read). */
+    onopenng?: (entry: LocalShelfEntry) => void;
     uploading?: boolean;
   } = $props();
 
@@ -126,7 +131,7 @@
         <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
           <Loader2 size={14} class="animate-spin" />
         </span>
-      {:else if ondelete || showUpload || onexport}
+      {:else if ondelete || showUpload || onexport || onopenng}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -149,8 +154,14 @@
                 {m.local_export()}
               </DropdownMenu.Item>
             {/if}
+            {#if onopenng}
+              <DropdownMenu.Item onclick={() => onopenng?.(entry)}>
+                <FlaskConical size={14} />
+                {m.book_open_reader_ng()}
+              </DropdownMenu.Item>
+            {/if}
             {#if ondelete}
-              {#if showUpload || onexport}
+              {#if showUpload || onexport || onopenng}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

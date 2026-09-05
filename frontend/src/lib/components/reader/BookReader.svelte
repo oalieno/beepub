@@ -1315,8 +1315,8 @@ ${darkOverrides}
     };
     try {
       const payload = await source.openBook(bookId);
-      const { loaderFromPayload } = await import("$lib/reader/loaders/server");
-      const loader = loaderFromPayload(payload);
+      const { loaderFromPayload } = await import("$lib/reader/loaders");
+      const loader = await loaderFromPayload(payload);
       // The list loads alongside the book; a failure leaves the page
       // readable without marks rather than blocking it.
       const listing = sync.listHighlights(bookId).catch((e: unknown) => {

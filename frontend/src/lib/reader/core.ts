@@ -15,7 +15,7 @@ import "./vendor/foliate/paginator.js";
 import { EPUB } from "./vendor/foliate/epub.js";
 import * as CFI from "./vendor/foliate/epubcfi.js";
 import { Overlayer } from "./vendor/foliate/overlayer.js";
-import type { BookLoader } from "./loaders/server";
+import type { BookLoader } from "./loaders/types";
 
 export type OverlayerInstance = InstanceType<typeof Overlayer>;
 

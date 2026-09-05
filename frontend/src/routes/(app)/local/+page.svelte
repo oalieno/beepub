@@ -494,6 +494,7 @@
               ondelete={handleDelete}
               onupload={canUploadToCloud ? startUpload : undefined}
               onexport={isNative() ? handleExport : undefined}
+              onopenng={(e) => goto(`/books/${e.id}/read-ng`)}
               uploading={uploadingId === entry.id}
             />
           {/each}
