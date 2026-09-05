@@ -27,6 +27,7 @@
     marginX = 32,
     marginY = 32,
     pageTurn = "instant",
+    pageTurnNote = null,
     darkMode = false,
     isImageBook = false,
     showSync = false,
@@ -58,6 +59,8 @@
     marginX?: number;
     marginY?: number;
     pageTurn?: "instant" | "animated" | "follow";
+    /** Why the mode does not apply to the book on screen (vertical text). */
+    pageTurnNote?: string | null;
     darkMode?: boolean;
     isImageBook?: boolean;
     /** Kosync-backed books get manual pull/push controls. */
@@ -361,6 +364,9 @@
               {/each}
             </div>
           </div>
+          {#if pageTurnNote}
+            <p class="-mt-2 text-xs {labelClass}">{pageTurnNote}</p>
+          {/if}
         {/if}
 
         <!-- Theme -->

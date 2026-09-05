@@ -344,6 +344,7 @@
   "reader_page_turn_instant": "瞬間",
   "reader_page_turn_slide": "滑動",
   "reader_page_turn_follow": "跟手",
+  "reader_page_turn_vertical_note": "直排書一律瞬間翻頁：分頁沿垂直軸排列，滑動與跟手會往錯的方向動。",
   "reader_step_down": "減少{setting}",
   "reader_step_up": "增加{setting}",
   "companion_title": "閱讀夥伴",

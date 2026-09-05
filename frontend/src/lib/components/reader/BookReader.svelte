@@ -152,8 +152,10 @@
     /** Section-start percents for scrubber chapter ticks; [] when the
      *  spine is per-page (comics) and ticks would be noise. */
     onticks?: (ticks: number[]) => void;
-    /** Whether the book advances leftward (vertical-rl or rtl). */
-    ondirection?: (rtl: boolean) => void;
+    /** Whether the book advances leftward (its declared page progression,
+     *  else the section on screen), and whether that section is vertical
+     *  text. Fires on every section load. */
+    ondirection?: (rtl: boolean, vertical: boolean) => void;
     /** A newer position bridged from an e-reader: adopted outright when
      *  the book was never read here (autoJumped), otherwise offered. */
     onkosyncposition?: (detail: {
@@ -1422,11 +1424,13 @@ ${darkOverrides}
       // Finger moving left pulls in the page on the right.
       onswipeleft: () => turn("right"),
       onswiperight: () => turn("left"),
+      // Finger-follow only where the section's scroll axis follows the
+      // finger (the core says which; vertical text turns instantly).
       onswipemove: (dx: number, dy: number) => {
-        if (pageTurn === "follow") c.scrollBy(dx, dy);
+        if (c.effectivePageTurn() === "follow") c.scrollBy(dx, dy);
       },
       onswipeend: (vx: number, vy: number) => {
-        if (pageTurn !== "follow") return false;
+        if (c.effectivePageTurn() !== "follow") return false;
         dismissMenu();
         c.snap(vx, vy);
         return true;
@@ -1469,7 +1473,7 @@ ${darkOverrides}
     vertical = !!core?.vertical;
     pushLayout();
     if (core?.vertical) pinVerticalPunctuation(doc);
-    ondirection?.(!!core?.vertical || core?.book?.dir === "rtl");
+    ondirection?.(!!core?.advancesLeftward(), vertical);
     attachGestures(doc);
   }
 

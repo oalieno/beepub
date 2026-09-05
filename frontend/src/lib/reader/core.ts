@@ -251,6 +251,9 @@ export class ReaderCore {
   lastLocation: Relocation | null = null;
   /** Writing mode of the current section, from its computed style. */
   vertical = false;
+  /** The current section's own direction (body dir / CSS direction),
+   *  the same reading the paginator lays its columns out by. */
+  sectionRtl = false;
   pageTurn: PageTurnMode = "instant";
 
   #handlers: ReaderCoreHandlers;
@@ -350,25 +353,63 @@ export class ReaderCore {
     return this.paginator.next();
   }
 
-  /** Physical direction → reading direction. Vertical-rl and rtl books
-   *  advance leftward. */
-  #backwardIsRight(): boolean {
-    return this.vertical || this.paginator.getAttribute("dir") === "rtl";
+  /**
+   * Whether the book advances leftward — the physical→reading direction
+   * every gesture and arrow maps through. The book's declared page
+   * progression rules for all of it (a vertical-rl novel's horizontal
+   * illustration page still turns leftward; the epub.js reader and
+   * upstream foliate do the same); only a book that declares nothing
+   * falls back to the section on screen.
+   */
+  advancesLeftward(): boolean {
+    const dir = this.book?.dir;
+    if (dir === "rtl") return true;
+    if (dir === "ltr") return false;
+    return this.sectionAdvancesLeftward();
+  }
+
+  /** Whether the section on screen is laid out to advance leftward
+   *  (vertical writing, or rtl columns). */
+  sectionAdvancesLeftward(): boolean {
+    return this.vertical || this.sectionRtl;
   }
 
   goLeft() {
-    return this.#backwardIsRight() ? this.next() : this.prev();
+    return this.advancesLeftward() ? this.next() : this.prev();
   }
 
   goRight() {
-    return this.#backwardIsRight() ? this.prev() : this.next();
+    return this.advancesLeftward() ? this.prev() : this.next();
   }
 
   setPageTurn(mode: PageTurnMode) {
     this.pageTurn = mode;
+    this.#applyPageTurn();
+  }
+
+  /**
+   * The page-turn mode that applies to the section on screen. The slide
+   * and finger-follow modes move the paginator's scroll axis, which for
+   * vertical text runs top to bottom (pages are stacked vertically) and
+   * for a section laid out against the book's direction runs the wrong
+   * way — both would slide the page across the finger's motion, so such
+   * sections turn instantly whatever the setting says.
+   */
+  effectivePageTurn(): PageTurnMode {
+    if (this.pageTurn === "instant") return "instant";
+    if (this.vertical) return "instant";
+    if (this.sectionAdvancesLeftward() !== this.advancesLeftward())
+      return "instant";
+    return this.pageTurn;
+  }
+
+  #applyPageTurn() {
     // The paginator animates page turns and snaps only while `animated`
     // is present; finger-follow wants the animated snap on release.
-    this.paginator.toggleAttribute("animated", mode !== "instant");
+    this.paginator.toggleAttribute(
+      "animated",
+      this.effectivePageTurn() !== "instant",
+    );
   }
 
   /** Finger-follow paging passthroughs (see PageTurnMode). */
@@ -505,8 +546,13 @@ export class ReaderCore {
     const root = doc.documentElement;
     root.lang ||= this.#language.canonical ?? "";
     if (!this.#language.isCJK) root.dir ||= this.#language.direction ?? "";
-    const writingMode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
+    const style = doc.defaultView?.getComputedStyle(doc.body);
+    const writingMode = style?.writingMode;
     this.vertical = !!writingMode && writingMode.startsWith("vertical");
+    // Mirrors the paginator's own getDirection() — read here because the
+    // load event precedes the render that stamps the paginator's `dir`.
+    this.sectionRtl = doc.body.dir === "rtl" || style?.direction === "rtl";
+    this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
   }

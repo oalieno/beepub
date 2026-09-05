@@ -344,6 +344,7 @@
   "reader_page_turn_instant": "Instant",
   "reader_page_turn_slide": "Slide",
   "reader_page_turn_follow": "Follow finger",
+  "reader_page_turn_vertical_note": "Vertical books always turn instantly: their pages are stacked top to bottom, so a slide or a finger-follow would move the wrong way.",
   "reader_step_down": "Decrease {setting}",
   "reader_step_up": "Increase {setting}",
   "companion_title": "Reading Companion",

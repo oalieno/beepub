@@ -4,6 +4,11 @@
  * text is selected. Engine-agnostic — attach to a section document. iOS
  * goes through ios-touch-selection.ts, whose state machine arbitrates the
  * same gesture against long-press selection.
+ *
+ * Gesture geometry is measured in screen coordinates: a finger-follow
+ * drag scrolls the frame the events come from, so client coordinates
+ * would shift under a still finger by exactly the distance just scrolled
+ * and feed that back as movement (the page then oscillates).
  */
 
 export const isIOSDevice = (): boolean =>
@@ -54,8 +59,8 @@ export function setupSwipeNavigation(
         return;
       }
       const t = e.touches[0];
-      startX = lastX = t.clientX;
-      startY = lastY = t.clientY;
+      startX = lastX = t.screenX;
+      startY = lastY = t.screenY;
       lastT = e.timeStamp;
       vx = vy = 0;
       swiping = false;
@@ -71,19 +76,19 @@ export function setupSwipeNavigation(
       const t = e.touches[0];
       if (
         !swiping &&
-        (Math.abs(t.clientX - startX) > MOVE_THRESHOLD ||
-          Math.abs(t.clientY - startY) > MOVE_THRESHOLD)
+        (Math.abs(t.screenX - startX) > MOVE_THRESHOLD ||
+          Math.abs(t.screenY - startY) > MOVE_THRESHOLD)
       ) {
         swiping = true;
       }
       if (swiping && callbacks.onswipemove && !hasSelection()) {
         const dt = Math.max(1, e.timeStamp - lastT);
-        const dx = lastX - t.clientX;
-        const dy = lastY - t.clientY;
+        const dx = lastX - t.screenX;
+        const dy = lastY - t.screenY;
         vx = dx / dt;
         vy = dy / dt;
-        lastX = t.clientX;
-        lastY = t.clientY;
+        lastX = t.screenX;
+        lastY = t.screenY;
         lastT = e.timeStamp;
         callbacks.onswipemove(dx, dy);
       }
@@ -96,7 +101,7 @@ export function setupSwipeNavigation(
     (e: TouchEvent) => {
       if (!active) return;
       active = false;
-      const endX = e.changedTouches[0]?.clientX ?? startX;
+      const endX = e.changedTouches[0]?.screenX ?? startX;
       const dx = endX - startX;
       if (!swiping) {
         callbacks.ontap?.();

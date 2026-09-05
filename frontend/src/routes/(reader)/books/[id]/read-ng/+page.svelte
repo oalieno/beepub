@@ -98,6 +98,8 @@
   // them (header, desktop scrubber) and the peek pill's way back.
   let percentage = $state<number | null>(null);
   let isRtl = $state(false);
+  // Vertical text on screen: the slide / finger-follow modes don't apply.
+  let isVertical = $state(false);
   let sectionTicks = $state<number[]>([]);
   let peekReturn = $state<{ percentage: number | null } | null>(null);
   const peekLabel = $derived(
@@ -593,7 +595,10 @@
             );
         }}
         onticks={(t) => (sectionTicks = t)}
-        ondirection={(rtl) => (isRtl = rtl)}
+        ondirection={(rtl, vertical) => {
+          isRtl = rtl;
+          isVertical = vertical;
+        }}
         onkosyncposition={handleKosyncPosition}
         onrestorefallback={(pct) =>
           toastStore.info(
@@ -806,6 +811,7 @@
     {marginX}
     {marginY}
     {pageTurn}
+    pageTurnNote={isVertical ? m.reader_page_turn_vertical_note() : null}
     {darkMode}
     {isImageBook}
     showSync={isKosync}

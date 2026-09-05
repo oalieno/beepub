@@ -194,8 +194,15 @@ export function setupIOSTouchSelection(
   type TouchState = "idle" | "waiting" | "selecting" | "swiping";
   let touchState: TouchState = "idle";
   let lpTimer: ReturnType<typeof setTimeout> | null = null;
+  // Client coordinates address the document (caret lookups); gesture
+  // geometry uses screen coordinates, because a finger-follow drag scrolls
+  // the very frame these events come from — client coordinates would shift
+  // under a still finger by the distance just scrolled and feed it back as
+  // movement (the page oscillates).
   let startX = 0;
   let startY = 0;
+  let startSX = 0;
+  let startSY = 0;
   let anchorNode: Node | null = null;
   let anchorOffset = 0;
   let didDragSelect = false;
@@ -306,8 +313,10 @@ export function setupIOSTouchSelection(
       const t = e.touches[0];
       startX = t.clientX;
       startY = t.clientY;
-      lastX = startX;
-      lastY = startY;
+      startSX = t.screenX;
+      startSY = t.screenY;
+      lastX = startSX;
+      lastY = startSY;
       lastT = e.timeStamp;
       vx = 0;
       vy = 0;
@@ -336,8 +345,8 @@ export function setupIOSTouchSelection(
       const t = e.touches[0];
       if (touchState === "waiting") {
         if (
-          Math.abs(t.clientX - startX) > MOVE_THRESHOLD ||
-          Math.abs(t.clientY - startY) > MOVE_THRESHOLD
+          Math.abs(t.screenX - startSX) > MOVE_THRESHOLD ||
+          Math.abs(t.screenY - startSY) > MOVE_THRESHOLD
         ) {
           if (lpTimer) {
             clearTimeout(lpTimer);
@@ -348,12 +357,12 @@ export function setupIOSTouchSelection(
       }
       if (touchState === "swiping" && callbacks.onswipemove) {
         const dt = Math.max(1, e.timeStamp - lastT);
-        const dx = lastX - t.clientX;
-        const dy = lastY - t.clientY;
+        const dx = lastX - t.screenX;
+        const dy = lastY - t.screenY;
         vx = dx / dt;
         vy = dy / dt;
-        lastX = t.clientX;
-        lastY = t.clientY;
+        lastX = t.screenX;
+        lastY = t.screenY;
         lastT = e.timeStamp;
         callbacks.onswipemove(dx, dy);
       } else if (touchState === "selecting") {
@@ -376,8 +385,8 @@ export function setupIOSTouchSelection(
         clearTimeout(lpTimer);
         lpTimer = null;
       }
-      const endX = e.changedTouches[0]?.clientX ?? startX;
-      const dx = endX - startX;
+      const endX = e.changedTouches[0]?.screenX ?? startSX;
+      const dx = endX - startSX;
 
       if (touchState === "selecting") {
         // WKWebView can delay the synthesized click well past touchend
