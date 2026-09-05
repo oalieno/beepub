@@ -94,6 +94,14 @@ export const VERTICAL_MIXED_BOOK: Fixture = {
   readyText: "卷一其1",
 };
 
+/** The same book with no page-progression-direction declared: the
+ *  direction has to be inferred from its vertical text. */
+export const VERTICAL_MIXED_UNDECLARED_BOOK: Fixture = {
+  file: "e2e-vertical-mixed-undeclared-book.epub",
+  title: "未宣告直書插畫卷",
+  readyText: "卷一其1",
+};
+
 /** Nested TOC with fragment entries, a same-file footnote, a cross-file
  *  note reference, a plain cross-file link, one unique search token
  *  ("quillstorm") and one frequent one ("lantern"). */

@@ -4,6 +4,7 @@ import {
   TOUCH_BOOK,
   VERTICAL_LONG_BOOK,
   VERTICAL_MIXED_BOOK,
+  VERTICAL_MIXED_UNDECLARED_BOOK,
   iphone,
   location,
   openBook,
@@ -161,4 +162,57 @@ test("page turns follow the book's direction across a horizontal plate", async (
   await expect.poll(index).toBe(1);
   await page.evaluate(() => window.__beepubReaderNG.core.goRight());
   await expect.poll(index).toBe(0);
+});
+
+test("an undeclared book infers its direction from its vertical text and keeps it across the plate", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(
+    page.request,
+    VERTICAL_MIXED_UNDECLARED_BOOK,
+  );
+  await openBook(
+    page,
+    bookId,
+    { font: "sans" },
+    VERTICAL_MIXED_UNDECLARED_BOOK,
+  );
+  const cdp = await context.newCDPSession(page);
+  const index = async () => (await location(page)).index;
+
+  // Chapter one (vertical) has been on screen: the book reads leftward
+  // for the rest of the session, plate included.
+  await page.evaluate(() => window.__beepubReaderNG.core.goTo(1));
+  await expect.poll(index).toBe(1);
+  await page.waitForTimeout(300);
+  await swipe(cdp, { x: 80, y: 400 }, { x: 300, y: 400 });
+  await expect.poll(index).toBe(2);
+  await swipe(cdp, { x: 300, y: 400 }, { x: 80, y: 400 });
+  await expect.poll(index).toBe(1);
+  await swipe(cdp, { x: 80, y: 400 }, { x: 300, y: 400 });
+  await expect.poll(index).toBe(2);
+});
+
+test("an undeclared book opened on its plate reads leftward from the first turn", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(
+    page.request,
+    VERTICAL_MIXED_UNDECLARED_BOOK,
+  );
+  // Straight onto the plate: no vertical section has rendered yet; the
+  // stylesheet scan at load is what knows the book is vertical.
+  await openBook(
+    page,
+    bookId,
+    { font: "sans", cfi: "epubcfi(/6/4!/4/2)" },
+    { ...VERTICAL_MIXED_UNDECLARED_BOOK, readyText: "卷二插畫" },
+  );
+  const cdp = await context.newCDPSession(page);
+  const index = async () => (await location(page)).index;
+  expect(await index()).toBe(1);
+  await swipe(cdp, { x: 80, y: 400 }, { x: 300, y: 400 });
+  await expect.poll(index).toBe(2);
 });

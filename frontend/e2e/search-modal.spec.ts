@@ -34,9 +34,14 @@ test("a stale search response cannot flash the empty state", async ({
   });
 
   await page.goto("/");
-  await page.keyboard.press("ControlOrMeta+k");
+  // The shortcut only works once the page has hydrated, which the first
+  // load after a stack rebuild can take a moment to do: keep pressing
+  // until the modal answers.
   const input = page.getByRole("textbox");
-  await expect(input).toBeVisible();
+  await expect(async () => {
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(input).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
 
   // Watch for any appearance of the empty state inside the modal's
   // results panel from now on (the string also exists in page content
