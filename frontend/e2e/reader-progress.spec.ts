@@ -1,38 +1,23 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
+import { CHAPTERS_BOOK, resetProgress, seedFixture } from "./ng-helpers";
 
 // Two chapters with a ~15:1 text-size ratio: chapter 1 owns ~94% of the
 // weight, so weight-interpolated progress and scrubber seeks have a shape
 // uniform section counting could not fake.
-const CHAPTERS_FIXTURE = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "fixtures",
-  "e2e-vertical-chapters-book.epub",
-);
 
 test.use({ storageState: ADMIN_STATE });
-// Text extraction is queued behind each earlier upload's metadata fetch
-// (seconds each, against external sources), so after the suite's burst
-// of uploads a fresh book's weights can take a minute or more.
+// A first-ever seed waits for text extraction, which queues behind the
+// worker's backfill over the (persistent) e2e library.
 test.setTimeout(180_000);
 
+/** Seed the chapters fixture once (by title — the e2e database persists
+ *  across runs, and every extra copy feeds the worker's backfill queue)
+ *  and put its saved position back on the first page. */
 async function uploadChaptersBook(page: Page): Promise<{ id: string }> {
-  const libraries = await (await page.request.get("/api/libraries")).json();
-  const uploaded = await page.request.post("/api/books", {
-    multipart: {
-      file: {
-        name: "progress-chapters.epub",
-        mimeType: "application/epub+zip",
-        buffer: fs.readFileSync(CHAPTERS_FIXTURE),
-      },
-      library_id: libraries[0].id,
-    },
-  });
-  expect(uploaded.ok()).toBeTruthy();
-  return uploaded.json();
+  const id = await seedFixture(page.request, CHAPTERS_BOOK);
+  await resetProgress(page.request, id);
+  return { id };
 }
 
 /** The worker extracts text shortly after upload; weights ride the book

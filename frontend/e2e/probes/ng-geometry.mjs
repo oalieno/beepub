@@ -37,15 +37,16 @@ const BOOKS = {
   },
 };
 
-// Each step is one geometry input. Sliders in the panel are the product
-// path for font/line-height (setStyles); layout params go through
-// core.setLayout, the same call BookReader makes.
+// Each step is one geometry input. Font/line-height go through the
+// settings sheet (the product path, setStyles); layout params go through
+// core.setLayout, the same call BookReader makes; the viewport step is
+// the container-size change hiding or pinning a bar would make.
 const STEPS = [
-  { name: "gap 7→12%", kind: "layout", layout: { gap: 12 } },
+  { name: "gap 24→64px", kind: "layout", layout: { gap: 64 } },
   { name: "margin 48→16px", kind: "layout", layout: { margin: 16 } },
-  { name: "font 18→24px", kind: "slider", id: "#ng-size", value: "24" },
-  { name: "line-height 1.8→2.4", kind: "slider", id: "#ng-lh", value: "2.4" },
-  { name: "header off (container +48px)", kind: "switch", id: "#ng-chrome" },
+  { name: "font 18→20px", kind: "sheet", button: "Increase font size" },
+  { name: "line-height 1.8→2.2", kind: "sheet", button: "Relaxed" },
+  { name: "viewport −48px", kind: "viewport", delta: -48 },
 ];
 
 const PAGES_IN = 3;
@@ -121,10 +122,16 @@ async function probeBook(bookId, spec, token, device) {
           (l) => window.__beepubReaderNG.core.setLayout(l),
           step.layout,
         );
-      } else if (step.kind === "slider") {
-        await page.locator(step.id).fill(step.value);
-      } else if (step.kind === "switch") {
-        await page.locator(step.id).click();
+      } else if (step.kind === "sheet") {
+        await page.getByRole("button", { name: "Reader settings" }).click();
+        await page.getByRole("button", { name: step.button }).click();
+        await page.keyboard.press("Escape");
+      } else if (step.kind === "viewport") {
+        const size = page.viewportSize();
+        await page.setViewportSize({
+          width: size.width,
+          height: size.height + step.delta,
+        });
       }
       const watch = await settle(page);
       const after = await snapshot(page);
@@ -158,9 +165,8 @@ async function openNg(bookId, spec, token, device) {
   const params = new URLSearchParams({
     size: "18",
     lh: "1.8",
-    gap: "7",
-    margin: "48",
-    cols: "1",
+    mx: "24",
+    my: "48",
   });
   if (spec.font) params.set("font", spec.font);
   await page.goto(`/books/${bookId}/read-ng?${params}`);

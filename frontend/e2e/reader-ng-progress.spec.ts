@@ -166,7 +166,7 @@ test("percentage follows the weights and the scrubber seeks on their scale", asy
   const chapter2Start = (before / total) * 100;
   expect(chapter2Start).toBeGreaterThan(80); // the fixture's 15:1 shape
 
-  await page.goto(`/books/${bookId}/read-ng?panel=0`);
+  await page.goto(`/books/${bookId}/read-ng`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,

@@ -27,12 +27,12 @@ const STEPS = [
       ),
   },
   {
-    name: "gap 12%",
+    name: "gap 64px",
     run: (page) =>
-      page.evaluate(() => window.__beepubReaderNG.core.setLayout({ gap: 12 })),
+      page.evaluate(() => window.__beepubReaderNG.core.setLayout({ gap: 64 })),
   },
-  // Hide the header by DOM, not the panel switch: the switch's thumb
-  // animation would add frames that have nothing to do with the reader.
+  // Hide the header by DOM: a control's own animation would add frames
+  // that have nothing to do with the reader.
   {
     name: "header off (display:none)",
     run: (page) =>
@@ -67,9 +67,8 @@ const page = await context.newPage();
 const params = new URLSearchParams({
   size: "18",
   lh: "1.8",
-  gap: "7",
-  margin: "48",
-  cols: "1",
+  mx: "24",
+  my: "48",
 });
 if (spec.font) params.set("font", spec.font);
 await page.goto(`/books/${bookId}/read-ng?${params}`);
@@ -82,11 +81,8 @@ for (let i = 0; i < 3; i++) {
   await page.evaluate(() => window.__beepubReaderNG.core.next());
   await page.waitForTimeout(250);
 }
-// Close the panel: its readout repaints on every relocate. The header's
-// §/% text still changes, so counts below are an upper bound for the
-// reader area.
-await page.locator('[aria-label="Close panel"]').click();
-await page.waitForTimeout(300);
+// The header's % text still changes on relocate, so counts below are an
+// upper bound for the reader area.
 const cdp = await context.newCDPSession(page);
 for (const step of STEPS) {
   const frames = [];

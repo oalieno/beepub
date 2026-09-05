@@ -67,6 +67,13 @@ export const VPUNCT_BOOK: Fixture = {
   readyText: "免費服務已終止",
 };
 
+/** One long vertical-rl chapter: many pages to page through. */
+export const VERTICAL_LONG_BOOK: Fixture = {
+  file: "e2e-vertical-long-book.epub",
+  title: "直書均勻格線",
+  readyText: "長卷話說天下大勢",
+};
+
 /** Two chapters with a ~15:1 text-size ratio: the weight scale has a
  *  shape uniform section counting could not fake. */
 export const CHAPTERS_BOOK: Fixture = {
@@ -135,14 +142,13 @@ export async function openBook(
   fixture: Fixture = TOUCH_BOOK,
 ) {
   const { restore, ...query } = overrides;
-  // panel=0: the geometry instrument would sit over the lower right.
+  // Session-only overrides of the reader settings (px gutters: mx is
+  // left/right, my top/bottom).
   const params = new URLSearchParams({
     size: "18",
     lh: "1.8",
-    gap: "7",
-    margin: "48",
-    cols: "1",
-    panel: "0",
+    mx: "24",
+    my: "48",
     ...query,
   });
   await page.goto(`/books/${bookId}/read-ng?${params}`);

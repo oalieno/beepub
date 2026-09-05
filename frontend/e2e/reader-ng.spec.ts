@@ -1,8 +1,11 @@
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
+import {
+  TOUCH_BOOK,
+  VERTICAL_LONG_BOOK,
+  seedFixture,
+  type Fixture,
+} from "./ng-helpers";
 
 /**
  * reader-ng G0 kill point, promoted from e2e/probes/ng-geometry.mjs.
@@ -18,26 +21,31 @@ import { ADMIN_STATE } from "./helpers";
  * paints; that stays a probe — CDP-only and slow.)
  */
 
-const fixture = (name: string) =>
-  path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", name);
-
-const BOOKS = [
+const BOOKS: { name: string; fixture: Fixture; font: string }[] = [
   {
     name: "vertical-rl",
-    file: fixture("e2e-vertical-long-book.epub"),
+    fixture: VERTICAL_LONG_BOOK,
     // Noto Sans CJK TC is the CJK face the e2e hosts have; the serif stack
     // would fall back to glyphs with a zero vertical advance.
     font: "sans",
   },
-  { name: "horizontal", file: fixture("e2e-touch-book.epub"), font: "serif" },
+  { name: "horizontal", fixture: TOUCH_BOOK, font: "serif" },
 ];
 
-const STEPS = [
-  { name: "gap 7→12%", layout: { gap: 12 } },
+// One reflow per step. Layout params go straight to the engine (the
+// same call BookReader makes); font size and line height go through the
+// settings sheet, the product path; the last step shrinks the viewport —
+// the container-size change hiding or pinning a bar would make.
+const STEPS: (
+  | { name: string; layout: Record<string, number> }
+  | { name: string; sheet: string }
+  | { name: string; viewport: number }
+)[] = [
+  { name: "gap 24→64px", layout: { gap: 64 } },
   { name: "margin 48→16px", layout: { margin: 16 } },
-  { name: "font 18→24px", slider: "#ng-size", value: "24" },
-  { name: "line-height 1.8→2.4", slider: "#ng-lh", value: "2.4" },
-  { name: "header off (container +48px)", switch: "#ng-chrome" },
+  { name: "font 18→20px", sheet: "Increase font size" },
+  { name: "line-height 1.8→2.2", sheet: "Relaxed" },
+  { name: "viewport −48px", viewport: -48 },
 ];
 
 test.use({ storageState: ADMIN_STATE });
@@ -50,29 +58,12 @@ declare global {
   }
 }
 
-async function seed(page: Page, file: string, name: string) {
-  const libraries = await (await page.request.get("/api/libraries")).json();
-  const uploaded = await page.request.post("/api/books", {
-    multipart: {
-      file: {
-        name: `${name}.epub`,
-        mimeType: "application/epub+zip",
-        buffer: fs.readFileSync(file),
-      },
-      library_id: libraries[0].id,
-    },
-  });
-  expect(uploaded.ok()).toBeTruthy();
-  return (await uploaded.json()).id as string;
-}
-
 async function openNg(page: Page, bookId: string, font: string) {
   const params = new URLSearchParams({
     size: "18",
     lh: "1.8",
-    gap: "7",
-    margin: "48",
-    cols: "1",
+    mx: "24",
+    my: "48",
     font,
   });
   await page.goto(`/books/${bookId}/read-ng?${params}`);
@@ -213,7 +204,7 @@ for (const book of BOOKS) {
   test(`reader-ng keeps the anchor and page grid through layout changes (${book.name})`, async ({
     page,
   }) => {
-    const bookId = await seed(page, book.file, `ng-${book.name}`);
+    const bookId = await seedFixture(page.request, book.fixture);
     await openNg(page, bookId, book.font);
 
     const baseline = await snapshot(page);
@@ -227,10 +218,16 @@ for (const book of BOOKS) {
           (l) => window.__beepubReaderNG.core.setLayout(l),
           step.layout,
         );
-      } else if ("slider" in step) {
-        await page.locator(step.slider).fill(step.value);
+      } else if ("sheet" in step) {
+        await page.getByRole("button", { name: "Reader settings" }).click();
+        await page.getByRole("button", { name: step.sheet }).click();
+        await page.keyboard.press("Escape");
       } else {
-        await page.locator(step.switch).click();
+        const size = page.viewportSize()!;
+        await page.setViewportSize({
+          width: size.width,
+          height: size.height + step.viewport,
+        });
       }
       const sizes = await settle(page);
       const after = await snapshot(page);
