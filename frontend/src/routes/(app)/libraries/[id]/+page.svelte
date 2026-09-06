@@ -323,7 +323,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept=".epub"
+        accept=".epub,.txt"
         multiple
         class="hidden"
         onchange={(e) => handleUpload(e.currentTarget.files)}

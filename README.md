@@ -4,12 +4,12 @@
   <img src="frontend/static/logo.png" alt="BeePub" width="160">
 </p>
 
-BeePub is a self-hosted ebook library and reader for EPUB collections. It can
-serve as a modern alternative to calibre-web, while also working as a standalone
-library for users who do not run Calibre. BeePub combines library management, a
-web reader, an iOS native app built with Capacitor, reading progress,
-highlights, tags, metadata tools, and optional AI-assisted features in one
-private deployment.
+BeePub is a self-hosted ebook library and reader for EPUB collections (TXT
+novels are converted to EPUB on upload). It can serve as a modern alternative to
+calibre-web, while also working as a standalone library for users who do not run
+Calibre. BeePub combines library management, a web reader, an iOS native app
+built with Capacitor, reading progress, highlights, tags, metadata tools, and
+optional AI-assisted features in one private deployment.
 
 **[Try the live demo](https://demo.beepub.app)** — one-click sign-in from the
 login page (`demo` / `demodemo`). Includes vertical (直排) Chinese classics to

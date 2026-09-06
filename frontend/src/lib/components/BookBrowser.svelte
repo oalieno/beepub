@@ -475,7 +475,11 @@
         class="inline-flex items-center gap-1 h-8 text-xs px-3 rounded-full bg-primary/15 text-primary font-medium hover:bg-primary/25 transition-colors"
         onclick={() => clearFilter("format")}
       >
-        {filterFormat === "physical" ? m.physical_badge() : filterFormat}
+        {filterFormat === "physical"
+          ? m.physical_badge()
+          : filterFormat === "txt"
+            ? m.txt_badge()
+            : filterFormat}
         <X size={12} />
       </button>
     {/if}

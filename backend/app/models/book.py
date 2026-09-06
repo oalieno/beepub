@@ -46,6 +46,10 @@ class Book(Base, TimestampMixin):
     cover_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # KOReader's kosync document digest of file_path (services/partial_md5).
     partial_md5: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Books uploaded in another format (format="txt" so far) are converted
+    # to an EPUB at ingest — that EPUB is file_path, so every consumer stays
+    # EPUB-only. The uploaded source is kept here for download.
+    original_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # EPUB original metadata
     epub_title: Mapped[str | None] = mapped_column(String(500), nullable=True)

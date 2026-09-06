@@ -1,0 +1,131 @@
+{
+  "_comment": "Shared vectors for TXT chapter splitting. The Python implementation is app/services/txt2epub.py (split_sections); a client-side TypeScript port for the serverless app must pass the same cases. Each case: title_hint, text, expect {title, author, sections: [{title, level, paragraphs}]}. level 1 = part/volume, 2 = chapter; paragraphs = count of non-empty lines under the heading.",
+  "cases": [
+    {
+      "name": "flat chapters, full-width indents",
+      "title_hint": "潮汐鐘樓手記",
+      "text": "第一章 退潮\n　　退潮之後，沙灘上留著昨夜的腳印。\n　　她把鐘樓的鑰匙放回口袋。\n\n第二章 鐘擺\n　　鐘擺停在三點十七分。\n",
+      "expect": {
+        "title": "潮汐鐘樓手記",
+        "author": null,
+        "sections": [
+          { "title": "第一章 退潮", "level": 2, "paragraphs": 2 },
+          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "parts nest chapters; a part with no text of its own is a TOC node",
+      "title_hint": "x",
+      "text": "第一卷 潮聲\n第一章 退潮\n退潮。\n第二章 鐘擺\n鐘擺。\n第二卷 迴聲\n卷首語。\n第三章 信\n信。\n",
+      "expect": {
+        "title": "x",
+        "author": null,
+        "sections": [
+          { "title": "第一卷 潮聲", "level": 1, "paragraphs": 0 },
+          { "title": "第一章 退潮", "level": 2, "paragraphs": 1 },
+          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 },
+          { "title": "第二卷 迴聲", "level": 1, "paragraphs": 1 },
+          { "title": "第三章 信", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "header lines become metadata; a leading TOC listing is dropped",
+      "title_hint": "download (1)",
+      "text": "《潮汐鐘樓手記》\n作者：林未晞\n\n目錄\n第一卷 潮聲\n第一章 退潮\n第二章 鐘擺\n\n第一卷 潮聲\n第一章 退潮\n退潮。\n第二章 鐘擺\n鐘擺。\n",
+      "expect": {
+        "title": "潮汐鐘樓手記",
+        "author": "林未晞",
+        "sections": [
+          { "title": "第一卷 潮聲", "level": 1, "paragraphs": 0 },
+          { "title": "第一章 退潮", "level": 2, "paragraphs": 1 },
+          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "書名/作者 colon lines and text before the first heading",
+      "title_hint": "x",
+      "text": "书名：海雾\n作者:  阿蕪\n内容简介\n一个关于海雾的故事。\n第1章 起雾\n雾来了。\n",
+      "expect": {
+        "title": "海雾",
+        "author": "阿蕪",
+        "sections": [
+          { "title": "海雾", "level": 2, "paragraphs": 1 },
+          { "title": "第1章 起雾", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "bracketed numbers, no separator, special headings",
+      "title_hint": "x",
+      "text": "楔子\n很久以前。\n【第一章】潮聲\n潮。\n第二章鐘擺\n鐘。\n番外篇 燈塔\n燈。\n後記\n記。\n",
+      "expect": {
+        "title": "x",
+        "author": null,
+        "sections": [
+          { "title": "楔子", "level": 2, "paragraphs": 1 },
+          { "title": "【第一章】潮聲", "level": 2, "paragraphs": 1 },
+          { "title": "第二章鐘擺", "level": 2, "paragraphs": 1 },
+          { "title": "番外篇 燈塔", "level": 2, "paragraphs": 1 },
+          { "title": "後記", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "a body line that starts like a heading but carries a sentence is text",
+      "title_hint": "x",
+      "text": "第一章 開始\n第三章的開頭寫道，他來了。\n第二章，她說。\n第二章 結束\n完。\n",
+      "expect": {
+        "title": "x",
+        "author": null,
+        "sections": [
+          { "title": "第一章 開始", "level": 2, "paragraphs": 2 },
+          { "title": "第二章 結束", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "只有「集」的檔案：集就是章",
+      "title_hint": "x",
+      "text": "第一集 出航\n航。\n第二集 靠岸\n岸。\n",
+      "expect": {
+        "title": "x",
+        "author": null,
+        "sections": [
+          { "title": "第一集 出航", "level": 2, "paragraphs": 1 },
+          { "title": "第二集 靠岸", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "english parts and chapters",
+      "title_hint": "Harbour Ledger",
+      "text": "Part One: The Ledger\nChapter 1\nThe cook kept a ledger.\nCHAPTER II — Frost\nIt froze.\nEpilogue\nDone.\n",
+      "expect": {
+        "title": "Harbour Ledger",
+        "author": null,
+        "sections": [
+          { "title": "Part One: The Ledger", "level": 1, "paragraphs": 0 },
+          { "title": "Chapter 1", "level": 2, "paragraphs": 1 },
+          { "title": "CHAPTER II — Frost", "level": 2, "paragraphs": 1 },
+          { "title": "Epilogue", "level": 2, "paragraphs": 1 }
+        ]
+      }
+    },
+    {
+      "name": "windows line endings and a trailing bare heading keep their titles",
+      "title_hint": "x",
+      "text": "第一章 一\r\n一。\r\n第二章 未完\r\n",
+      "expect": {
+        "title": "x",
+        "author": null,
+        "sections": [
+          { "title": "第一章 一", "level": 2, "paragraphs": 1 },
+          { "title": "第二章 未完", "level": 2, "paragraphs": 0 }
+        ]
+      }
+    }
+  ]
+}

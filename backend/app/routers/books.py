@@ -5,6 +5,7 @@ import re
 import uuid
 import zipfile
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Annotated
 from zoneinfo import ZoneInfo
 
@@ -79,6 +80,7 @@ from app.services.storage import (
     save_cover_bytes,
     save_upload_file,
 )
+from app.services.txt2epub import EmptyTextError, convert_txt_to_epub
 from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_book_metadata, fetch_metadata_source
 from app.tasks.text_extract import extract_book_text
@@ -206,6 +208,72 @@ async def _ingest_epub(
     return book
 
 
+async def _ingest_txt(
+    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
+) -> Book:
+    """Save one TXT, convert it to the EPUB the rest of the app reads, and
+    stage its Book row (no commit).
+
+    The EPUB is the book's file_path — reader, text extraction, digest,
+    OPDS and app downloads never see the TXT. The source stays at
+    original_path for download.
+    """
+    book_id = uuid.uuid4()
+    original_path = get_book_path(book_id, "book.txt")
+    file_path = get_book_path(book_id, "book.epub")
+    title_hint = Path(file.filename or "").stem
+
+    await save_upload_file(file, original_path)
+    try:
+        await asyncio.to_thread(
+            convert_txt_to_epub, original_path, file_path, title_hint
+        )
+        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
+    except EmptyTextError:
+        delete_file(original_path)
+        delete_file(file_path)
+        raise HTTPException(status_code=400, detail="The TXT file has no text")
+    except Exception:
+        delete_file(original_path)
+        delete_file(file_path)
+        raise HTTPException(status_code=400, detail="Invalid TXT file")
+
+    book = Book(
+        id=book_id,
+        file_path=file_path,
+        file_size=os.path.getsize(file_path),
+        format="txt",
+        original_path=original_path,
+        cover_path=None,
+        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
+        added_by=user.id,
+        **metadata,
+    )
+    db.add(book)
+    await db.flush()
+    if lib_id:
+        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
+    return book
+
+
+UPLOAD_SUFFIXES = (".epub", ".txt")
+UNSUPPORTED_UPLOAD = "Only EPUB or TXT files are supported"
+
+
+def _upload_suffix(file: UploadFile) -> str | None:
+    """The upload's extension when it is one we ingest, else None."""
+    suffix = Path(file.filename or "").suffix.lower()
+    return suffix if suffix in UPLOAD_SUFFIXES else None
+
+
+async def _ingest_upload(
+    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
+) -> Book:
+    if _upload_suffix(file) == ".txt":
+        return await _ingest_txt(file, user, lib_id, db)
+    return await _ingest_epub(file, user, lib_id, db)
+
+
 @router.post("", response_model=BookOut, status_code=status.HTTP_201_CREATED)
 async def upload_book(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -214,11 +282,11 @@ async def upload_book(
     library_id: str = Form(...),
 ):
     _require_upload_permission(current_user)
-    if not file.filename or not file.filename.lower().endswith(".epub"):
-        raise HTTPException(status_code=400, detail="Only EPUB files are supported")
+    if _upload_suffix(file) is None:
+        raise HTTPException(status_code=400, detail=UNSUPPORTED_UPLOAD)
 
     lib_id = await _validate_upload_library(library_id, current_user, db)
-    book = await _ingest_epub(file, current_user, lib_id, db)
+    book = await _ingest_upload(file, current_user, lib_id, db)
 
     await db.commit()
     await db.refresh(book)
@@ -240,9 +308,9 @@ async def upload_books_bulk(
 
     books = []
     for file in files:
-        if not file.filename or not file.filename.lower().endswith(".epub"):
+        if _upload_suffix(file) is None:
             continue
-        books.append(await _ingest_epub(file, current_user, lib_id, db))
+        books.append(await _ingest_upload(file, current_user, lib_id, db))
 
     await db.commit()
     for book in books:
@@ -1468,6 +1536,8 @@ async def delete_book(
     paths = []
     if book.calibre_id is None and book.file_path:
         paths.append(book.file_path)
+    if book.original_path:
+        paths.append(book.original_path)
     if book.cover_path:
         paths.append(book.cover_path)
     work_id = book.work_id
@@ -1503,6 +1573,33 @@ async def get_book_file(
         book.file_path,
         media_type="application/epub+zip",
         filename=filename,
+    )
+
+
+@router.get("/{book_id}/original")
+async def get_book_original(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """The file as it was uploaded, for books converted at ingest
+    (format="txt"). /file stays the EPUB everything else reads."""
+    if current_user.role != UserRole.admin and not current_user.can_download:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Download permission required",
+        )
+    book = await _get_book_with_access(book_id, current_user, db)
+    if not book.original_path or not os.path.exists(book.original_path):
+        raise HTTPException(status_code=404, detail="Original file not found")
+    suffix = Path(book.original_path).suffix
+    title = book.title or book.epub_title or "book"
+    # octet-stream on purpose: a text/* type would get a charset=utf-8
+    # appended, and the source may be Big5 or GBK.
+    return FileResponse(
+        book.original_path,
+        media_type="application/octet-stream",
+        filename=f"{title}{suffix}",
     )
 
 

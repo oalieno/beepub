@@ -41,6 +41,8 @@ export interface Fixture {
   title: string;
   /** Text the first rendered section must contain before a test starts. */
   readyText: string;
+  /** Upload content type; EPUB unless the fixture says otherwise. */
+  mimeType?: string;
 }
 
 export const TOUCH_BOOK: Fixture = {
@@ -130,6 +132,17 @@ export const PLATES_BOOK: Fixture = {
   readyText: "frost ledger kept by a lighthouse cook",
 };
 
+/** A plain-text novel the way they come off the net: 《title》 and 作者
+ *  header lines, a TOC listing up top, two parts (卷) of chapters (章)
+ *  and a 番外, paragraphs indented with full-width spaces. Uploaded as
+ *  TXT; the server converts it to an EPUB. */
+export const TXT_BOOK: Fixture = {
+  file: "e2e-tide-clocktower.txt",
+  title: "潮汐鐘樓手記",
+  readyText: "退潮之後",
+  mimeType: "text/plain",
+};
+
 /** Upload the fixture into the E2E library once; return its book id.
  *  Seeding by title keeps re-runs from piling copies into the persistent
  *  e2e database (which skews the search ranking other specs rely on). */
@@ -153,7 +166,7 @@ export async function seedFixture(
     multipart: {
       file: {
         name: fixture.file,
-        mimeType: "application/epub+zip",
+        mimeType: fixture.mimeType ?? "application/epub+zip",
         buffer: fs.readFileSync(path.join(FIXTURES, fixture.file)),
       },
       library_id: library.id,
