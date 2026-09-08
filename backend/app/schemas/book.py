@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -284,3 +285,9 @@ class ExternalMetadataOut(BaseModel):
     fetched_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ZhConversionRequest(BaseModel):
+    """OpenCC configuration for the Simplified-to-Traditional rebuild."""
+
+    mode: Literal["s2tw", "s2twp"] = "s2tw"

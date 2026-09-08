@@ -206,6 +206,7 @@ dependencies = [
     { name = "httpx" },
     { name = "lxml" },
     { name = "mcp" },
+    { name = "opencc" },
     { name = "pgvector" },
     { name = "pillow" },
     { name = "pydantic", extra = ["email"] },
@@ -240,6 +241,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27.2" },
     { name = "lxml", specifier = ">=4.9.0" },
     { name = "mcp", specifier = ">=1.28.1" },
+    { name = "opencc", specifier = ">=1.4.2" },
     { name = "pgvector", specifier = ">=0.3.6" },
     { name = "pillow", specifier = ">=10.4.0" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.9.2" },
@@ -1124,6 +1126,29 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/07/12/8160bea39da3335737b10308df4f484235fd297f556745f13092aa039d3b/numpy-2.4.3-cp314-cp314t-win32.whl", hash = "sha256:5e10da9e93247e554bb1d22f8edc51847ddd7dde52d85ce31024c1b4312bfba0", size = 6154547 },
     { url = "https://files.pythonhosted.org/packages/42/f3/76534f61f80d74cc9cdf2e570d3d4eeb92c2280a27c39b0aaf471eda7b48/numpy-2.4.3-cp314-cp314t-win_amd64.whl", hash = "sha256:45f003dbdffb997a03da2d1d0cb41fbd24a87507fb41605c0420a3db5bd4667b", size = 12633645 },
     { url = "https://files.pythonhosted.org/packages/1f/b6/7c0d4334c15983cec7f92a69e8ce9b1e6f31857e5ee3a413ac424e6bd63d/numpy-2.4.3-cp314-cp314t-win_arm64.whl", hash = "sha256:4d382735cecd7bcf090172489a525cd7d4087bc331f7df9f60ddc9a296cf208e", size = 10565454 },
+]
+
+[[package]]
+name = "opencc"
+version = "1.4.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e0/12/09e62f051af1de7ca84be1d69154bd0514416ef72237e2081584cc268bc9/opencc-1.4.2.tar.gz", hash = "sha256:47977905f131d7d9cfcec29fba5d841154907e1da73103105a4a68744e0f4f1a", size = 11637673 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/ad/9926e816dd654239905c4bc45997752dbe2d3d113a75cf77ba8ed866271c/opencc-1.4.2-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:052177a890ac2fdd960402d5a482163c965ec68ba7511271c19db327a5606616", size = 2149929 },
+    { url = "https://files.pythonhosted.org/packages/f3/44/03bf0db03120e10f18fa1f3453593d5540b6c4250e5dc15b9551f8ffe976/opencc-1.4.2-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:2992898ccfb14aaa9feef5a38e08c4c20a79f41482626fc5a6e8ee87b23016e2", size = 2051557 },
+    { url = "https://files.pythonhosted.org/packages/58/c2/6d6de602d5800b897a92eb6aad9c901eed562912dac3a0d099a06572710d/opencc-1.4.2-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:eb5df4bd9bd766aaa533d961123b519b51d6b678437b89650e8ffe9564c682c7", size = 2408615 },
+    { url = "https://files.pythonhosted.org/packages/75/8f/e8b80f225440a045c08dfc9bf251c8cb1019e0935d104c56715afff468ad/opencc-1.4.2-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:d90a8b76ea5d1f425a4f2eb16114cb33abd29a73c6a4ec367361c61b1c059a10", size = 2446507 },
+    { url = "https://files.pythonhosted.org/packages/43/83/ed548fd759ee4dfdd88a1f57f6877b5fd421f582e66bdf01979771d6cbba/opencc-1.4.2-cp312-cp312-win_amd64.whl", hash = "sha256:7025dc276b2a60b30ed3aefb99f1ceb8616076fd3eb3310c0f8f2046e79e76b1", size = 2890587 },
+    { url = "https://files.pythonhosted.org/packages/34/b9/5e31c48d97a4738aa5c6ceb3f7c27693f74354d1603103eaad543b7660b8/opencc-1.4.2-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:0e444f4bf4aff9f7396289652ea80c456c7b0237a8431cd0aece350d314e8816", size = 2149919 },
+    { url = "https://files.pythonhosted.org/packages/8e/88/9e8cd33abb5ef4d57391088a7a74d0f7b3c7143d9c0abeda99be7849f814/opencc-1.4.2-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:01674abf96cd6b6358755d692f1d56fde39deb77383a095c23c211cc8502e57f", size = 2051663 },
+    { url = "https://files.pythonhosted.org/packages/fe/32/aa83c2631bb1d829e1782505da9ce9511bb110fb22bb9e9fc72de10e8a6e/opencc-1.4.2-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:ba6d6f45ce4908e0c24a034d844d3f43be6f2e8c69a838028806f1af8e721bef", size = 2408714 },
+    { url = "https://files.pythonhosted.org/packages/23/f2/80e1bfdb82b16057c9961b889d15f644b0b0ea500c2ba6d1845192c23ee9/opencc-1.4.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:25c34e75fe2ab2bf5b43d89e2cf9413fbfd693c9e4851c9b7b641d50e9793f63", size = 2446584 },
+    { url = "https://files.pythonhosted.org/packages/cc/15/7bc47cc20436d1eb7163f15b200531bb4e18a6ee261784465019f87b049e/opencc-1.4.2-cp313-cp313-win_amd64.whl", hash = "sha256:4338dc5c7c6c7b42a847f3a8ecbbdfb2543e39d63bebcbe25f10e3c81b1c76fb", size = 2890688 },
+    { url = "https://files.pythonhosted.org/packages/fd/66/6198bde333ecc6151d7ee3e25c6d5ba2b9494130c1739e943e03ad459830/opencc-1.4.2-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:0b14d64943de6c3575ae1e863dbbf4a3c6c7e7ce7e90f85772b2ec4dc24a5aca", size = 2150039 },
+    { url = "https://files.pythonhosted.org/packages/19/0b/94de5296f99aa3a7e8e9ced388b0ada742b57394eb8cec8bc5ecc882af54/opencc-1.4.2-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:2dd2f8c3f7e633d252753c8f69298d5f446e02d62a3cf9c6a3c18683b5346c89", size = 2051838 },
+    { url = "https://files.pythonhosted.org/packages/03/a6/45a09a6f0344cca2d645254ee9494684733ecdf1c7faf3135577430a4d8c/opencc-1.4.2-cp314-cp314-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:050bdc8516b4830be810504dfed1e5d6ac8ca81f19030b7c187abec5160683ca", size = 2408987 },
+    { url = "https://files.pythonhosted.org/packages/c1/f4/9402bf733bd685b6a54a86d4f6ba3893e03088e0816080b5b95b63a94fda/opencc-1.4.2-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:d054897f2e597d663410b9dc20b9e79d9410a893b9578ef3eaf3f6eef5fbcb52", size = 2446514 },
+    { url = "https://files.pythonhosted.org/packages/92/8b/60963db0f968623ce7ce002f7480c083ebf8732314efc03c4f87a2d8f1d5/opencc-1.4.2-cp314-cp314-win_amd64.whl", hash = "sha256:06f215590050d8504ceb713be0c822dd00b14095fd10a0b66f689bab40821119", size = 2954295 },
 ]
 
 [[package]]

@@ -18,7 +18,7 @@ from app.schemas.auth import (
     RegisterRequest,
     UpdateUsernameRequest,
 )
-from app.schemas.user import UserOut
+from app.schemas.user import PreferencesUpdate, UserOut
 from app.services.auth import (
     create_access_token,
     create_refresh_token,
@@ -285,6 +285,19 @@ async def change_password(
     current_user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
     await db.commit()
     return {"ok": True}
+
+
+@router.put("/preferences", response_model=UserOut)
+async def update_preferences(
+    body: PreferencesUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Per-user upload preferences (the Simplified-to-Traditional setting)."""
+    current_user.upload_zh_conversion = body.upload_zh_conversion
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
 
 
 @router.get("/me", response_model=UserOut)

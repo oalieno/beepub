@@ -25,6 +25,7 @@ dependencies = [
     "pgvector>=0.3.6",
     "slowapi>=0.1.9",
     "mcp>=1.28.1",
+    "opencc>=1.4.2",
 ]
 
 [dependency-groups]

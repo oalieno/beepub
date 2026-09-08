@@ -583,11 +583,36 @@ def parse_txt(data: bytes, title_hint: str) -> TxtBook:
     )
 
 
-def convert_txt_to_epub(src_path: str, out_path: str, title_hint: str) -> TxtBook:
+def apply_zh_conversion(book: TxtBook, mode: str) -> TxtBook:
+    """Rewrite the book as Traditional Chinese in place: headings and
+    paragraphs through `mode`, title and author through the character
+    table only, language zh-TW."""
+    from app.services.zhconv import convert, convert_name
+
+    book.title = convert_name(book.title)
+    if book.author:
+        book.author = convert_name(book.author)
+    for section in book.sections:
+        section.title = convert(section.title, mode)
+        section.paragraphs = [convert(p, mode) for p in section.paragraphs]
+    book.language = "zh-TW"
+    return book
+
+
+def convert_txt_to_epub(
+    src_path: str,
+    out_path: str,
+    title_hint: str,
+    zh_conversion: str | None = None,
+    force_zh: bool = False,
+) -> TxtBook:
     """Read a .txt, write the EPUB next to it. Raises EmptyTextError for a
-    file with no text."""
+    file with no text. With `zh_conversion`, text detected as Simplified
+    Chinese (any Chinese when `force_zh`) is converted first."""
     with open(src_path, "rb") as f:
         data = f.read()
     book = parse_txt(data, title_hint)
+    if zh_conversion and (force_zh or book.language == "zh-CN"):
+        apply_zh_conversion(book, zh_conversion)
     write_epub(book, out_path)
     return book

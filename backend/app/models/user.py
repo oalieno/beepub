@@ -42,6 +42,9 @@ class User(Base, TimestampMixin):
     # "download failed" that the admin (who bypasses the gate) never sees.
     can_download: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_upload: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # OpenCC configuration applied to uploads detected as Simplified
+    # Chinese: None, "s2tw" (characters) or "s2twp" (characters + phrases).
+    upload_zh_conversion: Mapped[str | None] = mapped_column(String(8), nullable=True)
     daily_reading_goal_seconds: Mapped[int | None] = mapped_column(
         Integer, nullable=True
     )

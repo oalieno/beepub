@@ -1,5 +1,5 @@
 import { get, post, put } from "./client";
-import type { LoginResponse, UserOut } from "$lib/types";
+import type { LoginResponse, UserOut, ZhConversion } from "$lib/types";
 
 export const authApi = {
   register: (body: { username: string; password: string }) =>
@@ -29,4 +29,7 @@ export const authApi = {
 
   updateUsername: (newUsername: string) =>
     put("/auth/username", { new_username: newUsername }) as Promise<UserOut>,
+
+  updatePreferences: (body: { upload_zh_conversion: ZhConversion | null }) =>
+    put("/auth/preferences", body) as Promise<UserOut>,
 };

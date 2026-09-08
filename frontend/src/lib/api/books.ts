@@ -1,6 +1,7 @@
 import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
 import { feedQuery, type FeedParams } from "./libraries";
 import type {
+  ZhConversion,
   BookOut,
   BookReport,
   BookSyncRequest,
@@ -28,6 +29,10 @@ import type {
 } from "$lib/types";
 
 export const booksApi = {
+  /** Rebuild a TXT book's EPUB from its source as Traditional Chinese. */
+  convertZh: (bookId: string, mode: ZhConversion) =>
+    post(`/books/${bookId}/zh-conversion`, { mode }) as Promise<BookOut>,
+
   upload: (file: File, libraryId: string) => {
     const formData = new FormData();
     formData.append("file", file);

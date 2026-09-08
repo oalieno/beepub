@@ -19,7 +19,11 @@ export interface UserOut {
   created_at: string;
   /** Demo-mode shared account — username/password changes are disabled. */
   is_demo?: boolean;
+  /** OpenCC configuration applied to Simplified Chinese uploads. */
+  upload_zh_conversion?: ZhConversion | null;
 }
+
+export type ZhConversion = "s2tw" | "s2twp";
 
 export interface UserLibraryAccess {
   library_id: string;

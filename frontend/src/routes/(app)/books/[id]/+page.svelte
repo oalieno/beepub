@@ -56,6 +56,7 @@
     BookCopy,
     FlaskConical,
     FileText,
+    Languages,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -157,6 +158,29 @@
   let downloadProgress = $state(0);
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
+  // TXT books can be rebuilt from their source as Traditional Chinese.
+  let canConvertZh = $derived(
+    isTxt &&
+      book?.epub_language !== "zh-TW" &&
+      (isAdmin || $authStore.user?.can_upload),
+  );
+  let convertingZh = $state(false);
+  async function convertZh() {
+    if (!book || convertingZh) return;
+    convertingZh = true;
+    try {
+      await booksApi.convertZh(
+        bookId,
+        $authStore.user?.upload_zh_conversion ?? "s2tw",
+      );
+      toastStore.success(m.book_convert_zh_done());
+      await loadData();
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      convertingZh = false;
+    }
+  }
 
   // Track if user arrived via internal navigation (vs direct link / external)
   // Persisted in sessionStorage to survive reader round-trip (component gets destroyed)
@@ -912,6 +936,12 @@
                   {m.book_download_original_txt()}
                 </DropdownMenu.Item>
               {/if}
+              {#if canConvertZh}
+                <DropdownMenu.Item onclick={convertZh} disabled={convertingZh}>
+                  <Languages size={14} />
+                  {m.book_convert_zh()}
+                </DropdownMenu.Item>
+              {/if}
               {#if isAdmin}
                 <DropdownMenu.Separator />
                 <DropdownMenu.Item
@@ -1416,6 +1446,19 @@
       >
         <FileText size={20} class="text-muted-foreground shrink-0" />
         {m.book_download_original_txt()}
+      </button>
+    {/if}
+    {#if canConvertZh}
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        disabled={convertingZh}
+        onclick={() => {
+          showMobileActions = false;
+          convertZh();
+        }}
+      >
+        <Languages size={20} class="text-muted-foreground shrink-0" />
+        {m.book_convert_zh()}
       </button>
     {/if}
     {#if isAdmin}

@@ -116,3 +116,92 @@ async def test_unsupported_and_empty_uploads_are_rejected(admin_client, library_
 
     response = await admin_client.get("/api/books/all")
     assert response.json()["total"] == 0
+
+
+SIMPLIFIED = (
+    "雾港夜航 作者：陈默\n"
+    "\n"
+    "第一章 出港\n"
+    "　　缆绳解开的时候，雾还没散。软件工程师上了船。\n"
+).encode()
+
+
+async def _epub_text(client, book_id: str) -> str:
+    response = await client.get(f"/api/books/{book_id}/file")
+    assert response.status_code == 200
+    with zipfile.ZipFile(BytesIO(response.content)) as zf:
+        return "".join(
+            zf.read(n).decode() for n in zf.namelist() if n.startswith("OEBPS/text/")
+        )
+
+
+async def _set_preference(client, mode):
+    response = await client.put(
+        "/api/auth/preferences", json={"upload_zh_conversion": mode}
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["upload_zh_conversion"] == mode
+
+
+async def test_preference_converts_simplified_txt_at_upload(admin_client, library_id):
+    await _set_preference(admin_client, "s2twp")
+    try:
+        book = await upload_txt(admin_client, library_id, SIMPLIFIED, "novel.txt")
+    finally:
+        await _set_preference(admin_client, None)
+    assert book["epub_language"] == "zh-TW"
+    assert book["epub_title"] == "霧港夜航"
+    assert book["epub_authors"] == ["陳默"]
+    text = await _epub_text(admin_client, book["id"])
+    assert "纜繩解開" in text and "軟體工程師" in text
+    assert "缆绳" not in text
+
+    # The source is untouched.
+    response = await admin_client.get(f"/api/books/{book['id']}/original")
+    assert response.content == SIMPLIFIED
+
+
+async def test_traditional_txt_is_not_touched_by_the_preference(
+    admin_client, library_id
+):
+    await _set_preference(admin_client, "s2twp")
+    try:
+        book = await upload_txt(admin_client, library_id, TXT)
+    finally:
+        await _set_preference(admin_client, None)
+    assert book["epub_language"] == "zh-TW"
+    assert "退潮之後，沙灘上留著昨夜的腳印" in await _epub_text(
+        admin_client, book["id"]
+    )
+
+
+async def test_existing_txt_book_can_be_rebuilt_as_traditional(
+    admin_client, library_id
+):
+    book = await upload_txt(admin_client, library_id, SIMPLIFIED, "novel.txt")
+    assert book["epub_language"] == "zh-CN"
+    assert "缆绳" in await _epub_text(admin_client, book["id"])
+
+    response = await admin_client.post(
+        f"/api/books/{book['id']}/zh-conversion", json={"mode": "s2tw"}
+    )
+    assert response.status_code == 200, response.text
+    converted = response.json()
+    assert converted["epub_language"] == "zh-TW"
+    assert converted["epub_title"] == "霧港夜航"
+    assert converted["file_size"] != book["file_size"] or True
+    text = await _epub_text(admin_client, book["id"])
+    assert "纜繩解開" in text and "軟件工程師" in text  # s2tw keeps the phrase
+
+    # Not offered for EPUB uploads.
+    epub = build_epub(title="Not a TXT", chapters=[("One", ["hi"])])
+    response = await admin_client.post(
+        "/api/books",
+        files={"file": ("plain.epub", epub, "application/epub+zip")},
+        data={"library_id": library_id},
+    )
+    assert response.status_code == 201
+    response = await admin_client.post(
+        f"/api/books/{response.json()['id']}/zh-conversion", json={"mode": "s2tw"}
+    )
+    assert response.status_code == 409

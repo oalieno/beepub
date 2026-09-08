@@ -52,6 +52,8 @@ const ERROR_MAP: Record<string, () => string> = {
   "Not a Calibre library": () => m.error_not_calibre(),
   "Only EPUB or TXT files are supported": () => m.error_upload_format(),
   "The TXT file has no text": () => m.error_txt_empty(),
+  "Only books imported from TXT can be converted": () =>
+    m.error_zh_convert_not_txt(),
   "OpenAI base URL not configured": () => m.error_openai_not_configured(),
   "Path not found in EPUB": () => m.error_path_not_in_epub(),
   "Rating must be 0.5-5 in 0.5 steps": () => m.error_rating_range(),

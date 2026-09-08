@@ -136,6 +136,22 @@ export const PLATES_BOOK: Fixture = {
  *  header lines, a TOC listing up top, two parts (卷) of chapters (章)
  *  and a 番外, paragraphs indented with full-width spaces. Uploaded as
  *  TXT; the server converts it to an EPUB. */
+/** Simplified Chinese; the converted title is what the seeded book carries. */
+export const SIMPLIFIED_TXT_BOOK: Fixture = {
+  file: "e2e-fog-harbour.txt",
+  title: "霧港夜航",
+  readyText: "沒有燈的船",
+  mimeType: "text/plain",
+};
+
+/** Simplified Chinese, uploaded unconverted for the detail-page action. */
+export const SIMPLIFIED_TXT_BOOK_2: Fixture = {
+  file: "e2e-lighthouse-keeper.txt",
+  title: "灯塔守夜人",
+  readyText: "守夜人",
+  mimeType: "text/plain",
+};
+
 export const TXT_BOOK: Fixture = {
   file: "e2e-tide-clocktower.txt",
   title: "潮汐鐘樓手記",

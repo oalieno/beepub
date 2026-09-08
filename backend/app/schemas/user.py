@@ -1,10 +1,13 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
 from app.config import settings
 from app.models.user import UserRole
+
+ZhConversion = Literal["s2tw", "s2twp"]
 
 
 class UserOut(BaseModel):
@@ -18,6 +21,7 @@ class UserOut(BaseModel):
     # Demo-mode account restrictions (no username/password changes) are
     # enforced server-side; this lets the UI hide those controls too.
     is_demo: bool = False
+    upload_zh_conversion: ZhConversion | None = None
 
     model_config = {"from_attributes": True}
 
@@ -27,6 +31,10 @@ class UserOut(BaseModel):
             settings.demo_mode and self.username == settings.demo_username
         )
         return self
+
+
+class PreferencesUpdate(BaseModel):
+    upload_zh_conversion: ZhConversion | None = None
 
 
 class UserUpdateRole(BaseModel):

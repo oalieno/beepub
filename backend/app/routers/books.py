@@ -58,6 +58,7 @@ from app.schemas.book import (
     SeriesBookBrief,
     SeriesNeighborsOut,
     SeriesProgress,
+    ZhConversionRequest,
 )
 from app.schemas.reading import (
     ReadingActivityOut,
@@ -226,7 +227,11 @@ async def _ingest_txt(
     await save_upload_file(file, original_path)
     try:
         await asyncio.to_thread(
-            convert_txt_to_epub, original_path, file_path, title_hint
+            convert_txt_to_epub,
+            original_path,
+            file_path,
+            title_hint,
+            user.upload_zh_conversion,
         )
         metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
     except EmptyTextError:
@@ -1574,6 +1579,55 @@ async def get_book_file(
         media_type="application/epub+zip",
         filename=filename,
     )
+
+
+@router.post("/{book_id}/zh-conversion", response_model=BookOut)
+async def convert_book_zh(
+    book_id: uuid.UUID,
+    body: ZhConversionRequest,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Rebuild a TXT book's EPUB from its source as Traditional Chinese.
+    The text is converted whatever its detected script, since the reader
+    asked; a book that is already Traditional comes out unchanged."""
+    _require_upload_permission(current_user)
+    book = await _get_book_with_access(book_id, current_user, db)
+    if (
+        book.format != "txt"
+        or not book.original_path
+        or not os.path.exists(book.original_path)
+    ):
+        raise HTTPException(
+            status_code=409, detail="Only books imported from TXT can be converted"
+        )
+    file_path = book.file_path or get_book_path(book.id, "book.epub")
+    tmp_path = file_path + ".tmp"
+    title_hint = book.epub_title or book.title or ""
+    try:
+        await asyncio.to_thread(
+            convert_txt_to_epub,
+            book.original_path,
+            tmp_path,
+            title_hint,
+            body.mode,
+            True,
+        )
+        metadata = await asyncio.to_thread(parse_epub_metadata, tmp_path)
+    except Exception:
+        delete_file(tmp_path)
+        raise HTTPException(status_code=400, detail="Invalid TXT file")
+    os.replace(tmp_path, file_path)
+    book.file_path = file_path
+    book.file_size = os.path.getsize(file_path)
+    book.partial_md5 = await asyncio.to_thread(compute_partial_md5, file_path)
+    for key in ("epub_title", "epub_authors", "epub_language"):
+        setattr(book, key, metadata.get(key))
+    book.updated_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(book)
+    extract_book_text.delay(str(book.id))
+    return book
 
 
 @router.get("/{book_id}/original")

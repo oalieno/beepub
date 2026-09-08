@@ -320,6 +320,11 @@
       <p class="text-muted-foreground text-sm mt-1">
         {m.library_upload_hint()}
       </p>
+      {#if $authStore.user?.upload_zh_conversion}
+        <p class="text-muted-foreground text-xs mt-2">
+          {m.library_upload_zh_hint()}
+        </p>
+      {/if}
       <input
         bind:this={fileInput}
         type="file"
