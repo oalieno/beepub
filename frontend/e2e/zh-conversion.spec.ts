@@ -4,7 +4,7 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
-import { ADMIN_STATE } from "./helpers";
+import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
 import {
   SIMPLIFIED_TXT_BOOK,
   SIMPLIFIED_TXT_BOOK_2,
@@ -43,20 +43,36 @@ test.afterEach(async ({ request }) => {
   await setPreference(request, null);
 });
 
-test("the profile switch converts a Simplified TXT at upload", async ({
+test("the upload dialog's switch converts a Simplified TXT at upload", async ({
   page,
 }) => {
-  await page.goto("/profile");
-  await page.getByRole("button", { name: "Simplified to Traditional" }).click();
   const chars = page.getByRole("switch", {
-    name: "Convert Simplified Chinese TXT uploads to Traditional",
+    name: "Convert Simplified Chinese TXT to Traditional",
   });
   const phrases = page.getByRole("switch", {
     name: "Also convert Mainland phrases to Taiwan usage",
   });
-  await expect(phrases).toBeDisabled();
-  await chars.click();
-  await expect(phrases).toBeEnabled();
+  const openDialog = async () => {
+    await page.getByRole("button", { name: "Add books" }).first().click();
+    await page.getByRole("menuitem", { name: "Upload Books" }).click();
+  };
+
+  // English UI, setting off: not a concern, so not offered.
+  await page.goto("/libraries");
+  await page.getByRole("link", { name: LIBRARY_NAME }).first().click();
+  await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+$/);
+  await openDialog();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await expect(chars).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Once on (here through the API, as a Traditional UI would offer it),
+  // the dialog carries the switch, and the phrase option under it.
+  await setPreference(page.request, "s2tw");
+  await page.reload();
+  await openDialog();
+  await expect(chars).toBeChecked();
+  await expect(phrases).not.toBeChecked();
   await phrases.click();
   await expect
     .poll(

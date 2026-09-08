@@ -4,6 +4,8 @@
   import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { isNative } from "$lib/platform";
   import { authStore } from "$lib/stores/auth";
+  import { getLocale } from "$lib/paraglide/runtime.js";
+  import ZhConversionToggle from "$lib/components/ZhConversionToggle.svelte";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
@@ -168,6 +170,17 @@
     replaceState(url, {});
   }
 
+  // The Simplified-to-Traditional switch is a Traditional Chinese reader's
+  // concern: shown for that UI language, or while the setting is on.
+  // Decided when the dialog opens so switching it off keeps the row until
+  // the dialog closes.
+  let showZhToggle = $state(false);
+  function openUploadModal() {
+    showZhToggle =
+      getLocale() === "zh-Hant" || !!$authStore.user?.upload_zh_conversion;
+    showUploadModal = true;
+  }
+
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0 || id === ALL) return;
     uploading = true;
@@ -245,7 +258,7 @@
             </button>
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end">
-            <DropdownMenu.Item onclick={() => (showUploadModal = true)}>
+            <DropdownMenu.Item onclick={openUploadModal}>
               <Upload size={14} />
               {m.library_upload()}
             </DropdownMenu.Item>
@@ -320,11 +333,6 @@
       <p class="text-muted-foreground text-sm mt-1">
         {m.library_upload_hint()}
       </p>
-      {#if $authStore.user?.upload_zh_conversion}
-        <p class="text-muted-foreground text-xs mt-2">
-          {m.library_upload_zh_hint()}
-        </p>
-      {/if}
       <input
         bind:this={fileInput}
         type="file"
@@ -334,6 +342,9 @@
         onchange={(e) => handleUpload(e.currentTarget.files)}
       />
     </div>
+    {#if showZhToggle}
+      <ZhConversionToggle />
+    {/if}
     {#if uploading}
       <div class="flex items-center gap-2 text-primary text-sm">
         <Spinner size="sm" />

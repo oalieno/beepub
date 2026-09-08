@@ -27,7 +27,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import LanguageSection from "$lib/components/settings/LanguageSection.svelte";
   import AppearanceSection from "$lib/components/settings/AppearanceSection.svelte";
-  import ZhConversionSection from "$lib/components/settings/ZhConversionSection.svelte";
   import ApiTokensSection from "$lib/components/settings/ApiTokensSection.svelte";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
@@ -173,13 +172,6 @@
     </div>
 
     <AppearanceSection />
-
-    <!-- Divider -->
-    <div class="flex justify-center">
-      <div class="w-4/5 h-px bg-border" style="transform: scaleY(0.5);"></div>
-    </div>
-
-    <ZhConversionSection />
 
     <!-- Username/password changes are blocked server-side for the shared
          demo account, so don't offer them. -->
