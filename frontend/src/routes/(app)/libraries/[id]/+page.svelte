@@ -18,7 +18,8 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { ArrowLeftRight, BookCopy, Plus, Upload } from "@lucide/svelte";
+  import { ArrowLeftRight, BookCopy, Plus, Upload, X } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
@@ -170,22 +171,51 @@
     replaceState(url, {});
   }
 
+  // Two-step upload: files are listed first (a chance to catch a wrong
+  // file, and to see the options that apply to them), then sent together.
+  let pendingFiles = $state<File[]>([]);
+  let uploadedCount = $state(0);
+  let pendingHasTxt = $derived(
+    pendingFiles.some((f) => f.name.toLowerCase().endsWith(".txt")),
+  );
+
   // The Simplified-to-Traditional switch is a Traditional Chinese reader's
-  // concern: shown for that UI language, or while the setting is on.
-  // Decided when the dialog opens so switching it off keeps the row until
-  // the dialog closes.
+  // concern: shown for that UI language, or while the setting is on, and
+  // only when a TXT is waiting. Decided when the dialog opens so switching
+  // it off keeps the row until the dialog closes.
   let showZhToggle = $state(false);
   function openUploadModal() {
     showZhToggle =
       getLocale() === "zh-Hant" || !!$authStore.user?.upload_zh_conversion;
     showUploadModal = true;
   }
+  function closeUploadModal() {
+    if (uploading) return;
+    showUploadModal = false;
+    pendingFiles = [];
+  }
 
-  async function handleUpload(files: FileList | null) {
-    if (!files || files.length === 0 || id === ALL) return;
-    uploading = true;
-    let successCount = 0;
+  function addFiles(files: FileList | null) {
+    if (!files) return;
     for (const file of Array.from(files)) {
+      const dup = pendingFiles.some(
+        (p) => p.name === file.name && p.size === file.size,
+      );
+      if (!dup) pendingFiles.push(file);
+    }
+  }
+
+  function fmtSize(bytes: number): string {
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  }
+
+  async function uploadPending() {
+    if (pendingFiles.length === 0 || uploading || id === ALL) return;
+    uploading = true;
+    uploadedCount = 0;
+    let successCount = 0;
+    for (const file of pendingFiles) {
       try {
         await booksApi.upload(file, id);
         successCount++;
@@ -194,6 +224,7 @@
           `Failed to upload ${file.name}: ${(e as Error).message}`,
         );
       }
+      uploadedCount++;
     }
     if (successCount > 0) {
       toastStore.success(m.library_uploaded({ count: String(successCount) }));
@@ -201,13 +232,18 @@
       reloadNonce += 1;
     }
     uploading = false;
+    pendingFiles = [];
     showUploadModal = false;
   }
 
+  // A drop anywhere on the page lands in the dialog, not straight on the
+  // server.
   function onDrop(e: DragEvent) {
     e.preventDefault();
     dragOver = false;
-    handleUpload(e.dataTransfer?.files ?? null);
+    if (id === ALL) return;
+    addFiles(e.dataTransfer?.files ?? null);
+    openUploadModal();
   }
 </script>
 
@@ -313,22 +349,27 @@
 <Modal
   title={m.library_upload()}
   open={showUploadModal}
-  onclose={() => (showUploadModal = false)}
+  onclose={closeUploadModal}
 >
   <div class="space-y-4">
     <div
-      class="border-2 border-dashed border-border rounded-2xl p-10 text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors"
+      class="border-2 border-dashed border-border rounded-2xl text-center cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors {pendingFiles.length
+        ? 'p-5'
+        : 'p-10'}"
       onclick={() => fileInput?.click()}
       ondragover={(e) => e.preventDefault()}
       ondrop={(e) => {
         e.preventDefault();
-        handleUpload(e.dataTransfer?.files ?? null);
+        addFiles(e.dataTransfer?.files ?? null);
       }}
       role="button"
       tabindex="0"
       onkeydown={(e) => e.key === "Enter" && fileInput?.click()}
     >
-      <Upload class="mx-auto text-muted-foreground/40 mb-3" size={36} />
+      <Upload
+        class="mx-auto text-muted-foreground/40 mb-3"
+        size={pendingFiles.length ? 24 : 36}
+      />
       <p class="text-foreground font-medium">{m.library_upload_drag()}</p>
       <p class="text-muted-foreground text-sm mt-1">
         {m.library_upload_hint()}
@@ -339,17 +380,53 @@
         accept=".epub,.txt"
         multiple
         class="hidden"
-        onchange={(e) => handleUpload(e.currentTarget.files)}
+        onchange={(e) => {
+          addFiles(e.currentTarget.files);
+          e.currentTarget.value = "";
+        }}
       />
     </div>
-    {#if showZhToggle}
+    {#if pendingFiles.length}
+      <ul class="divide-y divide-border rounded-xl border border-border">
+        {#each pendingFiles as file, i (file.name + file.size)}
+          <li class="flex items-center gap-3 px-3 py-2 text-sm">
+            <span class="flex-1 truncate" title={file.name}>{file.name}</span>
+            <span class="text-muted-foreground tabular-nums shrink-0"
+              >{fmtSize(file.size)}</span
+            >
+            <button
+              type="button"
+              class="text-muted-foreground hover:text-foreground disabled:opacity-40 shrink-0"
+              aria-label={m.library_upload_remove({ name: file.name })}
+              disabled={uploading}
+              onclick={() => pendingFiles.splice(i, 1)}
+            >
+              <X size={16} />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    {#if showZhToggle && pendingHasTxt}
       <ZhConversionToggle />
     {/if}
-    {#if uploading}
-      <div class="flex items-center gap-2 text-primary text-sm">
-        <Spinner size="sm" />
-        {m.library_uploading()}
-      </div>
-    {/if}
+    <div class="flex items-center justify-end gap-3">
+      {#if uploading}
+        <span class="flex items-center gap-2 text-primary text-sm">
+          <Spinner size="sm" />
+          {m.library_uploading_progress({
+            done: String(uploadedCount),
+            total: String(pendingFiles.length),
+          })}
+        </span>
+      {/if}
+      <Button
+        class="rounded-xl"
+        disabled={pendingFiles.length === 0 || uploading}
+        onclick={uploadPending}
+      >
+        {m.library_upload_confirm({ count: String(pendingFiles.length) })}
+      </Button>
+    </div>
   </div>
 </Modal>

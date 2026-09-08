@@ -17,7 +17,7 @@ import { LIBRARY_NAME } from "./helpers";
  * input over CDP (which includes the browser's own click synthesis).
  */
 
-const FIXTURES = path.join(
+export const FIXTURES = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "fixtures",
 );

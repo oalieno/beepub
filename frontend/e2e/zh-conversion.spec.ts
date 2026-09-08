@@ -4,8 +4,10 @@ import {
   type APIRequestContext,
   type Page,
 } from "@playwright/test";
+import path from "node:path";
 import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
 import {
+  FIXTURES,
   SIMPLIFIED_TXT_BOOK,
   SIMPLIFIED_TXT_BOOK_2,
   openBook,
@@ -52,9 +54,14 @@ test("the upload dialog's switch converts a Simplified TXT at upload", async ({
   const phrases = page.getByRole("switch", {
     name: "Also convert Mainland phrases to Taiwan usage",
   });
+  // The switch only matters once a TXT is waiting in the dialog.
   const openDialog = async () => {
     await page.getByRole("button", { name: "Add books" }).first().click();
     await page.getByRole("menuitem", { name: "Upload Books" }).click();
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(path.join(FIXTURES, SIMPLIFIED_TXT_BOOK_2.file));
+    await expect(page.getByRole("dialog").getByText(/\.txt$/)).toBeVisible();
   };
 
   // English UI, setting off: not a concern, so not offered.
@@ -64,7 +71,9 @@ test("the upload dialog's switch converts a Simplified TXT at upload", async ({
   await openDialog();
   await expect(page.getByRole("dialog")).toBeVisible();
   await expect(chars).toHaveCount(0);
+  // Nothing is sent until the button is pressed.
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 
   // Once on (here through the API, as a Traditional UI would offer it),
   // the dialog carries the switch, and the phrase option under it.
@@ -74,6 +83,7 @@ test("the upload dialog's switch converts a Simplified TXT at upload", async ({
   await expect(chars).toBeChecked();
   await expect(phrases).not.toBeChecked();
   await phrases.click();
+  await page.keyboard.press("Escape");
   await expect
     .poll(
       async () =>

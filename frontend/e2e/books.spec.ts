@@ -20,6 +20,9 @@ test("upload a book, open it, and read it", async ({ page }) => {
   await page.getByRole("button", { name: "Add books" }).first().click();
   await page.getByRole("menuitem", { name: "Upload Books" }).click();
   await page.locator('input[type="file"]').setInputFiles(FIXTURE);
+  // Files are listed before anything is sent: a chance to catch a wrong one.
+  await expect(page.getByRole("dialog").getByText(/\.epub$/)).toBeVisible();
+  await page.getByRole("button", { name: "Upload 1 file(s)" }).click();
   await expect(page.getByText("Uploaded 1 book(s)")).toBeVisible({
     timeout: 15_000,
   });
