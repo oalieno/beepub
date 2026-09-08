@@ -52,14 +52,30 @@ test("add a physical book and find it via the format filter", async ({
 
   await page.getByRole("button", { name: "Add books" }).first().click();
   await page.getByRole("menuitem", { name: "Add a physical book" }).click();
-  await page.locator("#physical-title").fill("Paper Copy E2E");
+  await page.locator("#physical-title").fill("Bound Paper Copy E2E");
   await page.locator("#physical-authors").fill("Shelf Author");
   await page.getByRole("button", { name: "Add a physical book" }).click();
   await expect(page.getByText("Physical book added")).toBeVisible();
 
-  await page.getByText("Paper Copy E2E").first().click();
+  await page.getByText("Bound Paper Copy E2E").first().click();
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
   await expect(page.getByText("Physical book").first()).toBeVisible();
+  // No cover file, so the generated cover stands in. This title hashes
+  // above 2^31, where a signed shift once left the pattern unpainted.
+  await expect
+    .poll(() =>
+      page
+        .locator(".book-shadow")
+        .first()
+        .evaluate((el) => {
+          const cs = getComputedStyle(el);
+          return (
+            cs.backgroundImage !== "none" ||
+            cs.backgroundColor !== "rgba(0, 0, 0, 0)"
+          );
+        }),
+    )
+    .toBe(true);
   // No reader and no download for a paper copy.
   await expect(
     page.getByRole("button", { name: /Start Reading|Continue Reading/ }),
@@ -68,7 +84,7 @@ test("add a physical book and find it via the format filter", async ({
   // The chip filters the library down to physical books.
   await page.getByRole("button", { name: "Physical book" }).first().click();
   await expect(page).toHaveURL(/\/libraries\/[0-9a-f-]+\?format=physical/);
-  await expect(page.getByText("Paper Copy E2E").first()).toBeVisible();
+  await expect(page.getByText("Bound Paper Copy E2E").first()).toBeVisible();
   await expect(page.getByText("E2E Test Book")).toHaveCount(0);
 });
 

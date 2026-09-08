@@ -9,8 +9,16 @@
         "title": "潮汐鐘樓手記",
         "author": null,
         "sections": [
-          { "title": "第一章 退潮", "level": 2, "paragraphs": 2 },
-          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 }
+          {
+            "title": "第一章 退潮",
+            "level": 2,
+            "paragraphs": 2
+          },
+          {
+            "title": "第二章 鐘擺",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -22,11 +30,31 @@
         "title": "x",
         "author": null,
         "sections": [
-          { "title": "第一卷 潮聲", "level": 1, "paragraphs": 0 },
-          { "title": "第一章 退潮", "level": 2, "paragraphs": 1 },
-          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 },
-          { "title": "第二卷 迴聲", "level": 1, "paragraphs": 1 },
-          { "title": "第三章 信", "level": 2, "paragraphs": 1 }
+          {
+            "title": "第一卷 潮聲",
+            "level": 1,
+            "paragraphs": 0
+          },
+          {
+            "title": "第一章 退潮",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二章 鐘擺",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二卷 迴聲",
+            "level": 1,
+            "paragraphs": 1
+          },
+          {
+            "title": "第三章 信",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -38,9 +66,21 @@
         "title": "潮汐鐘樓手記",
         "author": "林未晞",
         "sections": [
-          { "title": "第一卷 潮聲", "level": 1, "paragraphs": 0 },
-          { "title": "第一章 退潮", "level": 2, "paragraphs": 1 },
-          { "title": "第二章 鐘擺", "level": 2, "paragraphs": 1 }
+          {
+            "title": "第一卷 潮聲",
+            "level": 1,
+            "paragraphs": 0
+          },
+          {
+            "title": "第一章 退潮",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二章 鐘擺",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -52,8 +92,16 @@
         "title": "海雾",
         "author": "阿蕪",
         "sections": [
-          { "title": "海雾", "level": 2, "paragraphs": 1 },
-          { "title": "第1章 起雾", "level": 2, "paragraphs": 1 }
+          {
+            "title": "海雾",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第1章 起雾",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -65,11 +113,31 @@
         "title": "x",
         "author": null,
         "sections": [
-          { "title": "楔子", "level": 2, "paragraphs": 1 },
-          { "title": "【第一章】潮聲", "level": 2, "paragraphs": 1 },
-          { "title": "第二章鐘擺", "level": 2, "paragraphs": 1 },
-          { "title": "番外篇 燈塔", "level": 2, "paragraphs": 1 },
-          { "title": "後記", "level": 2, "paragraphs": 1 }
+          {
+            "title": "楔子",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "【第一章】潮聲",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二章鐘擺",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "番外篇 燈塔",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "後記",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -81,8 +149,16 @@
         "title": "x",
         "author": null,
         "sections": [
-          { "title": "第一章 開始", "level": 2, "paragraphs": 2 },
-          { "title": "第二章 結束", "level": 2, "paragraphs": 1 }
+          {
+            "title": "第一章 開始",
+            "level": 2,
+            "paragraphs": 2
+          },
+          {
+            "title": "第二章 結束",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -94,8 +170,16 @@
         "title": "x",
         "author": null,
         "sections": [
-          { "title": "第一集 出航", "level": 2, "paragraphs": 1 },
-          { "title": "第二集 靠岸", "level": 2, "paragraphs": 1 }
+          {
+            "title": "第一集 出航",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二集 靠岸",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -107,10 +191,26 @@
         "title": "Harbour Ledger",
         "author": null,
         "sections": [
-          { "title": "Part One: The Ledger", "level": 1, "paragraphs": 0 },
-          { "title": "Chapter 1", "level": 2, "paragraphs": 1 },
-          { "title": "CHAPTER II — Frost", "level": 2, "paragraphs": 1 },
-          { "title": "Epilogue", "level": 2, "paragraphs": 1 }
+          {
+            "title": "Part One: The Ledger",
+            "level": 1,
+            "paragraphs": 0
+          },
+          {
+            "title": "Chapter 1",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "CHAPTER II — Frost",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "Epilogue",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     },
@@ -122,8 +222,74 @@
         "title": "x",
         "author": null,
         "sections": [
-          { "title": "第一章 一", "level": 2, "paragraphs": 1 },
-          { "title": "第二章 未完", "level": 2, "paragraphs": 0 }
+          {
+            "title": "第一章 一",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第二章 未完",
+            "level": 2,
+            "paragraphs": 0
+          }
+        ]
+      }
+    },
+    {
+      "name": "title and author on one line, a synopsis block before the first chapter",
+      "title_hint": "download (2)",
+      "text": "霧港夜航 作者：陳默\r\n\r\n內容簡介：\r\n　　一艘沒有燈的船在霧裡等潮。\r\n\r\n第一章 出港\r\n　　纜繩解開的時候，霧還沒散。\r\n",
+      "expect": {
+        "title": "霧港夜航",
+        "author": "陳默",
+        "sections": [
+          {
+            "title": "霧港夜航",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第一章 出港",
+            "level": 2,
+            "paragraphs": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "site banner, then a bare title line above 作者：; the file name hint is noisy",
+      "title_hint": "《霧港夜航》（校對版全本）作者：陳默",
+      "text": "==========\n更多小說盡在某站下載：https://example.invalid/\n==========\n霧港夜航\n作者：陳默\n\n内容简介：\n　　一艘沒有燈的船在霧裡等潮。\n\n第一章 出港\n　　纜繩解開的時候，霧還沒散。\n",
+      "expect": {
+        "title": "霧港夜航",
+        "author": "陳默",
+        "sections": [
+          {
+            "title": "霧港夜航",
+            "level": 2,
+            "paragraphs": 4
+          },
+          {
+            "title": "第一章 出港",
+            "level": 2,
+            "paragraphs": 1
+          }
+        ]
+      }
+    },
+    {
+      "name": "no header lines at all: title and author come out of the file name",
+      "title_hint": "《霧港夜航》（校對版全本）作者：陳默",
+      "text": "第一章 出港\n　　纜繩解開的時候，霧還沒散。\n",
+      "expect": {
+        "title": "霧港夜航",
+        "author": "陳默",
+        "sections": [
+          {
+            "title": "第一章 出港",
+            "level": 2,
+            "paragraphs": 1
+          }
         ]
       }
     }

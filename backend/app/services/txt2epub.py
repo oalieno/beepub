@@ -173,9 +173,14 @@ _AUTHOR_LINE_RE = re.compile(
 _BRACKET_TITLE_RE = re.compile(
     r"^《(.+?)》(?:\s*(?:作者|by)?\s*[:：]?\s*(\S.*))?$", re.IGNORECASE
 )
+_INLINE_AUTHOR_RE = re.compile(
+    r"^(\S.{0,40}?)\s+(?:作者|著者|by)\s*[:：]?\s*(\S.*)$", re.IGNORECASE
+)
 _LISTING_WORDS = frozenset(
     {"目录", "目錄", "正文", "内容简介", "內容簡介", "简介", "簡介"}
 )
+_BARE_TITLE_MAX = 30
+_BARE_TITLE_BAN = "。，,、：:；;！!？?=-—_*#/\\"
 _METADATA_SCAN = 20
 
 # Size-based fallback when a file has no recognisable headings: about
@@ -200,18 +205,25 @@ def _preview(paragraph: str) -> str:
     return paragraph[:_PREVIEW_CHARS].rstrip() + "…"
 
 
+def _bare_title(p: str) -> bool:
+    """A short line with no punctuation, such as the book's name sitting on
+    its own right above the `作者：` line."""
+    return 0 < len(p) <= _BARE_TITLE_MAX and not any(c in _BARE_TITLE_BAN for c in p)
+
+
 def _extract_metadata(
     paragraphs: list[str],
 ) -> tuple[str | None, str | None, list[str]]:
-    """Pull `書名：` / `作者：` / `《書名》` lines out of the opening
-    paragraphs. Returns (title, author, remaining paragraphs)."""
+    """Pull `書名：` / `作者：` / `《書名》` / `書名 作者：X` lines out of the
+    opening paragraphs. A bare line right above `作者：` is the title too.
+    Returns (title, author, remaining paragraphs)."""
     title = author = None
     kept: list[str] = []
     for i, p in enumerate(paragraphs):
         if i >= _METADATA_SCAN:
             kept.extend(paragraphs[i:])
             break
-        if p in _LISTING_WORDS:
+        if p.rstrip("：:") in _LISTING_WORDS:
             continue
         m = _TITLE_LINE_RE.match(p)
         if m and title is None:
@@ -220,6 +232,8 @@ def _extract_metadata(
         m = _AUTHOR_LINE_RE.match(p)
         if m and author is None:
             author = m.group(1).strip()
+            if title is None and kept and _bare_title(kept[-1]):
+                title = kept.pop().strip("《》 ")
             continue
         m = _BRACKET_TITLE_RE.match(p)
         if m and title is None:
@@ -227,8 +241,32 @@ def _extract_metadata(
             if m.group(2) and author is None:
                 author = _AUTHOR_LINE_RE.sub(lambda a: a.group(1), m.group(2)).strip()
             continue
+        m = _INLINE_AUTHOR_RE.match(p)
+        if m and title is None and author is None and _bare_title(m.group(1)):
+            title, author = m.group(1).strip("《》 "), m.group(2).strip()
+            continue
         kept.append(p)
     return title, author, kept
+
+
+def parse_title_hint(hint: str) -> tuple[str | None, str | None]:
+    """Title and author from a file name such as
+    `《海雾》（校对版全本）作者：阿蕪`: the brackets delimit the title, and an
+    `作者：` anywhere after them names the author."""
+    hint = " ".join(hint.split())
+    if not hint:
+        return None, None
+    m = re.match(r"^《(.+?)》(.*)$", hint)
+    if m:
+        rest = m.group(2)
+        a = re.search(
+            r"(?:作者|著者|by)\s*[:：]?\s*([^（）()\[\]【】]+)", rest, re.IGNORECASE
+        )
+        return m.group(1).strip(), a.group(1).strip() if a else None
+    m = _INLINE_AUTHOR_RE.match(hint)
+    if m:
+        return m.group(1).strip("《》 "), m.group(2).strip()
+    return hint, None
 
 
 def _drop_empty(sections: list[Section]) -> list[Section]:
@@ -285,7 +323,9 @@ def split_sections(text: str, title_hint: str) -> tuple[str, str | None, list[Se
         (sections[-1].paragraphs if sections else preamble).append(p)
 
     found_title, author, preamble = _extract_metadata(preamble)
-    title = found_title or title_hint.strip() or "Untitled"
+    hint_title, hint_author = parse_title_hint(title_hint)
+    title = found_title or hint_title or "Untitled"
+    author = author or hint_author
 
     sections = _drop_empty(sections)
     if sections and not any(s.level == LEVEL_CHAPTER for s in sections):

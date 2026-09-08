@@ -30,7 +30,9 @@
   // Independent hash slices so color and pattern don't correlate.
   const h = $derived(hash(title + "\0" + (authors[0] ?? "")));
   const [figure, ground] = $derived(PAIRS[h % PAIRS.length]);
-  const pattern = $derived((h >> 4) % 4);
+  // Unsigned shift: `h` is a uint32, and `>>` would turn the top bit into
+  // a negative index (no pattern painted for half of all titles).
+  const pattern = $derived((h >>> 4) % 4);
   const author = $derived(authors[0] ?? "");
 
   // Fixed-px tiles: scale-independent, no moiré at grid size.
