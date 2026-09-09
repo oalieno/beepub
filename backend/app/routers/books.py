@@ -20,7 +20,7 @@ from fastapi import (
     UploadFile,
     status,
 )
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import and_, exists, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -67,6 +67,8 @@ from app.schemas.reading import (
 )
 from app.schemas.series import PaginatedFeed
 from app.services.book_search import tiered_book_search
+from app.services.cbz2epub import CbzError, convert_cbz_to_epub
+from app.services.epub_pages import read_page_manifest
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.metadata_fetch import cached_resolve
 from app.services.mobi2epub import DrmProtectedError, convert_mobi_to_epub
@@ -306,8 +308,54 @@ async def _ingest_mobi(
     return book
 
 
-UPLOAD_SUFFIXES = (".epub", ".txt", ".mobi", ".azw3")
-UNSUPPORTED_UPLOAD = "Only EPUB, TXT, MOBI or AZW3 files are supported"
+async def _ingest_cbz(
+    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
+) -> Book:
+    """Save one CBZ, pack it into the pre-paginated EPUB the rest of the app
+    reads, and stage its Book row (no commit). Same layout as TXT and MOBI.
+    A comic has no text: it is classified an image book here so the text
+    pipeline never picks it up."""
+    book_id = uuid.uuid4()
+    original_path = get_book_path(book_id, "book.cbz")
+    file_path = get_book_path(book_id, "book.epub")
+    cover_path = get_cover_path(book_id)
+
+    await save_upload_file(file, original_path)
+    try:
+        await asyncio.to_thread(convert_cbz_to_epub, original_path, file_path)
+        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
+        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
+    except CbzError as exc:
+        for path in (original_path, file_path, cover_path):
+            delete_file(path)
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        for path in (original_path, file_path, cover_path):
+            delete_file(path)
+        raise HTTPException(status_code=400, detail="Invalid CBZ file")
+
+    book = Book(
+        id=book_id,
+        file_path=file_path,
+        file_size=os.path.getsize(file_path),
+        format="cbz",
+        original_path=original_path,
+        cover_path=cover_path if cover_ok else None,
+        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
+        added_by=user.id,
+        word_count=0,
+        is_image_book=True,
+        **metadata,
+    )
+    db.add(book)
+    await db.flush()
+    if lib_id:
+        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
+    return book
+
+
+UPLOAD_SUFFIXES = (".epub", ".txt", ".mobi", ".azw3", ".cbz")
+UNSUPPORTED_UPLOAD = "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported"
 DRM_UPLOAD = "The book is DRM-protected"
 
 
@@ -325,6 +373,8 @@ async def _ingest_upload(
         return await _ingest_txt(file, user, lib_id, db)
     if suffix in (".mobi", ".azw3"):
         return await _ingest_mobi(file, user, lib_id, db)
+    if suffix == ".cbz":
+        return await _ingest_cbz(file, user, lib_id, db)
     return await _ingest_epub(file, user, lib_id, db)
 
 
@@ -1686,7 +1736,7 @@ async def get_book_original(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """The file as it was uploaded, for books converted at ingest
-    (format txt/mobi/azw3). /file stays the EPUB everything else reads."""
+    (format txt/mobi/azw3/cbz). /file stays the EPUB everything else reads."""
     if current_user.role != UserRole.admin and not current_user.can_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1790,6 +1840,37 @@ async def list_epub_images(
             ]
 
     return await asyncio.to_thread(scan)
+
+
+@router.get("/{book_id}/pages")
+async def get_book_pages(
+    book_id: uuid.UUID,
+    request: Request,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """The EPUB's spine as pages: each entry names the image the page
+    shows, its pixel size and spread hint, in reading order with the
+    book's page-progression direction. Image pagers read this instead of
+    laying the XHTML out; /images is sorted by file name and is not it."""
+    book = await _get_book_with_access(book_id, current_user, db)
+    _require_book_file(book)
+    if not os.path.exists(book.file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    epub_mtime = int(os.path.getmtime(book.file_path))
+    etag = f'"{epub_mtime:x}-pages"'
+    headers = {
+        "ETag": etag,
+        "Cache-Control": "private, max-age=86400, must-revalidate",
+    }
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    try:
+        manifest = await asyncio.to_thread(read_page_manifest, book.file_path)
+    except Exception:
+        raise HTTPException(status_code=422, detail="Could not read the EPUB spine")
+    return JSONResponse(content=manifest.to_dict(), headers=headers)
 
 
 @router.get("/{book_id}/cover")

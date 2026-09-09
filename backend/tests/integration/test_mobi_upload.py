@@ -86,4 +86,4 @@ async def test_garbage_and_unknown_suffixes_are_rejected(admin_client, library_i
         data={"library_id": library_id},
     )
     assert response.status_code == 400
-    assert "MOBI or AZW3" in response.json()["detail"]
+    assert "AZW3 or CBZ" in response.json()["detail"]

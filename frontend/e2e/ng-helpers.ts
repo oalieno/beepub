@@ -434,3 +434,12 @@ export function marks(page: Page) {
     }));
   });
 }
+
+/** A six-page right-to-left comic (page four is a two-page spread), packed
+ *  into a pre-paginated EPUB at ingest. An image book: no readyText. */
+export const CBZ_BOOK: Fixture = {
+  file: "e2e-violin-platform.cbz",
+  title: "月台小提琴手",
+  readyText: "",
+  mimeType: "application/vnd.comicbook+zip",
+};

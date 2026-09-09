@@ -110,7 +110,7 @@
   // app's "download to phone" wants the EPUB).
   let isTxt = $derived(book?.format === "txt");
   let isConverted = $derived(
-    ["txt", "mobi", "azw3"].includes(book?.format ?? ""),
+    ["txt", "mobi", "azw3", "cbz"].includes(book?.format ?? ""),
   );
   let sourceFormat = $derived((book?.format ?? "").toUpperCase());
   let externalMeta = $state<ExternalMetadataOut[]>([]);

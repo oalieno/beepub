@@ -980,7 +980,7 @@
   "error_no_books_found": "找不到可存取的書籍",
   "error_no_metadata_db": "在路徑中找不到 metadata.db",
   "error_not_calibre": "不是 Calibre 書庫",
-  "error_upload_format": "僅支援 EPUB、TXT、MOBI 或 AZW3 檔案",
+  "error_upload_format": "僅支援 EPUB、TXT、MOBI、AZW3 或 CBZ 檔案",
   "error_upload_drm": "這本書有 DRM 保護，無法匯入",
   "error_txt_empty": "這個 TXT 檔沒有文字",
   "error_zh_convert_not_txt": "只有從 TXT 匯入的書可以轉換",

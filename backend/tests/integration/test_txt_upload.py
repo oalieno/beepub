@@ -104,7 +104,7 @@ async def test_unsupported_and_empty_uploads_are_rejected(admin_client, library_
         data={"library_id": library_id},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Only EPUB, TXT, MOBI or AZW3 files are supported"
+    assert response.json()["detail"] == "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported"
 
     response = await admin_client.post(
         "/api/books",

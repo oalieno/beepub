@@ -477,7 +477,7 @@
       >
         {filterFormat === "physical"
           ? m.physical_badge()
-          : ["txt", "mobi", "azw3"].includes(filterFormat)
+          : ["txt", "mobi", "azw3", "cbz"].includes(filterFormat)
             ? m.converted_badge({ format: filterFormat.toUpperCase() })
             : filterFormat}
         <X size={12} />
