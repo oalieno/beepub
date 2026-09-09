@@ -10,6 +10,21 @@ from app.vendor import ebooklib
 from app.vendor.ebooklib import epub
 
 
+def is_valid_isbn(value: str) -> bool:
+    """ISBN-10 or ISBN-13 with a correct check digit. An unschemed
+    identifier only counts as an ISBN when it checks out: Kindle files
+    carry a random 10-digit uid that would otherwise pass as one."""
+    digits = value.replace("-", "").replace(" ", "").upper()
+    if len(digits) == 10 and digits[:9].isdigit() and digits[9] in "0123456789X":
+        total = sum((10 - i) * int(d) for i, d in enumerate(digits[:9]))
+        total += 10 if digits[9] == "X" else int(digits[9])
+        return total % 11 == 0
+    if len(digits) == 13 and digits.isdigit():
+        total = sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(digits))
+        return total % 10 == 0
+    return False
+
+
 def parse_epub_metadata(file_path: str) -> dict[str, Any]:
     """Extract metadata from an EPUB file."""
     result = {
@@ -59,11 +74,7 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
             value = ident[0]
             attrs = ident[1] if len(ident) > 1 else {}
             scheme = attrs.get("opf:scheme", "").lower()
-            if "isbn" in scheme or (
-                value
-                and value.replace("-", "").isdigit()
-                and len(value.replace("-", "")) in (10, 13)
-            ):
+            if "isbn" in scheme or (value and is_valid_isbn(value)):
                 result["epub_isbn"] = value.replace("-", "")
                 break
 

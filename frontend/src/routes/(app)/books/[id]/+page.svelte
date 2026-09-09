@@ -105,10 +105,14 @@
   // Physical books have no file: no reader, no download — tracking is
   // status/rating/notes only (a percentage is meaningless for paper).
   let isPhysical = $derived(book?.format === "physical");
-  // Uploaded as TXT and converted at ingest: the file behind the book is
-  // the EPUB, and the source is offered separately (web only — the app's
-  // "download to phone" wants the EPUB).
+  // Uploaded as TXT/MOBI/AZW3 and converted at ingest: the file behind the
+  // book is the EPUB, and the source is offered separately (web only — the
+  // app's "download to phone" wants the EPUB).
   let isTxt = $derived(book?.format === "txt");
+  let isConverted = $derived(
+    ["txt", "mobi", "azw3"].includes(book?.format ?? ""),
+  );
+  let sourceFormat = $derived((book?.format ?? "").toUpperCase());
   let externalMeta = $state<ExternalMetadataOut[]>([]);
   let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
@@ -712,14 +716,14 @@
               {m.physical_badge()}
             </button>
           {/if}
-          {#if isTxt}
+          {#if isConverted}
             <button
               type="button"
               class="inline-flex items-center gap-1.5 mt-2 mr-2 px-3 py-1 bg-secondary rounded-full text-sm text-muted-foreground hover:text-foreground transition-colors"
-              onclick={() => filterInLibrary("format", "txt")}
+              onclick={() => filterInLibrary("format", book?.format ?? "")}
             >
               <FileText size={14} />
-              {m.txt_badge()}
+              {m.converted_badge({ format: sourceFormat })}
             </button>
           {/if}
           {#if editions.length > 0}
@@ -927,13 +931,13 @@
                   {m.book_open_reader_ng()}
                 </DropdownMenu.Item>
               {/if}
-              {#if isTxt && !isNative() && $authStore.user?.can_download}
+              {#if isConverted && !isNative() && $authStore.user?.can_download}
                 <DropdownMenu.Item
                   onclick={() =>
                     window.location.assign(`/api/books/${bookId}/original`)}
                 >
                   <FileText size={14} />
-                  {m.book_download_original_txt()}
+                  {m.book_download_original({ format: sourceFormat })}
                 </DropdownMenu.Item>
               {/if}
               {#if canConvertZh}
@@ -1436,7 +1440,7 @@
         {m.book_open_reader_ng()}
       </button>
     {/if}
-    {#if isTxt && !isNative() && $authStore.user?.can_download}
+    {#if isConverted && !isNative() && $authStore.user?.can_download}
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
@@ -1445,7 +1449,7 @@
         }}
       >
         <FileText size={20} class="text-muted-foreground shrink-0" />
-        {m.book_download_original_txt()}
+        {m.book_download_original({ format: sourceFormat })}
       </button>
     {/if}
     {#if canConvertZh}

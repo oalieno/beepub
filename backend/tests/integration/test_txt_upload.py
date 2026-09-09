@@ -89,7 +89,7 @@ async def test_bulk_upload_takes_txt_alongside_epub(admin_client, library_id):
         files=[
             ("files", ("a.epub", build_epub(title="A"), "application/epub+zip")),
             ("files", ("b.txt", TXT, "text/plain")),
-            ("files", ("c.mobi", b"not supported", "application/octet-stream")),
+            ("files", ("c.pdf", b"not supported", "application/octet-stream")),
         ],
         data={"library_id": library_id},
     )
@@ -100,11 +100,11 @@ async def test_bulk_upload_takes_txt_alongside_epub(admin_client, library_id):
 async def test_unsupported_and_empty_uploads_are_rejected(admin_client, library_id):
     response = await admin_client.post(
         "/api/books",
-        files={"file": ("book.mobi", b"x", "application/octet-stream")},
+        files={"file": ("book.pdf", b"x", "application/octet-stream")},
         data={"library_id": library_id},
     )
     assert response.status_code == 400
-    assert response.json()["detail"] == "Only EPUB or TXT files are supported"
+    assert response.json()["detail"] == "Only EPUB, TXT, MOBI or AZW3 files are supported"
 
     response = await admin_client.post(
         "/api/books",

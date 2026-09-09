@@ -377,7 +377,7 @@
       <input
         bind:this={fileInput}
         type="file"
-        accept=".epub,.txt"
+        accept=".epub,.txt,.mobi,.azw3"
         multiple
         class="hidden"
         onchange={(e) => {

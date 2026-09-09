@@ -50,7 +50,9 @@ const ERROR_MAP: Record<string, () => string> = {
   "No accessible books found": () => m.error_no_books_found(),
   "No metadata.db found at path": () => m.error_no_metadata_db(),
   "Not a Calibre library": () => m.error_not_calibre(),
-  "Only EPUB or TXT files are supported": () => m.error_upload_format(),
+  "Only EPUB, TXT, MOBI or AZW3 files are supported": () =>
+    m.error_upload_format(),
+  "The book is DRM-protected": () => m.error_upload_drm(),
   "The TXT file has no text": () => m.error_txt_empty(),
   "Only books imported from TXT can be converted": () =>
     m.error_zh_convert_not_txt(),

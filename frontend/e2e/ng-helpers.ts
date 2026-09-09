@@ -152,6 +152,23 @@ export const SIMPLIFIED_TXT_BOOK_2: Fixture = {
   mimeType: "text/plain",
 };
 
+/** Calibre-made AZW3 (KF8): unpacks to an EPUB whose first spine item
+ *  is a non-linear cover page; chapter two carries an inline image. */
+export const AZW3_BOOK: Fixture = {
+  file: "e2e-windmill-postman.azw3",
+  title: "風車島郵差",
+  readyText: "風車島上只有一個郵差",
+  mimeType: "application/vnd.amazon.ebook",
+};
+
+/** Old MOBI7: one HTML file, split on its page breaks at ingest. */
+export const MOBI7_BOOK: Fixture = {
+  file: "e2e-ferry-last-boat.mobi",
+  title: "渡口的最後一班船",
+  readyText: "船夫從不等人",
+  mimeType: "application/x-mobipocket-ebook",
+};
+
 export const TXT_BOOK: Fixture = {
   file: "e2e-tide-clocktower.txt",
   title: "潮汐鐘樓手記",
@@ -251,13 +268,20 @@ export async function openBook(
   // an earlier test); the specs assume the first section's first page
   // unless they asked for a target themselves.
   if (!query.cfi && !restore) {
-    await page.evaluate(() => window.__beepubReaderNG.core.goTo(0));
+    // First linear section: a converted Kindle book opens on a
+    // non-linear cover page at index 0.
+    const first = await page.evaluate(() => {
+      const core = window.__beepubReaderNG.core;
+      const index = core.firstLinearIndex();
+      core.goTo(index);
+      return index;
+    });
     await expect
       .poll(() =>
-        page.evaluate(() => {
+        page.evaluate((index) => {
           const l = window.__beepubReaderNG.core.lastLocation;
-          return l.index === 0 && l.fraction === 0;
-        }),
+          return l.index === index && l.fraction === 0;
+        }, first),
       )
       .toBe(true);
   }

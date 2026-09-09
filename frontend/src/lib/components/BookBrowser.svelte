@@ -477,8 +477,8 @@
       >
         {filterFormat === "physical"
           ? m.physical_badge()
-          : filterFormat === "txt"
-            ? m.txt_badge()
+          : ["txt", "mobi", "azw3"].includes(filterFormat)
+            ? m.converted_badge({ format: filterFormat.toUpperCase() })
             : filterFormat}
         <X size={12} />
       </button>

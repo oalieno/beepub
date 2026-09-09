@@ -69,6 +69,7 @@ from app.schemas.series import PaginatedFeed
 from app.services.book_search import tiered_book_search
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.metadata_fetch import cached_resolve
+from app.services.mobi2epub import DrmProtectedError, convert_mobi_to_epub
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
@@ -261,8 +262,53 @@ async def _ingest_txt(
     return book
 
 
-UPLOAD_SUFFIXES = (".epub", ".txt")
-UNSUPPORTED_UPLOAD = "Only EPUB or TXT files are supported"
+async def _ingest_mobi(
+    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
+) -> Book:
+    """Save one MOBI/AZW3, convert it to the EPUB the rest of the app reads,
+    and stage its Book row (no commit). Same layout as TXT: the EPUB is
+    file_path, the upload stays at original_path for download."""
+    suffix = _upload_suffix(file) or ".mobi"
+    book_id = uuid.uuid4()
+    original_path = get_book_path(book_id, f"book{suffix}")
+    file_path = get_book_path(book_id, "book.epub")
+    cover_path = get_cover_path(book_id)
+
+    await save_upload_file(file, original_path)
+    try:
+        await asyncio.to_thread(convert_mobi_to_epub, original_path, file_path)
+        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
+        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
+    except DrmProtectedError:
+        for path in (original_path, file_path, cover_path):
+            delete_file(path)
+        raise HTTPException(status_code=400, detail=DRM_UPLOAD)
+    except Exception:
+        for path in (original_path, file_path, cover_path):
+            delete_file(path)
+        raise HTTPException(status_code=400, detail="Invalid MOBI file")
+
+    book = Book(
+        id=book_id,
+        file_path=file_path,
+        file_size=os.path.getsize(file_path),
+        format=suffix[1:],
+        original_path=original_path,
+        cover_path=cover_path if cover_ok else None,
+        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
+        added_by=user.id,
+        **metadata,
+    )
+    db.add(book)
+    await db.flush()
+    if lib_id:
+        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
+    return book
+
+
+UPLOAD_SUFFIXES = (".epub", ".txt", ".mobi", ".azw3")
+UNSUPPORTED_UPLOAD = "Only EPUB, TXT, MOBI or AZW3 files are supported"
+DRM_UPLOAD = "The book is DRM-protected"
 
 
 def _upload_suffix(file: UploadFile) -> str | None:
@@ -274,8 +320,11 @@ def _upload_suffix(file: UploadFile) -> str | None:
 async def _ingest_upload(
     file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
 ) -> Book:
-    if _upload_suffix(file) == ".txt":
+    suffix = _upload_suffix(file)
+    if suffix == ".txt":
         return await _ingest_txt(file, user, lib_id, db)
+    if suffix in (".mobi", ".azw3"):
+        return await _ingest_mobi(file, user, lib_id, db)
     return await _ingest_epub(file, user, lib_id, db)
 
 
@@ -1637,7 +1686,7 @@ async def get_book_original(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """The file as it was uploaded, for books converted at ingest
-    (format="txt"). /file stays the EPUB everything else reads."""
+    (format txt/mobi/azw3). /file stays the EPUB everything else reads."""
     if current_user.role != UserRole.admin and not current_user.can_download:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
