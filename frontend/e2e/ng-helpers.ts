@@ -467,9 +467,22 @@ export function pagerState(page: Page) {
       total: p.total as number,
       shown: p.shown as number[],
       twoPage: p.twoPage as boolean,
+      mode: p.mode as string,
       flow: p.flow as string,
+      rtl: p.rtl as boolean,
       scale: p.scale as number,
       cfi: p.cfi as string,
     };
   });
+}
+
+/** Pick an image-pager setting through the settings sheet. */
+export async function setPagerSetting(
+  page: Page,
+  row: "setting-pager-mode" | "setting-pager-direction",
+  label: string,
+) {
+  await page.getByRole("button", { name: "Reader settings" }).click();
+  await page.getByTestId(row).getByRole("button", { name: label }).click();
+  await page.keyboard.press("Escape");
 }

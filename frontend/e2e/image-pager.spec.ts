@@ -1,6 +1,12 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
-import { CBZ_BOOK, openComic, pagerState, seedFixture } from "./ng-helpers";
+import {
+  CBZ_BOOK,
+  openComic,
+  pagerState,
+  seedFixture,
+  setPagerSetting,
+} from "./ng-helpers";
 
 /**
  * The image pager: a pre-paginated book (here a comic packed from a CBZ:
@@ -20,17 +26,22 @@ async function settleSave(page: Page) {
   await page.waitForTimeout(2600);
 }
 
-test("a comic opens in the pager: cover alone, then pairs, the spread alone", async ({
+test("double page: cover alone, then pairs, the spread alone", async ({
   page,
 }) => {
   const bookId = await seedFixture(page.request, CBZ_BOOK);
   await openComic(page, bookId);
   // Start from the cover whatever an earlier run left behind.
   await page.evaluate(() => window.__beepubReaderNG.pager.goTo(0));
-
   let state = await pagerState(page);
+  expect(state.mode).toBe("single");
+  expect(state.shown).toEqual([0]);
+  await setPagerSetting(page, "setting-pager-mode", "Double page");
+
+  state = await pagerState(page);
   expect(state.total).toBe(6);
-  expect(state.twoPage).toBe(true); // 1280×720 desktop viewport
+  expect(state.twoPage).toBe(true);
+  expect(state.rtl).toBe(true);
   expect(state.shown).toEqual([0]);
   await expect(chrome(page)).toContainText("1 / 6");
   expect(state.cfi).toMatch(/^epubcfi\(\/6\/2(\[[^\]]*\])?!\/4\)$/);
@@ -62,6 +73,16 @@ test("a comic opens in the pager: cover alone, then pairs, the spread alone", as
   await page.evaluate(() => window.__beepubReaderNG.pager.next());
   await expect(page.getByTestId("book-end")).toBeVisible();
   expect((await pagerState(page)).page).toBe(4);
+  await page.keyboard.press("Escape");
+
+  // Forcing the direction flips the pair on screen; back to single.
+  await setPagerSetting(page, "setting-pager-direction", "Left to right");
+  state = await pagerState(page);
+  expect(state.rtl).toBe(false);
+  expect(state.shown).toEqual([4, 5]);
+  await setPagerSetting(page, "setting-pager-direction", "As the book");
+  await setPagerSetting(page, "setting-pager-mode", "Single page");
+  expect((await pagerState(page)).shown).toEqual([4]);
 });
 
 test("the page is the position: it restores here and in the current reader", async ({
@@ -117,12 +138,7 @@ test("the scroll flow stacks the pages and follows the scroll", async ({
   await openComic(page, bookId);
   await page.evaluate(() => window.__beepubReaderNG.pager.goTo(0));
 
-  await page.getByRole("button", { name: "Reader settings" }).click();
-  await page
-    .getByTestId("setting-pager-flow")
-    .getByRole("button", { name: "Scroll" })
-    .click();
-  await page.keyboard.press("Escape");
+  await setPagerSetting(page, "setting-pager-mode", "Vertical scroll");
   await expect(page.getByTestId("image-pager")).toHaveAttribute(
     "data-flow",
     "scroll",
@@ -135,12 +151,7 @@ test("the scroll flow stacks the pages and follows the scroll", async ({
   await expect(chrome(page)).toContainText("6 / 6");
 
   // Back to pages for the specs that follow; the choice is remembered.
-  await page.getByRole("button", { name: "Reader settings" }).click();
-  await page
-    .getByTestId("setting-pager-flow")
-    .getByRole("button", { name: "Pages" })
-    .click();
-  await page.keyboard.press("Escape");
+  await setPagerSetting(page, "setting-pager-mode", "Single page");
   await expect(page.getByTestId("image-pager")).toHaveAttribute(
     "data-flow",
     "paged",

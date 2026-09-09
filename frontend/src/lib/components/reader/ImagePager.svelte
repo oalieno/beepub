@@ -27,8 +27,8 @@
     readPages,
     spreadIndexOf,
     type PageEntry,
-    type PagerFlow,
-    type PagerLayout,
+    type PagerDirection,
+    type PagerMode,
   } from "$lib/reader/pages";
   import {
     flattenToc,
@@ -47,8 +47,8 @@
     loader,
     initialCfi = null,
     darkMode = false,
-    flow = "paged",
-    layout = "auto",
+    mode = "single",
+    direction = "auto",
     onready,
     onerror,
     ontap,
@@ -70,8 +70,9 @@
     loader: BookLoader;
     initialCfi?: string | null;
     darkMode?: boolean;
-    flow?: PagerFlow;
-    layout?: PagerLayout;
+    mode?: PagerMode;
+    /** Overrides the book's page-progression direction. */
+    direction?: PagerDirection;
     /** First page shown. */
     onready?: () => void;
     onerror?: (error: Error) => void;
@@ -124,19 +125,19 @@
   let quietScrollUntil = 0;
   let quietTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const rtl = $derived(book.dir === "rtl");
-  const total = $derived(pages.length);
-  const twoPage = $derived(
-    flow === "paged" &&
-      layout === "auto" &&
-      containerWidth > containerHeight * 1.1,
+  const rtl = $derived(
+    direction === "auto" ? book.dir === "rtl" : direction === "rtl",
   );
+  const flow = $derived(mode === "scroll" ? "scroll" : "paged");
+  const total = $derived(pages.length);
+  const twoPage = $derived(mode === "double");
   const spreads = $derived(buildSpreads(pages, twoPage, rtl));
   const spreadIndex = $derived(spreadIndexOf(spreads, pageIndex));
   const current = $derived(spreads[spreadIndex] ?? []);
   const shown = $derived(displayOrder(current, rtl));
   const atEnd = $derived(total > 0 && spreadIndex >= spreads.length - 1);
-  const percentage = $derived(pagePercent(pageIndex, total));
+  // Whole percents: the chrome prints this number.
+  const percentage = $derived(Math.round(pagePercent(pageIndex, total)));
 
   // ----------------------------------------------------------------- zoom
 
@@ -769,8 +770,14 @@
           get twoPage() {
             return twoPage;
           },
+          get mode() {
+            return mode;
+          },
           get flow() {
             return flow;
+          },
+          get rtl() {
+            return rtl;
           },
           get scale() {
             return scale;
@@ -790,6 +797,11 @@
       console.error(e);
       onerror?.(e instanceof Error ? e : new Error(String(e)));
     }
+  });
+
+  // A forced direction flips the tap zones and the scrubber.
+  $effect(() => {
+    if (started) ondirection?.(rtl, false);
   });
 
   // Switching into the scroll flow lands on the current page.
@@ -819,7 +831,7 @@
   bind:this={container}
   class="relative h-full w-full select-none overflow-hidden {darkMode
     ? 'bg-ink-900'
-    : 'bg-secondary'}"
+    : 'bg-background'}"
   data-testid="image-pager"
   data-flow={flow}
 >

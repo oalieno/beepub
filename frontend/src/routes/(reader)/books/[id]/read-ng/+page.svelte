@@ -57,8 +57,8 @@
   import type { BookLoader } from "$lib/reader/loaders";
   import {
     isPrePaginated,
-    type PagerFlow,
-    type PagerLayout,
+    type PagerDirection,
+    type PagerMode,
   } from "$lib/reader/pages";
   import BookReader from "$lib/components/reader/BookReader.svelte";
   import ImagePager from "$lib/components/reader/ImagePager.svelte";
@@ -283,8 +283,8 @@
     legacyMargin: "reader-margin",
     pageTurn: "reader-page-turn",
     dark: "reader-dark",
-    pagerFlow: "reader-pager-flow",
-    pagerLayout: "reader-pager-layout",
+    pagerMode: "reader-pager-mode",
+    pagerDirection: "reader-pager-direction",
   } as const;
 
   function stored(key: string): string | null {
@@ -355,23 +355,25 @@
     browser ? pick("my", [KEY.marginY, KEY.legacyMargin], 32) : 32,
   );
   let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
-  function initialPagerFlow(): PagerFlow {
-    return stored(KEY.pagerFlow) === "scroll" ? "scroll" : "paged";
+  function initialPagerMode(): PagerMode {
+    const v = stored(KEY.pagerMode);
+    return v === "double" || v === "scroll" ? v : "single";
   }
-  function initialPagerLayout(): PagerLayout {
-    return stored(KEY.pagerLayout) === "single" ? "single" : "auto";
+  function initialPagerDirection(): PagerDirection {
+    const v = stored(KEY.pagerDirection);
+    return v === "ltr" || v === "rtl" ? v : "auto";
   }
-  let pagerFlow = $state<PagerFlow>(browser ? initialPagerFlow() : "paged");
-  let pagerLayout = $state<PagerLayout>(
-    browser ? initialPagerLayout() : "auto",
+  let pagerMode = $state<PagerMode>(browser ? initialPagerMode() : "single");
+  let pagerDirection = $state<PagerDirection>(
+    browser ? initialPagerDirection() : "auto",
   );
-  function handlePagerFlowChange(value: PagerFlow) {
-    pagerFlow = value;
-    store(KEY.pagerFlow, value);
+  function handlePagerModeChange(value: PagerMode) {
+    pagerMode = value;
+    store(KEY.pagerMode, value);
   }
-  function handlePagerLayoutChange(value: PagerLayout) {
-    pagerLayout = value;
-    store(KEY.pagerLayout, value);
+  function handlePagerDirectionChange(value: PagerDirection) {
+    pagerDirection = value;
+    store(KEY.pagerDirection, value);
   }
   let darkMode = $state(initialDark());
 
@@ -1033,8 +1035,8 @@
             loader={claimed.loader}
             {initialCfi}
             {darkMode}
-            flow={pagerFlow}
-            layout={pagerLayout}
+            mode={pagerMode}
+            direction={pagerDirection}
             onready={() => (rendered = true)}
             onerror={() => (loadError = true)}
             ontap={handleReaderTap}
@@ -1392,11 +1394,11 @@
     onletterSpacingChange={handleLetterSpacingChange}
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
-    onpageTurnChange={handlePageTurnChange}
-    {pagerFlow}
-    {pagerLayout}
-    onpagerFlowChange={claimed ? handlePagerFlowChange : undefined}
-    onpagerLayoutChange={claimed ? handlePagerLayoutChange : undefined}
+    onpageTurnChange={claimed ? undefined : handlePageTurnChange}
+    {pagerMode}
+    {pagerDirection}
+    onpagerModeChange={claimed ? handlePagerModeChange : undefined}
+    onpagerDirectionChange={claimed ? handlePagerDirectionChange : undefined}
     onhelp={() => (showGestureHint = true)}
     onsyncpull={handleKosyncPull}
     onsyncpush={handleKosyncPush}

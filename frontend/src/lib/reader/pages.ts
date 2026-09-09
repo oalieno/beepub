@@ -167,8 +167,8 @@ export function pageFromPercent(pct: number, total: number): number {
   return Math.round((clamped / 100) * (total - 1));
 }
 
-/** How the pager moves through a book: one screen at a time, or every
- *  page stacked in a vertical scroll (webtoons). */
-export type PagerFlow = "paged" | "scroll";
-/** Paged flow: pair portrait pages when the screen is wide, or never. */
-export type PagerLayout = "auto" | "single";
+/** How the pager shows a book: one page per screen, two side by side,
+ *  or every page stacked in a vertical scroll (webtoons). */
+export type PagerMode = "single" | "double" | "scroll";
+/** Reading direction: the book's own, or forced either way. */
+export type PagerDirection = "auto" | "ltr" | "rtl";
