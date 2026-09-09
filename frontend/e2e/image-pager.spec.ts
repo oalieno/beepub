@@ -80,7 +80,7 @@ test("double page: cover alone, then pairs, the spread alone", async ({
   state = await pagerState(page);
   expect(state.rtl).toBe(false);
   expect(state.shown).toEqual([4, 5]);
-  await setPagerSetting(page, "setting-pager-direction", "As the book");
+  await setPagerSetting(page, "setting-pager-direction", "Auto");
   await setPagerSetting(page, "setting-pager-mode", "Single page");
   expect((await pagerState(page)).shown).toEqual([4]);
 });
@@ -131,24 +131,46 @@ test("the page is the position: it restores here and in the current reader", asy
     .toBe(3);
 });
 
-test("the scroll flow stacks the pages and follows the scroll", async ({
+test("the continuous modes stack the pages and follow the scroll", async ({
   page,
 }) => {
   const bookId = await seedFixture(page.request, CBZ_BOOK);
   await openComic(page, bookId);
   await page.evaluate(() => window.__beepubReaderNG.pager.goTo(0));
+  const scroller = page.locator('[data-testid="image-pager"] > div');
 
-  await setPagerSetting(page, "setting-pager-mode", "Vertical scroll");
+  await setPagerSetting(page, "setting-pager-mode", "Continuous vertical");
   await expect(page.getByTestId("image-pager")).toHaveAttribute(
     "data-flow",
-    "scroll",
+    "vertical",
   );
   expect((await pagerState(page)).twoPage).toBe(false);
-
-  const scroller = page.locator('[data-testid="image-pager"] > div');
   await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
   await expect(chrome(page)).toContainText("6 / 6");
+
+  // Webtoon: the same strip edge to edge; the position carries over.
+  await setPagerSetting(page, "setting-pager-mode", "Webtoon");
+  await expect(page.getByTestId("image-pager")).toHaveAttribute(
+    "data-flow",
+    "webtoon",
+  );
+  expect((await pagerState(page)).page).toBe(5);
+  await scroller.evaluate((el) => (el.scrollTop = 0));
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(0);
+
+  // Horizontal: a right-to-left book starts at the right end and the
+  // strip runs leftward.
+  await setPagerSetting(page, "setting-pager-mode", "Continuous horizontal");
+  await expect(page.getByTestId("image-pager")).toHaveAttribute(
+    "data-flow",
+    "horizontal",
+  );
+  await expect(scroller).toHaveCSS("direction", "rtl");
+  await scroller.evaluate((el) => (el.scrollLeft = -el.scrollWidth));
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(4);
 
   // Back to pages for the specs that follow; the choice is remembered.
   await setPagerSetting(page, "setting-pager-mode", "Single page");
@@ -156,7 +178,7 @@ test("the scroll flow stacks the pages and follows the scroll", async ({
     "data-flow",
     "paged",
   );
-  expect((await pagerState(page)).page).toBe(5);
+  expect((await pagerState(page)).page).toBe(4);
 });
 
 test.describe("phone", () => {

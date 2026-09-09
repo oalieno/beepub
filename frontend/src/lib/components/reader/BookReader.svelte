@@ -139,7 +139,7 @@
     /** Called with the parsed book before anything renders. Return true
      *  to take the book over — a pre-paginated image book goes to the
      *  image pager — and the reader stops here, handing over its loader. */
-    claim?: (book: Book, loader: BookLoader) => boolean;
+    claim?: (book: Book, loader: BookLoader) => boolean | Promise<boolean>;
     onbook?: (book: Book) => void;
     /** First section rendered. */
     onready?: () => void;
@@ -1745,7 +1745,8 @@ ${darkOverrides}
       ]);
       if (destroyed) return;
       onbook?.(book);
-      if (claim?.(book, loader)) return;
+      if (claim && (await claim(book, loader))) return;
+      if (destroyed) return;
       // Before the first relocation, so the restore already reports the
       // chapter it lands in.
       tocEntries = flattenToc(book, book.toc);

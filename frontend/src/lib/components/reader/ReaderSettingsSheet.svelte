@@ -8,6 +8,13 @@
     CloudDownload,
     CloudUpload,
     Loader2,
+    File,
+    BookOpen,
+    GalleryVertical,
+    GalleryHorizontal,
+    Smartphone,
+    ArrowRight,
+    ArrowLeft,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { PagerDirection, PagerMode } from "$lib/reader/pages";
@@ -140,18 +147,33 @@
     { value: "animated", label: m.reader_page_turn_slide },
     { value: "follow", label: m.reader_page_turn_follow },
   ];
-  const pagerModeOptions: { value: PagerMode; label: () => string }[] = [
-    { value: "single", label: m.reader_pager_mode_single },
-    { value: "double", label: m.reader_pager_mode_double },
-    { value: "scroll", label: m.reader_pager_mode_scroll },
+  const pagerModeOptions: {
+    value: PagerMode;
+    label: () => string;
+    icon: typeof File;
+  }[] = [
+    { value: "single", label: m.reader_pager_mode_single, icon: File },
+    { value: "double", label: m.reader_pager_mode_double, icon: BookOpen },
+    {
+      value: "vertical",
+      label: m.reader_pager_mode_vertical,
+      icon: GalleryVertical,
+    },
+    {
+      value: "horizontal",
+      label: m.reader_pager_mode_horizontal,
+      icon: GalleryHorizontal,
+    },
+    { value: "webtoon", label: m.reader_pager_mode_webtoon, icon: Smartphone },
   ];
   const pagerDirectionOptions: {
     value: PagerDirection;
     label: () => string;
+    icon: typeof File | null;
   }[] = [
-    { value: "auto", label: m.reader_pager_direction_auto },
-    { value: "ltr", label: m.reader_pager_direction_ltr },
-    { value: "rtl", label: m.reader_pager_direction_rtl },
+    { value: "auto", label: m.reader_pager_direction_auto, icon: null },
+    { value: "ltr", label: m.reader_pager_direction_ltr, icon: ArrowRight },
+    { value: "rtl", label: m.reader_pager_direction_rtl, icon: ArrowLeft },
   ];
 
   // Gutters step in 8px; letter spacing in half pixels (sub-pixel
@@ -395,17 +417,18 @@
 
         {#if onpagerModeChange}
           <!-- Image pager: reading mode -->
-          <div class="flex items-center justify-between">
+          <div class="space-y-2">
             <span class="text-sm {labelClass}">{m.reader_pager_mode()}</span>
-            <div class="flex gap-1" data-testid="setting-pager-mode">
+            <div class="flex flex-wrap gap-1" data-testid="setting-pager-mode">
               {#each pagerModeOptions as option}
                 <button
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerMode ===
+                  class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerMode ===
                   option.value
                     ? activeBtnClass
                     : inactiveBtnClass}"
                   onclick={() => onpagerModeChange?.(option.value)}
                 >
+                  <option.icon size={14} />
                   {option.label()}
                 </button>
               {/each}
@@ -419,12 +442,15 @@
               <div class="flex gap-1" data-testid="setting-pager-direction">
                 {#each pagerDirectionOptions as option}
                   <button
-                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
+                    class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
                     option.value
                       ? activeBtnClass
                       : inactiveBtnClass}"
                     onclick={() => onpagerDirectionChange?.(option.value)}
                   >
+                    {#if option.icon}
+                      <option.icon size={14} />
+                    {/if}
                     {option.label()}
                   </button>
                 {/each}

@@ -101,9 +101,9 @@ export function isWide(page: Pick<PageEntry, "width" | "height">): boolean {
  * Group pages into what one screen shows, in reading order. Single-page
  * layout: one page per screen. Two-page layout follows the rule shared
  * with KOReader: the first page (the cover) alone, a wide page alone, and
- * portrait pages paired. Explicit spread hints (commercial EPUBs mark
- * pages left/right/center) keep pairs aligned: a page marked as the second
- * half of a spread never opens one, and a centre page stands alone.
+ * portrait pages paired. The spread hints commercial EPUBs carry are not
+ * consulted: the owner asked for pairs on any screen, and a book whose
+ * hints disagree with its pages would otherwise never pair at all.
  *
  * Each group lists its pages in reading order; `displayOrder` turns that
  * into left-to-right for the screen.
@@ -114,22 +114,13 @@ export function buildSpreads(
   rtl: boolean,
 ): PageEntry[][] {
   if (!twoPage) return pages.map((p) => [p]);
-  const firstHalf: SpreadHint = rtl ? "right" : "left";
-  const secondHalf: SpreadHint = rtl ? "left" : "right";
+  void rtl;
   const out: PageEntry[][] = [];
   let i = 0;
   while (i < pages.length) {
     const p = pages[i];
     const q = pages[i + 1];
-    const alone =
-      i === 0 ||
-      isWide(p) ||
-      p.spread === "center" ||
-      p.spread === secondHalf ||
-      !q ||
-      isWide(q) ||
-      q.spread === "center" ||
-      q.spread === firstHalf;
+    const alone = i === 0 || isWide(p) || !q || isWide(q);
     if (alone) {
       out.push([p]);
       i += 1;
@@ -167,8 +158,15 @@ export function pageFromPercent(pct: number, total: number): number {
   return Math.round((clamped / 100) * (total - 1));
 }
 
-/** How the pager shows a book: one page per screen, two side by side,
- *  or every page stacked in a vertical scroll (webtoons). */
-export type PagerMode = "single" | "double" | "scroll";
+/** How the pager shows a book (Tachidesk's set): one page per screen,
+ *  two side by side, or a continuous strip — vertical with gaps,
+ *  horizontal with gaps (reading-direction aware), or webtoon (vertical,
+ *  edge to edge, no gaps). */
+export type PagerMode =
+  | "single"
+  | "double"
+  | "vertical"
+  | "horizontal"
+  | "webtoon";
 /** Reading direction: the book's own, or forced either way. */
 export type PagerDirection = "auto" | "ltr" | "rtl";

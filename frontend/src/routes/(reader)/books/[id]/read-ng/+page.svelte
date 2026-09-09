@@ -57,6 +57,8 @@
   import type { BookLoader } from "$lib/reader/loaders";
   import {
     isPrePaginated,
+    readPages,
+    type PageEntry,
     type PagerDirection,
     type PagerMode,
   } from "$lib/reader/pages";
@@ -116,11 +118,26 @@
   const activeReader = () => reader ?? pager;
   /** A pre-paginated book claimed from BookReader before it rendered:
    *  the image pager takes the parsed book and the loader over. */
-  let claimed = $state<{ book: Book; loader: BookLoader } | null>(null);
-  function claimImageBook(b: Book, l: BookLoader): boolean {
-    if (!isPrePaginated(b)) return false;
-    claimed = { book: b, loader: l };
-    isImageBook = true;
+  let claimed = $state<{
+    book: Book;
+    loader: BookLoader;
+    pages: PageEntry[] | null;
+  } | null>(null);
+  /** Two ways in: the OPF declares pre-paginated (bought manga, packed
+   *  CBZ), or the library classified the book an image book and every
+   *  spine item turns out to be a picture — an older image-only EPUB
+   *  that never declared its layout. A short text book (a small fixture)
+   *  has no images, so it stays with the text reader. */
+  async function claimImageBook(b: Book, l: BookLoader): Promise<boolean> {
+    if (isPrePaginated(b)) {
+      claimed = { book: b, loader: l, pages: null };
+      isImageBook = true;
+      return true;
+    }
+    if (!isImageBook) return false;
+    const pages = await readPages(b, l);
+    if (!pages.length || !pages.every((p) => p.image)) return false;
+    claimed = { book: b, loader: l, pages };
     return true;
   }
   // Retry remounts the reader; the watchdog turns a book that never
@@ -357,7 +374,12 @@
   let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
   function initialPagerMode(): PagerMode {
     const v = stored(KEY.pagerMode);
-    return v === "double" || v === "scroll" ? v : "single";
+    return v === "double" ||
+      v === "vertical" ||
+      v === "horizontal" ||
+      v === "webtoon"
+      ? v
+      : "single";
   }
   function initialPagerDirection(): PagerDirection {
     const v = stored(KEY.pagerDirection);
@@ -1033,6 +1055,7 @@
             {sync}
             book={claimed.book}
             loader={claimed.loader}
+            pages={claimed.pages}
             {initialCfi}
             {darkMode}
             mode={pagerMode}

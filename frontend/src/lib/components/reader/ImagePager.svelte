@@ -45,6 +45,7 @@
     sync,
     book,
     loader,
+    pages: prepared = null,
     initialCfi = null,
     darkMode = false,
     mode = "single",
@@ -68,6 +69,9 @@
      *  pre-paginated; the pager reads its spine and never renders it. */
     book: Book;
     loader: BookLoader;
+    /** The page list when the caller already read it (the image-book
+     *  fallback claim); null reads it here. */
+    pages?: PageEntry[] | null;
     initialCfi?: string | null;
     darkMode?: boolean;
     mode?: PagerMode;
@@ -128,7 +132,12 @@
   const rtl = $derived(
     direction === "auto" ? book.dir === "rtl" : direction === "rtl",
   );
-  const flow = $derived(mode === "scroll" ? "scroll" : "paged");
+  /** "paged" for single/double; otherwise the continuous strip's axis. */
+  const flow = $derived(
+    mode === "single" || mode === "double" ? "paged" : mode,
+  );
+  const continuous = $derived(flow !== "paged");
+  const horizontal = $derived(mode === "horizontal");
   const total = $derived(pages.length);
   const twoPage = $derived(mode === "double");
   const spreads = $derived(buildSpreads(pages, twoPage, rtl));
@@ -217,7 +226,7 @@
     pageIndex = spread?.[0]?.index ?? clamped;
     resetZoom();
     emitPosition();
-    if (flow === "scroll") scrollToPage(pageIndex);
+    if (continuous) scrollToPage(pageIndex);
     if (reason === "user") {
       onactivity?.();
       debouncedSave();
@@ -343,7 +352,7 @@
   // Scroll: pages near the viewport, tracked by an IntersectionObserver.
   let observer: IntersectionObserver | null = null;
   $effect(() => {
-    if (flow !== "scroll" || !started || !scroller) return;
+    if (!continuous || !started || !scroller) return;
     const root = scroller;
     const io = new IntersectionObserver(
       (entries) => {
@@ -380,7 +389,8 @@
     const root = scroller;
     if (!el || !root) return;
     quietScrollUntil = performance.now() + 600;
-    root.scrollTop = el.offsetTop;
+    if (horizontal) el.scrollIntoView({ inline: "start", block: "nearest" });
+    else root.scrollTop = el.offsetTop;
   }
 
   /** The page under the middle of the viewport becomes the position. A
@@ -406,22 +416,45 @@
         }, wait + 20);
       return;
     }
-    const middle = root.scrollTop + root.clientHeight / 2;
+    // At either end of the strip the edge page is the position (its
+    // middle may never reach the viewport's); elsewhere the page under
+    // the middle of the viewport, on the strip's axis.
+    const offset = horizontal ? Math.abs(root.scrollLeft) : root.scrollTop;
+    const extent = horizontal ? root.scrollWidth : root.scrollHeight;
+    const span = horizontal ? root.clientWidth : root.clientHeight;
+    if (extent > span && offset + span >= extent - 2) {
+      settleOn(total - 1);
+      return;
+    }
+    if (extent > span && offset <= 2) {
+      settleOn(0);
+      return;
+    }
+    const rootRect = root.getBoundingClientRect();
+    const cx = rootRect.left + rootRect.width / 2;
+    const cy = rootRect.top + rootRect.height / 2;
     let found = pageIndex;
     for (const [key, el] of Object.entries(pageEls)) {
-      if (el.offsetTop <= middle && el.offsetTop + el.offsetHeight > middle) {
+      const r = el.getBoundingClientRect();
+      const hit = horizontal
+        ? r.left <= cx && r.right > cx
+        : r.top <= cy && r.bottom > cy;
+      if (hit) {
         found = Number(key);
         break;
       }
     }
-    if (found !== pageIndex) {
-      const wasAtEnd = atEnd;
-      pageIndex = found;
-      emitPosition();
-      onactivity?.();
-      debouncedSave();
-      if (atEnd && !wasAtEnd) onatend?.();
-    }
+    settleOn(found);
+  }
+
+  function settleOn(found: number) {
+    if (found === pageIndex) return;
+    const wasAtEnd = atEnd;
+    pageIndex = found;
+    emitPosition();
+    onactivity?.();
+    debouncedSave();
+    if (atEnd && !wasAtEnd) onatend?.();
   }
 
   function aspectRatio(page: PageEntry): string {
@@ -612,19 +645,19 @@
         break;
       case " ":
       case "PageDown":
-        if (flow === "scroll") return;
+        if (continuous) return;
         next();
         break;
       case "PageUp":
-        if (flow === "scroll") return;
+        if (continuous) return;
         prev();
         break;
       case "ArrowDown":
-        if (flow === "scroll") return;
+        if (continuous) return;
         next();
         break;
       case "ArrowUp":
-        if (flow === "scroll") return;
+        if (continuous) return;
         prev();
         break;
       case "Home":
@@ -720,7 +753,7 @@
     cache = new PageImageCache(loader, 32);
     try {
       const [list, saved] = await Promise.all([
-        readPages(book, loader),
+        prepared ?? readPages(book, loader),
         loadSaved(),
       ]);
       if (destroyed) return;
@@ -747,7 +780,7 @@
       await tick();
       await Promise.all(current.map((p) => loadImage(p)));
       if (destroyed) return;
-      if (flow === "scroll") scrollToPage(pageIndex);
+      if (continuous) scrollToPage(pageIndex);
       onready?.();
       progressTimer = setInterval(
         () => void saveProgress(false),
@@ -806,7 +839,7 @@
 
   // Switching into the scroll flow lands on the current page.
   $effect(() => {
-    if (flow === "scroll" && started) {
+    if (continuous && started) {
       void tick().then(() => scrollToPage(pageIndex));
     }
   });
@@ -831,23 +864,35 @@
   bind:this={container}
   class="relative h-full w-full select-none overflow-hidden {darkMode
     ? 'bg-ink-900'
-    : 'bg-background'}"
+    : 'bg-white'}"
   data-testid="image-pager"
   data-flow={flow}
 >
-  {#if flow === "scroll"}
+  {#if continuous}
+    <!-- A continuous strip: vertical (gaps, capped width), webtoon (edge
+         to edge, no gaps) or horizontal (fit to height, reading direction
+         sets which end it starts from). -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       bind:this={scroller}
-      class="relative h-full w-full overflow-y-auto overflow-x-hidden overscroll-contain"
+      class="relative h-full w-full overscroll-contain {horizontal
+        ? 'overflow-x-auto overflow-y-hidden'
+        : 'overflow-y-auto overflow-x-hidden'}"
+      style="direction: {horizontal && rtl ? 'rtl' : 'ltr'};"
       onscroll={handleScroll}
       onpointerdown={handleScrollPointerDown}
       onpointerup={handleScrollPointerUp}
     >
-      <div class="mx-auto w-full max-w-[900px]">
+      <div
+        class={horizontal
+          ? "flex h-full w-max flex-row gap-2"
+          : mode === "webtoon"
+            ? "flex w-full flex-col"
+            : "mx-auto flex w-full max-w-[900px] flex-col gap-2"}
+      >
         {#each pages as page (page.index)}
           <div
-            class="relative w-full"
+            class="relative {horizontal ? 'h-full shrink-0' : 'w-full'}"
             style="aspect-ratio: {aspectRatio(page)};"
             data-page={page.index}
             use:registerPage={page.index}
