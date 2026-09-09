@@ -443,3 +443,33 @@ export const CBZ_BOOK: Fixture = {
   readyText: "",
   mimeType: "application/vnd.comicbook+zip",
 };
+
+/** Open an image book in read-ng: BookReader parses it, finds the layout
+ *  pre-paginated and hands it to the image pager. Resolves once the pager
+ *  shows its restored page with every image on screen decoded. */
+export async function openComic(page: Page, bookId: string) {
+  await seedGesturesSeen(page);
+  await page.goto(`/books/${bookId}/read-ng`);
+  await page.waitForFunction(() => !!window.__beepubReaderNG?.pager, null, {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.__beepubReaderNG.pager.loaded))
+    .toBe(true);
+}
+
+/** The pager's position as the debug handle reports it. */
+export function pagerState(page: Page) {
+  return page.evaluate(() => {
+    const p = window.__beepubReaderNG.pager;
+    return {
+      page: p.page as number,
+      total: p.total as number,
+      shown: p.shown as number[],
+      twoPage: p.twoPage as boolean,
+      flow: p.flow as string,
+      scale: p.scale as number,
+      cfi: p.cfi as string,
+    };
+  });
+}

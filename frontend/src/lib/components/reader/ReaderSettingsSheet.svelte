@@ -10,6 +10,7 @@
     Loader2,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import type { PagerFlow, PagerLayout } from "$lib/reader/pages";
 
   /**
    * The reader's settings sheet. Rows appear when their handler is
@@ -30,6 +31,8 @@
     pageTurnNote = null,
     darkMode = false,
     isImageBook = false,
+    pagerFlow = "paged",
+    pagerLayout = "auto",
     showSync = false,
     syncBusy = null,
     onfontToggle,
@@ -42,6 +45,8 @@
     onmarginXChange,
     onmarginYChange,
     onpageTurnChange,
+    onpagerFlowChange,
+    onpagerLayoutChange,
     onhelp,
     onsyncpull,
     onsyncpush,
@@ -76,6 +81,12 @@
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
     onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
+    /** Image pager rows (comics): how pages flow and whether a wide
+     *  screen shows two at once. Present only while the pager renders. */
+    pagerFlow?: PagerFlow;
+    pagerLayout?: PagerLayout;
+    onpagerFlowChange?: (value: PagerFlow) => void;
+    onpagerLayoutChange?: (value: PagerLayout) => void;
     onhelp?: () => void;
     onsyncpull?: () => void;
     onsyncpush?: () => void;
@@ -128,6 +139,14 @@
     { value: "instant", label: m.reader_page_turn_instant },
     { value: "animated", label: m.reader_page_turn_slide },
     { value: "follow", label: m.reader_page_turn_follow },
+  ];
+  const pagerFlowOptions: { value: PagerFlow; label: () => string }[] = [
+    { value: "paged", label: m.reader_pager_flow_paged },
+    { value: "scroll", label: m.reader_pager_flow_scroll },
+  ];
+  const pagerLayoutOptions: { value: PagerLayout; label: () => string }[] = [
+    { value: "auto", label: m.reader_pager_layout_auto },
+    { value: "single", label: m.reader_pager_layout_single },
   ];
 
   // Gutters step in 8px; letter spacing in half pixels (sub-pixel
@@ -366,6 +385,45 @@
           </div>
           {#if pageTurnNote}
             <p class="-mt-2 text-xs {labelClass}">{pageTurnNote}</p>
+          {/if}
+        {/if}
+
+        {#if onpagerFlowChange}
+          <!-- Image pager: flow -->
+          <div class="flex items-center justify-between">
+            <span class="text-sm {labelClass}">{m.reader_pager_flow()}</span>
+            <div class="flex gap-1" data-testid="setting-pager-flow">
+              {#each pagerFlowOptions as option}
+                <button
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerFlow ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onpagerFlowChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+          {#if onpagerLayoutChange && pagerFlow === "paged"}
+            <div class="flex items-center justify-between">
+              <span class="text-sm {labelClass}">{m.reader_pager_layout()}</span
+              >
+              <div class="flex gap-1" data-testid="setting-pager-layout">
+                {#each pagerLayoutOptions as option}
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerLayout ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    onclick={() => onpagerLayoutChange?.(option.value)}
+                  >
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
           {/if}
         {/if}
 

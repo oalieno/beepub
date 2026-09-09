@@ -74,8 +74,10 @@ async function openFromShelf(
   await expect
     .poll(() =>
       page.evaluate((text) => {
-        const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
-        return doc.body?.textContent?.includes(text) ?? false;
+        // lastLocation can land a beat before the contents list is filled.
+        const doc: Document | undefined =
+          window.__beepubReaderNG.core.getContents()[0]?.doc;
+        return doc?.body?.textContent?.includes(text) ?? false;
       }, fixture.readyText),
     )
     .toBe(true);

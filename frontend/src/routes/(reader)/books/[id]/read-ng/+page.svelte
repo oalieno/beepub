@@ -53,8 +53,15 @@
     type StylePromptOut,
   } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
-  import type { PageTurnMode, TocItem } from "$lib/reader/core";
+  import type { Book, PageTurnMode, TocItem } from "$lib/reader/core";
+  import type { BookLoader } from "$lib/reader/loaders";
+  import {
+    isPrePaginated,
+    type PagerFlow,
+    type PagerLayout,
+  } from "$lib/reader/pages";
   import BookReader from "$lib/components/reader/BookReader.svelte";
+  import ImagePager from "$lib/components/reader/ImagePager.svelte";
   import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
   import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
   import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
@@ -103,6 +110,19 @@
   let rendered = $state(false);
   let loadError = $state(false);
   let reader: BookReader | undefined = $state();
+  let pager: ImagePager | undefined = $state();
+  /** Whichever renderer is mounted: the chrome's page turns, seeks and
+   *  chapter jumps go to it. */
+  const activeReader = () => reader ?? pager;
+  /** A pre-paginated book claimed from BookReader before it rendered:
+   *  the image pager takes the parsed book and the loader over. */
+  let claimed = $state<{ book: Book; loader: BookLoader } | null>(null);
+  function claimImageBook(b: Book, l: BookLoader): boolean {
+    if (!isPrePaginated(b)) return false;
+    claimed = { book: b, loader: l };
+    isImageBook = true;
+    return true;
+  }
   // Retry remounts the reader; the watchdog turns a book that never
   // renders into the error state instead of an endless spinner.
   let readerKey = $state(0);
@@ -118,6 +138,7 @@
   function retryLoad() {
     loadError = false;
     rendered = false;
+    claimed = null;
     readerKey += 1;
   }
 
@@ -262,6 +283,8 @@
     legacyMargin: "reader-margin",
     pageTurn: "reader-page-turn",
     dark: "reader-dark",
+    pagerFlow: "reader-pager-flow",
+    pagerLayout: "reader-pager-layout",
   } as const;
 
   function stored(key: string): string | null {
@@ -332,6 +355,24 @@
     browser ? pick("my", [KEY.marginY, KEY.legacyMargin], 32) : 32,
   );
   let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
+  function initialPagerFlow(): PagerFlow {
+    return stored(KEY.pagerFlow) === "scroll" ? "scroll" : "paged";
+  }
+  function initialPagerLayout(): PagerLayout {
+    return stored(KEY.pagerLayout) === "single" ? "single" : "auto";
+  }
+  let pagerFlow = $state<PagerFlow>(browser ? initialPagerFlow() : "paged");
+  let pagerLayout = $state<PagerLayout>(
+    browser ? initialPagerLayout() : "auto",
+  );
+  function handlePagerFlowChange(value: PagerFlow) {
+    pagerFlow = value;
+    store(KEY.pagerFlow, value);
+  }
+  function handlePagerLayoutChange(value: PagerLayout) {
+    pagerLayout = value;
+    store(KEY.pagerLayout, value);
+  }
   let darkMode = $state(initialDark());
 
   function handleFontToggle() {
@@ -459,7 +500,7 @@
     kosyncBusy = "push";
     try {
       // Land the current position in the backend first, then force it out.
-      await reader?.flushProgress();
+      await activeReader()?.flushProgress();
       const { manualKosyncPush } = await import("$lib/reading/kosync");
       const pushed = await manualKosyncPush(entry.digest);
       if (pushed) toastStore.success(m.kosync_pushed());
@@ -957,8 +998,8 @@
         offline={!$isOnline}
         backHref={localEntry ? "/local" : null}
         showAi={aiEnabled}
-        onprev={() => reader?.prev()}
-        onnext={() => reader?.next()}
+        onprev={() => activeReader()?.prev()}
+        onnext={() => activeReader()?.next()}
         onthemeToggle={handleThemeToggle}
         onhighlights={() => toggleSidebar("highlights")}
         oncompanion={() => openCompanion()}
@@ -983,71 +1024,115 @@
   <div class="relative min-h-0 flex-1 md:pb-2.5">
     {#if ready && source && sync && !loadError}
       {#key readerKey}
-        <BookReader
-          bind:this={reader}
-          {bookId}
-          {source}
-          {sync}
-          {initialCfi}
-          {fontFamily}
-          {fontSize}
-          {lineHeight}
-          {letterSpacing}
-          {marginX}
-          {marginY}
-          {darkMode}
-          {pageTurn}
-          {sectionWeights}
-          showAi={aiEnabled}
-          aiBookId={aiEnabled ? aiBookId : null}
-          offline={!$isOnline}
-          onbook={(b) => {
-            // The file's own title unless the record supplied one.
-            if (!hasDbTitle && typeof b.metadata?.title === "string")
-              title = b.metadata.title;
-          }}
-          onready={() => (rendered = true)}
-          onerror={() => (loadError = true)}
-          ontap={handleReaderTap}
-          ontoc={(t) => (toc = t)}
-          onchapter={(c) => {
-            currentHref = c.href ?? "";
-            chapterLabel = c.label;
-          }}
-          onhighlightschange={(list) => (highlights = list)}
-          onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
-          onshare={(hl) => (shareHighlight = hl)}
-          oncompanion={openCompanion}
-          onillustrate={handleIllustrate}
-          onillustrationschange={(list) => (illustrations = list)}
-          onillustrationclick={(ill) => (viewingIllustration = ill)}
-          onprogress={(p) => (percentage = p.percentage)}
-          onactivity={() => {
-            // beepub-kind saves carry track_activity — the server credits
-            // the 'web' device row itself. Local/kosync books tick the
-            // device ledger instead.
-            if (!isBeepub)
-              void import("$lib/services/readingLedger").then(
-                ({ tickReading }) => tickReading(),
-              );
-          }}
-          onticks={(t) => (sectionTicks = t)}
-          ondirection={(rtl, vertical) => {
-            isRtl = rtl;
-            isVertical = vertical;
-          }}
-          onkosyncposition={handleKosyncPosition}
-          onrestorefallback={(pct) =>
-            toastStore.info(
-              m.reader_restore_fallback({ percentage: Math.round(pct) }),
-            )}
-          onpeekchange={(peek) => (peekReturn = peek)}
-          onatend={() => {
-            reachedEnd = true;
-            prefetchSeriesNeighbors();
-          }}
-          onbookend={handleBookEnd}
-        />
+        {#if claimed}
+          <ImagePager
+            bind:this={pager}
+            {bookId}
+            {sync}
+            book={claimed.book}
+            loader={claimed.loader}
+            {initialCfi}
+            {darkMode}
+            flow={pagerFlow}
+            layout={pagerLayout}
+            onready={() => (rendered = true)}
+            onerror={() => (loadError = true)}
+            ontap={handleReaderTap}
+            ontoc={(t) => (toc = t)}
+            onchapter={(c) => {
+              currentHref = c.href ?? "";
+              chapterLabel = c.label;
+            }}
+            onprogress={(p) => (percentage = p.percentage)}
+            onactivity={() => {
+              if (!isBeepub)
+                void import("$lib/services/readingLedger").then(
+                  ({ tickReading }) => tickReading(),
+                );
+            }}
+            onticks={(t) => (sectionTicks = t)}
+            ondirection={(rtl, vertical) => {
+              isRtl = rtl;
+              isVertical = vertical;
+            }}
+            onrestorefallback={(pct) =>
+              toastStore.info(
+                m.reader_restore_fallback({ percentage: Math.round(pct) }),
+              )}
+            onatend={() => {
+              reachedEnd = true;
+              prefetchSeriesNeighbors();
+            }}
+            onbookend={handleBookEnd}
+          />
+        {:else}
+          <BookReader
+            bind:this={reader}
+            claim={claimImageBook}
+            {bookId}
+            {source}
+            {sync}
+            {initialCfi}
+            {fontFamily}
+            {fontSize}
+            {lineHeight}
+            {letterSpacing}
+            {marginX}
+            {marginY}
+            {darkMode}
+            {pageTurn}
+            {sectionWeights}
+            showAi={aiEnabled}
+            aiBookId={aiEnabled ? aiBookId : null}
+            offline={!$isOnline}
+            onbook={(b) => {
+              // The file's own title unless the record supplied one.
+              if (!hasDbTitle && typeof b.metadata?.title === "string")
+                title = b.metadata.title;
+            }}
+            onready={() => (rendered = true)}
+            onerror={() => (loadError = true)}
+            ontap={handleReaderTap}
+            ontoc={(t) => (toc = t)}
+            onchapter={(c) => {
+              currentHref = c.href ?? "";
+              chapterLabel = c.label;
+            }}
+            onhighlightschange={(list) => (highlights = list)}
+            onbrokenhighlights={(ids) => (brokenHighlightIds = new Set(ids))}
+            onshare={(hl) => (shareHighlight = hl)}
+            oncompanion={openCompanion}
+            onillustrate={handleIllustrate}
+            onillustrationschange={(list) => (illustrations = list)}
+            onillustrationclick={(ill) => (viewingIllustration = ill)}
+            onprogress={(p) => (percentage = p.percentage)}
+            onactivity={() => {
+              // beepub-kind saves carry track_activity — the server credits
+              // the 'web' device row itself. Local/kosync books tick the
+              // device ledger instead.
+              if (!isBeepub)
+                void import("$lib/services/readingLedger").then(
+                  ({ tickReading }) => tickReading(),
+                );
+            }}
+            onticks={(t) => (sectionTicks = t)}
+            ondirection={(rtl, vertical) => {
+              isRtl = rtl;
+              isVertical = vertical;
+            }}
+            onkosyncposition={handleKosyncPosition}
+            onrestorefallback={(pct) =>
+              toastStore.info(
+                m.reader_restore_fallback({ percentage: Math.round(pct) }),
+              )}
+            onpeekchange={(peek) => (peekReturn = peek)}
+            onatend={() => {
+              reachedEnd = true;
+              prefetchSeriesNeighbors();
+            }}
+            onbookend={handleBookEnd}
+          />
+        {/if}
       {/key}
     {/if}
 
@@ -1089,8 +1174,8 @@
               {isRtl}
               ticks={sectionTicks}
               ariaLabel={m.reader_progress()}
-              getlabel={(p) => reader?.chapterAtPercentage(p) ?? null}
-              onseek={(p) => reader?.seekPercentage(p)}
+              getlabel={(p) => activeReader()?.chapterAtPercentage(p) ?? null}
+              onseek={(p) => activeReader()?.seekPercentage(p)}
             />
           </div>
           <div
@@ -1191,11 +1276,11 @@
           ? () => booksApi.getRecap(aiBookId!, reader?.getCurrentCfi() ?? "")
           : null}
         onchapter={(href) => {
-          void reader?.displayChapter(href);
+          void activeReader()?.displayChapter(href);
           activeSidebar = null;
         }}
         onspine={(spineIndex) => {
-          void reader?.displayChapter(spineIndex);
+          void activeReader()?.displayChapter(spineIndex);
           activeSidebar = null;
         }}
         onclose={() => (activeSidebar = null)}
@@ -1256,16 +1341,16 @@
       onpeekreturn={() => reader?.returnFromPeek()}
       canSeek={true}
       ticks={sectionTicks}
-      getSeekLabel={(p) => reader?.chapterAtPercentage(p) ?? null}
-      onseek={(p) => reader?.seekPercentage(p)}
+      getSeekLabel={(p) => activeReader()?.chapterAtPercentage(p) ?? null}
+      onseek={(p) => activeReader()?.seekPercentage(p)}
       {darkMode}
       {isRtl}
       {isImageBook}
       highlightCount={highlights.length}
       offline={!$isOnline}
       showAi={aiEnabled}
-      onprev={() => reader?.prev()}
-      onnext={() => reader?.next()}
+      onprev={() => activeReader()?.prev()}
+      onnext={() => activeReader()?.next()}
       ontoc={() => toggleSidebar("toc")}
       onsearch={() => toggleSidebar("search")}
       onhighlights={() => toggleSidebar("highlights")}
@@ -1308,6 +1393,10 @@
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
     onpageTurnChange={handlePageTurnChange}
+    {pagerFlow}
+    {pagerLayout}
+    onpagerFlowChange={claimed ? handlePagerFlowChange : undefined}
+    onpagerLayoutChange={claimed ? handlePagerLayoutChange : undefined}
     onhelp={() => (showGestureHint = true)}
     onsyncpull={handleKosyncPull}
     onsyncpush={handleKosyncPush}
