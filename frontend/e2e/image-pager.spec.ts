@@ -217,13 +217,21 @@ test("the continuous modes stack the pages and follow the scroll", async ({
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(0);
 
   // Horizontal: a right-to-left book starts at the right end and the
-  // strip runs leftward.
+  // strip runs leftward. Switching between strips keeps the page (the
+  // relayout's own scroll event must not read the new origin as page 1).
+  await scroller.evaluate((el) => {
+    const target = el.querySelector<HTMLElement>('[data-page="3"]')!;
+    el.scrollTop = target.offsetTop + target.offsetHeight / 3;
+  });
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(3);
   await setPagerSetting(page, "setting-pager-mode", "Continuous horizontal");
   await expect(page.getByTestId("image-pager")).toHaveAttribute(
     "data-flow",
     "horizontal",
   );
   await expect(scroller).toHaveCSS("direction", "rtl");
+  await page.waitForTimeout(800);
+  expect((await pagerState(page)).page).toBe(3);
   await scroller.evaluate((el) => (el.scrollLeft = -el.scrollWidth));
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
   await page.keyboard.press("ArrowRight");

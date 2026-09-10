@@ -15,7 +15,7 @@
    *
    * Must sit inside the reader root div (.reader-light / .reader-dark).
    */
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
   import type { Book, NavInput, TocItem } from "$lib/reader/core";
   import type { BookLoader } from "$lib/reader/loaders/types";
   import { PageImageCache } from "$lib/reader/page-images";
@@ -955,11 +955,17 @@
     if (started) ondirection?.(rtl, false);
   });
 
-  // Switching into the scroll flow lands on the current page.
+  // Switching into, or between, the scroll flows lands on the current
+  // page. The mode is the dependency (vertical → horizontal keeps
+  // `continuous` true); the page is taken now, before the relayout's
+  // own scroll event can read the strip's new origin as page one, and
+  // that event is held quiet until the strip has been scrolled to it.
   $effect(() => {
-    if (continuous && started) {
-      void tick().then(() => scrollToPage(pageIndex));
-    }
+    void mode;
+    if (!continuous || !started) return;
+    const target = untrack(() => pageIndex);
+    quietScrollUntil = performance.now() + 600;
+    void tick().then(() => scrollToPage(target));
   });
 
   onDestroy(() => {
