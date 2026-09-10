@@ -179,6 +179,29 @@ test("the continuous modes stack the pages and follow the scroll", async ({
   await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
   await expect(chrome(page)).toContainText("6 / 6");
+  // No scrollbar: the strip fills the pager edge to edge.
+  expect(
+    await scroller.evaluate((el) => el.clientWidth === el.offsetWidth),
+  ).toBe(true);
+
+  // A mouse drags the strip: pulling up from the top scrolls down, and
+  // a drag is not a chrome tap.
+  await scroller.evaluate((el) => (el.scrollTop = 0));
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(0);
+  const box = (await scroller.boundingBox())!;
+  const chromeShown = await chrome(page).isVisible();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.8);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.2, {
+    steps: 8,
+  });
+  await page.mouse.up();
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(
+    box.height * 0.5,
+  );
+  expect(await chrome(page).isVisible()).toBe(chromeShown);
+  await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
 
   // Webtoon: the same strip edge to edge; the position carries over.
   await setPagerSetting(page, "setting-pager-mode", "Webtoon");
@@ -202,6 +225,18 @@ test("the continuous modes stack the pages and follow the scroll", async ({
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(4);
+  // A plain wheel moves the strip: down runs forward (leftward here),
+  // up runs back.
+  await scroller.evaluate((el) => (el.scrollLeft = 0));
+  await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(0);
+  const hbox = (await scroller.boundingBox())!;
+  await page.mouse.move(hbox.x + hbox.width / 2, hbox.y + hbox.height / 2);
+  await page.mouse.wheel(0, 2000);
+  await expect
+    .poll(() => scroller.evaluate((el) => el.scrollLeft))
+    .toBeLessThan(-1000);
+  await page.mouse.wheel(0, -4000);
+  await expect.poll(() => scroller.evaluate((el) => el.scrollLeft)).toBe(0);
 
   // Back to pages for the specs that follow; the choice is remembered.
   await setPagerSetting(page, "setting-pager-mode", "Single page");
@@ -209,7 +244,7 @@ test("the continuous modes stack the pages and follow the scroll", async ({
     "data-flow",
     "paged",
   );
-  expect((await pagerState(page)).page).toBe(4);
+  expect((await pagerState(page)).page).toBe(0);
 });
 
 test.describe("phone", () => {

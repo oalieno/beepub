@@ -625,16 +625,67 @@
   /** Scroll flow: a tap anywhere toggles the chrome (the wheel and the
    *  finger scroll the pages themselves). */
   let scrollTapStart: PointerPoint | null = null;
+  // A mouse drags the strip (touch scrolls it natively); a press that
+  // does not move is the chrome tap.
+  let drag: {
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    moved: boolean;
+  } | null = null;
+  let dragging = $state(false);
+
   function handleScrollPointerDown(e: PointerEvent) {
     scrollTapStart = { x: e.screenX, y: e.screenY };
+    if (e.pointerType !== "mouse" || e.button !== 0 || !scroller) return;
+    drag = {
+      x: e.clientX,
+      y: e.clientY,
+      left: scroller.scrollLeft,
+      top: scroller.scrollTop,
+      moved: false,
+    };
+    scroller.setPointerCapture(e.pointerId);
+  }
+  function handleScrollPointerMove(e: PointerEvent) {
+    if (!drag || !scroller) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < MOVE_THRESHOLD) return;
+    drag.moved = true;
+    dragging = true;
+    if (horizontal) scroller.scrollLeft = drag.left - dx;
+    else scroller.scrollTop = drag.top - dy;
   }
   function handleScrollPointerUp(e: PointerEvent) {
     const start = scrollTapStart;
     scrollTapStart = null;
-    if (!start) return;
+    const moved = drag?.moved ?? false;
+    drag = null;
+    dragging = false;
+    if (moved || !start) return;
     if (Math.hypot(e.screenX - start.x, e.screenY - start.y) > MOVE_THRESHOLD)
       return;
     ontap?.();
+  }
+  function handleScrollPointerCancel() {
+    scrollTapStart = null;
+    drag = null;
+    dragging = false;
+  }
+
+  /** The horizontal strip takes a plain (vertical) wheel too: down runs
+   *  forward in reading order. A trackpad's sideways motion scrolls
+   *  natively. */
+  function handleStripWheel(e: WheelEvent) {
+    if (!horizontal || !scroller) return;
+    if (e.ctrlKey || e.metaKey) return;
+    if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    // With `direction: rtl` the strip's scrollLeft runs from 0 at the
+    // right end to negative values leftward.
+    scroller.scrollLeft += rtl ? -e.deltaY : e.deltaY;
   }
 
   function handleKey(e: KeyboardEvent) {
@@ -887,13 +938,18 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       bind:this={scroller}
-      class="relative h-full w-full overscroll-contain {horizontal
+      class="strip relative h-full w-full overscroll-contain {horizontal
         ? 'overflow-x-auto overflow-y-hidden'
         : 'overflow-y-auto overflow-x-hidden'}"
-      style="direction: {horizontal && rtl ? 'rtl' : 'ltr'};"
+      style="direction: {horizontal && rtl ? 'rtl' : 'ltr'}; cursor: {dragging
+        ? 'grabbing'
+        : 'grab'};"
       onscroll={handleScroll}
       onpointerdown={handleScrollPointerDown}
+      onpointermove={handleScrollPointerMove}
       onpointerup={handleScrollPointerUp}
+      onpointercancel={handleScrollPointerCancel}
+      onwheel={handleStripWheel}
     >
       <div
         class={horizontal
@@ -986,3 +1042,14 @@
     </div>
   {/if}
 </div>
+
+<style>
+  /* The strip scrolls without a bar: the chrome's scrubber is the
+     position, and a horizontal bar under a manga page is noise. */
+  .strip {
+    scrollbar-width: none;
+  }
+  .strip::-webkit-scrollbar {
+    display: none;
+  }
+</style>
