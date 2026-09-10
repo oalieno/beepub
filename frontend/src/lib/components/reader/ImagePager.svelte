@@ -1013,47 +1013,52 @@
       onpointercancel={handleScrollPointerCancel}
       onwheel={handleStripWheel}
     >
-      <div
-        class={horizontal
-          ? "flex h-full w-max flex-row gap-2"
-          : mode === "webtoon"
-            ? "flex w-full flex-col"
-            : "mx-auto flex w-full max-w-[900px] flex-col gap-2"}
-        style={horizontal
-          ? `padding: ${padding}px 0;`
-          : `padding: 0 ${padding}px;`}
-      >
-        {#each pages as page (page.index)}
-          <div
-            class="relative {horizontal ? 'h-full shrink-0' : 'w-full'}"
-            style="aspect-ratio: {aspectRatio(page)};"
-            data-page={page.index}
-            use:registerPage={page.index}
-          >
-            {#if urls[page.index]}
-              <img
-                src={urls[page.index]}
-                alt=""
-                draggable="false"
-                class="block h-full w-full object-contain"
-                onerror={() => handleImageError(page)}
-              />
-            {:else if failed[page.index] || !page.image}
-              <div
-                class="flex h-full w-full items-center justify-center text-sm {darkMode
-                  ? 'text-ink-500'
-                  : 'text-muted-foreground'}"
-              >
-                {m.reader_pager_image_failed()}
-              </div>
-            {:else}
-              <div class="flex h-full w-full items-center justify-center">
-                <Spinner class={darkMode ? "border-ink-400" : ""} />
-              </div>
-            {/if}
-          </div>
-        {/each}
-      </div>
+      <!-- Keyed on the mode: WebKit keeps a page box's height from the
+           horizontal strip (h-full) when its class turns to w-full with
+           an aspect ratio, leaving a band under every picture. -->
+      {#key mode}
+        <div
+          class={horizontal
+            ? "flex h-full w-max flex-row gap-2"
+            : mode === "webtoon"
+              ? "flex w-full flex-col"
+              : "mx-auto flex w-full max-w-[900px] flex-col gap-2"}
+          style={horizontal
+            ? `padding: ${padding}px 0;`
+            : `padding: 0 ${padding}px;`}
+        >
+          {#each pages as page (page.index)}
+            <div
+              class="relative {horizontal ? 'h-full shrink-0' : 'w-full'}"
+              style="aspect-ratio: {aspectRatio(page)};"
+              data-page={page.index}
+              use:registerPage={page.index}
+            >
+              {#if urls[page.index]}
+                <img
+                  src={urls[page.index]}
+                  alt=""
+                  draggable="false"
+                  class="block h-full w-full object-contain"
+                  onerror={() => handleImageError(page)}
+                />
+              {:else if failed[page.index] || !page.image}
+                <div
+                  class="flex h-full w-full items-center justify-center text-sm {darkMode
+                    ? 'text-ink-500'
+                    : 'text-muted-foreground'}"
+                >
+                  {m.reader_pager_image_failed()}
+                </div>
+              {:else}
+                <div class="flex h-full w-full items-center justify-center">
+                  <Spinner class={darkMode ? "border-ink-400" : ""} />
+                </div>
+              {/if}
+            </div>
+          {/each}
+        </div>
+      {/key}
     </div>
   {:else}
     <!-- svelte-ignore a11y_no_static_element_interactions -->

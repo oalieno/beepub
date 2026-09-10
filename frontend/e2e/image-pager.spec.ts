@@ -232,6 +232,25 @@ test("the continuous modes stack the pages and follow the scroll", async ({
   await expect(scroller).toHaveCSS("direction", "rtl");
   await page.waitForTimeout(800);
   expect((await pagerState(page)).page).toBe(3);
+  // Back to a vertical strip: every page box is exactly its picture (a
+  // WebKit relayout bug left the horizontal strip's height on the box).
+  await setPagerSetting(page, "setting-pager-mode", "Continuous vertical");
+  await page.waitForTimeout(800);
+  expect(
+    await page.evaluate(() =>
+      [...document.querySelectorAll('[data-testid="image-pager"] [data-page]')]
+        .filter((el) => el.querySelector("img"))
+        .every(
+          (el) =>
+            Math.abs(
+              el.getBoundingClientRect().height -
+                el.querySelector("img")!.getBoundingClientRect().height,
+            ) < 1,
+        ),
+    ),
+  ).toBe(true);
+  await setPagerSetting(page, "setting-pager-mode", "Continuous horizontal");
+  await page.waitForTimeout(800);
   await scroller.evaluate((el) => (el.scrollLeft = -el.scrollWidth));
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
   await page.keyboard.press("ArrowRight");
