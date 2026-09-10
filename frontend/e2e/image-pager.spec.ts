@@ -196,10 +196,13 @@ test("the continuous modes stack the pages and follow the scroll", async ({
     steps: 8,
   });
   await page.mouse.up();
-  expect(await scroller.evaluate((el) => el.scrollTop)).toBeGreaterThan(
-    box.height * 0.5,
-  );
+  const released = await scroller.evaluate((el) => el.scrollTop);
+  expect(released).toBeGreaterThan(box.height * 0.5);
   expect(await chrome(page).isVisible()).toBe(chromeShown);
+  // A quick release flings: the strip keeps going after the hand lets go.
+  await expect
+    .poll(() => scroller.evaluate((el) => el.scrollTop))
+    .toBeGreaterThan(released + 50);
   await scroller.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect.poll(() => pagerState(page).then((s) => s.page)).toBe(5);
 

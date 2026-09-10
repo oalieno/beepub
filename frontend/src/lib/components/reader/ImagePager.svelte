@@ -633,18 +633,57 @@
     left: number;
     top: number;
     moved: boolean;
+    /** Recent positions along the scroll axis, for the release velocity. */
+    samples: { t: number; pos: number }[];
   } | null = null;
   let dragging = $state(false);
+  let flingFrame: number | null = null;
+
+  // A flung strip keeps moving and slows down, like a touch scroll:
+  // the release velocity decays by FLING_FRICTION every 16ms.
+  const FLING_WINDOW_MS = 100;
+  const FLING_FRICTION = 0.95;
+  const FLING_MIN_VELOCITY = 0.05; // px/ms
+
+  function stopFling() {
+    if (flingFrame != null) cancelAnimationFrame(flingFrame);
+    flingFrame = null;
+  }
+
+  function fling(velocity: number) {
+    stopFling();
+    if (Math.abs(velocity) < FLING_MIN_VELOCITY || !scroller) return;
+    const el = scroller;
+    let v = velocity;
+    let last = performance.now();
+    const step = (now: number) => {
+      flingFrame = null;
+      const dt = Math.min(64, now - last);
+      last = now;
+      const before = horizontal ? el.scrollLeft : el.scrollTop;
+      const target = before + v * dt;
+      if (horizontal) el.scrollLeft = target;
+      else el.scrollTop = target;
+      const after = horizontal ? el.scrollLeft : el.scrollTop;
+      v *= Math.pow(FLING_FRICTION, dt / 16);
+      // Stopped by the strip's end, or slowed to nothing.
+      if (after === before || Math.abs(v) < FLING_MIN_VELOCITY) return;
+      flingFrame = requestAnimationFrame(step);
+    };
+    flingFrame = requestAnimationFrame(step);
+  }
 
   function handleScrollPointerDown(e: PointerEvent) {
     scrollTapStart = { x: e.screenX, y: e.screenY };
     if (e.pointerType !== "mouse" || e.button !== 0 || !scroller) return;
+    stopFling();
     drag = {
       x: e.clientX,
       y: e.clientY,
       left: scroller.scrollLeft,
       top: scroller.scrollTop,
       moved: false,
+      samples: [],
     };
     scroller.setPointerCapture(e.pointerId);
   }
@@ -657,14 +696,29 @@
     dragging = true;
     if (horizontal) scroller.scrollLeft = drag.left - dx;
     else scroller.scrollTop = drag.top - dy;
+    const now = performance.now();
+    drag.samples.push({ t: now, pos: horizontal ? -dx : -dy });
+    while (drag.samples.length > 1 && now - drag.samples[0].t > FLING_WINDOW_MS)
+      drag.samples.shift();
   }
   function handleScrollPointerUp(e: PointerEvent) {
     const start = scrollTapStart;
     scrollTapStart = null;
     const moved = drag?.moved ?? false;
+    const samples = drag?.samples ?? [];
     drag = null;
     dragging = false;
-    if (moved || !start) return;
+    if (moved) {
+      // Velocity over the last FLING_WINDOW_MS of the drag; a hand that
+      // paused before letting go has none.
+      const first = samples[0];
+      const lastSample = samples[samples.length - 1];
+      const dt = lastSample && first ? lastSample.t - first.t : 0;
+      if (dt > 0 && performance.now() - lastSample.t < FLING_WINDOW_MS)
+        fling((lastSample.pos - first.pos) / dt);
+      return;
+    }
+    if (!start) return;
     if (Math.hypot(e.screenX - start.x, e.screenY - start.y) > MOVE_THRESHOLD)
       return;
     ontap?.();
@@ -679,6 +733,7 @@
    *  forward in reading order. A trackpad's sideways motion scrolls
    *  natively. */
   function handleStripWheel(e: WheelEvent) {
+    stopFling();
     if (!horizontal || !scroller) return;
     if (e.ctrlKey || e.metaKey) return;
     if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
@@ -912,6 +967,7 @@
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     if (scrollFrame != null) cancelAnimationFrame(scrollFrame);
+    stopFling();
     if (quietTimer != null) clearTimeout(quietTimer);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     resizeObserver?.disconnect();
