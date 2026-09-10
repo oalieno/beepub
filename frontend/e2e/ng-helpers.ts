@@ -467,6 +467,8 @@ export function pagerState(page: Page) {
       total: p.total as number,
       shown: p.shown as number[],
       twoPage: p.twoPage as boolean,
+      shift: p.shift as boolean,
+      padding: p.padding as number,
       mode: p.mode as string,
       flow: p.flow as string,
       rtl: p.rtl as boolean,
@@ -479,10 +481,24 @@ export function pagerState(page: Page) {
 /** Pick an image-pager setting through the settings sheet. */
 export async function setPagerSetting(
   page: Page,
-  row: "setting-pager-mode" | "setting-pager-direction",
+  row: "setting-pager-mode" | "setting-pager-direction" | "setting-pager-shift",
   label: string,
 ) {
   await page.getByRole("button", { name: "Reader settings" }).click();
   await page.getByTestId(row).getByRole("button", { name: label }).click();
+  await page.keyboard.press("Escape");
+}
+
+/** Press a stepper row's + or − in the settings sheet `times` times. */
+export async function stepPagerSetting(
+  page: Page,
+  setting: "Page padding",
+  dir: "up" | "down",
+  times = 1,
+) {
+  await page.getByRole("button", { name: "Reader settings" }).click();
+  const name = `${dir === "up" ? "Increase" : "Decrease"} ${setting}`;
+  for (let i = 0; i < times; i++)
+    await page.getByRole("button", { name }).click();
   await page.keyboard.press("Escape");
 }

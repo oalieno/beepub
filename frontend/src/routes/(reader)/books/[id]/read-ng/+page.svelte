@@ -302,6 +302,10 @@
     dark: "reader-dark",
     pagerMode: "reader-pager-mode",
     pagerDirection: "reader-pager-direction",
+    pagerPadding: "reader-pager-padding",
+    /** Per book (suffixed with the id): whether its pairs are staggered
+     *  is a fact about the file, not a preference. */
+    pagerShift: "reader-pager-shift",
   } as const;
 
   function stored(key: string): string | null {
@@ -396,6 +400,22 @@
   function handlePagerDirectionChange(value: PagerDirection) {
     pagerDirection = value;
     store(KEY.pagerDirection, value);
+  }
+  const pagerShiftKey = $derived(`${KEY.pagerShift}:${bookId}`);
+  let pagerShift = $state(false);
+  $effect(() => {
+    pagerShift = stored(pagerShiftKey) === "1";
+  });
+  function handlePagerShiftChange(value: boolean) {
+    pagerShift = value;
+    store(pagerShiftKey, value ? "1" : "0");
+  }
+  let pagerPadding = $state(
+    browser ? Math.max(0, storedNum(KEY.pagerPadding) ?? 0) : 0,
+  );
+  function handlePagerPaddingChange(value: number) {
+    pagerPadding = value;
+    store(KEY.pagerPadding, String(value));
   }
   let darkMode = $state(initialDark());
 
@@ -1060,6 +1080,8 @@
             {darkMode}
             mode={pagerMode}
             direction={pagerDirection}
+            shift={pagerShift}
+            padding={pagerPadding}
             onready={() => (rendered = true)}
             onerror={() => (loadError = true)}
             ontap={handleReaderTap}
@@ -1420,8 +1442,12 @@
     onpageTurnChange={claimed ? undefined : handlePageTurnChange}
     {pagerMode}
     {pagerDirection}
+    {pagerShift}
+    {pagerPadding}
     onpagerModeChange={claimed ? handlePagerModeChange : undefined}
     onpagerDirectionChange={claimed ? handlePagerDirectionChange : undefined}
+    onpagerShiftChange={claimed ? handlePagerShiftChange : undefined}
+    onpagerPaddingChange={claimed ? handlePagerPaddingChange : undefined}
     onhelp={() => (showGestureHint = true)}
     onsyncpull={handleKosyncPull}
     onsyncpush={handleKosyncPush}

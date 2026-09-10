@@ -50,6 +50,8 @@
     darkMode = false,
     mode = "single",
     direction = "auto",
+    shift = false,
+    padding = 0,
     onready,
     onerror,
     ontap,
@@ -77,6 +79,10 @@
     mode?: PagerMode;
     /** Overrides the book's page-progression direction. */
     direction?: PagerDirection;
+    /** Double page: pair from the first page instead of showing it alone. */
+    shift?: boolean;
+    /** Space kept around the pages, px: the pictures shrink to fit inside. */
+    padding?: number;
     /** First page shown. */
     onready?: () => void;
     onerror?: (error: Error) => void;
@@ -140,7 +146,7 @@
   const horizontal = $derived(mode === "horizontal");
   const total = $derived(pages.length);
   const twoPage = $derived(mode === "double");
-  const spreads = $derived(buildSpreads(pages, twoPage, rtl));
+  const spreads = $derived(buildSpreads(pages, twoPage, rtl, shift));
   const spreadIndex = $derived(spreadIndexOf(spreads, pageIndex));
   const current = $derived(spreads[spreadIndex] ?? []);
   const shown = $derived(displayOrder(current, rtl));
@@ -803,6 +809,12 @@
           get twoPage() {
             return twoPage;
           },
+          get shift() {
+            return shift;
+          },
+          get padding() {
+            return padding;
+          },
           get mode() {
             return mode;
           },
@@ -889,6 +901,9 @@
           : mode === "webtoon"
             ? "flex w-full flex-col"
             : "mx-auto flex w-full max-w-[900px] flex-col gap-2"}
+        style={horizontal
+          ? `padding: ${padding}px 0;`
+          : `padding: 0 ${padding}px;`}
       >
         {#each pages as page (page.index)}
           <div
@@ -935,7 +950,7 @@
     >
       <div
         class="flex h-full w-full items-center justify-center will-change-transform"
-        style="transform: translate({tx}px, {ty}px) scale({scale}); transform-origin: center center;"
+        style="padding: {padding}px; transform: translate({tx}px, {ty}px) scale({scale}); transform-origin: center center;"
       >
         {#each shown as page, i (page.index)}
           <div

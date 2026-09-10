@@ -6,6 +6,7 @@ import {
   pagerState,
   seedFixture,
   setPagerSetting,
+  stepPagerSetting,
 } from "./ng-helpers";
 
 /**
@@ -75,14 +76,44 @@ test("double page: cover alone, then pairs, the spread alone", async ({
   expect((await pagerState(page)).page).toBe(4);
   await page.keyboard.press("Escape");
 
-  // Forcing the direction flips the pair on screen; back to single.
+  // Forcing the direction flips the pair on screen.
   await setPagerSetting(page, "setting-pager-direction", "Left to right");
   state = await pagerState(page);
   expect(state.rtl).toBe(false);
   expect(state.shown).toEqual([4, 5]);
   await setPagerSetting(page, "setting-pager-direction", "Auto");
+
+  // Shifted pairing: the first page joins the second, so 1+2, 3 alone
+  // before the wide page, 4, then 5+6 — and it is remembered per book.
+  await setPagerSetting(page, "setting-pager-shift", "From page 1");
+  await page.evaluate(() => window.__beepubReaderNG.pager.goTo(0));
+  state = await pagerState(page);
+  expect(state.shift).toBe(true);
+  expect(state.shown).toEqual([1, 0]);
+  await expect(chrome(page)).toContainText("1–2 / 6");
+  await page.evaluate(() => window.__beepubReaderNG.pager.next());
+  expect((await pagerState(page)).shown).toEqual([2]);
+  await page.reload();
+  await openComic(page, bookId);
+  expect((await pagerState(page)).shift).toBe(true);
+  // The reload restored page 3; unshifted it pairs with page 2 again.
+  await setPagerSetting(page, "setting-pager-shift", "Cover alone");
+  expect((await pagerState(page)).shown).toEqual([2, 1]);
+  await page.evaluate(() => window.__beepubReaderNG.pager.goTo(0));
+  expect((await pagerState(page)).shown).toEqual([0]);
+
+  // Padding shrinks the picture inside the same box.
+  const img = page.locator('[data-testid="image-pager"] img').first();
+  const before = (await img.boundingBox())!;
+  await stepPagerSetting(page, "Page padding", "up", 3);
+  expect((await pagerState(page)).padding).toBe(24);
+  const after = (await img.boundingBox())!;
+  expect(after.height).toBeLessThan(before.height - 40);
+  await stepPagerSetting(page, "Page padding", "down", 3);
+  expect((await pagerState(page)).padding).toBe(0);
+
   await setPagerSetting(page, "setting-pager-mode", "Single page");
-  expect((await pagerState(page)).shown).toEqual([4]);
+  expect((await pagerState(page)).shown).toEqual([0]);
 });
 
 test("the page is the position: it restores here and in the current reader", async ({

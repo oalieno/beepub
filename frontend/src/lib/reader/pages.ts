@@ -105,6 +105,10 @@ export function isWide(page: Pick<PageEntry, "width" | "height">): boolean {
  * consulted: the owner asked for pairs on any screen, and a book whose
  * hints disagree with its pages would otherwise never pair at all.
  *
+ * `shift` moves the pairing by one page (Tachidesk's "shift double
+ * pages"): the first page joins the second instead of standing alone, for
+ * a book whose cover is not in the file or whose pairs come out staggered.
+ *
  * Each group lists its pages in reading order; `displayOrder` turns that
  * into left-to-right for the screen.
  */
@@ -112,6 +116,7 @@ export function buildSpreads(
   pages: readonly PageEntry[],
   twoPage: boolean,
   rtl: boolean,
+  shift = false,
 ): PageEntry[][] {
   if (!twoPage) return pages.map((p) => [p]);
   void rtl;
@@ -120,7 +125,7 @@ export function buildSpreads(
   while (i < pages.length) {
     const p = pages[i];
     const q = pages[i + 1];
-    const alone = i === 0 || isWide(p) || !q || isWide(q);
+    const alone = (i === 0 && !shift) || isWide(p) || !q || isWide(q);
     if (alone) {
       out.push([p]);
       i += 1;

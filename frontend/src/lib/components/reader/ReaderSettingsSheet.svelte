@@ -40,6 +40,8 @@
     isImageBook = false,
     pagerMode = "single",
     pagerDirection = "auto",
+    pagerShift = false,
+    pagerPadding = 0,
     showSync = false,
     syncBusy = null,
     onfontToggle,
@@ -54,6 +56,8 @@
     onpageTurnChange,
     onpagerModeChange,
     onpagerDirectionChange,
+    onpagerShiftChange,
+    onpagerPaddingChange,
     onhelp,
     onsyncpull,
     onsyncpush,
@@ -88,12 +92,17 @@
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
     onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
-    /** Image pager rows (comics): reading mode and direction. Present
-     *  only while the pager renders. */
+    /** Image pager rows (comics): reading mode, direction, double-page
+     *  pairing and page padding. Present only while the pager renders. */
     pagerMode?: PagerMode;
     pagerDirection?: PagerDirection;
+    pagerShift?: boolean;
+    /** px kept around the pages. */
+    pagerPadding?: number;
     onpagerModeChange?: (value: PagerMode) => void;
     onpagerDirectionChange?: (value: PagerDirection) => void;
+    onpagerShiftChange?: (value: boolean) => void;
+    onpagerPaddingChange?: (value: number) => void;
     onhelp?: () => void;
     onsyncpull?: () => void;
     onsyncpush?: () => void;
@@ -165,6 +174,10 @@
       icon: GalleryHorizontal,
     },
     { value: "webtoon", label: m.reader_pager_mode_webtoon, icon: Smartphone },
+  ];
+  const pagerShiftOptions: { value: boolean; label: () => string }[] = [
+    { value: false, label: m.reader_pager_pairing_cover },
+    { value: true, label: m.reader_pager_pairing_shift },
   ];
   const pagerDirectionOptions: {
     value: PagerDirection;
@@ -416,33 +429,44 @@
         {/if}
 
         {#if onpagerModeChange}
-          <!-- Image pager: reading mode -->
+          <!-- Image pager: reading mode. Five choices with icons, so a
+               row of equal tiles under the label rather than chips that
+               wrap unevenly beside it. -->
           <div class="space-y-2">
             <span class="text-sm {labelClass}">{m.reader_pager_mode()}</span>
-            <div class="flex flex-wrap gap-1" data-testid="setting-pager-mode">
+            <div
+              class="grid grid-cols-5 gap-1"
+              data-testid="setting-pager-mode"
+            >
               {#each pagerModeOptions as option}
                 <button
-                  class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerMode ===
+                  class="flex flex-col items-center gap-1 rounded-lg border px-1 py-2 text-xs font-medium transition-colors {pagerMode ===
                   option.value
                     ? activeBtnClass
                     : inactiveBtnClass}"
                   onclick={() => onpagerModeChange?.(option.value)}
                 >
-                  <option.icon size={14} />
-                  {option.label()}
+                  <option.icon size={18} />
+                  <span class="leading-tight">{option.label()}</span>
                 </button>
               {/each}
             </div>
           </div>
           {#if onpagerDirectionChange}
-            <div class="flex items-center justify-between">
-              <span class="text-sm {labelClass}"
+            <!-- The three chips outgrow a phone-width row in English:
+                 they drop under the label, right-aligned, rather than
+                 wrapping their words. -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="shrink-0 text-sm {labelClass}"
                 >{m.reader_pager_direction()}</span
               >
-              <div class="flex gap-1" data-testid="setting-pager-direction">
+              <div
+                class="ml-auto flex gap-1"
+                data-testid="setting-pager-direction"
+              >
                 {#each pagerDirectionOptions as option}
                   <button
-                    class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
+                    class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
                     option.value
                       ? activeBtnClass
                       : inactiveBtnClass}"
@@ -456,6 +480,39 @@
                 {/each}
               </div>
             </div>
+          {/if}
+          {#if onpagerShiftChange && pagerMode === "double"}
+            <!-- Which pages sit together: cover alone (1 | 2–3) or shifted
+                 by one (1–2 | 3–4), for a file without its cover. -->
+            <div class="flex items-center justify-between gap-3">
+              <span class="shrink-0 text-sm {labelClass}"
+                >{m.reader_pager_pairing()}</span
+              >
+              <div class="flex gap-1" data-testid="setting-pager-shift">
+                {#each pagerShiftOptions as option}
+                  <button
+                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerShift ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    onclick={() => onpagerShiftChange?.(option.value)}
+                  >
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+          {#if onpagerPaddingChange}
+            {@render stepper({
+              name: m.reader_pager_padding(),
+              testid: "setting-pager-padding",
+              value: pagerPadding,
+              display: `${pagerPadding}px`,
+              step: MARGIN_STEP,
+              max: MARGIN_MAX,
+              onchange: onpagerPaddingChange,
+            })}
           {/if}
         {/if}
 
