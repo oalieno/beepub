@@ -429,25 +429,28 @@
         {/if}
 
         {#if onpagerModeChange}
-          <!-- Image pager: reading mode. Five choices with icons, so a
-               row of equal tiles under the label rather than chips that
-               wrap unevenly beside it. -->
-          <div class="space-y-2">
-            <span class="text-sm {labelClass}">{m.reader_pager_mode()}</span>
-            <div
-              class="grid grid-cols-5 gap-1"
-              data-testid="setting-pager-mode"
+          <!-- Image pager: reading mode. Label left, choices right like
+               every other row; five choices fit only as icons, so the
+               selected one alone shows its name. -->
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="shrink-0 text-sm {labelClass}"
+              >{m.reader_pager_mode()}</span
             >
+            <div class="ml-auto flex gap-1" data-testid="setting-pager-mode">
               {#each pagerModeOptions as option}
+                {@const active = pagerMode === option.value}
                 <button
-                  class="flex flex-col items-center gap-1 rounded-lg border px-1 py-2 text-xs font-medium transition-colors {pagerMode ===
-                  option.value
-                    ? activeBtnClass
-                    : inactiveBtnClass}"
+                  class="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors {active
+                    ? `px-3 ${activeBtnClass}`
+                    : `w-9 justify-center ${inactiveBtnClass}`}"
+                  aria-label={option.label()}
+                  title={option.label()}
                   onclick={() => onpagerModeChange?.(option.value)}
                 >
-                  <option.icon size={18} />
-                  <span class="leading-tight">{option.label()}</span>
+                  <option.icon size={16} />
+                  {#if active}
+                    {option.label()}
+                  {/if}
                 </button>
               {/each}
             </div>
