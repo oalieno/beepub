@@ -247,6 +247,82 @@ function attrValue(key: keyof LayoutParams, value: number): string {
 
 // --------------------------------------------------------------------- core
 
+const VERTICAL_RL = /writing-mode\s*:\s*vertical-rl/i;
+const CSS_BLOCK = /([^{}]+)\{([^{}]*)\}/g;
+const ROOT_TAG = /<(html|body)\b([^>]*)>/gi;
+
+/** Classes on the section's html and body tags. */
+function classesOfRoot(markup: string): Set<string> {
+  const out = new Set<string>();
+  for (const m of markup.matchAll(ROOT_TAG)) {
+    const cls = /\bclass\s*=\s*["']([^"']*)["']/i.exec(m[2]);
+    for (const c of cls?.[1].split(/\s+/) ?? []) if (c) out.add(c);
+  }
+  return out;
+}
+
+/** Inline style attributes on the html and body tags, as declarations
+ *  the selector-free path below accepts. */
+function inlineRootStyles(markup: string): string[] {
+  const out: string[] = [];
+  for (const m of markup.matchAll(ROOT_TAG)) {
+    const style = /\bstyle\s*=\s*["']([^"']*)["']/i.exec(m[2]);
+    if (style) out.push(`body{${style[1]}}`);
+  }
+  return out;
+}
+
+function styleBlocks(markup: string): string[] {
+  return [...markup.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/gi)].map(
+    (m) => m[1],
+  );
+}
+
+/**
+ * Whether the CSS text has a vertical-rl rule that applies to the body:
+ * a selector made only of html/body/:root/* (with an optional descendant
+ * step), or such a selector qualified by classes the root actually
+ * wears. A rule on an inner element, or on a class the body lacks, is
+ * not the book's writing mode.
+ */
+function verticalBodyRule(css: string, rootClasses: Set<string>): boolean {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const m of text.matchAll(CSS_BLOCK)) {
+    if (!VERTICAL_RL.test(m[2])) continue;
+    // An at-rule prelude (`@charset ...;`, `@media (...) {`) may precede
+    // the selector in the capture.
+    const selectors = m[1].split(/[{};]/).pop()?.split(",") ?? [];
+    for (const raw of selectors) {
+      const selector = raw.trim();
+      if (!selector || selector.startsWith("@")) continue;
+      if (selectorReachesBody(selector, rootClasses)) return true;
+    }
+  }
+  return false;
+}
+
+const COMPOUND = /^(html|body|:root|\*)?((?:\.[\w-]+)*)$/;
+
+function selectorReachesBody(
+  selector: string,
+  rootClasses: Set<string>,
+): boolean {
+  const parts = selector.split(/\s*>\s*|\s+/).filter(Boolean);
+  if (parts.length === 0 || parts.length > 2) return false;
+  if (parts.length === 2 && !/^(html|:root|\*)/.test(parts[0])) return false;
+  for (const part of parts) {
+    const m = COMPOUND.exec(part);
+    if (!m) return false;
+    // A bare `.vrtl` compound may sit on the body; a bare element other
+    // than html/body/:root/* never does (COMPOUND rejects those).
+    if (!m[1] && !m[2]) return false;
+    for (const cls of m[2].split(".").filter(Boolean)) {
+      if (!rootClasses.has(cls)) return false;
+    }
+  }
+  return true;
+}
+
 export class ReaderCore {
   readonly paginator: PaginatorElement;
   book: Book | null = null;
@@ -317,30 +393,44 @@ export class ReaderCore {
   /** Look for vertical text before anything renders: the manifest's
    *  stylesheets and the first linear section's markup (inline styles).
    *  A book that opens on a horizontal plate is thereby read leftward
-   *  from its first page turn. Sections rendered later refine this. */
+   *  from its first page turn. Sections rendered later refine this.
+   *
+   *  Only a rule that reaches the body counts, the way the paginator's
+   *  own check reads the body's computed style: publishers' boilerplate
+   *  sheets carry `body.vrtl { writing-mode: vertical-rl }` in every
+   *  book, horizontal ones included, gated on a class the body may never
+   *  wear. */
   async #inferDirection(loader: BookLoader) {
     const book = this.book;
     if (!book) return;
+    const first = book.sections[this.firstLinearIndex()];
+    const load = async (href: string | undefined) => {
+      if (!href) return null;
+      try {
+        return await loader.loadText(href);
+      } catch {
+        return null;
+      }
+    };
+    const markup = await load(first?.id);
+    if (this.book !== book) return; // destroyed or reopened meanwhile
+    const rootClasses = classesOfRoot(markup ?? "");
+    const texts: string[] = [];
+    if (markup) {
+      texts.push(...inlineRootStyles(markup));
+      texts.push(...styleBlocks(markup));
+    }
     const sheets = (book.resources?.manifest ?? []).filter(
       (item) => item.mediaType === "text/css",
     );
-    const first = book.sections[this.firstLinearIndex()];
-    const hrefs = [...sheets.map((item) => item.href), first?.id].filter(
-      (href): href is string => !!href,
-    );
-    for (const href of hrefs) {
-      if (this.book !== book) return; // destroyed or reopened meanwhile
-      let text: string | null = null;
-      try {
-        text = await loader.loadText(href);
-      } catch {
-        text = null;
-      }
-      if (text && /writing-mode\s*:\s*vertical-rl/i.test(text)) {
-        this.#inferredLeftward = true;
-        this.#applyPageTurn();
-        return;
-      }
+    for (const item of sheets) {
+      const css = await load(item.href);
+      if (this.book !== book) return;
+      if (css) texts.push(css);
+    }
+    if (texts.some((text) => verticalBodyRule(text, rootClasses))) {
+      this.#inferredLeftward = true;
+      this.#applyPageTurn();
     }
   }
 

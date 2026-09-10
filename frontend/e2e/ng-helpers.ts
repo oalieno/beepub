@@ -104,6 +104,16 @@ export const VERTICAL_MIXED_UNDECLARED_BOOK: Fixture = {
   readyText: "卷一其1",
 };
 
+/** A horizontal zh-TW novel, no page-progression-direction, whose
+ *  publisher boilerplate sheet carries `body.vrtl { writing-mode:
+ *  vertical-rl }` on a class the body never wears (a Taiwanese
+ *  publisher's InDesign export). Reads left to right. */
+export const RAINY_POST_OFFICE_BOOK: Fixture = {
+  file: "e2e-rainy-post-office-book.epub",
+  title: "雨季郵局",
+  readyText: "雨季郵局首頁",
+};
+
 /** Built like the Japanese publishers' ebpaj template: the one linked
  *  stylesheet is a shell of @import rules, and the writing mode, fonts
  *  and classes live in the imported sheets (one of which imports again).

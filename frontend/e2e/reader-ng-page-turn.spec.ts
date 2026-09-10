@@ -5,6 +5,7 @@ import {
   VERTICAL_LONG_BOOK,
   VERTICAL_MIXED_BOOK,
   VERTICAL_MIXED_UNDECLARED_BOOK,
+  RAINY_POST_OFFICE_BOOK,
   iphone,
   location,
   openBook,
@@ -192,6 +193,33 @@ test("an undeclared book infers its direction from its vertical text and keeps i
   await expect.poll(index).toBe(1);
   await swipe(cdp, { x: 80, y: 400 }, { x: 300, y: 400 });
   await expect.poll(index).toBe(2);
+});
+
+test("an undeclared horizontal book with a class-gated vertical rule in its sheet reads rightward", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(page.request, RAINY_POST_OFFICE_BOOK);
+  await openBook(page, bookId, { font: "sans" }, RAINY_POST_OFFICE_BOOK);
+  const cdp = await context.newCDPSession(page);
+  const index = async () => (await location(page)).index;
+  expect(
+    await page.evaluate(() => window.__beepubReaderNG.core.advancesLeftward()),
+  ).toBe(false);
+  await page.evaluate(() => window.__beepubReaderNG.core.goTo(1));
+  await expect.poll(index).toBe(1);
+  await page.waitForTimeout(300);
+  // Swiping leftward (finger right to left) turns forward; the chapter
+  // runs several pages, so the move shows as a fraction.
+  const forward = async () => {
+    const l = await location(page);
+    return l.index > 1 || l.fraction > 0;
+  };
+  await swipe(cdp, { x: 300, y: 400 }, { x: 80, y: 400 });
+  await expect.poll(forward).toBe(true);
+  await swipe(cdp, { x: 80, y: 400 }, { x: 300, y: 400 });
+  await expect.poll(forward).toBe(false);
+  expect(await index()).toBe(1);
 });
 
 test("an undeclared book opened on its plate reads leftward from the first turn", async ({
