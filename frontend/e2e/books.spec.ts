@@ -36,14 +36,21 @@ test("upload a book, open it, and read it", async ({ page }) => {
     .click();
   await expect(page).toHaveURL(/\/read$/);
 
-  // The chapter renders inside the epub.js iframe.
-  await expect(
-    page
-      .frameLocator("iframe")
-      .first()
-      .getByText("The starship librarian")
-      .first(),
-  ).toBeVisible({ timeout: 30_000 });
+  // The chapter renders inside the reader's iframe, which lives in a
+  // closed shadow root: read its text through the debug handle.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const doc: Document | undefined =
+            window.__beepubReaderNG?.core?.getContents()[0]?.doc;
+          return (
+            doc?.body?.textContent?.includes("The starship librarian") ?? false
+          );
+        }),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
 });
 
 test("add a physical book and find it via the format filter", async ({

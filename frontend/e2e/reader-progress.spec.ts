@@ -56,7 +56,7 @@ test("progress is visible immediately and moves with the weights", async ({
   const positive = weights.filter((w: number) => w > 0);
   expect(positive.length).toBe(2);
 
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("甲章首段").first()).toBeVisible({
     timeout: 30_000,
@@ -100,7 +100,7 @@ test("scrubber seek maps through the weights into the right chapter", async ({
   const chapter2Start = Math.ceil((before / total) * 100);
   expect(chapter2Start).toBeGreaterThan(80); // the fixture's 15:1 shape
 
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("甲章首段").first()).toBeVisible({
     timeout: 30_000,

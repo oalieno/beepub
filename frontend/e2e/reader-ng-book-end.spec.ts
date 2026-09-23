@@ -112,7 +112,7 @@ test("the end of a series volume offers the next one", async ({ page }) => {
 
     // "Start reading" opens the next volume in this same reader.
     await overlay.getByRole("button", { name: "Start reading" }).click();
-    await page.waitForURL(new RegExp(`/books/${nextId}/read-ng`));
+    await page.waitForURL(new RegExp(`/books/${nextId}/read`));
     await page.waitForFunction(
       () => !!window.__beepubReaderNG?.core?.lastLocation,
       null,

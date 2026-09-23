@@ -868,7 +868,7 @@
   "local_upload": "上傳到雲端",
   "local_export": "匯出 EPUB",
   "book_download_to_device": "下載到手機",
-  "book_open_reader_ng": "用新閱讀器開啟（實驗）",
+  "book_open_reader_legacy": "用舊版閱讀器開啟",
   "book_download_original": "下載原始 {format}",
   "book_convert_zh": "轉成繁體",
   "book_convert_zh_done": "已轉成繁體",

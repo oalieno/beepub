@@ -52,20 +52,17 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
-/** Open the shelf card's menu entry for the new reader (client-side
- *  navigation, as in the app — a full load of a reader URL on the web
- *  stack bounces through the server-side login redirect first). */
+/** Open the shelf card (client-side navigation, as in the app — a full
+ *  load of a reader URL on the web stack bounces through the server-side
+ *  login redirect first). */
 async function openFromShelf(
   page: Page,
   fixture: Fixture = TOUCH_BOOK,
 ): Promise<string> {
-  // The card itself is a role=button whose name includes the trigger's
-  // label, so match exactly.
-  await page.getByRole("button", { name: "More actions", exact: true }).click();
-  await page
-    .getByRole("menuitem", { name: "Open in the new reader (experimental)" })
-    .click();
-  await page.waitForURL(/\/books\/[^/]+\/read-ng/);
+  // The card is a role=button whose name includes the title (and its
+  // menu trigger's label); the trigger alone is named "More actions".
+  await page.getByRole("button", { name: fixture.title }).first().click();
+  await page.waitForURL(/\/books\/[^/]+\/read/);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
@@ -81,7 +78,7 @@ async function openFromShelf(
       }, fixture.readyText),
     )
     .toBe(true);
-  return /\/books\/([^/]+)\/read-ng/.exec(page.url())![1];
+  return /\/books\/([^/]+)\/read/.exec(page.url())![1];
 }
 
 async function importFixture(page: Page, fixture: Fixture) {

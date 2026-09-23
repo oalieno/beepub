@@ -68,7 +68,7 @@ async function openNg(page: Page, bookId: string, font: string) {
     font,
   });
   await seedGesturesSeen(page);
-  await page.goto(`/books/${bookId}/read-ng?${params}`);
+  await page.goto(`/books/${bookId}/read?${params}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,

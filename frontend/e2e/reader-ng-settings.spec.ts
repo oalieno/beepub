@@ -121,7 +121,7 @@ test("font size and letter spacing apply through the sheet and persist", async (
   ).toEqual(["20", "1"]);
 
   // A plain open (no query overrides) reads the stored values back.
-  await page.goto(`/books/${bookId}/read-ng`);
+  await page.goto(`/books/${bookId}/read`);
   await waitForBook(page, TOUCH_BOOK);
   await expect
     .poll(() => bodyStyle(page))
@@ -138,7 +138,7 @@ test("the old single margin seeds both gutters", async ({ page }) => {
     localStorage.removeItem("reader-margin-x");
     localStorage.removeItem("reader-margin-y");
   });
-  await page.goto(`/books/${bookId}/read-ng`);
+  await page.goto(`/books/${bookId}/read`);
   await waitForBook(page, TOUCH_BOOK);
   await openSheet(page);
   await expect(page.getByTestId("setting-margin-x")).toHaveText("56px");

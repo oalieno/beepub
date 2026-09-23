@@ -174,7 +174,7 @@ test("percentage follows the weights and the scrubber seeks on their scale", asy
   expect(chapter2Start).toBeGreaterThan(80); // the fixture's 15:1 shape
 
   await seedGesturesSeen(page);
-  await page.goto(`/books/${bookId}/read-ng`);
+  await page.goto(`/books/${bookId}/read`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,

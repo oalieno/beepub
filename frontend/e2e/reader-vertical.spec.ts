@@ -45,7 +45,7 @@ test("vertical book renders vertical-rl in the reader", async ({ page }) => {
   expect(uploaded.ok()).toBeTruthy();
   const book = await uploaded.json();
 
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("話說天下大勢").first()).toBeVisible({
     timeout: 30_000,
@@ -89,7 +89,7 @@ test("vertical pages stay on the grid with a fractional container height", async
   await page.addInitScript(() =>
     localStorage.setItem("reader-gestures-seen", "1"),
   );
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   await page.waitForSelector("iframe", { timeout: 30_000 });
   await page.waitForTimeout(3000);
 
@@ -179,7 +179,7 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
   expect(uploaded.ok()).toBeTruthy();
   const book = await uploaded.json();
 
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("免費服務已終止").first()).toBeVisible({
     timeout: 30_000,
@@ -268,7 +268,7 @@ test("backward chapter jump survives a late content shrink", async ({
   await page.addInitScript(() =>
     localStorage.setItem("reader-gestures-seen", "1"),
   );
-  await page.goto(`/books/${book.id}/read`);
+  await page.goto(`/books/${book.id}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("甲章首段").first()).toBeVisible({
     timeout: 30_000,

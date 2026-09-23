@@ -169,7 +169,7 @@ async function openNg(bookId, spec, token, device) {
     my: "48",
   });
   if (spec.font) params.set("font", spec.font);
-  await page.goto(`/books/${bookId}/read-ng?${params}`);
+  await page.goto(`/books/${bookId}/read?${params}`);
   // The vite dev stack may full-reload once after discovering new deps;
   // let the network settle so that reload lands before we start measuring.
   await page.waitForLoadState("networkidle").catch(() => {});

@@ -12,7 +12,7 @@ import { LIBRARY_NAME } from "./helpers";
 
 /**
  * Shared plumbing for the reader-ng specs: fixture seeding, opening
- * read-ng at a known geometry, engine readouts through the debug handle
+ * the reader at a known geometry, engine readouts through the debug handle
  * (the section iframe lives in a closed shadow root), and trusted touch
  * input over CDP (which includes the browser's own click synthesis).
  */
@@ -248,7 +248,7 @@ export function seedGesturesSeen(page: Page) {
   });
 }
 
-/** Open read-ng at a fixed geometry and wait for the first section.
+/** Open the reader at a fixed geometry and wait for the first section.
  *  `overrides` are query params, plus `restore: "1"` to keep the reader's
  *  own restored position instead of resetting to the first page. */
 export async function openBook(
@@ -268,7 +268,7 @@ export async function openBook(
     ...query,
   });
   await seedGesturesSeen(page);
-  await page.goto(`/books/${bookId}/read-ng?${params}`);
+  await page.goto(`/books/${bookId}/read?${params}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
@@ -454,12 +454,12 @@ export const CBZ_BOOK: Fixture = {
   mimeType: "application/vnd.comicbook+zip",
 };
 
-/** Open an image book in read-ng: BookReader parses it, finds the layout
+/** Open an image book in the reader: BookReader parses it, finds the layout
  *  pre-paginated and hands it to the image pager. Resolves once the pager
  *  shows its restored page with every image on screen decoded. */
 export async function openComic(page: Page, bookId: string) {
   await seedGesturesSeen(page);
-  await page.goto(`/books/${bookId}/read-ng`);
+  await page.goto(`/books/${bookId}/read`);
   await page.waitForFunction(() => !!window.__beepubReaderNG?.pager, null, {
     timeout: 30_000,
   });

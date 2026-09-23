@@ -22,7 +22,7 @@
     Cloud,
     CloudUpload,
     EllipsisVertical,
-    FlaskConical,
+    History,
     Loader2,
     Share,
     Trash2,
@@ -36,7 +36,7 @@
     ondelete,
     onupload,
     onexport,
-    onopenng,
+    onopenlegacy,
     uploading = false,
   }: {
     entry: LocalShelfEntry;
@@ -47,9 +47,8 @@
     onupload?: (entry: LocalShelfEntry) => void;
     /** Share the EPUB file via the OS share sheet (native only). */
     onexport?: (entry: LocalShelfEntry) => void;
-    /** reader-ng A/B entry (experimental route; removed when the new
-     *  reader replaces /read). */
-    onopenng?: (entry: LocalShelfEntry) => void;
+    /** Legacy reader entry (the previous engine, kept until it is retired). */
+    onopenlegacy?: (entry: LocalShelfEntry) => void;
     uploading?: boolean;
   } = $props();
 
@@ -131,7 +130,7 @@
         <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
           <Loader2 size={14} class="animate-spin" />
         </span>
-      {:else if ondelete || showUpload || onexport || onopenng}
+      {:else if ondelete || showUpload || onexport || onopenlegacy}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -154,14 +153,14 @@
                 {m.local_export()}
               </DropdownMenu.Item>
             {/if}
-            {#if onopenng}
-              <DropdownMenu.Item onclick={() => onopenng?.(entry)}>
-                <FlaskConical size={14} />
-                {m.book_open_reader_ng()}
+            {#if onopenlegacy}
+              <DropdownMenu.Item onclick={() => onopenlegacy?.(entry)}>
+                <History size={14} />
+                {m.book_open_reader_legacy()}
               </DropdownMenu.Item>
             {/if}
             {#if ondelete}
-              {#if showUpload || onexport || onopenng}
+              {#if showUpload || onexport || onopenlegacy}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

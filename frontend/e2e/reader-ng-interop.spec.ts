@@ -3,10 +3,10 @@ import { ADMIN_STATE } from "./helpers";
 import { openBook, resetProgress, seedBook } from "./ng-helpers";
 
 /**
- * reader-ng ↔ current reader interop: the two readers share one progress
+ * reader-ng ↔ legacy reader interop: the two readers share one progress
  * row per book, so a position saved by either must restore in the other.
  * read-ng writes the point CFI where the visible text starts (what the
- * current reader stores); the current reader's rows resolve on read-ng's
+ * legacy reader stores); the legacy reader's rows resolve on read-ng's
  * page grid.
  */
 
@@ -26,10 +26,10 @@ function progressPut(page: Page) {
   );
 }
 
-/** The current reader's location, once its manager exists. */
-async function openCurrentReader(page: Page, bookId: string) {
+/** The legacy reader's location, once its manager exists. */
+async function openLegacyReader(page: Page, bookId: string) {
   await page.evaluate(() => localStorage.setItem("reader-gestures-seen", "1"));
-  await page.goto(`/books/${bookId}/read`);
+  await page.goto(`/books/${bookId}/read-legacy`);
   await page.waitForFunction(
     () => {
       try {
@@ -56,7 +56,7 @@ async function openCurrentReader(page: Page, bookId: string) {
   });
 }
 
-test("a position saved by read-ng restores in the current reader, and back", async ({
+test("a position saved by read-ng restores in the legacy reader, and back", async ({
   page,
 }) => {
   const bookId = await seedBook(page.request);
@@ -77,19 +77,19 @@ test("a position saved by read-ng restores in the current reader, and back", asy
   const row = await (
     await page.request.get(`/api/books/${bookId}/progress`)
   ).json();
-  // A point CFI, as the current reader stores it.
+  // A point CFI, as the legacy reader stores it.
   expect(row.cfi).toBe(ng.cfi);
   expect(row.cfi).not.toContain(",");
 
-  // Current reader: restores from that row past its first page. The two
+  // legacy reader: restores from that row past its first page. The two
   // readers' page grids differ (margins, gaps), so the page number is
   // not comparable — the anchor's paragraph is.
-  const current = await openCurrentReader(page, bookId);
+  const current = await openLegacyReader(page, bookId);
   expect(current.page).toBeGreaterThan(1);
   const paragraphOf = (cfi: string) => /\/4\/(\d+)/.exec(cfi)?.[1];
   expect(paragraphOf(current.cfi)).toBeTruthy();
 
-  // Current reader: turn a page, let it save its own position.
+  // legacy reader: turn a page, let it save its own position.
   const saved2 = progressPut(page);
   await page.keyboard.press("ArrowRight");
   await saved2;
@@ -98,7 +98,7 @@ test("a position saved by read-ng restores in the current reader, and back", asy
   ).json();
   expect(row2.cfi).not.toBe(row.cfi);
 
-  // read-ng: restores from the current reader's row — the anchored
+  // read-ng: restores from the legacy reader's row — the anchored
   // paragraph starts inside the visible page.
   await openBook(page, bookId, { restore: "1" });
   const landed = await page.evaluate((cfi) => {

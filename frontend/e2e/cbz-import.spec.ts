@@ -6,15 +6,15 @@ import { CBZ_BOOK, seedFixture } from "./ng-helpers";
  * CBZ upload: the archive is packed into a pre-paginated EPUB at ingest
  * (one fixed-layout page per image, right-to-left when ComicInfo says so),
  * classified an image book on the spot, and its pages are served in
- * reading order for the pager. The current reader opens it through
+ * reading order for the pager. The legacy reader opens it through
  * epub.js's fixed-layout path; the detail page offers the original.
  */
 
 test.use({ storageState: ADMIN_STATE });
 test.setTimeout(60_000);
 
-/** Whether the current reader shows a decoded image in its first section. */
-function currentReaderImageLoaded(page: Page) {
+/** Whether the legacy reader shows a decoded image in its first section. */
+function legacyReaderImageLoaded(page: Page) {
   return page.evaluate(() => {
     const contents = (window as any).__beepubReader?.rendition?.getContents?.();
     const doc = contents?.[0]?.document as Document | undefined;
@@ -57,15 +57,15 @@ test("a CBZ upload becomes a right-to-left image book with ordered pages", async
   expect((await original.body()).subarray(0, 2).toString()).toBe("PK");
 });
 
-test("the current reader opens the packed comic on its first page", async ({
+test("the legacy reader opens the packed comic on its first page", async ({
   page,
 }) => {
   const bookId = await seedFixture(page.request, CBZ_BOOK);
   await page.addInitScript(() =>
     localStorage.setItem("reader-gestures-seen", "1"),
   );
-  await page.goto(`/books/${bookId}/read`);
-  await expect.poll(() => currentReaderImageLoaded(page), {
+  await page.goto(`/books/${bookId}/read-legacy`);
+  await expect.poll(() => legacyReaderImageLoaded(page), {
     timeout: 30_000,
   }).toBe(true);
 });

@@ -54,7 +54,7 @@
     Search,
     Star,
     BookCopy,
-    FlaskConical,
+    History,
     FileText,
     Languages,
   } from "@lucide/svelte";
@@ -192,7 +192,7 @@
   afterNavigate((nav) => {
     if (nav.from) {
       // nav.from is null on initial page load (direct link), non-null for internal navigation
-      if (!nav.from.url.pathname.endsWith("/read")) {
+      if (!/\/read(-legacy)?$/.test(nav.from.url.pathname)) {
         hasInternalHistory = true;
         sessionStorage.setItem(`book-back-${bookId}`, "1");
       } else {
@@ -922,13 +922,13 @@
                 </DropdownMenu.Item>
               {/if}
               {#if !isPhysical}
-                <!-- reader-ng A/B entry (experimental route; removed when the
-                     new reader replaces /read) -->
+                <!-- legacy reader entry (the previous engine, kept until it is
+                     retired) -->
                 <DropdownMenu.Item
-                  onclick={() => goto(`/books/${bookId}/read-ng`)}
+                  onclick={() => goto(`/books/${bookId}/read-legacy`)}
                 >
-                  <FlaskConical size={14} />
-                  {m.book_open_reader_ng()}
+                  <History size={14} />
+                  {m.book_open_reader_legacy()}
                 </DropdownMenu.Item>
               {/if}
               {#if isConverted && !isNative() && $authStore.user?.can_download}
@@ -1428,16 +1428,16 @@
       </button>
     {/if}
     {#if !isPhysical}
-      <!-- reader-ng A/B entry, mirrored from the desktop menu -->
+      <!-- legacy reader entry, mirrored from the desktop menu -->
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
           showMobileActions = false;
-          goto(`/books/${bookId}/read-ng`);
+          goto(`/books/${bookId}/read-legacy`);
         }}
       >
-        <FlaskConical size={20} class="text-muted-foreground shrink-0" />
-        {m.book_open_reader_ng()}
+        <History size={20} class="text-muted-foreground shrink-0" />
+        {m.book_open_reader_legacy()}
       </button>
     {/if}
     {#if isConverted && !isNative() && $authStore.user?.can_download}

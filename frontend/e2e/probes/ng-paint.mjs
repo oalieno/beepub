@@ -71,7 +71,7 @@ const params = new URLSearchParams({
   my: "48",
 });
 if (spec.font) params.set("font", spec.font);
-await page.goto(`/books/${bookId}/read-ng?${params}`);
+await page.goto(`/books/${bookId}/read?${params}`);
 await page.waitForFunction(
   () => !!window.__beepubReaderNG?.core?.lastLocation,
   null,

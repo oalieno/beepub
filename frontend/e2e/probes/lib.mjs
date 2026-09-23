@@ -101,7 +101,7 @@ export async function openReader(
     },
     { margin, fontSize, lineHeight },
   );
-  await page.goto(`/books/${bookId}/read`);
+  await page.goto(`/books/${bookId}/read-legacy`);
   await page.waitForSelector("iframe", { timeout: 30_000 });
   await page.waitForTimeout(3000); // locations, progress restore, hooks
   return { browser, context, page };

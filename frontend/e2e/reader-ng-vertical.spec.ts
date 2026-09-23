@@ -25,7 +25,7 @@ declare global {
 
 async function openNg(page: Page, bookId: string, text: string, font: string) {
   await resetProgress(page.request, bookId);
-  await page.goto(`/books/${bookId}/read-ng?font=${font}`);
+  await page.goto(`/books/${bookId}/read?font=${font}`);
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,

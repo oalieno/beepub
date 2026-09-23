@@ -868,7 +868,7 @@
   "local_upload": "Upload to cloud",
   "local_export": "Export EPUB",
   "book_download_to_device": "Download to phone",
-  "book_open_reader_ng": "Open in the new reader (experimental)",
+  "book_open_reader_legacy": "Open in the legacy reader",
   "book_download_original": "Download original {format}",
   "book_convert_zh": "Convert to Traditional Chinese",
   "book_convert_zh_done": "Converted to Traditional Chinese",

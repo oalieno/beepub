@@ -75,7 +75,7 @@ async function openBook(page: Page, bookId: string) {
   // The fixture is shared with the new reader's specs, which page through
   // it; every test here assumes its first page.
   await resetProgress(page.request, bookId);
-  await page.goto(`/books/${bookId}/read`);
+  await page.goto(`/books/${bookId}/read-legacy`);
   const frame = page.frameLocator("iframe").first();
   await expect(frame.getByText("starship librarian").first()).toBeVisible({
     timeout: 30_000,
