@@ -110,6 +110,13 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
   expect(state.faces).not.toContain("U+2014");
   expect(state.faces).not.toContain("U+FF0D");
 
+  // Legacy Ming names a book might set by hand are re-routed to 源流明體,
+  // one face per weight.
+  expect(state.faces).toContain('font-family: "新細明體"');
+  expect(state.faces).toContain('font-family: "PMingLiU"');
+  expect(state.faces).toContain("GenRyuMin2TC-R.otf");
+  expect(state.faces).toContain("GenRyuMin2TC-B.otf");
+
   // `p { font-family: serif }` bypasses the body stack → pinned inline with
   // the book's own stack preserved behind the face. Same for class-declared
   // fonts. Elements that merely inherit must stay unpinned.
