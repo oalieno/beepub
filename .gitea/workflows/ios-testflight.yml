@@ -1,0 +1,29 @@
+# Runs only on Gitea: GitHub ignores .gitea/workflows. And since this folder
+# exists, Gitea in turn ignores .github/workflows (those run on GitHub).
+#
+# Needs a macOS act_runner in host mode with the label "macos-ios" (the Mac
+# mini that builds the iOS app), and the repo secrets ASC_KEY_ID and
+# ASC_ISSUER_ID; the .p8 key itself stays on that Mac, see
+# frontend/scripts/ios-testflight.sh.
+name: iOS TestFlight
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  testflight:
+    runs-on: macos-ios
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: ./scripts/ios-testflight.sh
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
