@@ -7,6 +7,7 @@ import {
   seedFixture,
   setPagerSetting,
   stepPagerSetting,
+  touchTap,
 } from "./ng-helpers";
 
 /**
@@ -21,6 +22,18 @@ test.use({ storageState: ADMIN_STATE });
 test.setTimeout(60_000);
 
 const chrome = (page: Page) => page.getByTestId("ng-chrome");
+const viewerClose = (page: Page) =>
+  page.getByRole("button", { name: "Close", exact: true });
+
+/** The settings button sits in the bottom bar, which a tap in the
+ *  middle of the page brings up on a phone. */
+async function showBottomBar(page: Page) {
+  const settings = page.getByRole("button", { name: "Reader settings" });
+  if (await settings.isVisible()) return;
+  const b = (await page.getByTestId("image-pager").boundingBox())!;
+  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  await expect(settings).toBeVisible();
+}
 
 async function settleSave(page: Page) {
   // The pager debounces its save by two seconds after a move.
@@ -313,5 +326,66 @@ test.describe("phone", () => {
     state = await pagerState(page);
     expect(state.scale).toBe(1);
     expect(state.page).toBe(2);
+  });
+
+  test("a long press on a page opens it in the viewer, paged and in the strip", async ({
+    page,
+    context,
+  }) => {
+    const bookId = await seedFixture(page.request, CBZ_BOOK);
+    await openComic(page, bookId);
+    await page.evaluate(() => window.__beepubReaderNG.pager.goTo(1));
+    const pager = page.getByTestId("image-pager");
+    // The system image menu (Save to Photos…) must not claim the press.
+    // (Chromium has no such property, so read the declaration itself.)
+    expect(await pager.getAttribute("style")).toContain(
+      "-webkit-touch-callout: none",
+    );
+
+    const cdp = await context.newCDPSession(page);
+    const centre = async () => {
+      const img = page
+        .locator('[data-testid="image-pager"] img:visible')
+        .first();
+      const b = (await img.boundingBox())!;
+      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+    };
+
+    // Paged: the hold opens the page; its release is not a tap or a turn.
+    const barShown = await page
+      .getByRole("button", { name: "Reader settings" })
+      .isVisible();
+    await touchTap(cdp, await centre(), 700);
+    await expect(viewerClose(page)).toBeVisible();
+    await page.waitForTimeout(400);
+    expect((await pagerState(page)).page).toBe(1);
+    expect(
+      await page.getByRole("button", { name: "Reader settings" }).isVisible(),
+    ).toBe(barShown);
+    // Keys belong to the viewer while it is open.
+    await page.keyboard.press("ArrowLeft");
+    expect((await pagerState(page)).page).toBe(1);
+    await page.keyboard.press("Escape");
+    await expect(viewerClose(page)).toHaveCount(0);
+
+    // The continuous strip answers the same press.
+    await showBottomBar(page);
+    await setPagerSetting(page, "setting-pager-mode", "Continuous vertical");
+    await expect(pager).toHaveAttribute("data-flow", "vertical");
+    // The middle of the screen: the first picture may sit above it.
+    const box = (await pager.boundingBox())!;
+    const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    expect(
+      await page.evaluate(
+        ({ x, y }) => document.elementFromPoint(x, y)?.tagName,
+        mid,
+      ),
+    ).toBe("IMG");
+    await touchTap(cdp, mid, 700);
+    await expect(viewerClose(page)).toBeVisible();
+    await viewerClose(page).click();
+    await expect(viewerClose(page)).toHaveCount(0);
+    await showBottomBar(page);
+    await setPagerSetting(page, "setting-pager-mode", "Single page");
   });
 });
