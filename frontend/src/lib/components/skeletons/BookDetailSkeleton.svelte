@@ -3,9 +3,6 @@
 </script>
 
 <div role="status" aria-label="Loading">
-  <!-- Back button placeholder -->
-  <Skeleton class="h-5 w-16 mb-6" />
-
   <!-- Hero Section -->
   <div class="flex flex-col md:flex-row gap-12">
     <!-- Cover -->

@@ -126,17 +126,18 @@
 </svelte:head>
 
 <div class="px-6 sm:px-8 py-6">
+  <!-- Back Button: live while the shelf loads. -->
+  <div class="mb-1">
+    <BackButton href="/bookshelves" label={m.nav_shelves()} />
+  </div>
+
   {#if loading}
     <div class="mb-8">
-      <Skeleton class="h-4 w-20 mb-1" />
       <Skeleton class="h-9 w-48" />
     </div>
     <BookGridSkeleton count={12} />
   {:else if shelf}
     <div class="mb-6">
-      <div class="mb-1">
-        <BackButton href="/bookshelves" label={m.nav_shelves()} />
-      </div>
       <h1 class="text-3xl font-bold text-foreground">{shelf.name}</h1>
       {#if shelf.description}
         <p class="text-muted-foreground mt-1">{shelf.description}</p>

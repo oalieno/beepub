@@ -115,18 +115,18 @@
 </svelte:head>
 
 <div class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-24 md:pb-6">
+  <!-- Back Button: live while the series loads. -->
+  <div class="mb-6 -ml-1">
+    <BackButton
+      href="/"
+      label={m.common_back()}
+      onclick={() => history.back()}
+    />
+  </div>
+
   {#if loading}
     <BookDetailSkeleton />
   {:else if series}
-    <!-- Back Button -->
-    <div class="mb-6 -ml-1">
-      <BackButton
-        href="/"
-        label={m.common_back()}
-        onclick={() => history.back()}
-      />
-    </div>
-
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->

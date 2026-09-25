@@ -138,3 +138,16 @@ test("admin moves a book to another library", async ({ page }) => {
   ).json();
   expect(listing.items.map((b: { id: string }) => b.id)).toContain(book.id);
 });
+
+test("the back button works while a book is still loading", async ({
+  page,
+}) => {
+  // A book request that never answers: the skeleton stays up.
+  await page.route(/\/api\/books\/[0-9a-f-]+$/, () => {});
+  await page.goto("/books/00000000-0000-4000-8000-000000000000");
+  await expect(page.getByRole("status", { name: "Loading" })).toBeVisible();
+  const back = page.getByRole("link", { name: "Back" });
+  await expect(back).toBeVisible();
+  await back.click();
+  await expect(page).not.toHaveURL(/\/books\//);
+});

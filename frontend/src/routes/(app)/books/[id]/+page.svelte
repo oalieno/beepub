@@ -666,17 +666,18 @@
 <div
   class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-6"
 >
+  <!-- Back Button: live before the book arrives, so a slow load (or a
+       failed one) never traps whoever tapped in by mistake. -->
+  <div class="mb-6 -ml-1">
+    <BackButton
+      href={book?.library_id ? `/libraries/${book.library_id}` : "/"}
+      onclick={hasInternalHistory ? () => history.back() : undefined}
+    />
+  </div>
+
   {#if loading}
     <BookDetailSkeleton />
   {:else if book}
-    <!-- Back Button -->
-    <div class="mb-6 -ml-1">
-      <BackButton
-        href={book.library_id ? `/libraries/${book.library_id}` : "/"}
-        onclick={hasInternalHistory ? () => history.back() : undefined}
-      />
-    </div>
-
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
       <!-- Cover -->
