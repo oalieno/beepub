@@ -25,16 +25,6 @@ const chrome = (page: Page) => page.getByTestId("ng-chrome");
 const viewerClose = (page: Page) =>
   page.getByRole("button", { name: "Close", exact: true });
 
-/** The settings button sits in the bottom bar, which a tap in the
- *  middle of the page brings up on a phone. */
-async function showBottomBar(page: Page) {
-  const settings = page.getByRole("button", { name: "Reader settings" });
-  if (await settings.isVisible()) return;
-  const b = (await page.getByTestId("image-pager").boundingBox())!;
-  await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
-  await expect(settings).toBeVisible();
-}
-
 async function settleSave(page: Page) {
   // The pager debounces its save by two seconds after a move.
   await page.waitForTimeout(2600);
@@ -328,7 +318,7 @@ test.describe("phone", () => {
     expect(state.page).toBe(2);
   });
 
-  test("a long press on a page opens it in the viewer, paged and in the strip", async ({
+  test("a long press is no gesture; a pinch lets go without a jump", async ({
     page,
     context,
   }) => {
@@ -341,51 +331,49 @@ test.describe("phone", () => {
     expect(await pager.getAttribute("style")).toContain(
       "-webkit-touch-callout: none",
     );
-
-    const cdp = await context.newCDPSession(page);
-    const centre = async () => {
-      const img = page
-        .locator('[data-testid="image-pager"] img:visible')
-        .first();
-      const b = (await img.boundingBox())!;
-      return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
-    };
-
-    // Paged: the hold opens the page; its release is not a tap or a turn.
-    const barShown = await page
-      .getByRole("button", { name: "Reader settings" })
-      .isVisible();
-    await touchTap(cdp, await centre(), 700);
-    await expect(viewerClose(page)).toBeVisible();
-    await page.waitForTimeout(400);
-    expect((await pagerState(page)).page).toBe(1);
-    expect(
-      await page.getByRole("button", { name: "Reader settings" }).isVisible(),
-    ).toBe(barShown);
-    // Keys belong to the viewer while it is open.
-    await page.keyboard.press("ArrowLeft");
-    expect((await pagerState(page)).page).toBe(1);
-    await page.keyboard.press("Escape");
-    await expect(viewerClose(page)).toHaveCount(0);
-
-    // The continuous strip answers the same press.
-    await showBottomBar(page);
-    await setPagerSetting(page, "setting-pager-mode", "Continuous vertical");
-    await expect(pager).toHaveAttribute("data-flow", "vertical");
-    // The middle of the screen: the first picture may sit above it.
     const box = (await pager.boundingBox())!;
-    const mid = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-    expect(
-      await page.evaluate(
-        ({ x, y }) => document.elementFromPoint(x, y)?.tagName,
-        mid,
-      ),
-    ).toBe("IMG");
-    await touchTap(cdp, mid, 700);
-    await expect(viewerClose(page)).toBeVisible();
-    await viewerClose(page).click();
+    const cx = box.x + box.width / 2;
+    const cy = box.y + box.height / 2;
+    const cdp = await context.newCDPSession(page);
+    // Each point carries its finger's id. Chromium lifts the fingers a
+    // touchEnd lists (a touchMove without one does not lift it).
+    const touch = (
+      type: string,
+      points: { id: number; x: number; y: number }[],
+    ) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+
+    // Pinch and double tap zoom in place; a long press opens nothing and
+    // turns nothing.
+    await touchTap(cdp, { x: cx, y: cy }, 700);
+    await page.waitForTimeout(400);
     await expect(viewerClose(page)).toHaveCount(0);
-    await showBottomBar(page);
-    await setPagerSetting(page, "setting-pager-mode", "Single page");
+    expect((await pagerState(page)).page).toBe(1);
+
+    // Two fingers spread apart, then leave one at a time: the one still
+    // down pans from where it is, not from where the pinch began.
+    await touch("touchStart", [
+      { id: 0, x: cx - 40, y: cy },
+      { id: 1, x: cx + 40, y: cy },
+    ]);
+    for (let i = 1; i <= 8; i++)
+      await touch("touchMove", [
+        { id: 0, x: cx - 40 - i * 10, y: cy },
+        { id: 1, x: cx + 40 + i * 10, y: cy },
+      ]);
+    // The left finger lifts; the right one stays where it is.
+    await touch("touchEnd", [{ id: 0, x: cx - 120, y: cy }]);
+    const pan = () =>
+      page.evaluate(() => window.__beepubReaderNG.pager.pan as number[]);
+    const before = await pan();
+    expect((await pagerState(page)).scale).toBeGreaterThan(1.5);
+    // A clear move (a tiny one can sit inside the touch slop): the page
+    // follows the finger by exactly that much.
+    // Chromium delivers pointermove on the next frame, after CDP returns.
+    await touch("touchMove", [{ id: 1, x: cx + 90, y: cy }]);
+    await expect.poll(async () => (await pan())[0]).not.toBe(before[0]);
+    const after = await pan();
+    await touch("touchEnd", []);
+    expect(Math.abs(after[0] - before[0] + 30)).toBeLessThanOrEqual(3);
+    expect(Math.abs(after[1] - before[1])).toBeLessThanOrEqual(3);
   });
 });

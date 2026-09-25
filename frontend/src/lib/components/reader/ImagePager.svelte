@@ -39,7 +39,6 @@
   import type { ProgressSave, SyncBackend } from "$lib/reading/sync";
   import * as m from "$lib/paraglide/messages.js";
   import Spinner from "$lib/components/Spinner.svelte";
-  import ImageViewer from "./ImageViewer.svelte";
 
   let {
     bookId,
@@ -114,7 +113,6 @@
   const DOUBLE_TAP_MS = 300;
   const MAX_SCALE = 5;
   const ZOOM_STEP = 2.5;
-  const IMAGE_HOLD_MS = 500;
 
   let pages = $state<PageEntry[]>([]);
   let pageIndex = $state(0);
@@ -405,7 +403,6 @@
    *  programmatic scroll (restore, flow switch) is quiet for a moment; a
    *  scroll landing inside that window is re-read once it closes. */
   function handleScroll() {
-    cancelHold();
     if (scrollFrame != null) return;
     scrollFrame = requestAnimationFrame(() => {
       scrollFrame = null;
@@ -472,56 +469,6 @@
       : "2 / 3";
   }
 
-  // ------------------------------------------------------------ long press
-
-  // A long press on a page opens it in the full-screen viewer, as a
-  // picture in a text book does; the release that ends it is not a tap.
-  let zoomImageSrc = $state<string | null>(null);
-  let holdTimer: ReturnType<typeof setTimeout> | null = null;
-  let holdStart: PointerPoint | null = null;
-  let holdFired = false;
-
-  function startHold(e: PointerEvent) {
-    cancelHold();
-    holdFired = false;
-    const img = (e.target as Element | null)?.closest?.("img");
-    const src = img ? (img as HTMLImageElement).src : "";
-    if (!src) return;
-    holdStart = { x: e.screenX, y: e.screenY };
-    holdTimer = setTimeout(() => {
-      holdTimer = null;
-      holdStart = null;
-      holdFired = true;
-      gesture = null;
-      pointers.clear();
-      zoomImageSrc = src;
-    }, IMAGE_HOLD_MS);
-  }
-
-  function cancelHold() {
-    if (holdTimer) clearTimeout(holdTimer);
-    holdTimer = null;
-    holdStart = null;
-  }
-
-  /** A finger that wanders off the press point is a drag, not a hold. */
-  function trackHold(e: PointerEvent) {
-    if (
-      holdStart &&
-      Math.hypot(e.screenX - holdStart.x, e.screenY - holdStart.y) >
-        MOVE_THRESHOLD
-    )
-      cancelHold();
-  }
-
-  /** True once for the release that ends a long press. */
-  function consumeHold() {
-    cancelHold();
-    const fired = holdFired;
-    holdFired = false;
-    return fired;
-  }
-
   // -------------------------------------------------------------- gestures
 
   interface PointerPoint {
@@ -551,8 +498,6 @@
     if (e.button !== 0 && e.pointerType === "mouse") return;
     pointers.set(e.pointerId, { x: e.screenX, y: e.screenY });
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    if (pointers.size === 1) startHold(e);
-    else cancelHold();
     if (pointers.size === 1) {
       gesture = {
         startX: e.screenX,
@@ -574,7 +519,6 @@
   }
 
   function handlePointerMove(e: PointerEvent) {
-    trackHold(e);
     if (!pointers.has(e.pointerId) || !gesture) return;
     pointers.set(e.pointerId, { x: e.screenX, y: e.screenY });
     if (pointers.size >= 2) {
@@ -602,14 +546,20 @@
   }
 
   function handlePointerUp(e: PointerEvent) {
-    if (consumeHold()) {
-      pointers.delete(e.pointerId);
-      gesture = null;
-      return;
-    }
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
-    if (pointers.size > 0 || !gesture) return;
+    if (!gesture) return;
+    if (pointers.size > 0) {
+      // Fingers leave a pinch one at a time: the one still down pans from
+      // where it is now, not from where the first finger landed before
+      // the pinch (which made the page jump on its next move).
+      const [rest] = [...pointers.values()];
+      gesture.startX = rest.x;
+      gesture.startY = rest.y;
+      gesture.startTx = tx;
+      gesture.startTy = ty;
+      return;
+    }
     const g = gesture;
     gesture = null;
     if (g.pinched) {
@@ -654,7 +604,6 @@
   }
 
   function handlePointerCancel(e: PointerEvent) {
-    cancelHold();
     pointers.delete(e.pointerId);
     if (pointers.size === 0) gesture = null;
   }
@@ -737,7 +686,6 @@
 
   function handleScrollPointerDown(e: PointerEvent) {
     scrollTapStart = { x: e.screenX, y: e.screenY };
-    startHold(e);
     if (e.pointerType !== "mouse" || e.button !== 0 || !scroller) return;
     stopFling();
     drag = {
@@ -751,7 +699,6 @@
     scroller.setPointerCapture(e.pointerId);
   }
   function handleScrollPointerMove(e: PointerEvent) {
-    trackHold(e);
     if (!drag || !scroller) return;
     const dx = e.clientX - drag.x;
     const dy = e.clientY - drag.y;
@@ -766,12 +713,6 @@
       drag.samples.shift();
   }
   function handleScrollPointerUp(e: PointerEvent) {
-    if (consumeHold()) {
-      scrollTapStart = null;
-      drag = null;
-      dragging = false;
-      return;
-    }
     const start = scrollTapStart;
     scrollTapStart = null;
     const moved = drag?.moved ?? false;
@@ -794,7 +735,6 @@
     ontap?.();
   }
   function handleScrollPointerCancel() {
-    cancelHold();
     scrollTapStart = null;
     drag = null;
     dragging = false;
@@ -816,8 +756,6 @@
 
   function handleKey(e: KeyboardEvent) {
     if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
-    // The viewer owns the keys while it is open.
-    if (zoomImageSrc) return;
     const target = e.target as HTMLElement | null;
     if (target && /^(input|textarea|select)$/i.test(target.tagName)) return;
     if (target?.isContentEditable) return;
@@ -1006,6 +944,9 @@
           get scale() {
             return scale;
           },
+          get pan() {
+            return [tx, ty];
+          },
           get cfi() {
             return getCurrentCfi();
           },
@@ -1043,7 +984,6 @@
 
   onDestroy(() => {
     destroyed = true;
-    cancelHold();
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     if (scrollFrame != null) cancelAnimationFrame(scrollFrame);
@@ -1069,8 +1009,8 @@
   data-testid="image-pager"
   data-flow={flow}
   oncontextmenu={(e) => {
-    // The system's image menu (Save to Photos, Copy…) would take the long
-    // press; the pager's own viewer answers it instead.
+    // A long press is not a gesture here (pinch and double tap zoom in
+    // place); the system's image menu (Save to Photos, Copy…) stays away.
     if ((e.target as Element | null)?.closest?.("img")) e.preventDefault();
   }}
 >
@@ -1188,14 +1128,6 @@
         {/each}
       </div>
     </div>
-  {/if}
-
-  {#if zoomImageSrc}
-    <ImageViewer
-      src={zoomImageSrc}
-      {darkMode}
-      onclose={() => (zoomImageSrc = null)}
-    />
   {/if}
 </div>
 
