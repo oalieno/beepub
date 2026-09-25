@@ -11,6 +11,8 @@
   import { initReadingSync, linkAndSyncAll } from "$lib/services/readingSync";
   import Toast from "$lib/components/Toast.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
+  import SplashIntro from "$lib/components/SplashIntro.svelte";
+  import { SplashScreen } from "@capacitor/splash-screen";
   import type { Snippet } from "svelte";
   import type { UserOut } from "$lib/types";
 
@@ -22,7 +24,14 @@
     children: Snippet;
   } = $props();
 
+  // The app's launch: the native launch screen is plain cream; the intro
+  // overlay (same cream) takes over from it here and plays once per cold
+  // start while the app loads underneath.
+  let showIntro = $state(browser && isNative());
+
   onMount(() => {
+    if (isNative())
+      void SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
     initNetworkWatcher();
     initReadingSync();
   });
@@ -103,4 +112,7 @@
   </div>
   <Toast />
   <ConfirmDialog />
+{/if}
+{#if showIntro}
+  <SplashIntro ondone={() => (showIntro = false)} />
 {/if}

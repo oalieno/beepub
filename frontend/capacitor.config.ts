@@ -10,8 +10,10 @@ const config: CapacitorConfig = {
       hideAccessoryBar: true,
     },
     SplashScreen: {
+      // Plain cream: the web intro (SplashIntro) hides this as soon as it
+      // is on screen; the delay is only a fallback.
       launchAutoHide: true,
-      autoHideDelay: 1500,
+      autoHideDelay: 3000,
       backgroundColor: "#faf7f2",
       showSpinner: false,
     },
