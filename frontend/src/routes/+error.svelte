@@ -15,8 +15,8 @@
   <img
     src={page.status >= 500 ? "/error-500.png" : "/error-404.png"}
     alt={page.status >= 500
-      ? "BeePub mascot sitting dazed in front of a cracked 500"
-      : "BeePub mascot lying in front of a cracked 404"}
+      ? "BeePub mascot slumped against a cracked 500, smoke rising from its antennae"
+      : "BeePub mascot peeking out of a hole it dug in front of a cracked 404, puzzled"}
     style="width: min(34rem, 85vw); max-height: 42dvh; height: auto; object-fit: contain;"
     class="mb-4"
   />
