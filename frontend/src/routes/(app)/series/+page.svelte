@@ -12,7 +12,21 @@
   import BackButton from "$lib/components/BackButton.svelte";
   import Modal from "$lib/components/Modal.svelte";
   import { BookDetailSkeleton } from "$lib/components/skeletons";
-  import { BookOpen, ListPlus } from "@lucide/svelte";
+  import {
+    BookOpen,
+    Check,
+    Download,
+    ListPlus,
+    LoaderCircle,
+  } from "@lucide/svelte";
+  import { isNative } from "$lib/platform";
+  import { authStore } from "$lib/stores/auth";
+  import {
+    cancelDownloads,
+    downloads,
+    enqueueDownloads,
+  } from "$lib/stores/downloads";
+  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
   import type {
     BookshelfOut,
     BookWithInteractionOut,
@@ -28,6 +42,28 @@
   let loadSeq = 0;
 
   let bookshelves = $state<BookshelfOut[]>([]);
+
+  // Download the series (native only): every volume with a file, queued
+  // in reading order; volumes already on the device are skipped.
+  let canDownload = $derived(isNative() && !!$authStore.user?.can_download);
+  let files = $derived(volumes.filter((v) => v.file_size !== null));
+  let missing = $derived(files.filter((v) => !$linkedServerBookIds.has(v.id)));
+  let seriesDownloading = $derived(files.some((v) => $downloads.has(v.id)));
+
+  function downloadSeries() {
+    if (!series) return;
+    enqueueDownloads(
+      missing.map((v) => ({
+        bookId: v.id,
+        title: v.display_title ?? v.title ?? "Untitled",
+        known: {
+          isImageBook: v.is_image_book,
+          sectionWeights: v.section_weights ?? null,
+        },
+      })),
+      { label: series.series_name },
+    );
+  }
   let showAddToShelf = $state(false);
 
   async function load(seriesName: string, libraryId: string) {
@@ -174,7 +210,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="mt-5">
+        <div class="mt-5 flex flex-wrap gap-2">
           <button
             class="inline-flex items-center gap-2 rounded-xl bg-secondary/60 hover:bg-secondary px-4 py-2 text-sm font-medium text-foreground transition-colors"
             onclick={() => (showAddToShelf = true)}
@@ -182,6 +218,46 @@
             <ListPlus size={16} />
             {m.book_add_to_shelf()}
           </button>
+          {#if canDownload && files.length > 0}
+            {#if seriesDownloading}
+              <button
+                class="inline-flex items-center gap-2 rounded-xl bg-secondary/60 hover:bg-secondary px-4 py-2 text-sm font-medium text-foreground transition-colors"
+                onclick={() => cancelDownloads(files.map((v) => v.id))}
+                aria-label={m.series_download_cancel()}
+                data-testid="series-download"
+              >
+                <LoaderCircle size={16} class="animate-spin text-primary" />
+                <span class="tabular-nums"
+                  >{m.series_downloading({
+                    done: String(files.length - missing.length),
+                    total: String(files.length),
+                  })}</span
+                >
+                <span class="text-muted-foreground"
+                  >· {m.series_download_cancel()}</span
+                >
+              </button>
+            {:else if missing.length === 0}
+              <span
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground"
+                data-testid="series-download"
+              >
+                <Check size={16} class="text-primary" />
+                {m.series_all_on_device()}
+              </span>
+            {:else}
+              <button
+                class="inline-flex items-center gap-2 rounded-xl bg-secondary/60 hover:bg-secondary px-4 py-2 text-sm font-medium text-foreground transition-colors"
+                onclick={downloadSeries}
+                data-testid="series-download"
+              >
+                <Download size={16} />
+                {missing.length === files.length
+                  ? m.series_download_all({ count: String(files.length) })
+                  : m.series_download_rest({ count: String(missing.length) })}
+              </button>
+            {/if}
+          {/if}
         </div>
       </div>
     </div>

@@ -7,14 +7,19 @@
     Bookmark,
     Check,
     HardDrive,
+    ArrowDownToLine,
+    CircleDashed,
   } from "@lucide/svelte";
   import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import { coverUrl } from "$lib/api/client";
   import { authedSrc } from "$lib/actions/authedSrc";
   import { linkedServerBookIds } from "$lib/stores/linkedBooks";
+  import { downloads } from "$lib/stores/downloads";
   import * as m from "$lib/paraglide/messages.js";
 
   let { book }: { book: BookOut } = $props();
+  // On its way to this device (native only: the queue is empty on web).
+  let download = $derived($downloads.get(book.id));
 
   // Covers are uncontrolled artwork — nothing gets stacked on them. All
   // semantic state lives in the info line below, where contrast is ours.
@@ -68,7 +73,7 @@
     >
       {book.display_title ?? m.common_untitled()}
     </h3>
-    {#if status || book.format === "physical" || book.has_unresolved_reports || $linkedServerBookIds.has(book.id)}
+    {#if status || book.format === "physical" || book.has_unresolved_reports || $linkedServerBookIds.has(book.id) || download}
       <div class="flex items-center gap-1.5 mt-1 text-xs">
         {#if book.format === "physical"}
           <span class="text-muted-foreground" title={m.physical_badge()}>
@@ -99,7 +104,20 @@
         {#if book.has_unresolved_reports}
           <TriangleAlert size={12} class="text-destructive shrink-0" />
         {/if}
-        {#if $linkedServerBookIds.has(book.id)}
+        {#if download?.state === "queued"}
+          <span class="text-muted-foreground">
+            <CircleDashed size={12} />
+          </span>
+        {:else if download}
+          <span
+            class="inline-flex items-center gap-0.5 text-primary tabular-nums"
+            title={m.download_progress({
+              percent: String(download.progress ?? 0),
+            })}
+          >
+            <ArrowDownToLine size={12} />{download.progress ?? 0}%
+          </span>
+        {:else if $linkedServerBookIds.has(book.id)}
           <!-- The mirror of the local shelf's cloud badge (native only:
                the set stays empty on web) -->
           <span class="text-muted-foreground" title={m.book_on_device()}>

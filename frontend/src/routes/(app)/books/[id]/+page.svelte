@@ -12,6 +12,9 @@
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
+  import { shareBook, type DownloadRequest } from "$lib/stores/downloads";
+  import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
+  import DownloadButton from "$lib/components/DownloadButton.svelte";
   import { confirmDialog } from "$lib/stores/confirm";
   import StarRating from "$lib/components/StarRating.svelte";
   import Modal from "$lib/components/Modal.svelte";
@@ -44,7 +47,6 @@
     Flag,
     TriangleAlert,
     Download,
-    Check,
     Layers,
     Link,
     Unlink,
@@ -155,11 +157,20 @@
   const WORK_SEARCH_LIMIT = 20;
   let savingStatus = $state(false);
 
-  // Download-to-library state (native only): a server book "downloaded"
-  // means a digest-linked copy exists in the local library.
-  let inLocalLibrary = $state(false);
-  let downloading = $state(false);
-  let downloadProgress = $state(0);
+  // Download-to-library (native only): the state lives in the app-wide
+  // queue, keyed by book — this page is reused across volumes.
+  let downloadRequest = $derived<DownloadRequest | null>(
+    book
+      ? {
+          bookId: book.id,
+          title: book.display_title ?? book.title ?? "Untitled",
+          known: {
+            isImageBook: book.is_image_book,
+            sectionWeights: book.section_weights ?? null,
+          },
+        }
+      : null,
+  );
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
   // TXT books can be rebuilt from their source as Traditional Chinese.
@@ -272,110 +283,12 @@
             primaryBookId = null;
           }),
       ];
-      if (isNative()) {
-        secondaryFetches.push(
-          import("$lib/services/localLibrary")
-            .then(({ getLocalBookLinks }) => getLocalBookLinks())
-            .then((links) => {
-              inLocalLibrary = Object.values(links).includes(bookId);
-            })
-            .catch(() => {
-              inLocalLibrary = false;
-            }),
-        );
-      }
+      if (isNative()) secondaryFetches.push(refreshLinkedBookIds());
       await Promise.all(secondaryFetches);
     } catch (e) {
       toastStore.error((e as Error).message);
     } finally {
       loading = false;
-    }
-  }
-
-  async function handleDownload() {
-    if (!book || downloading) return;
-    downloading = true;
-    downloadProgress = 0;
-    try {
-      const [{ downloadEpubToLibrary }, { apiBase, getAuthHeader }] =
-        await Promise.all([
-          import("$lib/services/epubDownload"),
-          import("$lib/api/client"),
-        ]);
-      const entry = await downloadEpubToLibrary({
-        url: `${apiBase()}/books/${bookId}/file`,
-        headers: getAuthHeader(),
-        title: book.display_title ?? book.title ?? "Untitled",
-        known: {
-          isImageBook: book.is_image_book,
-          sectionWeights: book.section_weights ?? null,
-        },
-        onProgress: (pct) => {
-          downloadProgress = pct ?? 0;
-        },
-      });
-      inLocalLibrary = true;
-      toastStore.success(m.local_import_success({ title: entry.title }));
-      // Same bytes as the server file — the digest link is guaranteed,
-      // and syncing starts right away.
-      void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
-        linkAndSyncBook(entry),
-      );
-    } catch (e) {
-      const { DuplicateBookError } = await import("$lib/services/localLibrary");
-      if (e instanceof DuplicateBookError) {
-        inLocalLibrary = true;
-        toastStore.info(m.local_import_duplicate({ title: e.existing.title }));
-      } else {
-        toastStore.error(
-          m.book_download_failed({ error: String((e as Error).message) }),
-        );
-      }
-    } finally {
-      downloading = false;
-    }
-  }
-
-  /** "Download to phone": straight to the OS share sheet (save to Files,
-   *  AirDrop, open in Readest/Books). Independent of the local library —
-   *  a digest-linked local copy just skips the network, invisibly. */
-  async function handleDownloadToDevice() {
-    if (!book || downloading) return;
-    try {
-      if (inLocalLibrary) {
-        const { getLocalBookLinks, shareLocalBookFile } =
-          await import("$lib/services/localLibrary");
-        const links = await getLocalBookLinks();
-        const localId = Object.keys(links).find((id) => links[id] === bookId);
-        if (localId) {
-          await shareLocalBookFile(localId);
-          return;
-        }
-        // Stale link — fall through to the network copy.
-      }
-      downloading = true;
-      downloadProgress = 0;
-      const [{ downloadEpubToDevice }, { apiBase, getAuthHeader }] =
-        await Promise.all([
-          import("$lib/services/epubDownload"),
-          import("$lib/api/client"),
-        ]);
-      await downloadEpubToDevice({
-        url: `${apiBase()}/books/${bookId}/file`,
-        headers: getAuthHeader(),
-        title: book.display_title ?? book.title ?? "Untitled",
-        onProgress: (pct) => {
-          downloadProgress = pct ?? 0;
-        },
-      });
-    } catch (e) {
-      // Dismissing the share sheet also rejects — that is not an error.
-      const msg = (e as Error).message ?? "";
-      if (!/cancel/i.test(msg)) {
-        toastStore.error(msg || m.local_export_failed());
-      }
-    } finally {
-      downloading = false;
     }
   }
 
@@ -812,60 +725,8 @@
           {#if isPhysical}
             <!-- nothing to download -->
           {:else if isNative()}
-            {#if inLocalLibrary}
-              <button
-                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-primary hover:shadow-md transition-all"
-                onclick={() => toastStore.info(m.book_in_local_library())}
-                title={m.book_in_local_library()}
-              >
-                <Check size={16} />
-              </button>
-            {:else if downloading}
-              <button
-                class="h-10 w-10 flex items-center justify-center rounded-full relative"
-                disabled
-                title="Downloading {downloadProgress}%"
-              >
-                <svg class="w-10 h-10 -rotate-90" viewBox="0 0 40 40">
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r="17"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    class="text-secondary"
-                  />
-                  <circle
-                    cx="20"
-                    cy="20"
-                    r="17"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    class="text-primary"
-                    stroke-dasharray={2 * Math.PI * 17}
-                    stroke-dashoffset={2 *
-                      Math.PI *
-                      17 *
-                      (1 - downloadProgress / 100)}
-                    stroke-linecap="round"
-                  />
-                </svg>
-                <span
-                  class="absolute inset-0 flex items-center justify-center text-[10px] font-semibold text-primary"
-                  >{downloadProgress}%</span
-                >
-              </button>
-            {:else if $authStore.user?.can_download}
-              <button
-                aria-label={m.book_download_to_library()}
-                class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-                onclick={handleDownload}
-                title={m.book_download_to_library()}
-              >
-                <Download size={16} />
-              </button>
+            {#if downloadRequest}
+              <DownloadButton request={downloadRequest} />
             {/if}
           {:else if $authStore.user?.can_download}
             <a
@@ -917,7 +778,9 @@
                 {m.book_report_issue()}
               </DropdownMenu.Item>
               {#if isNative() && !isPhysical && $authStore.user?.can_download}
-                <DropdownMenu.Item onclick={handleDownloadToDevice}>
+                <DropdownMenu.Item
+                  onclick={() => downloadRequest && shareBook(downloadRequest)}
+                >
                   <Share size={14} />
                   {m.book_download_to_device()}
                 </DropdownMenu.Item>
@@ -1283,58 +1146,8 @@
       {#if isPhysical}
         <!-- nothing to download -->
       {:else if isNative()}
-        {#if inLocalLibrary}
-          <button
-            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-primary transition-all"
-            onclick={() => toastStore.info(m.book_in_local_library())}
-            title={m.book_in_local_library()}
-          >
-            <Check size={18} />
-          </button>
-        {:else if downloading}
-          <button
-            class="h-12 w-12 flex items-center justify-center rounded-full relative"
-            disabled
-          >
-            <svg class="w-12 h-12 -rotate-90" viewBox="0 0 48 48">
-              <circle
-                cx="24"
-                cy="24"
-                r="21"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                class="text-secondary"
-              />
-              <circle
-                cx="24"
-                cy="24"
-                r="21"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.5"
-                class="text-primary"
-                stroke-dasharray={2 * Math.PI * 21}
-                stroke-dashoffset={2 *
-                  Math.PI *
-                  21 *
-                  (1 - downloadProgress / 100)}
-                stroke-linecap="round"
-              />
-            </svg>
-            <span
-              class="absolute inset-0 flex items-center justify-center text-xs font-semibold text-primary"
-              >{downloadProgress}%</span
-            >
-          </button>
-        {:else if $authStore.user?.can_download}
-          <button
-            aria-label={m.book_download_to_library()}
-            class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
-            onclick={handleDownload}
-          >
-            <Download size={18} />
-          </button>
+        {#if downloadRequest}
+          <DownloadButton request={downloadRequest} size="lg" />
         {/if}
       {:else if $authStore.user?.can_download}
         <a
@@ -1421,7 +1234,7 @@
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
           showMobileActions = false;
-          void handleDownloadToDevice();
+          if (downloadRequest) void shareBook(downloadRequest);
         }}
       >
         <Share size={20} class="text-muted-foreground shrink-0" />

@@ -104,8 +104,9 @@ export async function downloadEpubToLibrary(options: {
 }): Promise<LocalBookEntry> {
   const tempPath = `epub-dl/${crypto.randomUUID()}.epub`;
 
-  // One download runs at a time (callers queue), so filtering by url is
-  // unambiguous. null pct = no content-length, indeterminate.
+  // The download queue runs one book at a time and a book is never queued
+  // and shared at once, so filtering by url is unambiguous. null pct = no
+  // content-length, indeterminate.
   const listener = await Filesystem.addListener("progress", (status) => {
     if (status.url !== options.url) return;
     options.onProgress?.(
