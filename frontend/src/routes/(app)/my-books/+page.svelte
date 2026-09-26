@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { scrollSnapshot } from "$lib/scrollSnapshot";
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
@@ -95,9 +96,28 @@
     }
   }
 
+  // Back from a book: the list comes back as it was (every page loaded so
+  // far, and the scroll position), without a refetch.
+  let restoredTab: TabKey | null = null;
+  export const snapshot = scrollSnapshot({
+    capture: () => ({ tab: activeTab, books, total }),
+    restore: (d) => {
+      requestSeq += 1;
+      restoredTab = d.tab;
+      books = d.books;
+      total = d.total;
+      loading = false;
+      loadingMore = false;
+    },
+  });
+
   // Load books whenever activeTab changes (including back/forward navigation)
   $effect(() => {
     const tab = activeTab;
+    if (restoredTab === tab) {
+      restoredTab = null;
+      return;
+    }
     requestSeq += 1;
     loadFirstPage(tab, requestSeq);
   });

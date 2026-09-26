@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
+  import { scrollSnapshot } from "$lib/scrollSnapshot";
   import { bookshelvesApi } from "$lib/api/bookshelves";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
@@ -57,6 +58,19 @@
       : `b:${it.book.id}`;
   }
 
+  // Back from a book: the shelf comes back as it was, scroll included.
+  let restored = false;
+  export const snapshot = scrollSnapshot({
+    capture: () => ({ shelf, items, viewMode }),
+    restore: (d) => {
+      restored = true;
+      shelf = d.shelf;
+      items = d.items;
+      viewMode = d.viewMode;
+      loading = false;
+    },
+  });
+
   onMount(async () => {
     themeKey = loadShelfThemeKey(shelfId);
     await loadData();
@@ -69,6 +83,8 @@
         bookshelvesApi.get(shelfId),
         bookshelvesApi.getItems(shelfId),
       ]);
+      // A snapshot put the shelf back while this was in flight — keep it.
+      if (restored) return;
       shelf = s;
       items = list;
     } catch (e) {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { scrollSnapshot } from "$lib/scrollSnapshot";
   import { booksApi } from "$lib/api/books";
   import { seriesApi } from "$lib/api/series";
   import { bookshelvesApi } from "$lib/api/bookshelves";
@@ -116,7 +117,30 @@
     }
   }
 
+  // Back from a volume: the page comes back as it was, scroll included.
+  let restoredKey: string | null = null;
+  export const snapshot = scrollSnapshot({
+    capture: () => ({
+      key: `${name}\n${library}`,
+      series,
+      volumes,
+      bookshelves,
+    }),
+    restore: (d) => {
+      loadSeq += 1;
+      restoredKey = d.key;
+      series = d.series;
+      volumes = d.volumes;
+      bookshelves = d.bookshelves;
+      loading = false;
+    },
+  });
+
   $effect(() => {
+    if (restoredKey === `${name}\n${library}`) {
+      restoredKey = null;
+      return;
+    }
     if (name) load(name, library);
     else loading = false;
   });
