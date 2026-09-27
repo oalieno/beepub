@@ -27,6 +27,7 @@
   import LocalBookCard, {
     type LocalShelfEntry,
   } from "$lib/components/LocalBookCard.svelte";
+  import ContinueReadingRow from "$lib/components/ContinueReadingRow.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
   import { UserRole, type LibraryOut } from "$lib/types";
@@ -41,8 +42,8 @@
   let loading = $state(true);
 
   // Client-side search/sort — the shelf is small enough to filter in memory.
-  // Recently-read first is the default: sorted this way the shelf head IS
-  // the continue-reading row, which is the whole page's job offline.
+  // Recently-read first is the default, the same order as the
+  // continue-reading row above the shelf.
   const SORT_OPTIONS = [
     { value: "lastRead:desc", label: () => m.local_sort_last_read() },
     { value: "importedAt:desc", label: () => m.browser_sort_newest() },
@@ -93,6 +94,26 @@
     }
     return sorted;
   });
+  // Books started and not finished, most recently read first: the row
+  // opens the reader directly, since a card now opens the book page.
+  let continueReading = $derived(
+    entries
+      .filter(
+        (e) =>
+          e.lastReadAt &&
+          e.readingStatus !== "read" &&
+          e.readingStatus !== "did_not_finish",
+      )
+      .sort((a, b) => b.lastReadAt!.localeCompare(a.lastReadAt!))
+      .slice(0, 12)
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        percentage: e.progressPct ?? null,
+        authors: e.authors,
+        coverSrc: e.coverSrc,
+      })),
+  );
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   let addSheetOpen = $state(false);
@@ -433,6 +454,9 @@
         </p>
       </div>
     {:else}
+      {#if continueReading.length > 0 && !searchQuery.trim()}
+        <ContinueReadingRow items={continueReading} />
+      {/if}
       <!-- Search & sort, mirroring the cloud library browser's controls -->
       <div class="mb-6 space-y-4">
         <div class="relative">
@@ -495,7 +519,6 @@
               onupload={canUploadToCloud ? startUpload : undefined}
               onexport={isNative() ? handleExport : undefined}
               onopenlegacy={(e) => goto(`/books/${e.id}/read-legacy`)}
-              onnotes={(e) => goto(`/local/${e.id}/notes`)}
               uploading={uploadingId === entry.id}
             />
           {/each}

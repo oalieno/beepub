@@ -890,6 +890,7 @@
   "local_delete_confirm": "Delete \"{title}\" and its reading progress?",
   "local_deleted": "Book deleted",
   "local_linked": "Linked to your server library — reading will sync automatically",
+  "local_view_cloud": "Open the server copy",
   "local_linked_badge": "Synced with your server",
   "local_nav_books": "Books",
   "local_nav_settings": "Settings",

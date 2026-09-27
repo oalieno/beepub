@@ -5,9 +5,10 @@ import { ADMIN_STATE } from "./helpers";
 import { PLATES_BOOK, TOUCH_BOOK, seedFixture } from "./ng-helpers";
 
 /**
- * Book notes on a device-local book: written offline into the device
- * record, and — once the book is linked to a server copy — synced both
- * ways under their own LWW stamp.
+ * The device-local book page: a shelf card opens it (the continue-reading
+ * row above the shelf opens the reader directly); status and notes are
+ * written offline into the device record, and — once the book is linked
+ * to a server copy — notes sync both ways under their own LWW stamp.
  *
  * The app is simulated as in reader-ng-local / download-queue
  * (`CapacitorCustomPlatform`; Preferences → localStorage, Filesystem →
@@ -42,16 +43,20 @@ function simulateApp(page: Page, settings: Record<string, string>) {
   }, settings);
 }
 
-/** Shelf card → its menu → Notes. Returns the local book id. */
-async function openNotes(page: Page, title: string): Promise<string> {
+/** Shelf card → the book page. Returns the local book id. */
+async function openBookPage(page: Page, title: string): Promise<string> {
+  await page.getByRole("button", { name: title }).first().click();
+  await page.waitForURL(/\/local\/[^/]+$/);
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
+  return /\/local\/([^/]+)$/.exec(page.url())![1];
+}
+
+async function importFixture(page: Page, file: string, title: string) {
+  await page.goto("/local");
   await page
-    .getByRole("button", { name: title })
-    .first()
-    .getByRole("button", { name: "More actions" })
-    .click();
-  await page.getByRole("menuitem", { name: "Notes" }).click();
-  await page.waitForURL(/\/local\/[^/]+\/notes$/);
-  return /\/local\/([^/]+)\/notes/.exec(page.url())![1];
+    .locator('input[type="file"]')
+    .setInputFiles(path.join(FIXTURES, file));
+  await expect(page.getByRole("heading", { name: title })).toBeVisible();
 }
 
 function deviceRecord(page: Page, id: string) {
@@ -67,16 +72,9 @@ test.describe("local mode", () => {
   );
 
   test("notes are written on the device and come back", async ({ page }) => {
-    await page.goto("/local");
-    await page
-      .locator('input[type="file"]')
-      .setInputFiles(path.join(FIXTURES, TOUCH_BOOK.file));
-    await expect(
-      page.getByRole("heading", { name: TOUCH_BOOK.title }),
-    ).toBeVisible();
-
-    const id = await openNotes(page, TOUCH_BOOK.title);
-    // Nothing written yet: straight into the editor.
+    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
+    const id = await openBookPage(page, TOUCH_BOOK.title);
+    await page.getByRole("button", { name: /Add a private note/ }).click();
     const box = page.getByPlaceholder("Write your notes here...");
     await box.fill("Read on the night train.");
     await expect
@@ -87,8 +85,56 @@ test.describe("local mode", () => {
 
     await page.getByRole("link", { name: "Back" }).click();
     await page.waitForURL(/\/local$/);
-    await openNotes(page, TOUCH_BOOK.title);
+    await openBookPage(page, TOUCH_BOOK.title);
     await expect(page.getByText("Read on the night train.")).toBeVisible();
+  });
+
+  test("the reading status is set on the device", async ({ page }) => {
+    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
+    const id = await openBookPage(page, TOUCH_BOOK.title);
+    await page.locator("[data-select-trigger]").first().click();
+    await page.getByRole("option", { name: "Want to Read" }).click();
+    await expect
+      .poll(async () => (await deviceRecord(page, id))?.reading_status)
+      .toBe("want_to_read");
+    expect((await deviceRecord(page, id)).status_updated_at).toMatch(/^\d{4}-/);
+  });
+
+  test("a book being read is one tap away in the continue row", async ({
+    page,
+  }) => {
+    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
+    const row = page.getByTestId("continue-reading");
+    // Never opened: not in the row yet.
+    await expect(row).toHaveCount(0);
+
+    const id = await openBookPage(page, TOUCH_BOOK.title);
+    await page.getByRole("button", { name: "Start Reading" }).click();
+    await page.waitForFunction(
+      () => !!window.__beepubReaderNG?.core?.lastLocation,
+      null,
+      { timeout: 30_000 },
+    );
+    await page.evaluate(() => window.__beepubReaderNG.core.next());
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            (key) => !!localStorage.getItem(key),
+            `CapacitorStorage.local-progress:${id}`,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe(true);
+
+    // The reader's back lands on the book page, the page's back on the
+    // shelf — where the row now leads straight back into the book.
+    await page.getByRole("button", { name: "Go back" }).click();
+    await page.waitForURL(new RegExp(`/local/${id}$`));
+    await page.getByRole("link", { name: "Back" }).click();
+    await page.waitForURL(/\/local$/);
+    await row.getByRole("link", { name: new RegExp(TOUCH_BOOK.title) }).click();
+    await page.waitForURL(new RegExp(`/books/${id}/read`));
   });
 });
 
@@ -123,7 +169,7 @@ test.describe("linked to the server", () => {
 
     // Downloading links the copy and syncs it: the web notes fold in.
     await page.goto("/local");
-    await openNotes(page, PLATES_BOOK.title);
+    await openBookPage(page, PLATES_BOOK.title);
     await expect(page.getByText("Written on the web.")).toBeVisible();
 
     // A device edit is newer: it goes up.

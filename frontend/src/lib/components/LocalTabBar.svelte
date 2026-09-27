@@ -11,7 +11,12 @@
       href: "/local",
       label: m.local_nav_books(),
       icon: BookOpen,
-      match: (p: string) => p === "/local" || p.startsWith("/catalogs"),
+      // The shelf, its book pages, and the catalogs it imports from.
+      match: (p: string) =>
+        p === "/local" ||
+        p.startsWith("/catalogs") ||
+        (/^\/local\/[^/]+$/.test(p) &&
+          !/^\/local\/(highlights|settings)$/.test(p)),
     },
     {
       href: "/local/highlights",

@@ -2,11 +2,11 @@
   import { onMount } from "svelte";
   import { librariesApi } from "$lib/api/libraries";
   import BookGrid from "$lib/components/BookGrid.svelte";
+  import ContinueReadingRow from "$lib/components/ContinueReadingRow.svelte";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
   import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
   import { booksApi } from "$lib/api/books";
   import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
   import { isOnline } from "$lib/services/network";
   import { readingSyncStamp } from "$lib/services/readingSync";
   import type {
@@ -112,71 +112,18 @@
   {:else}
     <!-- Continue Reading -->
     {#if continueReadingBooks.length > 0}
-      <section class="mb-12">
-        <div class="flex items-end justify-between mb-6">
-          <div>
-            <h2 class="text-2xl font-bold text-foreground">
-              {m.home_continue_reading()}
-            </h2>
-            <p class="text-muted-foreground text-sm mt-1">
-              {m.home_continue_reading_subtitle()}
-            </p>
-          </div>
-          <a
-            href="/my-books?tab=currently_reading"
-            class="text-primary hover:text-primary/80 text-sm font-medium"
-            >{m.home_see_all()}</a
-          >
-        </div>
-        <div
-          class="flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory scrollbar-hide"
-        >
-          {#each continueReadingBooks as book}
-            <a
-              href="/books/{book.id}/read"
-              class="shrink-0 snap-start w-[140px] sm:w-[160px] group"
-            >
-              <div
-                class="aspect-[2/3] rounded-xl overflow-hidden bg-muted mb-2 relative"
-              >
-                {#if book.cover_path}
-                  <img
-                    use:authedSrc={coverUrl(book.id, book.updated_at)}
-                    alt={book.display_title ?? m.common_untitled()}
-                    class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-                  />
-                {:else}
-                  <div
-                    class="w-full h-full flex items-center justify-center text-muted-foreground/30"
-                  >
-                    <BookOpen size={32} />
-                  </div>
-                {/if}
-                {#if book.reading_percentage != null}
-                  <div
-                    class="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20"
-                  >
-                    <div
-                      class="h-full bg-primary transition-all"
-                      style="width: {Math.round(book.reading_percentage)}%"
-                    ></div>
-                  </div>
-                {/if}
-              </div>
-              <p
-                class="text-sm font-medium text-foreground line-clamp-2 leading-tight group-hover:text-primary transition-colors"
-              >
-                {book.display_title ?? m.common_untitled()}
-              </p>
-              {#if book.reading_percentage != null}
-                <p class="text-xs text-muted-foreground mt-0.5">
-                  {Math.round(book.reading_percentage)}%
-                </p>
-              {/if}
-            </a>
-          {/each}
-        </div>
-      </section>
+      <ContinueReadingRow
+        items={continueReadingBooks.map((book) => ({
+          id: book.id,
+          title: book.display_title ?? m.common_untitled(),
+          percentage: book.reading_percentage ?? null,
+          authors: book.display_authors ?? [],
+          authedCover: book.cover_path
+            ? coverUrl(book.id, book.updated_at)
+            : null,
+        }))}
+        seeAllHref="/my-books?tab=currently_reading"
+      />
     {/if}
 
     <!-- Reading Activity Heatmap -->

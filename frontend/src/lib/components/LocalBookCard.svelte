@@ -24,7 +24,6 @@
     EllipsisVertical,
     History,
     Loader2,
-    NotebookPen,
     Share,
     Trash2,
   } from "@lucide/svelte";
@@ -38,7 +37,6 @@
     onupload,
     onexport,
     onopenlegacy,
-    onnotes,
     uploading = false,
   }: {
     entry: LocalShelfEntry;
@@ -51,9 +49,6 @@
     onexport?: (entry: LocalShelfEntry) => void;
     /** Legacy reader entry (the previous engine, kept until it is retired). */
     onopenlegacy?: (entry: LocalShelfEntry) => void;
-    /** The book's notes page (the local library's stand-in for the
-     *  server book page's notes). */
-    onnotes?: (entry: LocalShelfEntry) => void;
     uploading?: boolean;
   } = $props();
 
@@ -70,8 +65,8 @@
   tabindex="0"
   class="text-left w-full group cursor-pointer"
   style="-webkit-tap-highlight-color: transparent;"
-  onclick={() => goto(`/books/${entry.id}/read`)}
-  onkeydown={(e) => e.key === "Enter" && goto(`/books/${entry.id}/read`)}
+  onclick={() => goto(`/local/${entry.id}`)}
+  onkeydown={(e) => e.key === "Enter" && goto(`/local/${entry.id}`)}
 >
   <!-- Cover -->
   <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
@@ -135,7 +130,7 @@
         <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
           <Loader2 size={14} class="animate-spin" />
         </span>
-      {:else if ondelete || showUpload || onexport || onopenlegacy || onnotes}
+      {:else if ondelete || showUpload || onexport || onopenlegacy}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -146,12 +141,6 @@
             <EllipsisVertical size={14} />
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end">
-            {#if onnotes}
-              <DropdownMenu.Item onclick={() => onnotes?.(entry)}>
-                <NotebookPen size={14} />
-                {m.notes_title()}
-              </DropdownMenu.Item>
-            {/if}
             {#if showUpload}
               <DropdownMenu.Item onclick={() => onupload?.(entry)}>
                 <CloudUpload size={14} />
@@ -171,7 +160,7 @@
               </DropdownMenu.Item>
             {/if}
             {#if ondelete}
-              {#if onnotes || showUpload || onexport || onopenlegacy}
+              {#if showUpload || onexport || onopenlegacy}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

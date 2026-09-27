@@ -890,6 +890,7 @@
   "local_delete_confirm": "確定刪除「{title}」與它的閱讀進度？",
   "local_deleted": "已刪除書籍",
   "local_linked": "已連結到伺服器書庫，閱讀將自動同步",
+  "local_view_cloud": "查看雲端版本",
   "local_linked_badge": "與伺服器同步中",
   "local_nav_books": "書庫",
   "local_nav_settings": "設定",

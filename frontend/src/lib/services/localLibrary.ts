@@ -508,3 +508,38 @@ export async function getLocalCoverSrc(
     return null;
   }
 }
+
+/** What the book page shows beyond the manifest entry. */
+export interface LocalBookDetails {
+  description: string | null;
+  publisher: string | null;
+  published: string | null;
+}
+
+/**
+ * The OPF's descriptive metadata, read from the stored file on demand —
+ * the manifest keeps only what the shelf needs, and reading it here works
+ * for books imported before the page existed. Null when the file is
+ * missing or unreadable (the page just shows less).
+ */
+export async function readLocalBookDetails(
+  bookId: string,
+): Promise<LocalBookDetails | null> {
+  const bytes = await readLocalBookBytes(bookId);
+  if (!bytes) return null;
+  const Epub = (await import("$lib/epubjs/epub.js")).default;
+  const book: any = (Epub as any)();
+  try {
+    await book.open(bytes);
+    const meta = book.packaging?.metadata ?? {};
+    return {
+      description: meta.description || null,
+      publisher: meta.publisher || null,
+      published: meta.pubdate || null,
+    };
+  } catch {
+    return null;
+  } finally {
+    book.destroy();
+  }
+}

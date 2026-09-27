@@ -52,6 +52,12 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+function readFromBookPage(page: Page) {
+  return page
+    .getByRole("button", { name: /^(Start|Continue) Reading$/ })
+    .click();
+}
+
 /** Open the shelf card (client-side navigation, as in the app — a full
  *  load of a reader URL on the web stack bounces through the server-side
  *  login redirect first). */
@@ -62,7 +68,16 @@ async function openFromShelf(
   // The card is a role=button whose name includes the title (and its
   // menu trigger's label); the trigger alone is named "More actions".
   await page.getByRole("button", { name: fixture.title }).first().click();
+  // A card opens the book page; its read button opens the reader.
+  await page.waitForURL(/\/local\/[^/]+$/);
+  await readFromBookPage(page);
   await page.waitForURL(/\/books\/[^/]+\/read/);
+  await waitForReader(page, fixture);
+  return /\/books\/([^/]+)\/read/.exec(page.url())![1];
+}
+
+/** Wait for the reader to render the book. */
+async function waitForReader(page: Page, fixture: Fixture) {
   await page.waitForFunction(
     () => !!window.__beepubReaderNG?.core?.lastLocation,
     null,
@@ -78,7 +93,6 @@ async function openFromShelf(
       }, fixture.readyText),
     )
     .toBe(true);
-  return /\/books\/([^/]+)\/read/.exec(page.url())![1];
 }
 
 async function importFixture(page: Page, fixture: Fixture) {
@@ -132,10 +146,13 @@ test("an imported book opens through the zip loader and keeps its place on the d
     )
     .toMatch(/^epubcfi\(/);
 
-  // Back to the shelf and in again: the saved position is restored.
+  // Back to the book page and in again: the saved position is restored.
   await back.click();
-  await page.waitForURL(/\/local$/);
-  expect(await openFromShelf(page)).toBe(bookId);
+  await page.waitForURL(new RegExp(`/local/${bookId}$`));
+  // Drop the closed reader's handle so the wait below sees the new one.
+  await page.evaluate(() => delete window.__beepubReaderNG);
+  await readFromBookPage(page);
+  await waitForReader(page, TOUCH_BOOK);
   const restored = await readLocation(page);
   expect(restored.index).toBe(moved.index);
   expect(restored.fraction).toBeGreaterThan(0);

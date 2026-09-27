@@ -861,7 +861,7 @@
       highlightCount={highlights.length}
       illustrationCount={illustrations.length}
       offline={!$isOnline}
-      backHref={localEntry ? "/local" : null}
+      backHref={localEntry ? `/local/${bookId}` : null}
       showAi={aiEnabled}
       onprev={() => reader?.prev()}
       onnext={() => reader?.next()}
@@ -887,7 +887,7 @@
     {percentage}
     {chapterLabel}
     {darkMode}
-    backHref={localEntry ? "/local" : null}
+    backHref={localEntry ? `/local/${bookId}` : null}
   />
 
   <!-- md:pb reserves a sliver for the collapsed progress line so book text
@@ -990,7 +990,7 @@
             {m.common_retry()}
           </button>
           <a
-            href={localEntry ? "/local" : `/books/${bookId}`}
+            href={localEntry ? `/local/${bookId}` : `/books/${bookId}`}
             class="rounded-lg px-4 py-2 text-sm font-medium transition-colors {darkMode
               ? 'text-ink-300 hover:bg-ink-800'
               : 'text-muted-foreground hover:bg-secondary'}"
