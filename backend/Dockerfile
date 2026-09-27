@@ -10,6 +10,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 ENV UV_COMPILE_BYTECODE=1
+# The image never wants the dev group: without this every `uv run` at
+# container start re-syncs it (downloading ruff, pytest...), which is slow
+# and fails outright on a host with no internet.
+ENV UV_NO_DEV=1
 
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project

@@ -7,6 +7,8 @@ services:
       - covers_data:/data/covers
     environment:
       DEV: "1"
+      # The image skips the dev group; the dev venv keeps it.
+      UV_NO_DEV: "0"
 
   worker:
     volumes:
@@ -14,12 +16,16 @@ services:
       - backend_venv:/app/.venv
       - books_data:/data/books
       - covers_data:/data/covers
+    environment:
+      UV_NO_DEV: "0"
     command: ["bash", "start-worker-dev.sh"]
 
   beat:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
+    environment:
+      UV_NO_DEV: "0"
     command: >
       sh -c "uv sync --frozen --no-install-project && exec uv run celery -A app.celeryapp:celery beat --loglevel=info"
 
