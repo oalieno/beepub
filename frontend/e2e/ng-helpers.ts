@@ -445,6 +445,15 @@ export function marks(page: Page) {
   });
 }
 
+/** Two chapters of prose; chapter two carries print page markers the way
+ *  publisher files do: an empty inline anchor (`<a id="page_43"/>`) inside
+ *  a paragraph and an empty pagebreak span between paragraphs. */
+export const PAGE_MARKERS_BOOK: Fixture = {
+  file: "e2e-page-markers-book.epub",
+  title: "Page Marker Gazette",
+  readyText: "harbor office",
+};
+
 /** A six-page right-to-left comic (page four is a two-page spread), packed
  *  into a pre-paginated EPUB at ingest. An image book: no readyText. */
 export const CBZ_BOOK: Fixture = {

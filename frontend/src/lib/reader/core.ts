@@ -14,6 +14,7 @@
 import "./vendor/foliate/paginator.js";
 import { EPUB } from "./vendor/foliate/epub.js";
 import * as CFI from "./vendor/foliate/epubcfi.js";
+import { normalizeCFI } from "./cfi";
 import { Overlayer } from "./vendor/foliate/overlayer.js";
 import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
@@ -467,7 +468,7 @@ export class ReaderCore {
       resolved = { index: target.index, anchor: target.fraction ?? 0 };
     } else if (CFI.isCFI.test(target)) {
       try {
-        resolved = book.resolveCFI(target);
+        resolved = book.resolveCFI(normalizeCFI(target));
       } catch {
         resolved = null;
       }
@@ -590,7 +591,7 @@ export class ReaderCore {
    *  as-is). */
   collapseCFI(cfi: string): string {
     try {
-      return CFI.collapse(cfi);
+      return CFI.collapse(normalizeCFI(cfi));
     } catch {
       return cfi;
     }
