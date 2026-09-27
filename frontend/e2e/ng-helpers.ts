@@ -521,3 +521,32 @@ export async function stepPagerSetting(
     await page.getByRole("button", { name }).click();
   await page.keyboard.press("Escape");
 }
+
+/** Run the web build as the iOS app: Capacitor reads
+ *  `CapacitorCustomPlatform` first, and plugins without a native bridge
+ *  fall back to their web implementations (Preferences → localStorage,
+ *  Filesystem → IndexedDB). `settings` are seeded into localStorage. */
+export function simulateApp(page: Page, settings: Record<string, string>) {
+  return page.addInitScript((settings) => {
+    (
+      window as unknown as { CapacitorCustomPlatform: { name: string } }
+    ).CapacitorCustomPlatform = { name: "ios" };
+    for (const [k, v] of Object.entries(settings)) localStorage.setItem(k, v);
+    // The stack is plain http, so the page is not a secure context and
+    // lacks crypto.randomUUID (imports and highlights mint ids with it).
+    // The app itself always runs in one (capacitor:// / https).
+    if (typeof crypto.randomUUID !== "function") {
+      crypto.randomUUID = () => {
+        const b = crypto.getRandomValues(new Uint8Array(16));
+        b[6] = (b[6] & 0x0f) | 0x40;
+        b[8] = (b[8] & 0x3f) | 0x80;
+        const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(
+          "",
+        );
+        return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` as ReturnType<
+          typeof crypto.randomUUID
+        >;
+      };
+    }
+  }, settings);
+}

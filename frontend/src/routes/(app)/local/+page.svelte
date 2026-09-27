@@ -7,7 +7,6 @@
   import { authStore } from "$lib/stores/auth";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
-  import { setActiveLibrary } from "$lib/stores/activeLibrary";
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import {
@@ -304,9 +303,6 @@
   }
 
   onMount(async () => {
-    // The device shelf is a library like any other — visiting it makes it
-    // the active one the 書庫 nav entry jumps back to.
-    if (isNative()) setActiveLibrary("device");
     await loadEntries();
     // A shelf visit is a natural refresh point: the full sync heals stale
     // links (server copy deleted → 404 → unlink) and pulls fresh status,

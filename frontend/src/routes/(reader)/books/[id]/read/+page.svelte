@@ -942,6 +942,15 @@
           }
         }
       } else {
+        // A downloaded copy's own hints first: offline, the fetch below
+        // never answers, and an image book must still open in the pager.
+        const hints = resolved.linkedEntry;
+        if (hints) {
+          title = hints.title;
+          authors = hints.authors ?? [];
+          if (hints.isImageBook !== undefined) isImageBook = hints.isImageBook;
+          if (hints.sectionWeights) sectionWeights = hints.sectionWeights;
+        }
         booksApi
           .get(bookId)
           .then((b) => {

@@ -3,15 +3,19 @@ import { browser } from "$app/environment";
 
 // Calibre-style "active library": the 書庫 nav entry jumps straight to the
 // last-visited library; the cards page one level up is the switcher.
-// "all" = the all-books pseudo-library, "device" = the local shelf.
-export type ActiveLibrary = "all" | "device" | (string & {});
+// "all" = the all-books pseudo-library. The device shelf is the other
+// library (local mode), never a server library to jump into.
+export type ActiveLibrary = "all" | (string & {});
 
 const STORAGE_KEY = "active-library";
 
 function getInitial(): ActiveLibrary {
   if (!browser) return "all";
   try {
-    return localStorage.getItem(STORAGE_KEY) || "all";
+    const stored = localStorage.getItem(STORAGE_KEY);
+    // "device" was the local shelf's card among the server libraries,
+    // before the two libraries split — it has no server page any more.
+    return stored && stored !== "device" ? stored : "all";
   } catch {
     return "all";
   }
@@ -28,6 +32,7 @@ export function setActiveLibrary(value: ActiveLibrary) {
   }
 }
 
-export const activeLibraryHref = derived(activeLibrary, (v) =>
-  v === "device" ? "/local" : `/libraries/${v}`,
+export const activeLibraryHref = derived(
+  activeLibrary,
+  (v) => `/libraries/${v}`,
 );

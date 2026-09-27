@@ -218,6 +218,15 @@ export function syncLocalBook(localBookId: string): Promise<void> {
   return run;
 }
 
+/** Push the book's device records after a local write. Waits out a run
+ *  that is already in flight — it read the records before the write — so
+ *  the write is always in the body of the run this starts. */
+export async function pushLocalBook(localBookId: string): Promise<void> {
+  const existing = perBookInFlight.get(localBookId);
+  if (existing) await existing.catch(() => {});
+  return syncLocalBook(localBookId);
+}
+
 function toSyncProgress(record: LocalProgressRecord): SyncProgressIn {
   return {
     cfi: record.cfi,

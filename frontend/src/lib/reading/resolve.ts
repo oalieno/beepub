@@ -24,6 +24,10 @@ export interface ResolvedReading {
   /** Set when the book is a local import — carries display metadata the
    *  server would otherwise provide. */
   localEntry: LocalBookEntry | null;
+  /** Set when a server book reads through its downloaded copy — the
+   *  entry's stored hints (image book, section weights) stand in for the
+   *  server record when there is no connection to fetch it. */
+  linkedEntry?: LocalBookEntry | null;
 }
 
 export async function resolveReading(bookId: string): Promise<ResolvedReading> {
@@ -61,12 +65,14 @@ export async function resolveReading(bookId: string): Promise<ResolvedReading> {
     try {
       const links = await getLocalBookLinks();
       const localId = Object.keys(links).find((k) => links[k] === bookId);
-      if (localId && (await getLocalBook(localId))) {
+      const linkedEntry = localId ? await getLocalBook(localId) : null;
+      if (localId && linkedEntry) {
         const { makeLinkedSync } = await import("./linked");
         return {
           source: localSourceFor(localId),
           sync: makeLinkedSync(localId),
           localEntry: null,
+          linkedEntry,
         };
       }
     } catch {
