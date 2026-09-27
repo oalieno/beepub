@@ -20,10 +20,8 @@
     Bookmark,
     Check,
     Cloud,
-    CloudUpload,
     EllipsisVertical,
     History,
-    Loader2,
     Share,
     Trash2,
   } from "@lucide/svelte";
@@ -34,25 +32,17 @@
   let {
     entry,
     ondelete,
-    onupload,
     onexport,
     onopenlegacy,
-    uploading = false,
   }: {
     entry: LocalShelfEntry;
     /** When absent the delete action is not rendered (read-only shelf). */
     ondelete?: (e: MouseEvent, entry: LocalShelfEntry) => void;
-    /** Offered for unlinked books only; the page owns the gate (server
-     *  configured, online, can_upload). */
-    onupload?: (entry: LocalShelfEntry) => void;
     /** Share the EPUB file via the OS share sheet (native only). */
     onexport?: (entry: LocalShelfEntry) => void;
     /** Legacy reader entry (the previous engine, kept until it is retired). */
     onopenlegacy?: (entry: LocalShelfEntry) => void;
-    uploading?: boolean;
   } = $props();
-
-  let showUpload = $derived(!!onupload && !entry.linked);
 
   function formatSize(bytes: number): string {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -130,11 +120,7 @@
            collapsed into a menu — a bare trash can invites misclicks
            (audit J). Stop both events so the trigger doesn't open the
            book. -->
-      {#if uploading}
-        <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
-          <Loader2 size={14} class="animate-spin" />
-        </span>
-      {:else if ondelete || showUpload || onexport || onopenlegacy}
+      {#if ondelete || onexport || onopenlegacy}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -145,12 +131,6 @@
             <EllipsisVertical size={14} />
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end">
-            {#if showUpload}
-              <DropdownMenu.Item onclick={() => onupload?.(entry)}>
-                <CloudUpload size={14} />
-                {m.local_upload()}
-              </DropdownMenu.Item>
-            {/if}
             {#if onexport}
               <DropdownMenu.Item onclick={() => onexport?.(entry)}>
                 <Share size={14} />
@@ -164,7 +144,7 @@
               </DropdownMenu.Item>
             {/if}
             {#if ondelete}
-              {#if showUpload || onexport || onopenlegacy}
+              {#if onexport || onopenlegacy}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

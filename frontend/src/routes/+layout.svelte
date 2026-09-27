@@ -81,6 +81,12 @@
     );
   }
 
+  // The device's own pages belong to the local library; in the server
+  // library an old link or back entry to one lands on the libraries.
+  function isDeviceOnlyPath(path: string): boolean {
+    return path.startsWith("/local") || path.startsWith("/catalogs");
+  }
+
   // Client-side route guards for SPA (Capacitor) mode
   let nativeReady = $state(!isNative());
   $effect(() => {
@@ -100,6 +106,9 @@
         }
       } else if (!$authStore.user && path !== "/login" && path !== "/setup") {
         goto("/login");
+        return;
+      } else if (isDeviceOnlyPath(path)) {
+        goto("/libraries", { replaceState: true });
         return;
       }
       nativeReady = true;

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { isNative } from "$lib/platform";
   import { authStore } from "$lib/stores/auth";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
@@ -12,9 +11,7 @@
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
   import {
-    Cloud,
     EllipsisVertical,
-    HardDrive,
     Library,
     Pencil,
     Plus,
@@ -28,8 +25,6 @@
     count: 0,
     previewIds: [],
   });
-  // null = not native (card hidden).
-  let device = $state<{ count: number; previewSrcs: string[] } | null>(null);
   let loading = $state(true);
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
@@ -57,25 +52,6 @@
       toastStore.error((e as Error).message);
     } finally {
       loading = false;
-    }
-    if (isNative()) {
-      try {
-        const { listLocalBooks, getLocalCoverSrc } =
-          await import("$lib/services/localLibrary");
-        const books = await listLocalBooks();
-        const newest = books
-          .filter((b) => b.coverPath)
-          .sort((a, b) => b.importedAt.localeCompare(a.importedAt))
-          .slice(0, 4);
-        // Cover URIs go stale across app restarts — always re-derived here.
-        const srcs = await Promise.all(newest.map(getLocalCoverSrc));
-        device = {
-          count: books.length,
-          previewSrcs: srcs.filter((s): s is string => !!s),
-        };
-      } catch {
-        device = { count: 0, previewSrcs: [] };
-      }
     }
   }
 
@@ -179,31 +155,15 @@
     <CardListSkeleton count={4} />
   {:else}
     <div class="grid grid-cols-1 gap-5 collection-grid">
-      {#if device}
-        <CollectionCard
-          href="/local"
-          name={m.libraries_this_device()}
-          previewSrcs={device.previewSrcs}
-          bookCount={device.count}
-        >
-          {#snippet icon()}
-            <HardDrive class="text-muted-foreground/50 shrink-0" size={16} />
-          {/snippet}
-        </CollectionCard>
-      {/if}
       {#if libraries.length > 0}
         <CollectionCard
           href="/libraries/all"
-          name={isNative() ? m.libraries_cloud_books() : m.allbooks_heading()}
+          name={m.allbooks_heading()}
           previewBookIds={allBooks.previewIds}
           bookCount={allBooks.count}
         >
           {#snippet icon()}
-            {#if isNative()}
-              <Cloud class="text-muted-foreground/50 shrink-0" size={16} />
-            {:else}
-              <Library class="text-muted-foreground/50 shrink-0" size={16} />
-            {/if}
+            <Library class="text-muted-foreground/50 shrink-0" size={16} />
           {/snippet}
         </CollectionCard>
       {/if}
@@ -217,13 +177,7 @@
           badgeClass="bg-amber-500/15 text-amber-600"
         >
           {#snippet icon()}
-            <!-- On native the page contrasts cloud vs device, so every
-                 server library carries the cloud mark. -->
-            {#if isNative()}
-              <Cloud class="text-muted-foreground/50 shrink-0" size={16} />
-            {:else}
-              <Library class="text-muted-foreground/50 shrink-0" size={16} />
-            {/if}
+            <Library class="text-muted-foreground/50 shrink-0" size={16} />
           {/snippet}
           {#snippet overlay()}
             {#if isAdmin}

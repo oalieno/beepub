@@ -9,7 +9,6 @@
   import ContinueReadingRow, {
     type ContinueReadingItem,
   } from "$lib/components/ContinueReadingRow.svelte";
-  import { isNative } from "$lib/platform";
   import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
   import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
   import { booksApi } from "$lib/api/books";
@@ -52,7 +51,7 @@
       libraries = libs;
       readingActivity = activity;
       readingStats = stats;
-      continueReading = await mergeContinueReading(currentlyReading.items);
+      continueReading = currentlyReading.items.map(toContinueItem);
 
       // Gather recent books from all libraries (only fetch top 12 each)
       const allBooks: BookWithInteractionOut[] = [];
@@ -84,42 +83,14 @@
     }
   }
 
-  /** Server books being read, merged with device books that have no
-   *  server copy yet (linked ones already appear as their server copy),
-   *  most recently read first. */
-  async function mergeContinueReading(
-    books: BookWithInteractionOut[],
-  ): Promise<ContinueReadingItem[]> {
-    const merged: (ContinueReadingItem & { lastReadAt: string })[] = books.map(
-      (book) => ({
-        id: book.id,
-        title: book.display_title ?? m.common_untitled(),
-        authors: book.display_authors ?? [],
-        percentage: book.reading_percentage ?? null,
-        authedCover: book.cover_path
-          ? coverUrl(book.id, book.updated_at)
-          : null,
-        lastReadAt: book.last_read_at ?? "",
-      }),
-    );
-    if (isNative()) {
-      try {
-        const { loadShelfEntries, continueItems } =
-          await import("$lib/services/localShelf");
-        const entries = await loadShelfEntries();
-        merged.push(
-          ...continueItems(entries.filter((e) => !e.linked)).map((item) => ({
-            ...item,
-            authedCover: null,
-          })),
-        );
-      } catch {
-        // The device shelf is a bonus here; the server list stands alone.
-      }
-    }
-    return merged
-      .sort((a, b) => b.lastReadAt.localeCompare(a.lastReadAt))
-      .slice(0, 12);
+  function toContinueItem(book: BookWithInteractionOut): ContinueReadingItem {
+    return {
+      id: book.id,
+      title: book.display_title ?? m.common_untitled(),
+      authors: book.display_authors ?? [],
+      percentage: book.reading_percentage ?? null,
+      authedCover: book.cover_path ? coverUrl(book.id, book.updated_at) : null,
+    };
   }
 
   onMount(async () => {

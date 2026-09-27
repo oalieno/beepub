@@ -89,14 +89,21 @@ export function navTabs(ctx: NavContext): NavItem[] {
 
 /** The desktop (and iPad) sidebar's main links. */
 export function navLinks(ctx: NavContext): NavItem[] {
+  // Catalogs import into the device, so they belong to the local library.
+  const catalogs: NavItem[] =
+    ctx.native && ctx.mode === "local"
+      ? [
+          {
+            href: "/catalogs",
+            label: m.nav_catalogs(),
+            icon: Rss,
+            match: (p) => p.startsWith("/catalogs"),
+          },
+        ]
+      : [];
   const catalogsAndMode: NavItem[] = ctx.native
     ? [
-        {
-          href: "/catalogs",
-          label: m.nav_catalogs(),
-          icon: Rss,
-          match: (p) => p.startsWith("/catalogs"),
-        },
+        ...catalogs,
         {
           href: "/mode",
           label: m.mode_switch_title(),
@@ -160,8 +167,6 @@ export function navTitle(mode: NavMode, path: string): string {
           ["/gacha", m.nav_gacha()],
           ["/admin", m.nav_admin()],
           ["/profile", m.nav_profile()],
-          ["/local", m.nav_local_books()],
-          ["/catalogs", m.nav_catalogs()],
         ];
   if (path === "/") return m.nav_home();
   for (const [prefix, title] of titles) {
@@ -187,7 +192,7 @@ function libraries(ctx: NavContext, icon: Component): NavItem {
     href: ctx.libraryHref,
     label: m.nav_libraries(),
     icon,
-    match: (p) => p.startsWith("/libraries") || p.startsWith("/local"),
+    match: (p) => p.startsWith("/libraries"),
   };
 }
 

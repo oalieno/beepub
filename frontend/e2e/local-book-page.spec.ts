@@ -43,14 +43,8 @@ async function openShelf(page: Page) {
   await page.waitForURL(/\/local$/);
 }
 
-async function importFixture(
-  page: Page,
-  file: string,
-  title: string,
-  mode: "local" | "server" = "local",
-) {
-  if (mode === "local") await openShelf(page);
-  else await page.goto("/local");
+async function importFixture(page: Page, file: string, title: string) {
+  await openShelf(page);
   await page
     .locator('input[type="file"]')
     .setInputFiles(path.join(FIXTURES, file));
@@ -147,7 +141,26 @@ async function readOnePage(page: Page, id: string) {
     .toBe(true);
 }
 
-test.describe("linked to the server", () => {
+/** Switch libraries the way the app does: flip the flag, reload. */
+async function switchTo(page: Page, library: "local" | "server") {
+  if (page.url() === "about:blank") await page.goto("/");
+  await page.evaluate((local) => {
+    if (local) localStorage.setItem("localMode", "1");
+    else localStorage.removeItem("localMode");
+  }, library === "local");
+  await page.goto("/");
+}
+
+/** Every device interaction record's notes. */
+function deviceNotes(page: Page) {
+  return page.evaluate(() =>
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("CapacitorStorage.local-interaction:"))
+      .map((k) => JSON.parse(localStorage.getItem(k)!).notes as string | null),
+  );
+}
+
+test.describe("with a server", () => {
   test.use({ storageState: ADMIN_STATE });
   test.beforeEach(({ page, baseURL }) =>
     simulateApp(page, {
@@ -156,7 +169,7 @@ test.describe("linked to the server", () => {
     }),
   );
 
-  test("notes sync both ways", async ({ page }) => {
+  test("notes on a downloaded book sync both ways", async ({ page }) => {
     const serverId = await seedFixture(page.request, PLATES_BOOK);
     // A web edit that predates the device copy.
     expect(
@@ -175,17 +188,26 @@ test.describe("linked to the server", () => {
     await expect(
       page.getByRole("button", { name: /Downloaded to this device/ }).first(),
     ).toBeVisible({ timeout: 30_000 });
-
     // Downloading links the copy and syncs it: the web notes fold in.
-    await page.goto("/local");
+    await expect
+      .poll(() => deviceNotes(page), { timeout: 15_000 })
+      .toContain("Written on the web.");
+
+    // The local library shows them, and takes an edit offline.
+    await switchTo(page, "local");
+    await page.getByRole("link", { name: "Books", exact: true }).first().click();
     await openBookPage(page, PLATES_BOOK.title);
     await expect(page.getByText("Written on the web.")).toBeVisible();
-
-    // A device edit is newer: it goes up.
     await page.getByRole("button", { name: "Edit" }).first().click();
     await page
       .getByPlaceholder("Write your notes here...")
       .fill("Rewritten on the device.");
+    await expect
+      .poll(() => deviceNotes(page))
+      .toContain("Rewritten on the device.");
+
+    // Back in the server library, the newer device edit goes up.
+    await switchTo(page, "server");
     await expect
       .poll(
         async () =>
@@ -199,22 +221,56 @@ test.describe("linked to the server", () => {
       .toBe("Rewritten on the device.");
   });
 
-  test("Home's continue row includes books only on this device", async ({
+  test("the device's own pages stay in the local library", async ({
     page,
   }) => {
-    // Keep the import unlinked even if the server has the same file.
+    await page.goto("/libraries");
+    await expect(page.getByRole("link", { name: /All Books/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /This device/ })).toHaveCount(
+      0,
+    );
+    // An old link to the device shelf lands on the libraries instead.
+    await page.goto("/local");
+    await page.waitForURL(/\/libraries$/);
+  });
+
+  test("a local book goes up from the library's add menu", async ({
+    page,
+  }) => {
+    // The server already has this file, which would link the import on
+    // its own; hide it, and stand the upload in for the real one (no
+    // duplicate book in the shared stack) by answering with that book.
+    const serverId = await seedFixture(page.request, TOUCH_BOOK);
     await page.route("**/api/books/by-digest", (route) =>
       route.fulfill({ json: { matches: {} } }),
     );
-    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title, "server");
-    const id = await openBookPage(page, TOUCH_BOOK.title);
-    await readOnePage(page, id);
+    let uploads = 0;
+    await page.route("**/api/books", async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      uploads++;
+      const book = await (
+        await page.request.get(`/api/books/${serverId}`)
+      ).json();
+      return route.fulfill({ json: book });
+    });
+    await switchTo(page, "local");
+    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
+    await switchTo(page, "server");
 
-    await page.goto("/");
-    await expect(
-      page
-        .getByTestId("continue-reading")
-        .getByRole("link", { name: new RegExp(TOUCH_BOOK.title) }),
-    ).toHaveAttribute("href", `/books/${id}/read`);
+    const libs = await (await page.request.get("/api/libraries")).json();
+    const target = libs.find(
+      (l: { calibre_path: string | null }) => !l.calibre_path,
+    );
+    await page.goto(`/libraries/${target.id}`);
+    await page.getByRole("button", { name: "Add books" }).first().click();
+    await page.getByRole("menuitem", { name: "From the local library" }).click();
+    await page.getByRole("checkbox").first().click();
+    await page.getByRole("button", { name: /^Upload 1/ }).click();
+    await expect(page.getByText("Uploaded 1", { exact: false })).toBeVisible();
+    expect(uploads).toBe(1);
+
+    // Linked now: the book is on the Downloaded shelf, not offered again.
+    await page.goto("/my-books?tab=downloaded");
+    await expect(page.getByText(TOUCH_BOOK.title).first()).toBeVisible();
   });
 });

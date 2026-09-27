@@ -4,14 +4,12 @@
   import { authStore } from "$lib/stores/auth";
   import { authApi } from "$lib/api/auth";
   import { get } from "$lib/api/client";
-  import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
   import { UserRole } from "$lib/types";
   import {
     BookOpen,
     Highlighter,
     Settings,
-    Rss,
     Dices,
     LogOut,
     ChevronRight,
@@ -123,15 +121,6 @@
       label: m.nav_highlights(),
       icon: Highlighter,
     },
-    ...(isNative()
-      ? [
-          {
-            href: "/catalogs",
-            label: m.nav_catalogs(),
-            icon: Rss,
-          } satisfies ProfileLink,
-        ]
-      : []),
     { href: "/gacha", label: m.nav_gacha(), icon: Dices },
     ...(isAdmin
       ? [

@@ -18,7 +18,15 @@
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
   import type { LibraryOut } from "$lib/types";
   import { UserRole } from "$lib/types";
-  import { ArrowLeftRight, BookCopy, Plus, Upload, X } from "@lucide/svelte";
+  import {
+    ArrowLeftRight,
+    BookCopy,
+    HardDriveUpload,
+    Plus,
+    Upload,
+    X,
+  } from "@lucide/svelte";
+  import LocalUploadModal from "$lib/components/LocalUploadModal.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as m from "$lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
@@ -52,10 +60,7 @@
   let canUpload = $derived(
     (isAdmin || !!$authStore.user?.can_upload) && !!library && !isCalibre,
   );
-  let heading = $derived(
-    library?.name ??
-      (isNative() ? m.libraries_cloud_books() : m.allbooks_heading()),
-  );
+  let heading = $derived(library?.name ?? m.allbooks_heading());
 
   let bookBrowser = $state<BookBrowser>();
   let restoreData = $state<BookBrowserState | null>(null);
@@ -65,6 +70,7 @@
   let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
+  let showLocalUpload = $state(false);
   let dragOver = $state(false);
 
   interface PageSnapshot {
@@ -298,6 +304,12 @@
               <Upload size={14} />
               {m.library_upload()}
             </DropdownMenu.Item>
+            {#if isNative()}
+              <DropdownMenu.Item onclick={() => (showLocalUpload = true)}>
+                <HardDriveUpload size={14} />
+                {m.local_upload_source()}
+              </DropdownMenu.Item>
+            {/if}
             <DropdownMenu.Item
               onclick={() => goto(`/libraries/${id}/physical/new`)}
             >
@@ -430,3 +442,12 @@
     </div>
   </div>
 </Modal>
+
+{#if library}
+  <LocalUploadModal
+    open={showLocalUpload}
+    libraryId={library.id}
+    onclose={() => (showLocalUpload = false)}
+    ondone={() => (reloadNonce += 1)}
+  />
+{/if}

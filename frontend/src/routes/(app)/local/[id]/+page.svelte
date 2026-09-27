@@ -11,7 +11,6 @@
   import {
     BookOpen,
     Bookmark,
-    Cloud,
     EllipsisVertical,
     History,
     Share,
@@ -26,7 +25,6 @@
   import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
   import { BookDetailSkeleton } from "$lib/components/skeletons";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { isLocalMode } from "$lib/api/client";
   import { isNative } from "$lib/platform";
   import {
     emptyLocalInteraction,
@@ -39,7 +37,6 @@
   } from "$lib/reading/local";
   import {
     getLocalBook,
-    getLocalBookLinks,
     getLocalCoverSrc,
     readLocalBookDetails,
     removeLocalBook,
@@ -63,8 +60,6 @@
   let record = $state<LocalInteractionRecord>(emptyLocalInteraction());
   let percentage = $state<number | null>(null);
   let highlights = $state<HighlightOut[]>([]);
-  // The server copy, when linked — only reachable in server mode.
-  let serverBookId = $state<string | null>(null);
   let savingStatus = $state(false);
   let showMobileActions = $state(false);
   let wantToRead = $derived(record.reading_status === "want_to_read");
@@ -101,18 +96,16 @@
       return;
     }
     entry = found;
-    const [cover, stored, progress, marks, links] = await Promise.all([
+    const [cover, stored, progress, marks] = await Promise.all([
       getLocalCoverSrc(found),
       readLocalInteraction(bookId),
       readLocalProgress(bookId),
       localSync.listHighlights(bookId),
-      getLocalBookLinks(),
     ]);
     coverSrc = cover;
     record = stored ?? emptyLocalInteraction();
     percentage = progress?.percentage ?? null;
     highlights = marks;
-    serverBookId = isLocalMode() ? null : (links[bookId] ?? null);
     loading = false;
     // The OPF parse is the slow part; the page stands without it.
     details = await readLocalBookDetails(bookId);
@@ -288,16 +281,6 @@
           >
             <Bookmark size={16} class={wantToRead ? "fill-primary" : ""} />
           </button>
-          {#if serverBookId}
-            <a
-              href="/books/{serverBookId}"
-              class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-foreground hover:shadow-md transition-all"
-              title={m.local_view_cloud()}
-              aria-label={m.local_view_cloud()}
-            >
-              <Cloud size={16} />
-            </a>
-          {/if}
           <DropdownMenu.Root>
             <DropdownMenu.Trigger
               class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground hover:text-foreground hover:shadow-md transition-all"
@@ -424,16 +407,6 @@
       >
         <Bookmark size={18} class={wantToRead ? "fill-primary" : ""} />
       </button>
-      {#if serverBookId}
-        <a
-          href="/books/{serverBookId}"
-          class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
-          title={m.local_view_cloud()}
-          aria-label={m.local_view_cloud()}
-        >
-          <Cloud size={18} />
-        </a>
-      {/if}
       <button
         aria-label={m.book_more_actions()}
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"

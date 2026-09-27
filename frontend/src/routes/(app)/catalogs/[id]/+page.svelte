@@ -222,13 +222,6 @@
       });
       setDownloadState(entry.key, { status: "imported", pct: null });
       toastStore.success(m.local_import_success({ title: imported.title }));
-      // Mirror the /local import hook: if the same file exists on the
-      // connected BeePub server, link it and start syncing right away.
-      void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
-        linkAndSyncBook(imported).then((linked) => {
-          if (linked) toastStore.info(m.local_linked());
-        }),
-      );
     } catch (err) {
       if (err instanceof DuplicateBookError) {
         setDownloadState(entry.key, { status: "duplicate", pct: null });
