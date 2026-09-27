@@ -151,3 +151,13 @@ test("the back button works while a book is still loading", async ({
   await back.click();
   await expect(page).not.toHaveURL(/\/books\//);
 });
+
+test("a book that isn't there gets a page, not a toast", async ({ page }) => {
+  await page.goto("/books/00000000-0000-4000-8000-000000000000");
+  await expect(
+    page.getByRole("heading", { name: "This book isn't here" }),
+  ).toBeVisible();
+  await expect(page.getByText("Book not found")).toHaveCount(0);
+  await page.getByRole("link", { name: "Go to libraries" }).click();
+  await page.waitForURL(/\/libraries/);
+});

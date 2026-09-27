@@ -1067,5 +1067,8 @@
   "local_upload_source_hint": "Books on this device that aren't on the server yet. Their progress, highlights and notes come along.",
   "local_upload_source_empty": "Every book in the local library is already on the server.",
   "local_upload_linked": "{count} already on the server — linked instead",
-  "mode_switch_entry": "Switch library"
+  "mode_switch_entry": "Switch library",
+  "book_not_found_title": "This book isn't here",
+  "book_not_found_desc": "It may have been deleted, or it's in a library you can't access.",
+  "book_not_found_back": "Go to libraries"
 }

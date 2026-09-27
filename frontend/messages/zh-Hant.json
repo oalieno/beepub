@@ -1067,5 +1067,8 @@
   "local_upload_source_hint": "這台裝置上、還不在伺服器上的書。閱讀進度、畫線和筆記會一起帶上去。",
   "local_upload_source_empty": "本機書庫的書都已經在伺服器上了。",
   "local_upload_linked": "有 {count} 本伺服器上已經有了，改為連結",
-  "mode_switch_entry": "切換書庫"
+  "mode_switch_entry": "切換書庫",
+  "book_not_found_title": "找不到這本書",
+  "book_not_found_desc": "它可能已經被刪除，或在你沒有權限的書庫裡。",
+  "book_not_found_back": "前往書庫"
 }

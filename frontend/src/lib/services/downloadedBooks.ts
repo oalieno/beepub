@@ -4,6 +4,8 @@
  * Membership lives on the device — the digest link map — so the shelf
  * pages these ids through the server's book list itself.
  */
+import { writable } from "svelte/store";
+
 import { getIsOnline } from "$lib/services/network";
 import {
   getLocalBookLinks,
@@ -11,6 +13,11 @@ import {
   removeLocalBook,
 } from "$lib/services/localLibrary";
 import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
+
+/** Server ids whose copy was removed this session — pages kept alive
+ *  across navigation (the Downloaded shelf restored on back) drop them
+ *  without refetching. */
+export const removedDownloads = writable<ReadonlySet<string>>(new Set());
 
 /** Server ids of the downloaded books, newest download first. */
 export async function downloadedServerIds(): Promise<string[]> {
@@ -48,4 +55,5 @@ export async function removeDownload(serverBookId: string): Promise<void> {
   }
   await removeLocalBook(localId);
   await refreshLinkedBookIds();
+  removedDownloads.update((s) => new Set([...s, serverBookId]));
 }

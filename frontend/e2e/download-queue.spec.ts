@@ -231,13 +231,17 @@ test("a downloaded book is on the Downloaded shelf until it is removed", async (
   await page.waitForURL(/\/my-books\?tab=downloaded/);
   await expect(page.getByText(CHAPTERS_BOOK.title).first()).toBeVisible();
 
-  // Tapping the check on the book page takes the copy off the device.
-  await page.goto(`/books/${id}`);
+  // Into the book, and tapping the check takes the copy off the device.
+  await page.getByText(CHAPTERS_BOOK.title).first().click();
+  await page.waitForURL(new RegExp(`/books/${id}$`));
   await onDevice(page).click();
   await page.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(downloadButton(page)).toBeVisible();
 
-  await page.goto("/my-books?tab=downloaded");
+  // Back to the shelf as it was left (restored, not refetched): the
+  // book is gone all the same.
+  await page.goBack();
+  await page.waitForURL(/\/my-books\?tab=downloaded/);
   await expect(
     page.getByText("Nothing downloaded to this device yet", { exact: false }),
   ).toBeVisible();

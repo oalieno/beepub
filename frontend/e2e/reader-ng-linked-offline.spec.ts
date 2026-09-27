@@ -92,3 +92,43 @@ test("a highlight made offline on a downloaded book syncs up later", async ({
     .toContain("librarian");
   await expect.poll(() => marks(page)).toHaveLength(1);
 });
+
+test("reconnecting pushes an offline highlight without reopening the book", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedBook(page.request);
+  for (const h of await listHighlights(page.request, bookId)) {
+    if (h.text === "librarian")
+      await page.request.delete(`/api/books/${bookId}/highlights/${h.id}`);
+  }
+  await page.goto(`/books/${bookId}`);
+  await page
+    .getByRole("button", { name: "Download to this device" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Downloaded to this device/ }).first(),
+  ).toBeVisible({ timeout: 30_000 });
+  // Launch-time sync already ran: a reconnect right after must still push.
+  await openBook(page, bookId);
+
+  await context.setOffline(true);
+  const pt = await pointOnWord(page, "librarian", 0);
+  const cdp = await context.newCDPSession(page);
+  await touchTap(cdp, pt!, 900);
+  await page
+    .getByTestId("highlight-menu")
+    .getByTitle("Highlight", { exact: true })
+    .click();
+  await expect.poll(() => marks(page)).toHaveLength(1);
+
+  await context.setOffline(false);
+  await expect
+    .poll(
+      async () =>
+        (await listHighlights(page.request, bookId)).map((h) => h.text),
+      { timeout: 30_000 },
+    )
+    .toContain("librarian");
+});

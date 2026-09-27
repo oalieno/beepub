@@ -81,7 +81,10 @@ export function initReadingSync(): void {
   initialized = true;
   let prev = getIsOnline();
   isOnline.subscribe((online) => {
-    if (online && !prev) void linkAndSyncAll();
+    // Forced: writes made offline (a highlight on a downloaded book) wait
+    // for exactly this moment, and the cooldown armed by the last pass —
+    // often the launch sync seconds earlier — must not swallow it.
+    if (online && !prev) void linkAndSyncAll({ force: true });
     prev = online;
   });
   // The transition alone is not enough: the app is often relaunched or

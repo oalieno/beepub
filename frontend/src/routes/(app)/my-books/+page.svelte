@@ -2,6 +2,8 @@
   import { page } from "$app/state";
   import { scrollSnapshot } from "$lib/scrollSnapshot";
   import { booksApi } from "$lib/api/books";
+  import { removedDownloads } from "$lib/services/downloadedBooks";
+  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
   import { toastStore } from "$lib/stores/toast";
   import BookGrid from "$lib/components/BookGrid.svelte";
   import BackButton from "$lib/components/BackButton.svelte";
@@ -76,6 +78,23 @@
     (page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
   );
   let activeTab = $derived(urlTab in shelfNames ? urlTab : "currently_reading");
+  // A copy removed elsewhere (its book page) leaves the Downloaded shelf
+  // even when this page comes back from its snapshot. Downloaded again
+  // since? Then it is linked again and stays.
+  let gone = $derived(
+    activeTab === "downloaded"
+      ? books.filter(
+          (b) => $removedDownloads.has(b.id) && !$linkedServerBookIds.has(b.id),
+        ).length
+      : 0,
+  );
+  let shown = $derived(
+    gone === 0
+      ? books
+      : books.filter(
+          (b) => !$removedDownloads.has(b.id) || $linkedServerBookIds.has(b.id),
+        ),
+  );
   let hasMore = $derived(
     activeTab === "downloaded"
       ? cursor < downloadedIds.length
@@ -179,7 +198,7 @@
 
   {#if loading}
     <BookGridSkeleton count={12} />
-  {:else if books.length === 0}
+  {:else if shown.length === 0}
     <div class="flex flex-col items-center justify-center py-24 text-center">
       <div class="mb-4 p-3 bg-primary/10 rounded-xl">
         <BookOpen class="text-primary/50" size={28} />
@@ -199,9 +218,9 @@
     </div>
   {:else}
     <p class="text-sm text-muted-foreground mb-4">
-      {m.browser_showing({ total: String(total) })}
+      {m.browser_showing({ total: String(total - gone) })}
     </p>
-    <BookGrid {books} />
+    <BookGrid books={shown} />
     {#if hasMore}
       <div class="flex justify-center mt-8">
         <button

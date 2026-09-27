@@ -232,8 +232,11 @@
     }
   });
 
+  let notFound = $state(false);
+
   async function loadData() {
     loading = true;
+    notFound = false;
     try {
       const [b, ext, shelves] = await Promise.all([
         booksApi.get(bookId),
@@ -286,7 +289,11 @@
       if (isNative()) secondaryFetches.push(refreshLinkedBookIds());
       await Promise.all(secondaryFetches);
     } catch (e) {
-      toastStore.error((e as Error).message);
+      // Gone (deleted) or out of reach is a page state, not a toast;
+      // anything else — a network hiccup, a 5xx — keeps the toast.
+      const status = (e as { status?: number }).status;
+      if (status === 404 || status === 403) notFound = true;
+      else toastStore.error((e as Error).message);
     } finally {
       loading = false;
     }
@@ -590,6 +597,27 @@
 
   {#if loading}
     <BookDetailSkeleton />
+  {:else if notFound}
+    <div class="flex flex-col items-center text-center py-8">
+      <img
+        src="/error-404.png"
+        alt=""
+        style="width: min(26rem, 80vw); max-height: 36dvh; height: auto; object-fit: contain;"
+        class="mb-4"
+      />
+      <h1 class="text-xl font-semibold text-foreground mb-2">
+        {m.book_not_found_title()}
+      </h1>
+      <p class="text-muted-foreground mb-6 max-w-sm">
+        {m.book_not_found_desc()}
+      </p>
+      <a
+        href="/libraries"
+        class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition-opacity"
+      >
+        {m.book_not_found_back()}
+      </a>
+    </div>
   {:else if book}
     <!-- Hero Section -->
     <div class="flex flex-col md:flex-row gap-12">
