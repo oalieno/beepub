@@ -13,8 +13,9 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
     volumes:
       # Everything BeePub stores: app/ (the auto SECRET_KEY), books/,
-      # covers/, illustrations/. Back this up with postgres_data.
-      - data:/data
+      # covers/, illustrations/. Back this up with postgres_data. Set
+      # BEEPUB_DATA_PATH to an absolute host path to keep it there instead.
+      - ${BEEPUB_DATA_PATH:-data}:/data
       # To import an existing Calibre library, mount it read-only here and
       # in the worker service below, then use Admin -> Calibre in the app:
       # - /path/to/calibre:/calibre:ro
@@ -35,7 +36,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
-      - data:/data
+      - ${BEEPUB_DATA_PATH:-data}:/data
       # Calibre mount, same as the backend service:
       # - /path/to/calibre:/calibre:ro
     depends_on:
@@ -63,7 +64,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
-      - data:/data
+      - ${BEEPUB_DATA_PATH:-data}:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -81,7 +82,7 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
       # migrate runs first, so it generates the auto SECRET_KEY when unset
-      - data:/data
+      - ${BEEPUB_DATA_PATH:-data}:/data
       # Installs from before 0.14 kept each kind in its own volume; migrate
       # moves their files into `data` on first start (and does nothing once
       # they're empty or on a fresh install). Kept here for a transition
@@ -115,7 +116,7 @@ services:
       # password is acceptable; set POSTGRES_PASSWORD to override.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-beepub}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${BEEPUB_POSTGRES_PATH:-postgres_data}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-beepub}"]
       interval: 5s
@@ -142,7 +143,7 @@ services:
       - "${PORT:-80}:80"
     volumes:
       # Serves /data/covers directly (read-only; nothing else is exposed).
-      - data:/data:ro
+      - ${BEEPUB_DATA_PATH:-data}:/data:ro
     depends_on:
       - backend
       - frontend

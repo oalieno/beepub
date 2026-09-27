@@ -101,7 +101,8 @@ def main() -> int:
         if not is_docker_volume(src):
             print(
                 f"{src} is not a Docker-managed volume (a bind mount?) — "
-                f"leaving it untouched. Mount that directory at {dst} "
+                "leaving it untouched. Move its contents into the "
+                f"{kind}/ directory of the data volume (BEEPUB_DATA_PATH) "
                 "yourself; see the README's Data and Backups section.",
                 flush=True,
             )

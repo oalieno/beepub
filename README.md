@@ -216,10 +216,13 @@ Docker Compose keeps runtime data in three named volumes:
 Back up `data` and `postgres_data` before upgrading or rebuilding a
 production deployment.
 
-To keep the data in a directory of your own instead (a NAS share, say),
-bind-mount it at `/data` in the `backend`, `worker`, `beat` and `migrate`
-services, and read-only in `nginx` — e.g. `- /srv/beepub:/data` in a
-compose override.
+To keep the data in directories of your own instead (a NAS share, say),
+set absolute host paths in `.env`:
+
+```bash
+BEEPUB_DATA_PATH=/srv/beepub/data
+BEEPUB_POSTGRES_PATH=/srv/beepub/postgres
+```
 
 Upgrading from 0.13 or earlier: those versions kept books, covers,
 illustrations and the secret in four separate volumes (`books_data`,
@@ -227,9 +230,9 @@ illustrations and the secret in four separate volumes (`books_data`,
 their files into `data` on the first start, file by file — an interrupted
 move resumes on the next start, and it never needs twice the space. Once it
 has run, the old volumes are empty and can be removed. If you had pointed
-one of them at a host directory, it is left untouched: mount that directory
-at the matching path under `/data` (e.g. `- /srv/books:/data/books`)
-instead.
+one of them at a host directory, it is left untouched: move its contents
+into the matching subdirectory of `BEEPUB_DATA_PATH` (e.g. `books/`)
+yourself.
 
 The repository does not include book files, database contents, user data, API
 keys, or generated runtime assets.
