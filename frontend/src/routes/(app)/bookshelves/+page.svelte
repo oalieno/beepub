@@ -4,6 +4,7 @@
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
+  import { isNative } from "$lib/platform";
   import Modal from "$lib/components/Modal.svelte";
   import CollectionCard from "$lib/components/CollectionCard.svelte";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -14,6 +15,7 @@
     CircleCheck,
     CircleX,
     EllipsisVertical,
+    HardDriveDownload,
     Heart,
     Pencil,
     Plus,
@@ -65,6 +67,26 @@
   ];
 
   let systemData = $state<{ count: number; previewIds: string[] }[]>([]);
+  // The app's own shelf: server books with a copy on this device. Its
+  // membership lives on the device, not in /my-books.
+  let downloaded = $state<{ count: number; previewIds: string[] } | null>(null);
+
+  async function loadDownloaded() {
+    const { downloadedServerIds } =
+      await import("$lib/services/downloadedBooks");
+    const ids = await downloadedServerIds();
+    const head = ids.slice(0, 12);
+    const page = head.length
+      ? await booksApi.getAll({ ids: head, limit: head.length })
+      : { items: [] };
+    const withCover = new Set(
+      page.items.filter((b) => b.cover_path).map((b) => b.id),
+    );
+    downloaded = {
+      count: ids.length,
+      previewIds: head.filter((id) => withCover.has(id)).slice(0, 4),
+    };
+  }
   let bookshelves = $state<BookshelfOut[]>([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
@@ -73,6 +95,7 @@
   let creating = $state(false);
 
   onMount(async () => {
+    if (isNative()) loadDownloaded().catch(() => {});
     await loadData();
   });
 
@@ -204,6 +227,21 @@
           {/snippet}
         </CollectionCard>
       {/each}
+      {#if downloaded}
+        <CollectionCard
+          href="/my-books?tab=downloaded"
+          name={m.mybooks_tab_downloaded()}
+          previewBookIds={downloaded.previewIds}
+          bookCount={downloaded.count}
+        >
+          {#snippet icon()}
+            <HardDriveDownload
+              class="text-muted-foreground/50 shrink-0"
+              size={16}
+            />
+          {/snippet}
+        </CollectionCard>
+      {/if}
       {#each bookshelves as shelf}
         <CollectionCard
           href="/bookshelves/{shelf.id}"

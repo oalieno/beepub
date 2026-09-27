@@ -259,7 +259,6 @@
   "external_mark_not_found": "Mark as not found",
   "book_download_epub": "Download EPUB",
   "book_download_to_library": "Download to this device",
-  "book_in_local_library": "In your local library — manage it in Local Books",
   "book_on_device": "Downloaded to this device",
   "download_queued": "Waiting to download — tap to cancel",
   "download_progress": "Downloading {percent}%",
@@ -1064,5 +1063,14 @@
   "duplicates_not_duplicates": "Not Duplicates",
   "duplicates_not_duplicates_toast": "Marked as not duplicates",
   "duplicates_view_review": "Review",
-  "duplicates_view_all": "All Groups"
+  "duplicates_view_all": "All Groups",
+  "mybooks_tab_downloaded": "Downloaded",
+  "mybooks_empty_downloaded": "Nothing downloaded to this device yet. Download a book from its page to read it without using data.",
+  "book_downloaded_remove": "Downloaded to this device — tap to remove",
+  "download_done": "Downloaded \"{title}\" to this device",
+  "download_remove_title": "Remove download?",
+  "download_remove_desc": "Remove \"{title}\" from this device? Your progress and highlights stay on the server.",
+  "download_remove_confirm": "Remove",
+  "download_removed": "Removed from this device",
+  "download_remove_unsynced": "Some reading on this copy hasn't reached the server yet. Try again once you're connected."
 }

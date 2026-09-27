@@ -173,7 +173,7 @@ test.describe("linked to the server", () => {
       .first()
       .click();
     await expect(
-      page.getByRole("button", { name: /In your local library/ }).first(),
+      page.getByRole("button", { name: /Downloaded to this device/ }).first(),
     ).toBeVisible({ timeout: 30_000 });
 
     // Downloading links the copy and syncs it: the web notes fold in.

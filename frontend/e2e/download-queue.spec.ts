@@ -66,7 +66,7 @@ const stateOf = (page: Page) =>
   page.locator("[data-download-state]").first();
 const onDevice = (page: Page) =>
   page
-    .getByRole("button", { name: /In your local library/ })
+    .getByRole("button", { name: /Downloaded to this device/ })
     .first();
 
 /** Make `from` and `to` adjacent volumes of one series. */
@@ -216,4 +216,29 @@ test("the series downloads in one go, skipping what is already here", async ({
   release(ids[2]);
   await series.click();
   await expect(series).toHaveText("All on this device", { timeout: 15_000 });
+});
+
+test("a downloaded book is on the Downloaded shelf until it is removed", async ({
+  page,
+}) => {
+  const id = await seedFixture(page.request, CHAPTERS_BOOK);
+  await page.goto(`/books/${id}`);
+  await downloadButton(page).click();
+  await expect(onDevice(page)).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/bookshelves");
+  await page.getByRole("link", { name: /Downloaded/ }).click();
+  await page.waitForURL(/\/my-books\?tab=downloaded/);
+  await expect(page.getByText(CHAPTERS_BOOK.title).first()).toBeVisible();
+
+  // Tapping the check on the book page takes the copy off the device.
+  await page.goto(`/books/${id}`);
+  await onDevice(page).click();
+  await page.getByRole("button", { name: "Remove", exact: true }).click();
+  await expect(downloadButton(page)).toBeVisible();
+
+  await page.goto("/my-books?tab=downloaded");
+  await expect(
+    page.getByText("Nothing downloaded to this device yet", { exact: false }),
+  ).toBeVisible();
 });

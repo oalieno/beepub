@@ -16,7 +16,8 @@
     | "want_to_read"
     | "read"
     | "did_not_finish"
-    | "favorites";
+    | "favorites"
+    | "downloaded";
 
   // System-shelf detail: the bookshelves page pins one card per reading
   // status (plus favorites) and links here with ?tab=.
@@ -26,6 +27,7 @@
     read: m.mybooks_tab_read,
     did_not_finish: m.mybooks_tab_did_not_finish,
     favorites: m.mybooks_tab_favorites,
+    downloaded: m.mybooks_tab_downloaded,
   };
 
   const PAGE_SIZE = 60;
@@ -35,15 +37,52 @@
   let loading = $state(true);
   let loadingMore = $state(false);
   let requestSeq = 0;
-  let hasMore = $derived(books.length < total);
+  // The downloaded shelf's membership is the device's list of ids, paged
+  // here through the server's book list; `cursor` counts ids consumed
+  // (a book since removed from the server is skipped, not shown).
+  let downloadedIds: string[] = [];
+  let cursor = $state(0);
+
+  async function fetchPage(
+    tab: TabKey,
+    offset: number,
+  ): Promise<{ items: BookWithInteractionOut[]; total: number }> {
+    if (tab !== "downloaded") {
+      return booksApi.getMyBooks({
+        ...getTabQuery(tab),
+        limit: PAGE_SIZE,
+        offset,
+      });
+    }
+    if (offset === 0) {
+      const { downloadedServerIds } =
+        await import("$lib/services/downloadedBooks");
+      downloadedIds = await downloadedServerIds();
+    }
+    const slice = downloadedIds.slice(cursor, cursor + PAGE_SIZE);
+    const page = slice.length
+      ? await booksApi.getAll({ ids: slice, limit: slice.length })
+      : { items: [] as BookWithInteractionOut[] };
+    const byId = new Map(page.items.map((b) => [b.id, b]));
+    cursor += slice.length;
+    return {
+      items: slice.flatMap((id) => byId.get(id) ?? []),
+      total: downloadedIds.length,
+    };
+  }
 
   // Derive the active shelf from the URL so back/forward navigation works
   let urlTab = $derived(
     (page.url.searchParams.get("tab") as TabKey | null) ?? "currently_reading",
   );
   let activeTab = $derived(urlTab in shelfNames ? urlTab : "currently_reading");
+  let hasMore = $derived(
+    activeTab === "downloaded"
+      ? cursor < downloadedIds.length
+      : books.length < total,
+  );
 
-  function getTabQuery(tab: TabKey) {
+  function getTabQuery(tab: Exclude<TabKey, "downloaded">) {
     const isFavoriteTab = tab === "favorites";
     return {
       status: isFavoriteTab ? undefined : (tab as ReadingStatus),
@@ -55,12 +94,9 @@
   async function loadFirstPage(tab: TabKey, seq: number) {
     loading = true;
     loadingMore = false;
+    cursor = 0;
     try {
-      const result = await booksApi.getMyBooks({
-        ...getTabQuery(tab),
-        limit: PAGE_SIZE,
-        offset: 0,
-      });
+      const result = await fetchPage(tab, 0);
       if (seq !== requestSeq) return;
       books = result.items;
       total = result.total;
@@ -79,11 +115,7 @@
     const tab = activeTab;
     loadingMore = true;
     try {
-      const result = await booksApi.getMyBooks({
-        ...getTabQuery(tab),
-        limit: PAGE_SIZE,
-        offset: books.length,
-      });
+      const result = await fetchPage(tab, books.length);
       if (seq !== requestSeq || tab !== activeTab) return;
       books = [...books, ...result.items];
       total = result.total;
@@ -100,12 +132,20 @@
   // far, and the scroll position), without a refetch.
   let restoredTab: TabKey | null = null;
   export const snapshot = scrollSnapshot({
-    capture: () => ({ tab: activeTab, books, total }),
+    capture: () => ({
+      tab: activeTab,
+      books,
+      total,
+      downloadedIds,
+      cursor,
+    }),
     restore: (d) => {
       requestSeq += 1;
       restoredTab = d.tab;
       books = d.books;
       total = d.total;
+      downloadedIds = d.downloadedIds ?? [];
+      cursor = d.cursor ?? 0;
       loading = false;
       loadingMore = false;
     },
@@ -150,6 +190,8 @@
       <p class="text-muted-foreground text-sm max-w-xs">
         {#if activeTab === "favorites"}
           {m.mybooks_empty_favorites()}
+        {:else if activeTab === "downloaded"}
+          {m.mybooks_empty_downloaded()}
         {:else}
           {m.mybooks_empty_default()}
         {/if}

@@ -53,7 +53,7 @@ test("a highlight made offline on a downloaded book syncs up later", async ({
     .first()
     .click();
   await expect(
-    page.getByRole("button", { name: /In your local library/ }).first(),
+    page.getByRole("button", { name: /Downloaded to this device/ }).first(),
   ).toBeVisible({ timeout: 30_000 });
 
   await openBook(page, bookId);

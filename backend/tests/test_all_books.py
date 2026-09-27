@@ -170,6 +170,51 @@ class TestListAllBooksEndpoint:
             app.dependency_overrides.clear()
 
     @pytest.mark.asyncio
+    async def test_ids_narrow_the_query(self, admin_user):
+        wanted = [uuid.uuid4(), uuid.uuid4()]
+        seen: list[str] = []
+        db = _mock_db_returning([], 0)
+        inner = db.execute
+
+        async def recording_execute(stmt):
+            try:
+                seen.append(str(stmt.compile(compile_kwargs={"literal_binds": True})))
+            except Exception:
+                pass
+            return await inner(stmt)
+
+        db.execute = recording_execute
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+        app.dependency_overrides[get_db] = lambda: db
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    "/api/books/all", params=[("ids", str(i)) for i in wanted]
+                )
+            assert resp.status_code == 200
+            assert any(all(i.hex in q.replace("-", "") for i in wanted) for q in seen)
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
+    async def test_rejects_malformed_ids(self, admin_user):
+        db = _mock_db_returning([], 0)
+        app.dependency_overrides[get_current_user] = lambda: admin_user
+        app.dependency_overrides[get_db] = lambda: db
+
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/api/books/all?ids=not-a-uuid")
+            assert resp.status_code == 422
+        finally:
+            app.dependency_overrides.clear()
+
+    @pytest.mark.asyncio
     async def test_accepts_has_rating_param(self, regular_user):
         db = _mock_db_returning([], 0)
 

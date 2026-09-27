@@ -1104,6 +1104,7 @@ async def list_all_books(
     series: str | None = Query(None),
     format: str | None = Query(None),
     library: uuid.UUID | None = Query(None),
+    ids: list[uuid.UUID] | None = Query(None, max_length=200),
     has_rating: bool = Query(False),
     sort: str = Query("created_at"),
     order: str = Query("desc"),
@@ -1115,6 +1116,9 @@ async def list_all_books(
     ``library`` scopes the result to one library — used with ``series`` so the
     series-detail page only shows that library's volumes (series identity is
     ``(library_id, series_key)``).
+
+    ``ids`` narrows to the given books — the app's "downloaded" shelf, whose
+    membership lives on the device; it pages the ids itself.
     """
     from sqlalchemy.sql.functions import coalesce
 
@@ -1124,6 +1128,8 @@ async def list_all_books(
     accessible_ids = accessible_book_ids_select(current_user)
 
     base_query = select(Book).where(Book.id.in_(accessible_ids))
+    if ids:
+        base_query = base_query.where(Book.id.in_(ids))
 
     # Apply filters. Search is applied last, below — its tier probe must
     # see the fully-filtered scope.

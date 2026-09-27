@@ -356,6 +356,7 @@ export const booksApi = {
     series?: string;
     format?: string;
     library?: string;
+    ids?: string[];
     has_rating?: boolean;
     sort?: string;
     order?: string;
@@ -363,6 +364,7 @@ export const booksApi = {
     offset?: number;
   }) => {
     const params = new URLSearchParams();
+    for (const id of options?.ids ?? []) params.append("ids", id);
     if (options?.search) params.set("search", options.search);
     if (options?.author) params.set("author", options.author);
     if (options?.tag) params.set("tag", options.tag);

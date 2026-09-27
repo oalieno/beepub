@@ -158,8 +158,7 @@ async function fetchToLibrary(job: Job): Promise<void> {
       onProgress: (pct) =>
         setState(job.bookId, { state: "downloading", progress: pct }),
     });
-    if (single)
-      toastStore.success(m.local_import_success({ title: entry.title }));
+    if (single) toastStore.success(m.download_done({ title: entry.title }));
     // Same bytes as the server file — the digest link is guaranteed, and
     // syncing starts right away.
     void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>

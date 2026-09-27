@@ -259,7 +259,6 @@
   "external_mark_not_found": "標記為未找到",
   "book_download_epub": "下載 EPUB",
   "book_download_to_library": "下載到這台裝置",
-  "book_in_local_library": "已在本機書庫，請到「本機書籍」管理",
   "book_on_device": "已下載到這台裝置",
   "download_queued": "排隊中，點一下取消",
   "download_progress": "下載中 {percent}%",
@@ -1064,5 +1063,14 @@
   "duplicates_not_duplicates": "不是重複",
   "duplicates_not_duplicates_toast": "已標記為非重複",
   "duplicates_view_review": "逐一審核",
-  "duplicates_view_all": "所有群組"
+  "duplicates_view_all": "所有群組",
+  "mybooks_tab_downloaded": "已下載",
+  "mybooks_empty_downloaded": "這台裝置上還沒有下載的書。在書的頁面按下載，就能不耗流量地閱讀。",
+  "book_downloaded_remove": "已下載到本機，點一下移除",
+  "download_done": "「{title}」已下載到本機",
+  "download_remove_title": "移除下載？",
+  "download_remove_desc": "要移除這台裝置上的「{title}」嗎？閱讀進度和畫線都保留在伺服器上。",
+  "download_remove_confirm": "移除",
+  "download_removed": "已從本機移除",
+  "download_remove_unsynced": "這本書還有閱讀紀錄沒同步到伺服器，連上網路後再試一次。"
 }

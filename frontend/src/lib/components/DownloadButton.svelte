@@ -3,11 +3,12 @@
    * The book page's "download to this device" button (native only). Its
    * state comes from the app-wide download queue by book id, so it stays
    * true across page reuse and revisits: download → queued (tap to take
-   * it back out) → progress ring → on this device.
+   * it back out) → progress ring → on this device (tap to remove).
    */
   import { Check, Download } from "@lucide/svelte";
 
   import { authStore } from "$lib/stores/auth";
+  import { confirmDialog } from "$lib/stores/confirm";
   import {
     cancelDownloads,
     downloads,
@@ -23,6 +24,37 @@
     size = "sm",
   }: { request: DownloadRequest; size?: "sm" | "lg" } = $props();
 
+  let removing = $state(false);
+
+  async function remove() {
+    if (
+      !(await confirmDialog({
+        title: m.download_remove_title(),
+        description: m.download_remove_desc({ title: request.title }),
+        confirmLabel: m.download_remove_confirm(),
+        destructive: true,
+      }))
+    )
+      return;
+    removing = true;
+    try {
+      const { removeDownload, UnsyncedCopyError } =
+        await import("$lib/services/downloadedBooks");
+      try {
+        await removeDownload(request.bookId);
+        toastStore.success(m.download_removed());
+      } catch (e) {
+        toastStore.error(
+          e instanceof UnsyncedCopyError
+            ? m.download_remove_unsynced()
+            : (e as Error).message,
+        );
+      }
+    } finally {
+      removing = false;
+    }
+  }
+
   let job = $derived($downloads.get(request.bookId));
   let percent = $derived(job?.progress ?? 0);
   // sm: the desktop action row, lg: the phone action bar.
@@ -35,8 +67,10 @@
 {#if $linkedServerBookIds.has(request.bookId)}
   <button
     class="{dim} flex items-center justify-center bg-card card-soft rounded-full text-primary hover:shadow-md transition-all"
-    onclick={() => toastStore.info(m.book_in_local_library())}
-    title={m.book_in_local_library()}
+    onclick={remove}
+    disabled={removing}
+    aria-label={m.book_downloaded_remove()}
+    title={m.book_downloaded_remove()}
   >
     <Check size={icon} />
   </button>
