@@ -121,3 +121,86 @@ async def test_library_search_uses_the_same_tiers(admin_client: AsyncClient):
         TITLES["spaced"],
         TITLES["unspaced"],
     }
+
+
+async def _seed_relevance(admin_client: AsyncClient) -> str:
+    """Uploaded least-relevant first, so newest-first is the reverse of
+    the relevance order and a silently ignored sort can't pass."""
+    library_id = await create_library(admin_client, "Relevance")
+    books = {}
+    for i, title in enumerate(["我的食堂", "食堂番外", "食堂", "晚餐之書"]):
+        books[title] = await upload_epub(
+            admin_client,
+            library_id,
+            title=title,
+            identifier=f"urn:uuid:00000000-0000-4000-8000-00000000020{i}",
+        )
+    # A book whose title doesn't mention the query, in a series named
+    # exactly that — a search for the series itself.
+    response = await admin_client.put(
+        f"/api/books/{books['晚餐之書']['id']}/metadata", json={"series": "食堂"}
+    )
+    assert response.status_code == 200, response.text
+    return library_id
+
+
+RELEVANCE_ORDER = ["食堂", "晚餐之書", "食堂番外", "我的食堂"]
+
+
+async def test_library_list_sorts_by_relevance(admin_client: AsyncClient):
+    library_id = await _seed_relevance(admin_client)
+    for url, params in [
+        (f"/api/libraries/{library_id}/books", {}),
+        ("/api/books/all", {"library": library_id}),
+    ]:
+        response = await admin_client.get(
+            url, params={**params, "search": "食堂", "sort": "relevance"}
+        )
+        assert response.status_code == 200, response.text
+        titles = [item["display_title"] for item in response.json()["items"]]
+        assert titles == RELEVANCE_ORDER, url
+
+
+async def test_grouped_feed_sorts_by_relevance(admin_client: AsyncClient):
+    library_id = await _seed_relevance(admin_client)
+    response = await admin_client.get(
+        f"/api/libraries/{library_id}/feed",
+        params={"search": "食堂", "sort": "relevance"},
+    )
+    assert response.status_code == 200, response.text
+    units = [
+        item["book"]["display_title"]
+        if item["type"] == "book"
+        else f"series:{item['series']['series_name']}"
+        for item in response.json()["items"]
+    ]
+    assert units == ["食堂", "series:食堂", "食堂番外", "我的食堂"]
+
+
+async def test_grouped_feed_uses_the_same_tiers(admin_client: AsyncClient):
+    library_id = await _seed(admin_client)
+    # Only the normalized tier matches the spaced volume — the grouped
+    # view must find both, like the flat list does.
+    response = await admin_client.get(
+        f"/api/libraries/{library_id}/feed", params={"search": "街角VR食堂"}
+    )
+    assert response.status_code == 200, response.text
+    assert {item["book"]["display_title"] for item in response.json()["items"]} == {
+        TITLES["spaced"],
+        TITLES["unspaced"],
+    }
+    response = await admin_client.get(
+        f"/api/libraries/{library_id}/feed", params={"search": "zzzz查無此書zzzz"}
+    )
+    assert response.json() == {"items": [], "total": 0}
+
+
+async def test_relevance_without_a_query_falls_back(admin_client: AsyncClient):
+    library_id = await _seed_relevance(admin_client)
+    for url in [
+        f"/api/libraries/{library_id}/books",
+        f"/api/libraries/{library_id}/feed",
+    ]:
+        response = await admin_client.get(url, params={"sort": "relevance"})
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == 4, url

@@ -197,3 +197,44 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
 
 def select_exists(scope: Select, conditions: list):
     return select(exists(scope.where(or_(*conditions))))
+
+
+def relevance_score(search: TieredSearch, q: str):
+    """Per-book relevance, lower is better — the "most relevant" sort.
+
+    Exact title first, then a series named exactly this (a search for
+    the series itself), then title prefix, then any other hit. The
+    normalized views are compared when the query folds to something
+    usable, so 「街角 VR 食堂」 still counts as an exact 「街角VR食堂」.
+    Any-word searches put books hitting more keywords first: each extra
+    keyword outweighs every title tier.
+    """
+    title_col = func.coalesce(Book.title, Book.epub_title)
+    series_col = func.coalesce(Book.series, Book.epub_series)
+    if search.normalized_query is not None:
+        norm_q = search.normalized_query
+        norm_title = func.beepub_norm(title_col)
+        tier = case(
+            (norm_title == norm_q, 0),
+            (func.beepub_norm(series_col) == norm_q, 1),
+            (norm_title.like(f"{norm_q}%"), 2),
+            else_=3,
+        )
+    else:
+        tier = case(
+            (func.lower(title_col) == q.lower(), 0),
+            (func.lower(series_col) == q.lower(), 1),
+            (title_col.ilike(f"{q}%"), 2),
+            else_=3,
+        )
+    if search.rank is not None:
+        return tier - search.rank * 10
+    return tier
+
+
+def relevance_order(search: TieredSearch, q: str) -> list:
+    """ORDER BY clauses for the relevance sort: score, then shorter (and
+    then alphabetical) title — among a series' volumes that is volume
+    order for the common 「…1」「…2」 naming."""
+    title_col = func.coalesce(Book.title, Book.epub_title)
+    return [relevance_score(search, q), func.length(title_col), title_col]

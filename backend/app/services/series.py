@@ -265,18 +265,20 @@ async def list_library_feed(
         """
 
     filters = []
+    relevance_join = ""
     if search:
-        params["search"] = f"%{search}%"
-        filters.append(
-            "("
-            "coalesce(b.title, '') ILIKE :search"
-            " OR coalesce(b.epub_title, '') ILIKE :search"
-            " OR coalesce(b.authors::text, '') ILIKE :search"
-            " OR coalesce(b.epub_authors::text, '') ILIKE :search"
-            " OR coalesce(b.series, '') ILIKE :search"
-            " OR coalesce(b.epub_series, '') ILIKE :search"
-            " OR coalesce(b.epub_isbn, '') ILIKE :search"
-            ")"
+        matches = await _search_matches(
+            db, user, library_id=library_id, search=search, author=author, tag=tag
+        )
+        if not matches:
+            return [], 0
+        # The shared tiered search decides membership (and each book's
+        # relevance) exactly as the flat list does; the feed only groups.
+        params["match_ids"] = [m[0] for m in matches]
+        params["match_scores"] = [int(m[1]) for m in matches]
+        relevance_join = (
+            "JOIN unnest(CAST(:match_ids AS uuid[]), CAST(:match_scores AS int[]))"
+            " AS m(book_id, score) ON m.book_id = b.id"
         )
     if author:
         params["author"] = author
@@ -289,8 +291,16 @@ async def list_library_feed(
         )
     where = ("WHERE " + " AND ".join(filters)) if filters else ""
 
-    ord_col = _FEED_ORD_COLUMNS.get(sort, "ord_added")
-    direction = "DESC" if order == "desc" else "ASC"
+    if sort == "relevance" and not search:
+        # Nothing to be relevant to (a stale URL) — the default order.
+        sort, order = "added_at", "desc"
+    if sort == "relevance":
+        # A series ranks by its best-matching volume.
+        order_by = "ord_rel ASC, length(ord_title), ord_title ASC"
+    else:
+        ord_col = _FEED_ORD_COLUMNS.get(sort, "ord_added")
+        direction = "DESC" if order == "desc" else "ASC"
+        order_by = f"{ord_col} {direction} NULLS LAST, ord_title ASC"
 
     params["limit"] = limit
     params["offset"] = offset
@@ -307,9 +317,11 @@ async def list_library_feed(
                     (w.primary_book_id = b.id) AS is_primary,
                     coalesce(b.title, b.epub_title) AS display_title,
                     coalesce(b.calibre_added_at, b.created_at) AS added_at,
-                    b.popularity_score AS popularity_score
+                    b.popularity_score AS popularity_score,
+                    {"m.score" if search else "0"} AS relevance
                 FROM books b
                 JOIN accessible a ON a.book_id = b.id
+                {relevance_join}
                 LEFT JOIN works w ON w.id = b.work_id
                 {where}
             ),
@@ -321,7 +333,8 @@ async def list_library_feed(
                     NULL::uuid AS book_id,
                     max(display_title) AS ord_title,
                     max(added_at) AS ord_added,
-                    max(popularity_score) AS ord_pop
+                    max(popularity_score) AS ord_pop,
+                    min(relevance) AS ord_rel
                 FROM eligible
                 WHERE series_key IS NOT NULL
                 GROUP BY library_id, series_key
@@ -334,7 +347,8 @@ async def list_library_feed(
                         AS book_id,
                     max(display_title) AS ord_title,
                     max(added_at) AS ord_added,
-                    max(popularity_score) AS ord_pop
+                    max(popularity_score) AS ord_pop,
+                    min(relevance) AS ord_rel
                 FROM eligible
                 WHERE series_key IS NULL AND work_id IS NOT NULL
                 GROUP BY library_id, work_id
@@ -346,15 +360,15 @@ async def list_library_feed(
                     book_id,
                     display_title AS ord_title,
                     added_at AS ord_added,
-                    popularity_score AS ord_pop
+                    popularity_score AS ord_pop,
+                    relevance AS ord_rel
                 FROM eligible
                 WHERE series_key IS NULL AND work_id IS NULL
             )
             SELECT kind, library_id, series_key, book_id,
                    count(*) OVER () AS total_count
             FROM units
-            ORDER BY {ord_col} {direction} NULLS LAST,
-                     ord_title ASC, kind, series_key, book_id
+            ORDER BY {order_by}, kind, series_key, book_id
             LIMIT :limit OFFSET :offset
         """),
         params,
@@ -386,6 +400,54 @@ async def list_library_feed(
             if book is not None:
                 items.append({"type": "book", "book": book})
     return items, total
+
+
+async def _search_matches(
+    db: AsyncSession,
+    user: User,
+    *,
+    library_id: uuid.UUID | None,
+    search: str,
+    author: str | None,
+    tag: str | None,
+) -> list[tuple[uuid.UUID, int]]:
+    """``(book_id, relevance)`` for every book the feed's search matches,
+    through the same tiered search as the flat list. The scope carries
+    every other filter so the tier probe sees what the user sees."""
+    from sqlalchemy import or_
+
+    from app.models.book import Book
+    from app.models.library import LibraryBook
+    from app.models.tag import BookTag
+    from app.routers.libraries import accessible_book_ids_select
+    from app.services.book_search import relevance_score, tiered_book_search
+
+    if library_id is not None:
+        visible = select(LibraryBook.book_id).where(
+            LibraryBook.library_id == library_id
+        )
+    else:
+        visible = accessible_book_ids_select(user)
+    scope = select(Book.id).where(Book.id.in_(visible))
+    if author:
+        scope = scope.where(
+            or_(Book.authors.any(author), Book.epub_authors.any(author))
+        )
+    if tag:
+        scope = scope.where(
+            or_(
+                Book.tags.any(tag),
+                Book.epub_tags.any(tag),
+                Book.id.in_(select(BookTag.book_id).where(BookTag.tag == tag)),
+            )
+        )
+    tiered = await tiered_book_search(db, search, scope)
+    rows = await db.execute(
+        scope.add_columns(relevance_score(tiered, search)).where(
+            or_(*tiered.conditions)
+        )
+    )
+    return [(r[0], r[1]) for r in rows.all()]
 
 
 async def _hydrate_feed_books(db: AsyncSession, user: User, book_ids: list) -> dict:

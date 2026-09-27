@@ -66,7 +66,7 @@ from app.schemas.reading import (
     ReadingStatsOut,
 )
 from app.schemas.series import PaginatedFeed
-from app.services.book_search import tiered_book_search
+from app.services.book_search import relevance_order, tiered_book_search
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_pages import read_page_manifest
 from app.services.epub_parser import extract_cover, parse_epub_metadata
@@ -904,8 +904,6 @@ async def search_books(
     q: str = Query("", min_length=1),
     limit: int = Query(20, ge=1, le=100),
 ):
-    from sqlalchemy import case
-
     from app.routers.libraries import accessible_libraries_condition
 
     # Subquery: accessible library IDs
@@ -934,30 +932,8 @@ async def search_books(
     ).scalar() or 0
 
     # Rank by relevance so a short query like "小王子" surfaces the closest
-    # titles first instead of an arbitrary UUID-ordered slice: exact title
-    # match, then title prefix, then any substring; ties broken by shorter
-    # (and then alphabetical) title. Fuzzy tiers rank against the same
-    # normalized views they matched on.
-    title_col = func.coalesce(Book.title, Book.epub_title)
-    if search.normalized_query is not None:
-        norm_title = func.beepub_norm(title_col)
-        relevance = case(
-            (norm_title == search.normalized_query, 0),
-            (norm_title.like(f"{search.normalized_query}%"), 1),
-            else_=2,
-        )
-    else:
-        relevance = case(
-            (func.lower(title_col) == q.lower(), 0),
-            (title_col.ilike(f"{q}%"), 1),
-            else_=2,
-        )
-    # Any-word (broadened) searches surface books hitting more keywords
-    # first; within equal counts the usual relevance applies.
-    rank_order = [search.rank.desc()] if search.rank is not None else []
-    ranked_query = base_query.order_by(
-        *rank_order, relevance, func.length(title_col), title_col, Book.id
-    )
+    # titles first instead of an arbitrary UUID-ordered slice.
+    ranked_query = base_query.order_by(*relevance_order(search, q), Book.id)
 
     result = await db.execute(ranked_query.limit(limit))
     rows = result.all()
@@ -1190,6 +1166,7 @@ async def list_all_books(
                 )
             )
         )
+    tiered = None
     if search:
         tiered = await tiered_book_search(db, search, base_query)
         base_query = base_query.where(or_(*tiered.conditions))
@@ -1208,8 +1185,13 @@ async def list_all_books(
     if series and sort == "created_at":
         sort = "series_index"
         order = "asc"
+    if sort == "relevance" and tiered is None:
+        # Nothing to be relevant to (a stale URL) — the default order.
+        sort, order = "created_at", "desc"
     sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
-    if sort == "series_index":
+    if sort == "relevance":
+        base_query = base_query.order_by(*relevance_order(tiered, search), Book.id)
+    elif sort == "series_index":
         series_col = coalesce(Book.series, Book.epub_series)
         if order == "desc":
             base_query = base_query.order_by(

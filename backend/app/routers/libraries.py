@@ -23,7 +23,7 @@ from app.schemas.library import (
     LibraryUpdate,
 )
 from app.schemas.series import PaginatedFeed, PaginatedSeries
-from app.services.book_search import tiered_book_search
+from app.services.book_search import relevance_order, tiered_book_search
 from app.services.series import build_series_out, list_library_feed, list_series
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
@@ -245,6 +245,7 @@ async def list_library_books(
         )
     if format:
         base_query = base_query.where(Book.format == format)
+    tiered = None
     if search:
         # Applied last — the tier probe must see the fully-filtered scope.
         tiered = await tiered_book_search(db, search, base_query)
@@ -264,8 +265,13 @@ async def list_library_books(
     if series and sort == "created_at":
         sort = "series_index"
         order = "asc"
+    if sort == "relevance" and tiered is None:
+        # Nothing to be relevant to (a stale URL) — the default order.
+        sort, order = "created_at", "desc"
     sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
-    if sort == "series_index":
+    if sort == "relevance":
+        base_query = base_query.order_by(*relevance_order(tiered, search), Book.id)
+    elif sort == "series_index":
         # Sort by series name first, then index within each series; NULLS LAST
         series_col = coalesce(Book.series, Book.epub_series)
         if order == "desc":

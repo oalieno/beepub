@@ -27,23 +27,8 @@
   import { toastStore } from "$lib/stores/toast";
   import { openSearchModal } from "$lib/stores/search";
 
-  // series_index sort is meaningless once series collapse into one card, so it
-  // is dropped from the menu while collapsed.
-  const SORT_OPTIONS = $derived(
-    [
-      { value: "added_at:desc", label: m.browser_sort_newest() },
-      { value: "added_at:asc", label: m.browser_sort_oldest() },
-      { value: "display_title:asc", label: m.browser_sort_title_asc() },
-      { value: "display_title:desc", label: m.browser_sort_title_desc() },
-      { value: "series_index:asc", label: m.browser_sort_series_asc() },
-      { value: "series_index:desc", label: m.browser_sort_series_desc() },
-      {
-        value: "popularity_score:desc",
-        label: m.browser_sort_popularity_desc(),
-      },
-      { value: "popularity_score:asc", label: m.browser_sort_popularity_asc() },
-    ].filter((o) => !(collapse && o.value.startsWith("series_index"))),
-  );
+  // "Most relevant" exists only while there is a query to be relevant to.
+  const RELEVANCE = "relevance:asc";
 
   const PAGE_SIZE = 60;
 
@@ -185,9 +170,51 @@
       filterFormat
     ),
   );
-  let sortValue = $state(init.sortValue);
+  let sortValue = $state(
+    init.sortValue === RELEVANCE && !init.searchQuery.trim()
+      ? "added_at:desc"
+      : init.sortValue,
+  );
+  // Starting a search switches to relevance; clearing it goes back to
+  // the order the user was browsing in (unless they picked another
+  // order meanwhile — then that pick stands).
+  let searching = !!init.searchQuery.trim();
+  // svelte-ignore state_referenced_locally
+  let sortBeforeSearch = sortValue === RELEVANCE ? "added_at:desc" : sortValue;
+
+  function syncSortToSearch() {
+    const active = !!searchQuery.trim();
+    if (active && !searching && sortValue !== RELEVANCE) {
+      sortBeforeSearch = sortValue;
+      sortValue = RELEVANCE;
+    } else if (!active && searching && sortValue === RELEVANCE) {
+      sortValue = sortBeforeSearch;
+    }
+    searching = active;
+  }
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
+  // series_index sort is meaningless once series collapse into one card, so it
+  // is dropped from the menu while collapsed.
+  const SORT_OPTIONS = $derived(
+    [
+      ...(searchQuery.trim()
+        ? [{ value: RELEVANCE, label: m.browser_sort_relevance() }]
+        : []),
+      { value: "added_at:desc", label: m.browser_sort_newest() },
+      { value: "added_at:asc", label: m.browser_sort_oldest() },
+      { value: "display_title:asc", label: m.browser_sort_title_asc() },
+      { value: "display_title:desc", label: m.browser_sort_title_desc() },
+      { value: "series_index:asc", label: m.browser_sort_series_asc() },
+      { value: "series_index:desc", label: m.browser_sort_series_desc() },
+      {
+        value: "popularity_score:desc",
+        label: m.browser_sort_popularity_desc(),
+      },
+      { value: "popularity_score:asc", label: m.browser_sort_popularity_asc() },
+    ].filter((o) => !(collapse && o.value.startsWith("series_index"))),
+  );
+
   let sortLabel = $derived(
     SORT_OPTIONS.find((o) => o.value === sortValue)?.label ??
       m.browser_sort_newest(),
@@ -306,6 +333,7 @@
 
   function handleSearchInput() {
     clearTimeout(searchTimer);
+    syncSortToSearch();
     // Show the loading state right away. Otherwise, during the debounce
     // window (and a slow request), `loading` stays false while the old/empty
     // results render — briefly flashing "no books found" before the fetch.
@@ -387,6 +415,7 @@
         onclick={() => {
           searchQuery = "";
           clearTimeout(searchTimer);
+          syncSortToSearch();
           handleImmediateChange();
         }}
       >
