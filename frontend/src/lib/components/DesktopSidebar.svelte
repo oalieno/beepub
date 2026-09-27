@@ -6,97 +6,34 @@
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import * as m from "$lib/paraglide/messages.js";
   import {
-    ArrowLeftRight,
-    Home,
-    Library,
-    ShelvingUnit,
-    Highlighter,
-    Compass,
     Search as SearchIcon,
     Dices,
     PanelLeftClose,
     PanelLeftOpen,
-    Rss,
-    Settings,
   } from "@lucide/svelte";
+  import { isLocalMode } from "$lib/api/client";
+  import { navLinks as buildNavLinks } from "$lib/nav";
   import * as Avatar from "$lib/components/ui/avatar";
   import { Separator } from "$lib/components/ui/separator";
   import { UserRole } from "$lib/types";
 
-  let { onSearchOpen }: { onSearchOpen: () => void } = $props();
+  let { onSearchOpen }: { onSearchOpen?: () => void } = $props();
 
   let collapsed = $derived($sidebarCollapsed);
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
+  // Mode switches are a full page load, so a one-time read is enough.
+  const mode = isLocalMode() ? "local" : "server";
 
   // No per-link online gating: offline replaces this chrome with the
-  // offline shell entirely, so every link rendered here is usable.
-  const navLinks = $derived([
-    {
-      href: "/",
-      label: m.nav_home(),
-      icon: Home,
-      active: page.url.pathname === "/",
-    },
-    {
-      href: "/bookshelves",
-      label: m.nav_shelves(),
-      icon: ShelvingUnit,
-      // /my-books is the system-shelf detail route — keep the entry lit there.
-      active:
-        page.url.pathname.startsWith("/bookshelves") ||
-        page.url.pathname.startsWith("/my-books"),
-    },
-    {
-      // Calibre-style: jump straight into the active library; the cards
-      // page one level up (via its back button) is the switcher.
-      href: $activeLibraryHref,
-      label: m.nav_libraries(),
-      icon: Library,
-      active:
-        page.url.pathname.startsWith("/libraries") ||
-        page.url.pathname.startsWith("/local"),
-    },
-    {
-      href: "/highlights",
-      label: m.nav_highlights(),
-      icon: Highlighter,
-      active: page.url.pathname.startsWith("/highlights"),
-    },
-    {
-      href: "/discover",
-      label: m.nav_discover(),
-      icon: Compass,
-      active: page.url.pathname.startsWith("/discover"),
-    },
-    ...(isNative()
-      ? [
-          {
-            href: "/catalogs",
-            label: m.nav_catalogs(),
-            icon: Rss,
-            active: page.url.pathname.startsWith("/catalogs"),
-          },
-          {
-            href: "/mode",
-            label: m.mode_switch_title(),
-            icon: ArrowLeftRight,
-            active: page.url.pathname === "/mode",
-          },
-        ]
-      : []),
-    // Instance-level administration, not a personal setting — it lives in
-    // the global nav rather than behind the profile page.
-    ...(isAdmin
-      ? [
-          {
-            href: "/admin",
-            label: m.nav_admin(),
-            icon: Settings,
-            active: page.url.pathname.startsWith("/admin"),
-          },
-        ]
-      : []),
-  ]);
+  // disconnect screen entirely, so every link rendered here is usable.
+  const navLinks = $derived(
+    buildNavLinks({
+      mode,
+      libraryHref: $activeLibraryHref,
+      native: isNative(),
+      admin: isAdmin,
+    }).map((link) => ({ ...link, active: link.match(page.url.pathname) })),
+  );
 </script>
 
 <nav
@@ -142,32 +79,34 @@
     </button>
   </div>
 
-  <!-- Search -->
-  <div class="px-3 mb-2">
-    <button
-      class="flex items-center w-full rounded-lg text-sm transition-colors {collapsed
-        ? 'justify-center px-0 py-2.5 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
-        : 'gap-3 px-3 py-2 border border-sidebar-border bg-card text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
-      onclick={onSearchOpen}
-      title={collapsed ? m.nav_search() : undefined}
-    >
-      <SearchIcon size={collapsed ? 20 : 16} class="flex-shrink-0" />
-      {#if !collapsed}
-        <span
-          class="transition-opacity duration-100 {collapsed
-            ? 'opacity-0'
-            : 'opacity-100 delay-100'}"
-        >
-          {m.nav_search()}
-        </span>
-        <kbd
-          class="ml-auto text-xs text-sidebar-foreground/30 bg-sidebar-accent/50 px-1.5 py-0.5 rounded"
-        >
-          ⌘K
-        </kbd>
-      {/if}
-    </button>
-  </div>
+  <!-- Search, gacha and the account query the server: server mode only. -->
+  {#if mode === "server"}
+    <div class="px-3 mb-2">
+      <button
+        class="flex items-center w-full rounded-lg text-sm transition-colors {collapsed
+          ? 'justify-center px-0 py-2.5 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'
+          : 'gap-3 px-3 py-2 border border-sidebar-border bg-card text-sidebar-foreground/50 hover:border-sidebar-foreground/30'}"
+        onclick={onSearchOpen}
+        title={collapsed ? m.nav_search() : undefined}
+      >
+        <SearchIcon size={collapsed ? 20 : 16} class="flex-shrink-0" />
+        {#if !collapsed}
+          <span
+            class="transition-opacity duration-100 {collapsed
+              ? 'opacity-0'
+              : 'opacity-100 delay-100'}"
+          >
+            {m.nav_search()}
+          </span>
+          <kbd
+            class="ml-auto text-xs text-sidebar-foreground/30 bg-sidebar-accent/50 px-1.5 py-0.5 rounded"
+          >
+            ⌘K
+          </kbd>
+        {/if}
+      </button>
+    </div>
+  {/if}
 
   <!-- Nav links -->
   <div class="flex-1 px-3 flex flex-col gap-0.5 overflow-y-auto">
@@ -195,56 +134,60 @@
       </a>
     {/each}
 
-    <Separator class="my-2" />
+    {#if mode === "server"}
+      <Separator class="my-2" />
 
-    <!-- Gacha -->
-    <a
-      href="/gacha"
-      class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
-        ? 'justify-center px-0'
-        : 'px-3'} {page.url.pathname === '/gacha'
-        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-        : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
-      title={collapsed ? m.nav_gacha() : undefined}
-    >
-      <Dices size={20} class="flex-shrink-0" />
-      {#if !collapsed}
-        <span
-          class="transition-opacity duration-100 whitespace-nowrap {collapsed
-            ? 'opacity-0'
-            : 'opacity-100 delay-100'}"
-        >
-          {m.nav_gacha()}
-        </span>
-      {/if}
-    </a>
+      <!-- Gacha -->
+      <a
+        href="/gacha"
+        class="flex items-center gap-3 py-2.5 rounded-lg text-sm font-medium transition-colors {collapsed
+          ? 'justify-center px-0'
+          : 'px-3'} {page.url.pathname === '/gacha'
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent/50'}"
+        title={collapsed ? m.nav_gacha() : undefined}
+      >
+        <Dices size={20} class="flex-shrink-0" />
+        {#if !collapsed}
+          <span
+            class="transition-opacity duration-100 whitespace-nowrap {collapsed
+              ? 'opacity-0'
+              : 'opacity-100 delay-100'}"
+          >
+            {m.nav_gacha()}
+          </span>
+        {/if}
+      </a>
+    {/if}
   </div>
 
   <!-- User section at bottom -->
-  <div class="px-3 pb-4 pt-2 border-t border-sidebar-border">
-    <a
-      href="/profile"
-      class="flex items-center gap-3 py-2.5 rounded-lg w-full text-left transition-colors {collapsed
-        ? 'justify-center px-0'
-        : 'px-3'} {page.url.pathname.startsWith('/profile')
-        ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-        : 'hover:bg-sidebar-accent/50'}"
-      title={collapsed ? $authStore.user?.username : undefined}
-    >
-      <Avatar.Root class="h-8 w-8 shrink-0">
-        <Avatar.Fallback
-          class="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold"
-        >
-          {$authStore.user?.username?.charAt(0).toUpperCase() ?? "?"}
-        </Avatar.Fallback>
-      </Avatar.Root>
-      {#if !collapsed}
-        <span
-          class="text-sm font-medium text-sidebar-foreground truncate transition-opacity duration-100 opacity-100 delay-100"
-        >
-          {$authStore.user?.username}
-        </span>
-      {/if}
-    </a>
-  </div>
+  {#if mode === "server"}
+    <div class="px-3 pb-4 pt-2 border-t border-sidebar-border">
+      <a
+        href="/profile"
+        class="flex items-center gap-3 py-2.5 rounded-lg w-full text-left transition-colors {collapsed
+          ? 'justify-center px-0'
+          : 'px-3'} {page.url.pathname.startsWith('/profile')
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'hover:bg-sidebar-accent/50'}"
+        title={collapsed ? $authStore.user?.username : undefined}
+      >
+        <Avatar.Root class="h-8 w-8 shrink-0">
+          <Avatar.Fallback
+            class="bg-sidebar-primary text-sidebar-primary-foreground text-xs font-semibold"
+          >
+            {$authStore.user?.username?.charAt(0).toUpperCase() ?? "?"}
+          </Avatar.Fallback>
+        </Avatar.Root>
+        {#if !collapsed}
+          <span
+            class="text-sm font-medium text-sidebar-foreground truncate transition-opacity duration-100 opacity-100 delay-100"
+          >
+            {$authStore.user?.username}
+          </span>
+        {/if}
+      </a>
+    </div>
+  {/if}
 </nav>

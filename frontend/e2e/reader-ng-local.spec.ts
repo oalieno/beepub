@@ -95,8 +95,17 @@ async function waitForReader(page: Page, fixture: Fixture) {
     .toBe(true);
 }
 
+/** Home, then the Books entry — client-side, as in the app. (A full load
+ *  of /local on the web stack bounces through the server's login
+ *  redirect, which local mode then sends to Home.) */
+async function openShelf(page: Page) {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Books", exact: true }).first().click();
+  await page.waitForURL(/\/local$/);
+}
+
 async function importFixture(page: Page, fixture: Fixture) {
-  await page.goto("/local");
+  await openShelf(page);
   await page
     .locator('input[type="file"]')
     .setInputFiles(path.join(FIXTURES, fixture.file));

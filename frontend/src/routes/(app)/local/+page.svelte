@@ -27,11 +27,9 @@
   import LocalBookCard, {
     type LocalShelfEntry,
   } from "$lib/components/LocalBookCard.svelte";
-  import ContinueReadingRow from "$lib/components/ContinueReadingRow.svelte";
   import { BookGridSkeleton } from "$lib/components/skeletons";
   import * as m from "$lib/paraglide/messages.js";
   import { UserRole, type LibraryOut } from "$lib/types";
-  import type { LocalBookEntry } from "$lib/services/localLibrary";
 
   // Serverless local mode: this page is a root tab, so no back navigation.
   // Connected mode reaches it through the libraries cards page instead.
@@ -42,17 +40,17 @@
   let loading = $state(true);
 
   // Client-side search/sort — the shelf is small enough to filter in memory.
-  // Recently-read first is the default, the same order as the
-  // continue-reading row above the shelf.
+  // Newest first by default, like the cloud libraries; resuming a book is
+  // Home's continue-reading row.
   const SORT_OPTIONS = [
-    { value: "lastRead:desc", label: () => m.local_sort_last_read() },
     { value: "importedAt:desc", label: () => m.browser_sort_newest() },
+    { value: "lastRead:desc", label: () => m.local_sort_last_read() },
     { value: "importedAt:asc", label: () => m.browser_sort_oldest() },
     { value: "title:asc", label: () => m.browser_sort_title_asc() },
     { value: "title:desc", label: () => m.browser_sort_title_desc() },
   ];
   let searchQuery = $state("");
-  let sortValue = $state("lastRead:desc");
+  let sortValue = $state("importedAt:desc");
   let sortLabel = $derived(
     (
       SORT_OPTIONS.find((o) => o.value === sortValue) ?? SORT_OPTIONS[0]
@@ -94,26 +92,6 @@
     }
     return sorted;
   });
-  // Books started and not finished, most recently read first: the row
-  // opens the reader directly, since a card now opens the book page.
-  let continueReading = $derived(
-    entries
-      .filter(
-        (e) =>
-          e.lastReadAt &&
-          e.readingStatus !== "read" &&
-          e.readingStatus !== "did_not_finish",
-      )
-      .sort((a, b) => b.lastReadAt!.localeCompare(a.lastReadAt!))
-      .slice(0, 12)
-      .map((e) => ({
-        id: e.id,
-        title: e.title,
-        percentage: e.progressPct ?? null,
-        authors: e.authors,
-        coverSrc: e.coverSrc,
-      })),
-  );
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   let addSheetOpen = $state(false);
@@ -140,42 +118,16 @@
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  // Cover URIs are re-derived per mount, so keep them beside the entry
-  // instead of mutating the manifest shape. Progress/status ride along
-  // from the device reading records.
-  async function withCover(
-    entry: LocalBookEntry,
-    links: Record<string, string>,
-  ): Promise<LocalShelfEntry> {
-    const { getLocalCoverSrc } = await import("$lib/services/localLibrary");
-    const { readLocalProgress, readLocalInteraction } =
-      await import("$lib/reading/local");
-    const [coverSrc, progress, interaction] = await Promise.all([
-      getLocalCoverSrc(entry),
-      readLocalProgress(entry.id),
-      readLocalInteraction(entry.id),
-    ]);
-    return {
-      ...entry,
-      coverSrc,
-      linked: entry.id in links,
-      progressPct: progress?.percentage ?? null,
-      readingStatus: interaction?.reading_status ?? null,
-      lastReadAt: progress?.last_read_at ?? null,
-    };
-  }
-
   async function loadEntries() {
     if (!isNative()) {
       loading = false;
       return;
     }
     try {
-      const { listLocalBooks, getLocalStorageUsage, getLocalBookLinks } =
+      const { getLocalStorageUsage } =
         await import("$lib/services/localLibrary");
-      const books = await listLocalBooks();
-      const links = await getLocalBookLinks();
-      entries = await Promise.all(books.map((b) => withCover(b, links)));
+      const { loadShelfEntries } = await import("$lib/services/localShelf");
+      entries = await loadShelfEntries();
       totalSize = await getLocalStorageUsage();
     } catch {
       // ignore
@@ -193,7 +145,8 @@
       await import("$lib/services/localLibrary");
     try {
       const entry = await importLocalBook(file);
-      entries = [await withCover(entry, {}), ...entries];
+      const { toShelfEntry } = await import("$lib/services/localShelf");
+      entries = [await toShelfEntry(entry, {}), ...entries];
       totalSize += entry.fileSize;
       toastStore.success(m.local_import_success({ title: entry.title }));
       // Fire-and-forget: if the same file exists on the server, link it
@@ -420,23 +373,28 @@
       onchange={handleImport}
     />
 
-    {#if entries.length === 0}
-      <div class="flex items-center justify-end gap-3 mb-6">
-        <Button
-          size="sm"
-          disabled={importing}
-          onclick={() => (addSheetOpen = true)}
-        >
-          {#if importing}
-            <Loader2 class="animate-spin" size={16} />
-            {m.local_importing()}
-          {:else}
-            <Plus size={16} />
-            {m.local_add()}
-          {/if}
-        </Button>
-      </div>
+    <div class="flex items-center justify-between gap-3 mb-6">
+      <p class="text-sm text-muted-foreground">
+        {#if entries.length > 0}
+          {formatSize(totalSize)}
+        {/if}
+      </p>
+      <Button
+        size="sm"
+        disabled={importing}
+        onclick={() => (addSheetOpen = true)}
+      >
+        {#if importing}
+          <Loader2 class="animate-spin" size={16} />
+          {m.local_importing()}
+        {:else}
+          <Plus size={16} />
+          {m.local_add()}
+        {/if}
+      </Button>
+    </div>
 
+    {#if entries.length === 0}
       <div class="flex flex-col items-center justify-center py-24 text-center">
         <div class="mb-4 p-3 bg-primary/10 rounded-xl">
           <HardDrive class="text-primary/50" size={28} />
@@ -449,37 +407,6 @@
         </p>
       </div>
     {:else}
-      {#if continueReading.length > 0 && !searchQuery.trim()}
-        <ContinueReadingRow items={continueReading} />
-      {/if}
-      <!-- The shelf is its own section: search and sort belong to it, not
-           to the continue-reading row above. -->
-      <div class="flex items-end justify-between gap-3 mb-4">
-        <div class="min-w-0">
-          <h2 class="text-2xl font-bold text-foreground">
-            {m.allbooks_heading()}
-          </h2>
-          <p class="text-muted-foreground text-sm mt-1">
-            {m.local_shelf_summary({
-              count: entries.length,
-              size: formatSize(totalSize),
-            })}
-          </p>
-        </div>
-        <Button
-          size="sm"
-          disabled={importing}
-          onclick={() => (addSheetOpen = true)}
-        >
-          {#if importing}
-            <Loader2 class="animate-spin" size={16} />
-            {m.local_importing()}
-          {:else}
-            <Plus size={16} />
-            {m.local_add()}
-          {/if}
-        </Button>
-      </div>
       <!-- Search & sort, mirroring the cloud library browser's controls -->
       <div class="mb-6 space-y-4">
         <div class="relative">

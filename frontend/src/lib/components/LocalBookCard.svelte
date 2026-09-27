@@ -81,7 +81,11 @@
           loading="lazy"
         />
       {:else}
-        <GeneratedCover title={entry.title} class="h-56 sm:h-64 aspect-[2/3]" />
+        <GeneratedCover
+          title={entry.title}
+          authors={entry.authors}
+          class="h-56 sm:h-64 aspect-[2/3]"
+        />
       {/if}
     </div>
   </div>

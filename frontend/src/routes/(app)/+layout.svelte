@@ -5,8 +5,6 @@
   import { serverDisconnected } from "$lib/services/serverDisconnect";
   import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
   import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
-  import LocalTabBar from "$lib/components/LocalTabBar.svelte";
-  import LocalTopBar from "$lib/components/LocalTopBar.svelte";
   import DisconnectScreen from "$lib/components/DisconnectScreen.svelte";
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
@@ -16,8 +14,8 @@
 
   let { children }: { children: Snippet } = $props();
 
-  // Local mode gets its own chrome below. Mode switches are a full page
-  // load (switchAppMode), so a one-time read is enough.
+  // Mode switches are a full page load (switchAppMode), so a one-time
+  // read is enough.
   const localMode = isLocalMode();
 
   let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
@@ -43,29 +41,17 @@
   }}
 />
 
-<!-- localMode wins over isAuthenticated: entering serverless means no
-     server session can exist, but page.data.user is cached load output
-     and may lag until invalidation lands. -->
-{#if localMode}
-  {#if !isBookDetail}
-    <LocalTopBar />
-    <LocalTabBar />
-  {/if}
-
-  <main
-    class={isBookDetail
-      ? "book-detail-safe-area"
-      : "pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"}
-  >
-    {@render children()}
-  </main>
-{:else if isAuthenticated && $serverDisconnected}
+<!-- One chrome for both modes; the mode only decides which nav entries
+     exist (lib/nav.ts). localMode wins over isAuthenticated: entering
+     serverless means no server session can exist, but page.data.user is
+     cached load output and may lag until invalidation lands. -->
+{#if !localMode && isAuthenticated && $serverDisconnected}
   <!-- Server mode needs a connection: one disconnect surface (retry /
        switch to local mode) instead of per-page failure states. The
        reader is in its own layout group and deliberately survives this —
        going offline mid-book must never interrupt reading. -->
   <DisconnectScreen />
-{:else if isAuthenticated}
+{:else if localMode || isAuthenticated}
   <!-- Desktop: sidebar -->
   <DesktopSidebar onSearchOpen={() => searchModalOpen.set(true)} />
 
@@ -85,7 +71,9 @@
     {@render children()}
   </main>
 
-  <SearchModal bind:open={$searchModalOpen} />
+  {#if !localMode}
+    <SearchModal bind:open={$searchModalOpen} />
+  {/if}
 {:else}
   <main>
     {@render children()}

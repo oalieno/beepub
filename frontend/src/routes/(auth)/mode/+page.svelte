@@ -26,7 +26,7 @@
     if (history.length > 1) {
       history.back();
     } else {
-      goto(localMode ? "/local" : "/", { replaceState: true });
+      goto("/", { replaceState: true });
     }
   }
 </script>

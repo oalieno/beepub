@@ -2,34 +2,16 @@
   import { page } from "$app/state";
   import * as m from "$lib/paraglide/messages.js";
   import { ArrowLeftRight, Search, Dices } from "@lucide/svelte";
+  import { isLocalMode } from "$lib/api/client";
+  import { navTitle } from "$lib/nav";
   import { isNative } from "$lib/platform";
 
-  let { onSearchOpen }: { onSearchOpen: () => void } = $props();
+  let { onSearchOpen }: { onSearchOpen?: () => void } = $props();
 
-  // Derive page title from route
-  const titleMap = $derived<Record<string, string>>({
-    "/": m.nav_home(),
-    "/my-books": m.nav_shelves(),
-    "/libraries": m.nav_libraries(),
-    "/bookshelves": m.nav_shelves(),
-    "/highlights": m.nav_highlights(),
-    "/discover": m.nav_discover(),
-    "/gacha": m.nav_gacha(),
-    "/admin": m.nav_admin(),
-    "/profile": m.nav_profile(),
-    "/local": m.nav_local_books(),
-    "/catalogs": m.nav_catalogs(),
-  });
+  // Mode switches are a full page load, so a one-time read is enough.
+  const mode = isLocalMode() ? "local" : "server";
 
-  let pageTitle = $derived(() => {
-    const path = page.url.pathname;
-    for (const [prefix, title] of Object.entries(titleMap)) {
-      if (path === prefix || (prefix !== "/" && path.startsWith(prefix))) {
-        return title;
-      }
-    }
-    return "BeePub";
-  });
+  let pageTitle = $derived(navTitle(mode, page.url.pathname));
 </script>
 
 <header
@@ -41,7 +23,7 @@
       class="text-lg font-bold tracking-tight"
       style="font-family: var(--font-heading)"
     >
-      {pageTitle()}
+      {pageTitle}
     </h1>
 
     <div class="flex items-center gap-1">
@@ -54,22 +36,26 @@
           <ArrowLeftRight size={20} />
         </a>
       {/if}
-      <button
-        class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-        onclick={onSearchOpen}
-        aria-label={m.nav_search()}
-      >
-        <Search size={20} />
-      </button>
-      <a
-        href="/gacha"
-        class="p-2 rounded-lg transition-colors {page.url.pathname === '/gacha'
-          ? 'bg-primary/10 text-primary'
-          : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
-        aria-label={m.nav_gacha()}
-      >
-        <Dices size={20} />
-      </a>
+      <!-- Search and gacha query the server: server mode only. -->
+      {#if mode === "server"}
+        <button
+          class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
+          onclick={onSearchOpen}
+          aria-label={m.nav_search()}
+        >
+          <Search size={20} />
+        </button>
+        <a
+          href="/gacha"
+          class="p-2 rounded-lg transition-colors {page.url.pathname ===
+          '/gacha'
+            ? 'bg-primary/10 text-primary'
+            : 'text-muted-foreground hover:text-foreground hover:bg-secondary'}"
+          aria-label={m.nav_gacha()}
+        >
+          <Dices size={20} />
+        </a>
+      {/if}
     </div>
   </div>
 </header>

@@ -1,49 +1,25 @@
 <script lang="ts">
   import { page } from "$app/state";
+  import { isLocalMode } from "$lib/api/client";
+  import { navTabs } from "$lib/nav";
+  import { isNative } from "$lib/platform";
   import { activeLibraryHref } from "$lib/stores/activeLibrary";
   import { keyboardVisible } from "$lib/stores/keyboard";
   import * as m from "$lib/paraglide/messages.js";
-  import { Home, ShelvingUnit, BookCopy, Compass, User } from "@lucide/svelte";
+
+  // Mode switches are a full page load, so a one-time read is enough.
+  const mode = isLocalMode() ? "local" : "server";
 
   // No per-tab online gating: offline replaces this chrome with the
-  // offline shell entirely, so every tab rendered here is usable.
-  const tabs = $derived([
-    {
-      href: "/",
-      label: m.nav_home(),
-      icon: Home,
-      match: (p: string) => p === "/",
-    },
-    {
-      href: "/bookshelves",
-      label: m.nav_shelves(),
-      icon: ShelvingUnit,
-      // /my-books is the system-shelf detail route — keep the tab lit there.
-      match: (p: string) =>
-        p.startsWith("/bookshelves") || p.startsWith("/my-books"),
-    },
-    {
-      // Calibre-style: jump straight into the active library; the cards
-      // page one level up (via its back button) is the switcher.
-      href: $activeLibraryHref,
-      label: m.nav_libraries(),
-      icon: BookCopy,
-      match: (p: string) =>
-        p.startsWith("/libraries") || p.startsWith("/local"),
-    },
-    {
-      href: "/discover",
-      label: m.nav_discover(),
-      icon: Compass,
-      match: (p: string) => p.startsWith("/discover"),
-    },
-    {
-      href: "/profile",
-      label: m.nav_profile(),
-      icon: User,
-      match: (p: string) => p.startsWith("/profile"),
-    },
-  ]);
+  // disconnect screen entirely, so every tab rendered here is usable.
+  const tabs = $derived(
+    navTabs({
+      mode,
+      libraryHref: $activeLibraryHref,
+      native: isNative(),
+      admin: false,
+    }),
+  );
 </script>
 
 {#if !$keyboardVisible}

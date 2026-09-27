@@ -67,11 +67,12 @@
     }
   });
 
-  // Local mode only works on pages that don't need a server: the shelf,
-  // OPDS catalogs, setup (to connect later), the mode switcher, and the
-  // reader for local books.
+  // Local mode only works on pages that don't need a server: home, the
+  // shelf, OPDS catalogs, setup (to connect later), the mode switcher,
+  // and the reader for local books.
   function isLocalPath(path: string): boolean {
     return (
+      path === "/" ||
       path.startsWith("/local") ||
       path.startsWith("/catalogs") ||
       path === "/setup" ||
@@ -87,7 +88,7 @@
       const path = page.url.pathname;
       if (isLocalMode()) {
         if (!isLocalPath(path)) {
-          goto("/local");
+          goto("/");
           return;
         }
       } else if (!hasServerUrl()) {

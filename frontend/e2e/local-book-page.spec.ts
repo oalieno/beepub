@@ -5,10 +5,11 @@ import { ADMIN_STATE } from "./helpers";
 import { PLATES_BOOK, TOUCH_BOOK, seedFixture } from "./ng-helpers";
 
 /**
- * The device-local book page: a shelf card opens it (the continue-reading
- * row above the shelf opens the reader directly); status and notes are
- * written offline into the device record, and — once the book is linked
- * to a server copy — notes sync both ways under their own LWW stamp.
+ * The device-local book page: a shelf card opens it (Home's
+ * continue-reading row opens the reader directly, in both modes); status
+ * and notes are written offline into the device record, and — once the
+ * book is linked to a server copy — notes sync both ways under their own
+ * LWW stamp.
  *
  * The app is simulated as in reader-ng-local / download-queue
  * (`CapacitorCustomPlatform`; Preferences → localStorage, Filesystem →
@@ -51,8 +52,23 @@ async function openBookPage(page: Page, title: string): Promise<string> {
   return /\/local\/([^/]+)$/.exec(page.url())![1];
 }
 
-async function importFixture(page: Page, file: string, title: string) {
-  await page.goto("/local");
+/** Home, then the Books entry — client-side, as in the app. (A full load
+ *  of /local on the web stack bounces through the server's login
+ *  redirect, which local mode then sends to Home.) */
+async function openShelf(page: Page) {
+  await page.goto("/");
+  await page.getByRole("link", { name: "Books", exact: true }).first().click();
+  await page.waitForURL(/\/local$/);
+}
+
+async function importFixture(
+  page: Page,
+  file: string,
+  title: string,
+  mode: "local" | "server" = "local",
+) {
+  if (mode === "local") await openShelf(page);
+  else await page.goto("/local");
   await page
     .locator('input[type="file"]')
     .setInputFiles(path.join(FIXTURES, file));
@@ -100,43 +116,54 @@ test.describe("local mode", () => {
     expect((await deviceRecord(page, id)).status_updated_at).toMatch(/^\d{4}-/);
   });
 
-  test("a book being read is one tap away in the continue row", async ({
+  test("Home lands first, and a book being read is one tap away there", async ({
     page,
   }) => {
     await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
+    await page.getByRole("link", { name: "Home" }).first().click();
+    await page.waitForURL(/\/$/);
     const row = page.getByTestId("continue-reading");
-    // Never opened: not in the row yet.
+    // Never opened: recently added, but not in the row yet.
+    await expect(
+      page.getByRole("button", { name: TOUCH_BOOK.title }).first(),
+    ).toBeVisible();
     await expect(row).toHaveCount(0);
 
     const id = await openBookPage(page, TOUCH_BOOK.title);
-    await page.getByRole("button", { name: "Start Reading" }).click();
-    await page.waitForFunction(
-      () => !!window.__beepubReaderNG?.core?.lastLocation,
-      null,
-      { timeout: 30_000 },
-    );
-    await page.evaluate(() => window.__beepubReaderNG.core.next());
-    await expect
-      .poll(
-        () =>
-          page.evaluate(
-            (key) => !!localStorage.getItem(key),
-            `CapacitorStorage.local-progress:${id}`,
-          ),
-        { timeout: 10_000 },
-      )
-      .toBe(true);
+    await readOnePage(page, id);
 
-    // The reader's back lands on the book page, the page's back on the
-    // shelf — where the row now leads straight back into the book.
+    // The reader's back lands on the book page, the page's back on Home —
+    // where the row now leads straight back into the book.
     await page.getByRole("button", { name: "Go back" }).click();
     await page.waitForURL(new RegExp(`/local/${id}$`));
     await page.getByRole("link", { name: "Back" }).click();
-    await page.waitForURL(/\/local$/);
+    await page.waitForURL(/\/$/);
     await row.getByRole("link", { name: new RegExp(TOUCH_BOOK.title) }).click();
     await page.waitForURL(new RegExp(`/books/${id}/read`));
   });
 });
+
+/** Open the reader from the book page and turn a page, so the device
+ *  records a position. */
+async function readOnePage(page: Page, id: string) {
+  await page.getByRole("button", { name: "Start Reading" }).click();
+  await page.waitForFunction(
+    () => !!window.__beepubReaderNG?.core?.lastLocation,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.evaluate(() => window.__beepubReaderNG.core.next());
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (key) => !!localStorage.getItem(key),
+          `CapacitorStorage.local-progress:${id}`,
+        ),
+      { timeout: 10_000 },
+    )
+    .toBe(true);
+}
 
 test.describe("linked to the server", () => {
   test.use({ storageState: ADMIN_STATE });
@@ -188,5 +215,24 @@ test.describe("linked to the server", () => {
         { timeout: 15_000 },
       )
       .toBe("Rewritten on the device.");
+  });
+
+  test("Home's continue row includes books only on this device", async ({
+    page,
+  }) => {
+    // Keep the import unlinked even if the server has the same file.
+    await page.route("**/api/books/by-digest", (route) =>
+      route.fulfill({ json: { matches: {} } }),
+    );
+    await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title, "server");
+    const id = await openBookPage(page, TOUCH_BOOK.title);
+    await readOnePage(page, id);
+
+    await page.goto("/");
+    await expect(
+      page
+        .getByTestId("continue-reading")
+        .getByRole("link", { name: new RegExp(TOUCH_BOOK.title) }),
+    ).toHaveAttribute("href", `/books/${id}/read`);
   });
 });

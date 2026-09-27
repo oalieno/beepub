@@ -109,7 +109,7 @@ export function setLocalMode(on: boolean): void {
  *  mode is deliberately read once per app lifetime across the tree. */
 export function switchAppMode(mode: "server" | "local"): void {
   setLocalMode(mode === "local");
-  window.location.replace(mode === "local" ? "/local" : "/");
+  window.location.replace("/");
 }
 
 export function apiBase(): string {
