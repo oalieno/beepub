@@ -50,7 +50,7 @@ docker compose up -d
 
 Open `http://localhost` and register — the first account automatically
 becomes the admin. A JWT secret is auto-generated on first start and
-persisted in the `app_data` volume; the database is only reachable inside
+persisted in the `data` volume; the database is only reachable inside
 the compose network.
 
 Using Portainer, Synology Container Manager, or another compose UI? Paste
@@ -173,7 +173,7 @@ Important variables:
   settings; the database is not reachable from outside the compose network,
   so the defaults are safe to keep
 - `SECRET_KEY`: JWT signing secret; auto-generated and persisted in the
-  `app_data` volume when unset. Set it explicitly to control or rotate it —
+  `data` volume when unset. Set it explicitly to control or rotate it —
   changing it logs every session out
 - `PORT`: public nginx port
 - `CORS_ORIGINS`: comma-separated public origins allowed to call the API;
@@ -206,15 +206,31 @@ pnpm check
 
 ## Data And Backups
 
-Docker Compose stores runtime data in named volumes:
+Docker Compose keeps runtime data in three named volumes:
 
-- `postgres_data`: database
-- `redis_data`: Redis state
-- `books_data`: uploaded/imported books
-- `covers_data`: extracted covers
-- `illustrations_data`: generated illustrations
+- `data`: everything BeePub stores — `books/` (uploaded books), `covers/`,
+  `illustrations/` (generated), and `app/` (the auto-generated JWT secret)
+- `postgres_data`: the database
+- `redis_data`: Redis state (disposable)
 
-Back up these volumes before upgrading or rebuilding a production deployment.
+Back up `data` and `postgres_data` before upgrading or rebuilding a
+production deployment.
+
+To keep the data in a directory of your own instead (a NAS share, say),
+bind-mount it at `/data` in the `backend`, `worker`, `beat` and `migrate`
+services, and read-only in `nginx` — e.g. `- /srv/beepub:/data` in a
+compose override.
+
+Upgrading from 0.13 or earlier: those versions kept books, covers,
+illustrations and the secret in four separate volumes (`books_data`,
+`covers_data`, `illustrations_data`, `app_data`). The `migrate` service moves
+their files into `data` on the first start, file by file — an interrupted
+move resumes on the next start, and it never needs twice the space. Once it
+has run, the old volumes are empty and can be removed. If you had pointed
+one of them at a host directory, it is left untouched: mount that directory
+at the matching path under `/data` (e.g. `- /srv/books:/data/books`)
+instead.
+
 The repository does not include book files, database contents, user data, API
 keys, or generated runtime assets.
 

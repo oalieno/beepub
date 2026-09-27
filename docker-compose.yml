@@ -12,10 +12,9 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
     volumes:
-      - app_data:/data/app
-      - books_data:/data/books
-      - covers_data:/data/covers
-      - illustrations_data:/data/illustrations
+      # Everything BeePub stores: app/ (the auto SECRET_KEY), books/,
+      # covers/, illustrations/. Back this up with postgres_data.
+      - data:/data
       # To import an existing Calibre library, mount it read-only here and
       # in the worker service below, then use Admin -> Calibre in the app:
       # - /path/to/calibre:/calibre:ro
@@ -36,10 +35,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
-      - app_data:/data/app
-      - books_data:/data/books
-      - covers_data:/data/covers
-      - illustrations_data:/data/illustrations
+      - data:/data
       # Calibre mount, same as the backend service:
       # - /path/to/calibre:/calibre:ro
     depends_on:
@@ -67,7 +63,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
-      - app_data:/data/app
+      - data:/data
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -85,7 +81,15 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
     volumes:
       # migrate runs first, so it generates the auto SECRET_KEY when unset
-      - app_data:/data/app
+      - data:/data
+      # Installs from before 0.14 kept each kind in its own volume; migrate
+      # moves their files into `data` on first start (and does nothing once
+      # they're empty or on a fresh install). Kept here for a transition
+      # period so upgrades need no manual step.
+      - app_data:/legacy/app
+      - books_data:/legacy/books
+      - covers_data:/legacy/covers
+      - illustrations_data:/legacy/illustrations
     depends_on:
       postgres:
         condition: service_healthy
@@ -137,7 +141,8 @@ services:
     ports:
       - "${PORT:-80}:80"
     volumes:
-      - covers_data:/data/covers:ro
+      # Serves /data/covers directly (read-only; nothing else is exposed).
+      - data:/data:ro
     depends_on:
       - backend
       - frontend
@@ -145,6 +150,8 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  data:
+  # Pre-0.14 layout, read only by migrate's one-time move (see above).
   app_data:
   books_data:
   covers_data:

@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+# Before anything writes to /data (including SECRET_KEY generation): move
+# pre-0.14 installs' per-kind volumes into the single data volume.
+uv run python scripts/merge_data_volumes.py
+
 # Convert postgresql+asyncpg:// to postgresql:// for psql.
 PSQL_URL=$(echo "$DATABASE_URL" | sed 's/+asyncpg//')
 

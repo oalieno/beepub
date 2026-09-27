@@ -3,8 +3,6 @@ services:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
-      - books_data:/data/books
-      - covers_data:/data/covers
     environment:
       DEV: "1"
       # The image skips the dev group; the dev venv keeps it.
@@ -14,8 +12,6 @@ services:
     volumes:
       - ./backend:/app
       - backend_venv:/app/.venv
-      - books_data:/data/books
-      - covers_data:/data/covers
     environment:
       UV_NO_DEV: "0"
     command: ["bash", "start-worker-dev.sh"]

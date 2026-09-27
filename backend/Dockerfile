@@ -24,7 +24,7 @@ COPY . .
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
 
-RUN mkdir -p /data/books /data/covers
+RUN mkdir -p /data/app /data/books /data/covers /data/illustrations
 
 COPY migrate.sh start.sh /app/
 RUN chmod +x /app/migrate.sh /app/start.sh
