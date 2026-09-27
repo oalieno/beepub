@@ -892,6 +892,7 @@
   "local_linked": "已連結到伺服器書庫，閱讀將自動同步",
   "local_view_cloud": "查看雲端版本",
   "local_linked_badge": "與伺服器同步中",
+  "local_shelf_summary": "{count} 本 · {size}",
   "local_nav_books": "書庫",
   "local_nav_settings": "設定",
   "local_settings_page_title": "設定 - BeePub",

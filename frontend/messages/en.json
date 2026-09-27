@@ -892,6 +892,7 @@
   "local_linked": "Linked to your server library — reading will sync automatically",
   "local_view_cloud": "Open the server copy",
   "local_linked_badge": "Synced with your server",
+  "local_shelf_summary": "{count} books · {size}",
   "local_nav_books": "Books",
   "local_nav_settings": "Settings",
   "local_settings_page_title": "Settings - BeePub",

@@ -420,28 +420,23 @@
       onchange={handleImport}
     />
 
-    <div class="flex items-center justify-between gap-3 mb-6">
-      <p class="text-sm text-muted-foreground">
-        {#if entries.length > 0}
-          {formatSize(totalSize)}
-        {/if}
-      </p>
-      <Button
-        size="sm"
-        disabled={importing}
-        onclick={() => (addSheetOpen = true)}
-      >
-        {#if importing}
-          <Loader2 class="animate-spin" size={16} />
-          {m.local_importing()}
-        {:else}
-          <Plus size={16} />
-          {m.local_add()}
-        {/if}
-      </Button>
-    </div>
-
     {#if entries.length === 0}
+      <div class="flex items-center justify-end gap-3 mb-6">
+        <Button
+          size="sm"
+          disabled={importing}
+          onclick={() => (addSheetOpen = true)}
+        >
+          {#if importing}
+            <Loader2 class="animate-spin" size={16} />
+            {m.local_importing()}
+          {:else}
+            <Plus size={16} />
+            {m.local_add()}
+          {/if}
+        </Button>
+      </div>
+
       <div class="flex flex-col items-center justify-center py-24 text-center">
         <div class="mb-4 p-3 bg-primary/10 rounded-xl">
           <HardDrive class="text-primary/50" size={28} />
@@ -457,6 +452,34 @@
       {#if continueReading.length > 0 && !searchQuery.trim()}
         <ContinueReadingRow items={continueReading} />
       {/if}
+      <!-- The shelf is its own section: search and sort belong to it, not
+           to the continue-reading row above. -->
+      <div class="flex items-end justify-between gap-3 mb-4">
+        <div class="min-w-0">
+          <h2 class="text-2xl font-bold text-foreground">
+            {m.allbooks_heading()}
+          </h2>
+          <p class="text-muted-foreground text-sm mt-1">
+            {m.local_shelf_summary({
+              count: entries.length,
+              size: formatSize(totalSize),
+            })}
+          </p>
+        </div>
+        <Button
+          size="sm"
+          disabled={importing}
+          onclick={() => (addSheetOpen = true)}
+        >
+          {#if importing}
+            <Loader2 class="animate-spin" size={16} />
+            {m.local_importing()}
+          {:else}
+            <Plus size={16} />
+            {m.local_add()}
+          {/if}
+        </Button>
+      </div>
       <!-- Search & sort, mirroring the cloud library browser's controls -->
       <div class="mb-6 space-y-4">
         <div class="relative">

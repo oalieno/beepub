@@ -10,6 +10,7 @@
   import { goto } from "$app/navigation";
   import {
     BookOpen,
+    Bookmark,
     Cloud,
     EllipsisVertical,
     History,
@@ -17,6 +18,8 @@
     Trash2,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
+  import BackToTop from "$lib/components/BackToTop.svelte";
+  import BottomSheet from "$lib/components/BottomSheet.svelte";
   import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import HighlightList from "$lib/components/HighlightList.svelte";
@@ -46,6 +49,7 @@
   } from "$lib/services/localLibrary";
   import { sanitizeDescription } from "$lib/sanitize";
   import { confirmDialog } from "$lib/stores/confirm";
+  import { keyboardVisible } from "$lib/stores/keyboard";
   import { toastStore } from "$lib/stores/toast";
   import type { HighlightOut, InteractionOut, ReadingStatus } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
@@ -62,6 +66,21 @@
   // The server copy, when linked — only reachable in server mode.
   let serverBookId = $state<string | null>(null);
   let savingStatus = $state(false);
+  let showMobileActions = $state(false);
+  let wantToRead = $derived(record.reading_status === "want_to_read");
+  let readLabel = $derived(
+    percentage != null && percentage > 0
+      ? m.book_continue_reading()
+      : m.book_start_reading(),
+  );
+
+  function read() {
+    goto(`/books/${bookId}/read`, { replaceState: true });
+  }
+
+  function toggleWantToRead() {
+    void handleStatusChange(wantToRead ? null : "want_to_read");
+  }
 
   // ReadingStatusSelect speaks the server's interaction shape.
   let interaction = $derived<InteractionOut>({
@@ -200,7 +219,11 @@
   <title>{entry?.title ?? m.local_page_title()} - BeePub</title>
 </svelte:head>
 
-<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-24">
+<!-- Bottom padding clears the phone's sticky action bar (and its safe
+     area), as on the server book page. -->
+<div
+  class="max-w-5xl mx-auto px-6 sm:px-8 py-6 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-6"
+>
   <!-- Live while the book loads, so a slow read never traps anyone. -->
   <div class="mb-6 -ml-1">
     <BackButton href="/local" onclick={() => history.back()} />
@@ -245,16 +268,25 @@
           ondatechange={handleDateChange}
         />
 
-        <div class="pt-6 flex items-center gap-2.5">
+        <!-- Action buttons (desktop; phones get the sticky bar below) -->
+        <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
           <button
-            onclick={() =>
-              goto(`/books/${bookId}/read`, { replaceState: true })}
-            class="h-10 flex-1 md:flex-none flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
+            onclick={read}
+            class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
           >
             <BookOpen size={16} />
-            {percentage != null && percentage > 0
-              ? m.book_continue_reading()
-              : m.book_start_reading()}
+            {readLabel}
+          </button>
+          <button
+            class="h-10 w-10 flex items-center justify-center bg-card card-soft rounded-full hover:shadow-md transition-all {wantToRead
+              ? 'text-primary'
+              : 'text-foreground'}"
+            onclick={toggleWantToRead}
+            title={wantToRead
+              ? m.book_remove_want_to_read()
+              : m.book_want_to_read()}
+          >
+            <Bookmark size={16} class={wantToRead ? "fill-primary" : ""} />
           </button>
           {#if serverBookId}
             <a
@@ -273,7 +305,7 @@
             >
               <EllipsisVertical size={16} />
             </DropdownMenu.Trigger>
-            <DropdownMenu.Content align="end" side="top">
+            <DropdownMenu.Content align="start" side="top">
               {#if isNative()}
                 <DropdownMenu.Item onclick={handleExport}>
                   <Share size={14} />
@@ -362,3 +394,88 @@
     {/if}
   {/if}
 </div>
+
+{#if entry && !loading}
+  <BackToTop />
+{/if}
+
+<!-- Phone sticky action bar, the same bar as the server book page -->
+{#if entry && !loading && !$keyboardVisible}
+  <div
+    class="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background/95 backdrop-blur-sm border-t border-border px-4 pt-3"
+    style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom));"
+  >
+    <div class="flex items-center gap-2.5" style="max-width: 900px;">
+      <button
+        onclick={read}
+        class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
+      >
+        <BookOpen size={16} />
+        {readLabel}
+      </button>
+      <button
+        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full transition-all {wantToRead
+          ? 'text-primary'
+          : 'text-foreground'}"
+        onclick={toggleWantToRead}
+        title={wantToRead
+          ? m.book_remove_want_to_read()
+          : m.book_want_to_read()}
+      >
+        <Bookmark size={18} class={wantToRead ? "fill-primary" : ""} />
+      </button>
+      {#if serverBookId}
+        <a
+          href="/books/{serverBookId}"
+          class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-foreground transition-all"
+          title={m.local_view_cloud()}
+          aria-label={m.local_view_cloud()}
+        >
+          <Cloud size={18} />
+        </a>
+      {/if}
+      <button
+        aria-label={m.book_more_actions()}
+        class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"
+        onclick={() => (showMobileActions = true)}
+      >
+        <EllipsisVertical size={18} />
+      </button>
+    </div>
+  </div>
+
+  <BottomSheet bind:open={showMobileActions}>
+    {#if isNative()}
+      <button
+        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+        onclick={() => {
+          showMobileActions = false;
+          void handleExport();
+        }}
+      >
+        <Share size={20} class="text-muted-foreground shrink-0" />
+        {m.local_export()}
+      </button>
+    {/if}
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
+      onclick={() => {
+        showMobileActions = false;
+        goto(`/books/${bookId}/read-legacy`);
+      }}
+    >
+      <History size={20} class="text-muted-foreground shrink-0" />
+      {m.book_open_reader_legacy()}
+    </button>
+    <button
+      class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
+      onclick={() => {
+        showMobileActions = false;
+        void handleDelete();
+      }}
+    >
+      <Trash2 size={20} class="shrink-0" />
+      {m.local_delete()}
+    </button>
+  </BottomSheet>
+{/if}

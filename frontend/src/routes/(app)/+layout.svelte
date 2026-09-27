@@ -21,7 +21,13 @@
   const localMode = isLocalMode();
 
   let isAuthenticated = $derived(!!$authStore.user || !!page.data.user);
-  let isBookDetail = $derived(/^\/books\/[^/]+$/.test(page.url.pathname));
+  // Book pages (server and device-local) carry their own sticky action
+  // bar on phones instead of the tab bar.
+  let isBookDetail = $derived(
+    /^\/books\/[^/]+$/.test(page.url.pathname) ||
+      (/^\/local\/[^/]+$/.test(page.url.pathname) &&
+        !/^\/local\/(highlights|settings)$/.test(page.url.pathname)),
+  );
 </script>
 
 <svelte:window
@@ -41,11 +47,15 @@
      server session can exist, but page.data.user is cached load output
      and may lag until invalidation lands. -->
 {#if localMode}
-  <LocalTopBar />
-  <LocalTabBar />
+  {#if !isBookDetail}
+    <LocalTopBar />
+    <LocalTabBar />
+  {/if}
 
   <main
-    class="pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"
+    class={isBookDetail
+      ? "book-detail-safe-area"
+      : "pt-[calc(48px+env(safe-area-inset-top,0px))] pb-[calc(56px+env(safe-area-inset-bottom,0px))]"}
   >
     {@render children()}
   </main>
