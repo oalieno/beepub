@@ -68,15 +68,19 @@ export type LocalHighlightRecord = HighlightOut & {
   deleted_at: string | null;
 };
 
-/** Manually-set reading status for a local book, wire-shaped like the
- *  server's status group. status_updated_at is the group's LWW stamp: set
- *  only once the device actually edited it (a fresh record must not beat
- *  server state it never saw), and compared against the server's on sync. */
+/** Manually-set fields for a local book, wire-shaped like the server's
+ *  groups: the reading status, and the book notes. Each *_updated_at is
+ *  its group's LWW stamp: set only once the device actually edited it (a
+ *  fresh record must not beat server state it never saw), and compared
+ *  against the server's on sync. The notes fields are optional — records
+ *  written before notes existed lack them. */
 export interface LocalInteractionRecord {
   reading_status: ReadingStatus | null;
   started_at: string | null;
   finished_at: string | null;
   status_updated_at: string | null;
+  notes?: string | null;
+  notes_updated_at?: string | null;
 }
 
 export function emptyLocalInteraction(): LocalInteractionRecord {
@@ -85,6 +89,8 @@ export function emptyLocalInteraction(): LocalInteractionRecord {
     started_at: null,
     finished_at: null,
     status_updated_at: null,
+    notes: null,
+    notes_updated_at: null,
   };
 }
 
@@ -131,7 +137,8 @@ export async function writeLocalInteraction(
 }
 
 /** Set the status group as a device edit: stamps now, so the change wins
- *  LWW against anything older and syncs once the book is linked. */
+ *  LWW against anything older and syncs once the book is linked. The
+ *  other groups in the record are kept as they are. */
 export async function setLocalReadingStatus(
   bookId: string,
   status: ReadingStatus | null,
@@ -139,10 +146,26 @@ export async function setLocalReadingStatus(
   finishedAt: string | null,
 ): Promise<LocalInteractionRecord> {
   const record: LocalInteractionRecord = {
+    ...((await readLocalInteraction(bookId)) ?? emptyLocalInteraction()),
     reading_status: status,
     started_at: startedAt,
     finished_at: finishedAt,
     status_updated_at: new Date().toISOString(),
+  };
+  await writeLocalInteraction(bookId, record);
+  return record;
+}
+
+/** Set the book notes as a device edit (null clears them), stamped like
+ *  the status group. */
+export async function setLocalNotes(
+  bookId: string,
+  notes: string | null,
+): Promise<LocalInteractionRecord> {
+  const record: LocalInteractionRecord = {
+    ...((await readLocalInteraction(bookId)) ?? emptyLocalInteraction()),
+    notes,
+    notes_updated_at: new Date().toISOString(),
   };
   await writeLocalInteraction(bookId, record);
   return record;

@@ -19,6 +19,7 @@ import { booksApi } from "$lib/api/books";
 import { hasServerUrl, isLocalMode } from "$lib/api/client";
 import { isNative } from "$lib/platform";
 import {
+  emptyLocalInteraction,
   readLocalHighlightRecords,
   readLocalInteraction,
   readLocalProgress,
@@ -252,16 +253,7 @@ async function doSync(localBookId: string): Promise<void> {
   const body = {
     progress: progress && progress.cfi ? toSyncProgress(progress) : null,
     highlights,
-    // Only a device-edited status group (stamp present) is pushed; the
-    // response snapshot still folds web edits back either way.
-    interaction: interaction?.status_updated_at
-      ? ({
-          reading_status: interaction.reading_status,
-          started_at: interaction.started_at,
-          finished_at: interaction.finished_at,
-          status_updated_at: interaction.status_updated_at,
-        } satisfies SyncInteractionIn)
-      : null,
+    interaction: toSyncInteraction(interaction),
   };
 
   let response: BookSyncResponse;
@@ -330,28 +322,60 @@ async function backfillEntryMeta(
   }
 }
 
+/** Only device-edited groups (stamp present) are pushed; the response
+ *  snapshot still folds web edits back either way. */
+function toSyncInteraction(
+  local: LocalInteractionRecord | null,
+): SyncInteractionIn | null {
+  if (!local) return null;
+  const body: SyncInteractionIn = {};
+  if (local.status_updated_at) {
+    body.reading_status = local.reading_status;
+    body.started_at = local.started_at;
+    body.finished_at = local.finished_at;
+    body.status_updated_at = local.status_updated_at;
+  }
+  if (local.notes_updated_at) {
+    body.notes = local.notes ?? null;
+    body.notes_updated_at = local.notes_updated_at;
+  }
+  return Object.keys(body).length ? body : null;
+}
+
+/** Strictly newer only: an in-flight local edit (stamp past the echo)
+ *  must survive to be pushed next time. Ties are our own echo anyway. */
+function remoteWins(
+  remoteStamp: string | null | undefined,
+  localStamp: string | null | undefined,
+): remoteStamp is string {
+  return (
+    !!remoteStamp &&
+    !(localStamp && Date.parse(localStamp) >= Date.parse(remoteStamp))
+  );
+}
+
 async function applyInteraction(
   localBookId: string,
   response: BookSyncResponse,
 ): Promise<void> {
   const remote = response.interaction;
-  if (!remote?.status_updated_at) return;
+  if (!remote) return;
   const fresh = await readLocalInteraction(localBookId);
-  // Strictly newer only: an in-flight local edit (stamp past the echo)
-  // must survive to be pushed next time. Ties are our own echo anyway.
-  if (
-    fresh?.status_updated_at &&
-    Date.parse(fresh.status_updated_at) >= Date.parse(remote.status_updated_at)
-  ) {
-    return;
+  const record: LocalInteractionRecord = fresh ?? emptyLocalInteraction();
+  let changed = false;
+  if (remoteWins(remote.status_updated_at, fresh?.status_updated_at)) {
+    record.reading_status = remote.reading_status;
+    record.started_at = remote.started_at;
+    record.finished_at = remote.finished_at;
+    record.status_updated_at = remote.status_updated_at;
+    changed = true;
   }
-  const record: LocalInteractionRecord = {
-    reading_status: remote.reading_status,
-    started_at: remote.started_at,
-    finished_at: remote.finished_at,
-    status_updated_at: remote.status_updated_at,
-  };
-  await writeLocalInteraction(localBookId, record);
+  if (remoteWins(remote.notes_updated_at, fresh?.notes_updated_at)) {
+    record.notes = remote.notes;
+    record.notes_updated_at = remote.notes_updated_at;
+    changed = true;
+  }
+  if (changed) await writeLocalInteraction(localBookId, record);
 }
 
 async function applyHighlights(

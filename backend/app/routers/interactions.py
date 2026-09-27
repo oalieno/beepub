@@ -172,6 +172,7 @@ async def update_notes(
     await _get_book_with_access(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.notes = body.notes
+    interaction.notes_updated_at = datetime.now(UTC)
     await db.commit()
     return {"status": "updated"}
 

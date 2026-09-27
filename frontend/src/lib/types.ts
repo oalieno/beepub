@@ -314,6 +314,8 @@ export interface SyncInteractionIn {
   rating_updated_at?: string | null;
   is_favorite?: boolean | null;
   favorite_updated_at?: string | null;
+  notes?: string | null;
+  notes_updated_at?: string | null;
 }
 
 export interface SyncInteractionOut {
@@ -325,6 +327,8 @@ export interface SyncInteractionOut {
   rating_updated_at: string | null;
   is_favorite: boolean;
   favorite_updated_at: string | null;
+  notes: string | null;
+  notes_updated_at: string | null;
 }
 
 export interface BookSyncRequest {

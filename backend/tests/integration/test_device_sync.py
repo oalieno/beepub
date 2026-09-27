@@ -532,6 +532,56 @@ async def test_sync_interaction_favorite_group(admin_client, book_id):
     assert response.json()["interaction"]["is_favorite"] is True
 
 
+async def _sync_notes(client, book_id, notes, stamp):
+    response = await client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"notes": notes, "notes_updated_at": stamp}},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()["interaction"]
+
+
+async def test_sync_interaction_notes_group(admin_client, book_id):
+    stamp = _stamp()
+    snapshot = await _sync_notes(admin_client, book_id, "written offline", stamp)
+    assert snapshot["notes"] == "written offline"
+    assert datetime.fromisoformat(snapshot["notes_updated_at"]) == (
+        datetime.fromisoformat(stamp)
+    )
+
+    # An older device copy loses.
+    snapshot = await _sync_notes(admin_client, book_id, "stale", _stamp(-3600))
+    assert snapshot["notes"] == "written offline"
+
+    # A newer stamped null is a deliberate clear.
+    snapshot = await _sync_notes(admin_client, book_id, None, _stamp(3600))
+    assert snapshot["notes"] is None
+    assert snapshot["notes_updated_at"] is not None
+
+    # No stamp, no merge: other groups' pushes leave notes alone.
+    response = await admin_client.post(
+        f"/api/books/{book_id}/sync",
+        json={"interaction": {"notes": "unstamped"}},
+    )
+    assert response.json()["interaction"]["notes"] is None
+
+
+async def test_web_notes_edit_stamps_and_beats_older_device_copy(admin_client, book_id):
+    response = await admin_client.put(
+        f"/api/books/{book_id}/notes", json={"notes": "from the web"}
+    )
+    assert response.status_code == 200
+    snapshot = (await admin_client.post(f"/api/books/{book_id}/sync", json={})).json()[
+        "interaction"
+    ]
+    assert snapshot is None or snapshot["notes"] == "from the web"
+
+    # A device edit made before the web edit must not erase it.
+    snapshot = await _sync_notes(admin_client, book_id, "older", _stamp(-3600))
+    assert snapshot["notes"] == "from the web"
+    assert snapshot["notes_updated_at"] is not None
+
+
 async def test_sync_interaction_validates(admin_client, book_id):
     # Unknown status → 422.
     response = await admin_client.post(

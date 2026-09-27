@@ -181,8 +181,8 @@ def _merge_interaction_fields(
     strictly newer than the server's (ties → server, matching the highlight
     rule). A NULL server stamp loses — it means the field was never set (or
     predates the stamps, where the migration backfilled from updated_at).
-    Returns the changed columns for sibling propagation; rating stays
-    per-edition there, mirroring the web PUTs.
+    Returns the changed columns for sibling propagation; rating and notes
+    stay per-edition there, mirroring the web PUTs.
     """
     propagate: dict = {}
     if body.status_updated_at is not None and (
@@ -216,6 +216,12 @@ def _merge_interaction_fields(
             is_favorite=bool(body.is_favorite),
             favorite_updated_at=body.favorite_updated_at,
         )
+    if body.notes_updated_at is not None and (
+        interaction.notes_updated_at is None
+        or body.notes_updated_at > interaction.notes_updated_at
+    ):
+        interaction.notes = body.notes
+        interaction.notes_updated_at = body.notes_updated_at
     return propagate
 
 
@@ -270,7 +276,7 @@ async def sync_reading_state(
     response is the full post-merge set INCLUDING tombstones, so the
     device can apply remote deletions. Progress: single winner by
     last_read_at (ties → server). Interaction fields (status/rating/
-    favorite): per-group LWW by their own stamps. Synced progress never
+    favorite/notes): per-group LWW by their own stamps. Synced progress never
     records reading activity — streaks stay a live-reading signal.
     """
     book = await _get_book_with_access(book_id, current_user, db)

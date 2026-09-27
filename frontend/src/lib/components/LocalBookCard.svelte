@@ -24,6 +24,7 @@
     EllipsisVertical,
     History,
     Loader2,
+    NotebookPen,
     Share,
     Trash2,
   } from "@lucide/svelte";
@@ -37,6 +38,7 @@
     onupload,
     onexport,
     onopenlegacy,
+    onnotes,
     uploading = false,
   }: {
     entry: LocalShelfEntry;
@@ -49,6 +51,9 @@
     onexport?: (entry: LocalShelfEntry) => void;
     /** Legacy reader entry (the previous engine, kept until it is retired). */
     onopenlegacy?: (entry: LocalShelfEntry) => void;
+    /** The book's notes page (the local library's stand-in for the
+     *  server book page's notes). */
+    onnotes?: (entry: LocalShelfEntry) => void;
     uploading?: boolean;
   } = $props();
 
@@ -130,7 +135,7 @@
         <span class="ml-auto -my-1 w-6 h-6 flex items-center justify-center">
           <Loader2 size={14} class="animate-spin" />
         </span>
-      {:else if ondelete || showUpload || onexport || onopenlegacy}
+      {:else if ondelete || showUpload || onexport || onopenlegacy || onnotes}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -141,6 +146,12 @@
             <EllipsisVertical size={14} />
           </DropdownMenu.Trigger>
           <DropdownMenu.Content align="end">
+            {#if onnotes}
+              <DropdownMenu.Item onclick={() => onnotes?.(entry)}>
+                <NotebookPen size={14} />
+                {m.notes_title()}
+              </DropdownMenu.Item>
+            {/if}
             {#if showUpload}
               <DropdownMenu.Item onclick={() => onupload?.(entry)}>
                 <CloudUpload size={14} />
@@ -160,7 +171,7 @@
               </DropdownMenu.Item>
             {/if}
             {#if ondelete}
-              {#if showUpload || onexport || onopenlegacy}
+              {#if onnotes || showUpload || onexport || onopenlegacy}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item

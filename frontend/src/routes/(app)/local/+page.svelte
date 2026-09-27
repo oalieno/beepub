@@ -495,6 +495,7 @@
               onupload={canUploadToCloud ? startUpload : undefined}
               onexport={isNative() ? handleExport : undefined}
               onopenlegacy={(e) => goto(`/books/${e.id}/read-legacy`)}
+              onnotes={(e) => goto(`/local/${e.id}/notes`)}
               uploading={uploadingId === entry.id}
             />
           {/each}
