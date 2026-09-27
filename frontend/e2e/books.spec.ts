@@ -161,3 +161,12 @@ test("a book that isn't there gets a page, not a toast", async ({ page }) => {
   await page.getByRole("link", { name: "Go to libraries" }).click();
   await page.waitForURL(/\/libraries/);
 });
+
+test("an unknown page speaks the interface language", async ({ page }) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("PARAGLIDE_LOCALE", "zh-Hant"),
+  );
+  await page.goto("/no-such-page-here");
+  await expect(page.getByText("找不到這個頁面")).toBeVisible();
+  await expect(page.getByRole("link", { name: "回到首頁" })).toBeVisible();
+});

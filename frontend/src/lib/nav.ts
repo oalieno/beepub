@@ -106,7 +106,11 @@ export function navLinks(ctx: NavContext): NavItem[] {
         ...catalogs,
         {
           href: "/mode",
-          label: m.mode_switch_entry(),
+          // Named by where it goes: the two sides are places, not modes.
+          label:
+            ctx.mode === "local"
+              ? m.mode_switch_to_server()
+              : m.mode_switch_to_local(),
           icon: ArrowLeftRight,
           match: (p) => p === "/mode",
         },

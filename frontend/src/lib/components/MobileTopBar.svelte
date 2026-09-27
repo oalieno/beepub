@@ -31,7 +31,9 @@
         <a
           href="/mode"
           class="p-2 rounded-lg transition-colors text-muted-foreground hover:text-foreground hover:bg-secondary"
-          aria-label={m.mode_switch_entry()}
+          aria-label={mode === "local"
+            ? m.mode_switch_to_server()
+            : m.mode_switch_to_local()}
         >
           <ArrowLeftRight size={20} />
         </a>

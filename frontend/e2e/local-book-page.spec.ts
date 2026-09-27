@@ -263,7 +263,7 @@ test.describe("with a server", () => {
     );
     await page.goto(`/libraries/${target.id}`);
     await page.getByRole("button", { name: "Add books" }).first().click();
-    await page.getByRole("menuitem", { name: "From the local library" }).click();
+    await page.getByRole("menuitem", { name: "From this device" }).click();
     await page.getByRole("checkbox").first().click();
     await page.getByRole("button", { name: /^Upload 1/ }).click();
     await expect(page.getByText("Uploaded 1", { exact: false })).toBeVisible();
