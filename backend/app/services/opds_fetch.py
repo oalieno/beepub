@@ -26,7 +26,8 @@ import httpx
 
 MAX_REDIRECTS = 5
 FEED_MAX_BYTES = 10 * 1024 * 1024
-IMAGE_MAX_BYTES = 5 * 1024 * 1024
+# Full-size covers can be large; the proxy shrinks them before sending.
+IMAGE_MAX_BYTES = 15 * 1024 * 1024
 TIMEOUT = httpx.Timeout(30.0, connect=10.0)
 USER_AGENT = "BeePub OPDS"
 

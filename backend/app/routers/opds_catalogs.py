@@ -272,11 +272,39 @@ async def fetch_image(
     content_type = result.content_type.split(";")[0].strip().lower()
     if not content_type.startswith("image/") or content_type == "image/svg+xml":
         raise HTTPException(status_code=415, detail="Not an image")
+    body, content_type = await asyncio.to_thread(
+        _shrink_image, result.body, content_type
+    )
     return Response(
-        content=result.body,
+        content=body,
         media_type=content_type,
         headers={"Cache-Control": "private, max-age=86400"},
     )
+
+
+# Catalog grids ask for the full cover (thumbnails are often ~100px wide,
+# too small for the card); it is cut to our own cover size on the way.
+IMAGE_MAX_WIDTH = 600
+
+
+def _shrink_image(data: bytes, content_type: str) -> tuple[bytes, str]:
+    """The image at most IMAGE_MAX_WIDTH wide, as JPEG when resized. What
+    Pillow can't read passes through as sent."""
+    import io
+
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(data)) as img:
+            if img.width <= IMAGE_MAX_WIDTH:
+                return data, content_type
+            height = round(img.height * IMAGE_MAX_WIDTH / img.width)
+            small = img.convert("RGB").resize((IMAGE_MAX_WIDTH, height), Image.LANCZOS)
+            out = io.BytesIO()
+            small.save(out, "JPEG", quality=85)
+            return out.getvalue(), "image/jpeg"
+    except Exception:
+        return data, content_type
 
 
 def _filename(disposition: str | None) -> str | None:

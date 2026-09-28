@@ -1,9 +1,11 @@
 """Server-side OPDS catalogs: admin-managed list, proxy, import."""
 
 import base64
+import io
 
 import httpx
 import pytest
+from PIL import Image
 
 from app.routers import opds_catalogs
 from app.services.opds_fetch import OpdsFetcher
@@ -38,6 +40,12 @@ def upstream(monkeypatch):
         if path == "/admin":
             return httpx.Response(
                 200, text="<html>settings</html>", headers={"content-type": "text/html"}
+            )
+        if path == "/covers/big.png":
+            buf = io.BytesIO()
+            Image.new("RGB", (1400, 2100), "teal").save(buf, "PNG")
+            return httpx.Response(
+                200, content=buf.getvalue(), headers={"content-type": "image/png"}
             )
         if path == "/covers/1.png":
             return httpx.Response(
@@ -156,6 +164,13 @@ async def test_image_proxy(admin_client, upstream):
     )
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
+    # A full-size cover comes back cut to the card size.
+    big = await admin_client.get(
+        f"/api/opds-catalogs/{catalog['id']}/image",
+        params={"url": "https://books.example.org/covers/big.png"},
+    )
+    assert big.headers["content-type"] == "image/jpeg"
+    assert Image.open(io.BytesIO(big.content)).size == (600, 900)
     not_image = await admin_client.get(
         f"/api/opds-catalogs/{catalog['id']}/image", params={"url": ROOT + "/root"}
     )

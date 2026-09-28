@@ -97,8 +97,14 @@
   const credentialed = $derived(side === "device" && !!catalog?.hasCredentials);
 
   function coverOf(entry: OpdsBookEntry): string | undefined {
+    // Server: the full cover, which the server cuts to card size —
+    // thumbnails are often ~100px wide (Gutenberg), too small for a card.
+    if (side === "server") {
+      const url = entry.coverUrl ?? entry.thumbnailUrl;
+      return url && serverImageUrl(catalogId, url);
+    }
+    // Device: thumbnail first, fetched over the phone's own connection.
     const url = entry.thumbnailUrl ?? entry.coverUrl;
-    if (side === "server") return url && serverImageUrl(catalogId, url);
     return credentialed ? coverSrcs[entry.key] : url;
   }
 
