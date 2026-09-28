@@ -208,10 +208,7 @@
             value={themeKey}
             onValueChange={(v) => v && setTheme(v)}
           >
-            <Select.Trigger
-              class="w-[150px] bg-background"
-              aria-label={m.tier_theme_label()}
-            >
+            <Select.Trigger class="w-[150px]" aria-label={m.tier_theme_label()}>
               {selectedName}
             </Select.Trigger>
             <Select.Content align="end">

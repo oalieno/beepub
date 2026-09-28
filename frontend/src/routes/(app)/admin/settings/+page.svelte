@@ -337,7 +337,7 @@
         value={value || "none"}
         onValueChange={(v) => onChange(v === "none" ? "" : v)}
       >
-        <Select.Trigger id="{prefix}-provider" class="w-full bg-background">
+        <Select.Trigger id="{prefix}-provider" class="w-full">
           {providerLabel(value)}
         </Select.Trigger>
         <Select.Content align="start">
@@ -380,7 +380,7 @@
             value={model || "none"}
             onValueChange={(v) => onModelChange(v === "none" ? "" : v)}
           >
-            <Select.Trigger id="{prefix}-model" class="w-full bg-background">
+            <Select.Trigger id="{prefix}-model" class="w-full">
               {model || m.admin_settings_select_model()}
             </Select.Trigger>
             <Select.Content align="start" class="max-h-64">
@@ -506,7 +506,7 @@
               value={timezone}
               onValueChange={(v) => (timezone = v)}
             >
-              <Select.Trigger id="timezone" class="w-full bg-background">
+              <Select.Trigger id="timezone" class="w-full">
                 {getTimezoneLabel(timezone)}
               </Select.Trigger>
               <Select.Content align="start" class="max-h-64">

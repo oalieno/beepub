@@ -117,8 +117,8 @@ const IMPORTABLE = [
  *  offers nothing it reads (PDF, audiobooks, …). */
 export function importableDownload(
   entry: OpdsBookEntry,
-): { href: string; type: string } | null {
-  let best: { href: string; type: string } | null = null;
+): OpdsBookEntry["downloads"][number] | null {
+  let best: OpdsBookEntry["downloads"][number] | null = null;
   let bestRank = IMPORTABLE.length;
   for (const d of entry.downloads) {
     const rank = IMPORTABLE.indexOf(d.type.split(";")[0].trim().toLowerCase());

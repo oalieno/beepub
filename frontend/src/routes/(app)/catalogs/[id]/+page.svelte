@@ -108,6 +108,12 @@
     return credentialed ? coverSrcs[entry.key] : url;
   }
 
+  /** The name of the file a tap would fetch, as the feed calls it. */
+  function variantOf(entry: OpdsBookEntry): string | undefined {
+    if (side === "server") return importableDownload(entry)?.title;
+    return entry.downloads.find((d) => d.href === entry.epubUrl)?.title;
+  }
+
   function downloadable(entry: OpdsBookEntry): boolean {
     return side === "device" ? !!entry.epubUrl : !!importableDownload(entry);
   }
@@ -521,7 +527,7 @@
             onValueChange={(v) => v && pickImportLibrary(v)}
           >
             <Select.Trigger
-              class="w-[200px] bg-background"
+              class="w-[200px]"
               aria-label={m.catalogs_import_target()}
             >
               {importLibraries.find((l) => l.id === importLibrary)?.name ?? ""}
@@ -558,7 +564,12 @@
                 style="-webkit-tap-highlight-color: transparent;"
               >
                 <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
-                  <FolderOpen class="text-primary" size={18} />
+                  {#if entry.iconUrl}
+                    <!-- The feed's own icon: a book reads apart from a list. -->
+                    <img src={entry.iconUrl} alt="" class="size-[18px]" />
+                  {:else}
+                    <FolderOpen class="text-primary" size={18} />
+                  {/if}
                 </div>
                 <div class="flex-1 min-w-0">
                   <h3
@@ -694,6 +705,15 @@
                 {#if entry.authors.length}
                   <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
                     {entry.authors.join(", ")}
+                  </p>
+                {/if}
+                {#if variantOf(entry)}
+                  <!-- Catalogs list one book per variant (Gutenberg: with
+                       and without images); the link's name tells them apart. -->
+                  <p
+                    class="text-muted-foreground/80 text-xs mt-0.5 line-clamp-2"
+                  >
+                    {variantOf(entry)}
                   </p>
                 {/if}
               </div>

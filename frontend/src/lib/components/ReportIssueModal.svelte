@@ -78,7 +78,7 @@
         bind:value={reportForm.description}
         rows={4}
         maxlength={2000}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-sm"
+        class="w-full border border-input bg-card rounded-xl px-3 py-2.5 text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none text-sm"
         placeholder={m.report_describe_placeholder()}
       ></textarea>
     </div>

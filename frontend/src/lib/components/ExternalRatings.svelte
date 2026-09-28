@@ -170,7 +170,7 @@
       <input
         bind:value={editingUrlValue}
         placeholder={src.idHint}
-        class="flex-1 min-w-0 border border-input bg-background rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="flex-1 min-w-0 border border-input bg-card rounded-lg px-2.5 py-1.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     {#if validationError}

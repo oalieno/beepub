@@ -63,6 +63,10 @@ export interface OpdsNavEntry {
   title: string;
   href: string;
   content?: string;
+  /** The feed's own small icon for the row, when it inlines one as a data:
+   *  image (Gutenberg marks books apart from author/subject lists this
+   *  way). Inline only — rendering it fetches nothing. */
+  iconUrl?: string;
 }
 
 export interface OpdsBookEntry {
@@ -78,7 +82,7 @@ export interface OpdsBookEntry {
   epubUrl?: string;
   /** Every acquisition link, in feed order (the server imports more than
    *  EPUB). */
-  downloads: { href: string; type: string }[];
+  downloads: { href: string; type: string; title?: string }[];
   updated?: string;
 }
 
@@ -93,6 +97,9 @@ interface OpdsLink {
   rel: string;
   type: string;
   href: string;
+  /** What the link is, in the feed's words ("EPUB3 (E-readers …)") —
+   *  catalogs list the same book once per variant. */
+  title?: string;
 }
 
 /** First matching child, preferring the given namespace but accepting any
@@ -152,6 +159,7 @@ function readLinks(
       rel: link.getAttribute("rel") ?? "",
       type: link.getAttribute("type") ?? "",
       href,
+      title: link.getAttribute("title")?.trim() || undefined,
     });
   }
   return links;
@@ -192,7 +200,11 @@ function parseEntry(
       coverUrl: links.find((l) => IMAGE_RELS.includes(l.rel))?.href,
       thumbnailUrl: links.find((l) => THUMBNAIL_RELS.includes(l.rel))?.href,
       epubUrl,
-      downloads: acquisition.map((l) => ({ href: l.href, type: l.type })),
+      downloads: acquisition.map((l) => ({
+        href: l.href,
+        type: l.type,
+        title: l.title,
+      })),
       updated: childText(el, ATOM_NS, "updated") ?? undefined,
     };
   }
@@ -201,6 +213,12 @@ function parseEntry(
     (l) => l.type.includes("atom+xml") && !STRUCTURAL_RELS.has(l.rel),
   );
   if (!nav) return null; // Neither a book nor a browsable feed — skip.
+  const iconUrl = childrenByName(el, ATOM_NS, "link")
+    .filter((l) =>
+      [...IMAGE_RELS, ...THUMBNAIL_RELS].includes(l.getAttribute("rel") ?? ""),
+    )
+    .map((l) => l.getAttribute("href") ?? "")
+    .find((href) => href.startsWith("data:image/"));
   return {
     kind: "nav",
     key: childText(el, ATOM_NS, "id") ?? nav.href,
@@ -210,6 +228,7 @@ function parseEntry(
       childText(el, ATOM_NS, "content") ??
       childText(el, ATOM_NS, "summary") ??
       undefined,
+    iconUrl,
   };
 }
 

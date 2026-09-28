@@ -235,7 +235,7 @@
         id="lib-name"
         bind:value={createName}
         placeholder={m.library_name_placeholder()}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="w-full border border-input bg-card rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <div class="space-y-1">
@@ -246,7 +246,7 @@
         id="lib-desc"
         bind:value={createDesc}
         placeholder={m.library_description_placeholder()}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="w-full border border-input bg-card rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <div class="flex justify-end gap-2 pt-2">
@@ -280,7 +280,7 @@
         id="lib-edit-name"
         bind:value={editName}
         placeholder={m.library_name_placeholder()}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="w-full border border-input bg-card rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <div class="space-y-1">
@@ -292,7 +292,7 @@
         id="lib-edit-desc"
         bind:value={editDesc}
         placeholder={m.library_description_placeholder()}
-        class="w-full border border-input bg-background rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+        class="w-full border border-input bg-card rounded-xl px-3 py-2.5 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
       />
     </div>
     <div class="flex justify-end gap-2 pt-2">
