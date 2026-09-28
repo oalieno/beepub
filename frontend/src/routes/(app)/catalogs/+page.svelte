@@ -157,7 +157,7 @@
   <title>{m.catalogs_page_title()}</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   {#if loading}
     <!-- Preferences read is quick; avoid a skeleton flash. -->
     <div class="py-24"></div>

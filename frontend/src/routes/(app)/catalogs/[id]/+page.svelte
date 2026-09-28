@@ -413,7 +413,7 @@
   <title>{catalog ? catalog.name : m.catalogs_page_title()}</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6">
+<div class="max-w-5xl mx-auto px-6 sm:px-8 py-6">
   <div class="mb-4">
     {#if page.url.searchParams.get("feed")}
       <!-- Deeper in the catalog: back walks the feed history. -->
