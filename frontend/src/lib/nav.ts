@@ -89,21 +89,16 @@ export function navTabs(ctx: NavContext): NavItem[] {
 
 /** The desktop (and iPad) sidebar's main links. */
 export function navLinks(ctx: NavContext): NavItem[] {
-  // Catalogs import into the device, so they belong to the local library.
-  const catalogs: NavItem[] =
-    ctx.native && ctx.mode === "local"
-      ? [
-          {
-            href: "/catalogs",
-            label: m.nav_catalogs(),
-            icon: Rss,
-            match: (p) => p.startsWith("/catalogs"),
-          },
-        ]
-      : [];
-  const catalogsAndMode: NavItem[] = ctx.native
+  // Each library has its own catalogs: the device's download onto the
+  // device, the server's import into a server library.
+  const catalogs: NavItem = {
+    href: "/catalogs",
+    label: m.nav_catalogs(),
+    icon: Rss,
+    match: (p) => p.startsWith("/catalogs"),
+  };
+  const mode: NavItem[] = ctx.native
     ? [
-        ...catalogs,
         {
           href: "/mode",
           // Named by where it goes: the two sides are places, not modes.
@@ -118,7 +113,7 @@ export function navLinks(ctx: NavContext): NavItem[] {
     : [];
   if (ctx.mode === "local") {
     const [homeTab, books, highlights, settings] = navTabs(ctx);
-    return [homeTab, books, highlights, ...catalogsAndMode, settings];
+    return [homeTab, books, highlights, catalogs, ...mode, settings];
   }
   return [
     home(),
@@ -136,7 +131,8 @@ export function navLinks(ctx: NavContext): NavItem[] {
       icon: Compass,
       match: (p) => p.startsWith("/discover"),
     },
-    ...catalogsAndMode,
+    catalogs,
+    ...mode,
     // Instance-level administration, not a personal setting — it lives in
     // the global nav rather than behind the profile page.
     ...(ctx.admin
@@ -168,6 +164,7 @@ export function navTitle(mode: NavMode, path: string): string {
           ["/bookshelves", m.nav_shelves()],
           ["/highlights", m.nav_highlights()],
           ["/discover", m.nav_discover()],
+          ["/catalogs", m.nav_catalogs()],
           ["/gacha", m.nav_gacha()],
           ["/admin", m.nav_admin()],
           ["/profile", m.nav_profile()],

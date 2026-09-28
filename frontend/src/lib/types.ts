@@ -499,6 +499,7 @@ export interface AdminStats {
 
 export interface AdminSettings {
   registration_enabled: string;
+  opds_block_private_network: string;
   timezone: string;
   calibre_base_dir: string;
   gemini_api_key: string;

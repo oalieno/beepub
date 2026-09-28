@@ -30,6 +30,7 @@ from app.routers import (
     libraries,
     metadata,
     opds,
+    opds_catalogs,
     search,
     series,
     tags,
@@ -109,6 +110,7 @@ app.include_router(metadata.router)
 app.include_router(opds.router, prefix="/opds")
 app.include_router(opds.router, prefix="/api/opds", include_in_schema=False)
 # KOReader progress sync: custom sync server URL = https://<host>/kosync
+app.include_router(opds_catalogs.router)
 app.include_router(kosync.router, prefix="/kosync")
 app.include_router(interactions.router)
 app.include_router(device_sync.router)

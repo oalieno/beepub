@@ -10,8 +10,14 @@
  * server, so the URL is opaque.
  *
  * Resolved URLs are filtered to https: here, which is where the app's
- * HTTPS-only posture (no ATS exceptions on iOS) gets enforced.
+ * HTTPS-only posture (no ATS exceptions on iOS) gets enforced. Feeds the
+ * server fetches for us (`allowHttp`) keep http: links too — a catalog on
+ * the home network rarely has a certificate.
  */
+
+export interface ParseOptions {
+  allowHttp?: boolean;
+}
 
 const ATOM_NS = "http://www.w3.org/2005/Atom";
 const DC_TERMS_NS = "http://purl.org/dc/terms/";
@@ -70,6 +76,9 @@ export interface OpdsBookEntry {
   thumbnailUrl?: string;
   /** Undefined when no EPUB acquisition link exists — shown as unavailable. */
   epubUrl?: string;
+  /** Every acquisition link, in feed order (the server imports more than
+   *  EPUB). */
+  downloads: { href: string; type: string }[];
   updated?: string;
 }
 
@@ -115,20 +124,29 @@ function childText(el: Element, ns: string, localName: string): string | null {
   return text ? text : null;
 }
 
-function resolveHttpsUrl(href: string | null, baseUrl: string): string | null {
+function resolveUrl(
+  href: string | null,
+  baseUrl: string,
+  opts: ParseOptions,
+): string | null {
   if (!href) return null;
   try {
     const url = new URL(href, baseUrl);
-    return url.protocol === "https:" ? url.toString() : null;
+    if (url.protocol === "https:") return url.toString();
+    return opts.allowHttp && url.protocol === "http:" ? url.toString() : null;
   } catch {
     return null;
   }
 }
 
-function readLinks(el: Element, baseUrl: string): OpdsLink[] {
+function readLinks(
+  el: Element,
+  baseUrl: string,
+  opts: ParseOptions,
+): OpdsLink[] {
   const links: OpdsLink[] = [];
   for (const link of childrenByName(el, ATOM_NS, "link")) {
-    const href = resolveHttpsUrl(link.getAttribute("href"), baseUrl);
+    const href = resolveUrl(link.getAttribute("href"), baseUrl, opts);
     if (!href) continue;
     links.push({
       rel: link.getAttribute("rel") ?? "",
@@ -143,9 +161,10 @@ function parseEntry(
   el: Element,
   feedUrl: string,
   index: number,
+  opts: ParseOptions,
 ): OpdsEntry | null {
   const title = childText(el, ATOM_NS, "title") ?? "";
-  const links = readLinks(el, feedUrl);
+  const links = readLinks(el, feedUrl, opts);
   const acquisition = links.filter((l) =>
     l.rel.startsWith(ACQUISITION_REL_PREFIX),
   );
@@ -173,6 +192,7 @@ function parseEntry(
       coverUrl: links.find((l) => IMAGE_RELS.includes(l.rel))?.href,
       thumbnailUrl: links.find((l) => THUMBNAIL_RELS.includes(l.rel))?.href,
       epubUrl,
+      downloads: acquisition.map((l) => ({ href: l.href, type: l.type })),
       updated: childText(el, ATOM_NS, "updated") ?? undefined,
     };
   }
@@ -193,7 +213,11 @@ function parseEntry(
   };
 }
 
-export function parseOpdsFeed(xml: string, feedUrl: string): OpdsFeed {
+export function parseOpdsFeed(
+  xml: string,
+  feedUrl: string,
+  opts: ParseOptions = {},
+): OpdsFeed {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   // WebKit reports malformed XML via a parsererror element in the XHTML
   // namespace — a plain getElementsByTagName misses it.
@@ -207,10 +231,10 @@ export function parseOpdsFeed(xml: string, feedUrl: string): OpdsFeed {
     );
   }
 
-  const feedLinks = readLinks(feed, feedUrl);
+  const feedLinks = readLinks(feed, feedUrl, opts);
   const entries: OpdsEntry[] = [];
   childrenByName(feed, ATOM_NS, "entry").forEach((el, index) => {
-    const entry = parseEntry(el, feedUrl, index);
+    const entry = parseEntry(el, feedUrl, index, opts);
     if (entry) entries.push(entry);
   });
 
@@ -237,6 +261,7 @@ const TERMS_TOKEN = "OPDSSEARCHTERMS0";
 export function parseOpenSearchDescription(
   xml: string,
   docUrl: string,
+  opts: ParseOptions = {},
 ): string | null {
   const doc = new DOMParser().parseFromString(xml, "application/xml");
   if (doc.getElementsByTagNameNS("*", "parsererror").length > 0) return null;
@@ -261,7 +286,11 @@ export function parseOpenSearchDescription(
       raw.replaceAll("{searchTerms}", TERMS_TOKEN),
       docUrl,
     ).toString();
-    if (!resolved.startsWith("https:")) return null;
+    if (
+      !resolved.startsWith("https:") &&
+      !(opts.allowHttp && resolved.startsWith("http:"))
+    )
+      return null;
     return resolved.replaceAll(TERMS_TOKEN, "{searchTerms}");
   } catch {
     return null;

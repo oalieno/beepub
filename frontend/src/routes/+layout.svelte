@@ -84,7 +84,7 @@
   // The device's own pages belong to the local library; in the server
   // library an old link or back entry to one lands on the libraries.
   function isDeviceOnlyPath(path: string): boolean {
-    return path.startsWith("/local") || path.startsWith("/catalogs");
+    return path.startsWith("/local");
   }
 
   // Client-side route guards for SPA (Capacitor) mode

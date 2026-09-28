@@ -12,6 +12,7 @@ import { CapacitorHttp, type HttpResponse } from "@capacitor/core";
 
 import { uint8ToBase64 } from "$lib/services/base64";
 
+import { OpdsError } from "./errors";
 import {
   parseOpdsFeed,
   parseOpenSearchDescription,
@@ -23,19 +24,7 @@ export interface OpdsCredentials {
   password: string;
 }
 
-export type OpdsErrorKind = "auth" | "http" | "network" | "parse";
-
-/** Typed transport/parse failure; the UI translates by `kind`. */
-export class OpdsError extends Error {
-  constructor(
-    public readonly kind: OpdsErrorKind,
-    public readonly status?: number,
-    cause?: unknown,
-  ) {
-    super(`OPDS ${kind} error${status ? ` (${status})` : ""}`, { cause });
-    this.name = "OpdsError";
-  }
-}
+export { OpdsError, type OpdsErrorKind } from "./errors";
 
 const CONNECT_TIMEOUT = 10_000;
 const READ_TIMEOUT = 20_000;

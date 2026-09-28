@@ -8,6 +8,10 @@ _STATIC_DEFAULTS = {
     "registration_enabled": "false",
     "timezone": "Asia/Taipei",
     "calibre_base_dir": "/calibre",
+    # OPDS catalogs: refuse addresses on the server's own network. Off by
+    # default — BeePub is self-hosted at home, where a LAN catalog is the
+    # common case; a server exposed to the internet turns it on.
+    "opds_block_private_network": "false",
     # Provider credentials (stored once)
     "gemini_api_key": "",
     "openai_api_key": "",

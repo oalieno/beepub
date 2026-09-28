@@ -9,12 +9,17 @@ import {
   DuplicateBookError,
   InvalidEpubError,
 } from "$lib/services/localLibrary";
-import type { OpdsCatalog } from "$lib/services/opdsCatalogs";
+
+/** The catalog's credentials, as the device list stores them. */
+interface CatalogAuth {
+  username?: string | null;
+  password?: string | null;
+}
 
 import { authHeaders, OpdsError, type OpdsCredentials } from "./client";
 import type { OpdsBookEntry } from "./parse";
 
-function catalogCreds(catalog: OpdsCatalog): OpdsCredentials | undefined {
+function catalogCreds(catalog: CatalogAuth): OpdsCredentials | undefined {
   if (!catalog.username) return undefined;
   return { username: catalog.username, password: catalog.password ?? "" };
 }
@@ -25,7 +30,7 @@ function catalogCreds(catalog: OpdsCatalog): OpdsCredentials | undefined {
  */
 export async function downloadAndImport(
   entry: OpdsBookEntry,
-  catalog: OpdsCatalog,
+  catalog: CatalogAuth,
   onProgress?: (pct: number | null) => void,
 ): Promise<LocalBookEntry> {
   const epubUrl = entry.epubUrl;

@@ -10,6 +10,7 @@
     BookOpen,
     Highlighter,
     Settings,
+    Rss,
     Dices,
     LogOut,
     ChevronRight,
@@ -121,6 +122,8 @@
       label: m.nav_highlights(),
       icon: Highlighter,
     },
+    // The server library's catalogs (the sidebar has them on wide screens).
+    { href: "/catalogs", label: m.nav_catalogs(), icon: Rss },
     { href: "/gacha", label: m.nav_gacha(), icon: Dices },
     ...(isAdmin
       ? [

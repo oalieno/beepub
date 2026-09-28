@@ -9,6 +9,7 @@ from app.models.illustration import Illustration
 from app.models.kosync import KosyncProgress
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.llm_usage import LLMUsageLog
+from app.models.opds_catalog import OpdsCatalog
 from app.models.reading import (
     Highlight,
     UserBookInteraction,
@@ -35,6 +36,7 @@ __all__ = [
     "Highlight",
     "Illustration",
     "KosyncProgress",
+    "OpdsCatalog",
     "AppSetting",
     "BookTag",
     "TagCategory",

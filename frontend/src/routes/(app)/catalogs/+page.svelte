@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { isNative } from "$lib/platform";
+  import { authStore } from "$lib/stores/auth";
+  import { UserRole } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
   import { Button } from "$lib/components/ui/button";
@@ -17,13 +18,26 @@
     ChevronRight,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import type { OpdsCatalog } from "$lib/services/opdsCatalogs";
+  import {
+    catalogSide,
+    listCatalogs,
+    removeCatalog,
+    saveCatalog,
+    type CatalogInfo,
+  } from "$lib/opds/catalogs";
 
-  let catalogs = $state<OpdsCatalog[]>([]);
+  // Device catalogs (local mode) download onto the device; the server's
+  // are shared and only admins manage them.
+  const side = catalogSide();
+  let canManage = $derived(
+    side === "device" || $authStore.user?.role === UserRole.Admin,
+  );
+
+  let catalogs = $state<CatalogInfo[]>([]);
   let loading = $state(true);
 
   let dialogOpen = $state(false);
-  let editing = $state<OpdsCatalog | null>(null);
+  let editing = $state<CatalogInfo | null>(null);
   let formName = $state("");
   let formUrl = $state("");
   let formUsername = $state("");
@@ -40,15 +54,10 @@
   }
 
   async function loadCatalogs() {
-    if (!isNative()) {
-      loading = false;
-      return;
-    }
     try {
-      const { listCatalogs } = await import("$lib/services/opdsCatalogs");
-      catalogs = await listCatalogs();
-    } catch {
-      // ignore
+      catalogs = await listCatalogs(side);
+    } catch (err) {
+      toastStore.error((err as Error).message);
     } finally {
       loading = false;
     }
@@ -64,13 +73,14 @@
     dialogOpen = true;
   }
 
-  function openEdit(e: MouseEvent, catalog: OpdsCatalog) {
+  function openEdit(e: MouseEvent, catalog: CatalogInfo) {
     e.stopPropagation();
     e.preventDefault();
     editing = catalog;
     formName = catalog.name;
     formUrl = catalog.url;
     formUsername = catalog.username ?? "";
+    // The server never sends a password back; blank keeps it.
     formPassword = catalog.password ?? "";
     formError = "";
     dialogOpen = true;
@@ -86,27 +96,29 @@
       formError = m.catalogs_url_invalid();
       return;
     }
-    if (parsed.protocol !== "https:") {
-      formError = m.catalogs_url_invalid();
+    // The app reaches catalogs itself and iOS allows https only; the
+    // server fetches for us, and a home-network catalog is often http.
+    const schemes = side === "device" ? ["https:"] : ["https:", "http:"];
+    if (!schemes.includes(parsed.protocol)) {
+      formError =
+        side === "device"
+          ? m.catalogs_url_invalid()
+          : m.catalogs_server_url_invalid();
       return;
     }
     saving = true;
     try {
-      const { addCatalog, updateCatalog } =
-        await import("$lib/services/opdsCatalogs");
       const input = {
         name: formName.trim() || parsed.host,
         url,
         username: formUsername,
         password: formPassword,
       };
-      if (editing) {
-        const updated = await updateCatalog(editing.id, input);
-        if (updated) {
-          catalogs = catalogs.map((c) => (c.id === updated.id ? updated : c));
-        }
-      } else {
-        catalogs = [...catalogs, await addCatalog(input)];
+      const saved = await saveCatalog(side, editing?.id ?? null, input);
+      if (saved) {
+        catalogs = editing
+          ? catalogs.map((c) => (c.id === saved.id ? saved : c))
+          : [...catalogs, saved];
       }
       dialogOpen = false;
     } catch (err) {
@@ -116,19 +128,21 @@
     }
   }
 
-  async function handleDelete(e: MouseEvent, catalog: OpdsCatalog) {
+  async function handleDelete(e: MouseEvent, catalog: CatalogInfo) {
     e.stopPropagation();
     e.preventDefault();
     if (
       !(await confirmDialog({
-        title: m.catalogs_delete_confirm({ name: catalog.name }),
+        title:
+          side === "device"
+            ? m.catalogs_delete_confirm({ name: catalog.name })
+            : m.catalogs_server_delete_confirm({ name: catalog.name }),
         destructive: true,
       }))
     )
       return;
     try {
-      const { removeCatalog } = await import("$lib/services/opdsCatalogs");
-      await removeCatalog(catalog.id);
+      await removeCatalog(side, catalog.id);
       catalogs = catalogs.filter((c) => c.id !== catalog.id);
       toastStore.success(m.catalogs_deleted());
     } catch (err) {
@@ -147,21 +161,15 @@
   {#if loading}
     <!-- Preferences read is quick; avoid a skeleton flash. -->
     <div class="py-24"></div>
-  {:else if !isNative()}
-    <div class="bg-card card-soft rounded-2xl p-12 text-center">
-      <Rss class="mx-auto mb-4 text-muted-foreground/30" size={48} />
-      <p class="text-muted-foreground text-lg">
-        {m.catalogs_native_only()}
-      </p>
-    </div>
   {:else}
-    <div class="flex items-center justify-between gap-3 mb-6">
-      <p class="text-sm text-muted-foreground"></p>
-      <Button size="sm" onclick={openAdd}>
-        <Plus size={16} />
-        {m.catalogs_add()}
-      </Button>
-    </div>
+    {#if canManage}
+      <div class="flex items-center justify-end gap-3 mb-6">
+        <Button size="sm" onclick={openAdd}>
+          <Plus size={16} />
+          {m.catalogs_add()}
+        </Button>
+      </div>
+    {/if}
 
     {#if catalogs.length === 0}
       <div class="flex flex-col items-center justify-center py-24 text-center">
@@ -172,7 +180,11 @@
           {m.catalogs_empty()}
         </p>
         <p class="text-muted-foreground text-sm max-w-xs mb-6">
-          {m.catalogs_empty_subtitle()}
+          {side === "device"
+            ? m.catalogs_empty_subtitle()
+            : canManage
+              ? m.catalogs_server_empty_subtitle()
+              : m.catalogs_server_empty_reader()}
         </p>
       </div>
     {:else}
@@ -197,28 +209,30 @@
               <p
                 class="text-muted-foreground text-xs truncate flex items-center gap-1 mt-0.5"
               >
-                {#if catalog.username}
+                {#if catalog.hasCredentials}
                   <Lock size={10} class="shrink-0" />
                 {/if}
                 {hostOf(catalog.url)}
               </p>
             </div>
-            <button
-              class="p-2 text-muted-foreground hover:text-foreground transition-colors"
-              style="-webkit-tap-highlight-color: transparent;"
-              title={m.catalogs_edit()}
-              onclick={(e) => openEdit(e, catalog)}
-            >
-              <Pencil size={15} />
-            </button>
-            <button
-              class="p-2 text-muted-foreground hover:text-destructive transition-colors"
-              style="-webkit-tap-highlight-color: transparent;"
-              title={m.catalogs_delete()}
-              onclick={(e) => handleDelete(e, catalog)}
-            >
-              <Trash2 size={15} />
-            </button>
+            {#if canManage}
+              <button
+                class="p-2 text-muted-foreground hover:text-foreground transition-colors"
+                style="-webkit-tap-highlight-color: transparent;"
+                title={m.catalogs_edit()}
+                onclick={(e) => openEdit(e, catalog)}
+              >
+                <Pencil size={15} />
+              </button>
+              <button
+                class="p-2 text-muted-foreground hover:text-destructive transition-colors"
+                style="-webkit-tap-highlight-color: transparent;"
+                title={m.catalogs_delete()}
+                onclick={(e) => handleDelete(e, catalog)}
+              >
+                <Trash2 size={15} />
+              </button>
+            {/if}
             <ChevronRight size={16} class="text-muted-foreground shrink-0" />
           </div>
         {/each}
@@ -233,7 +247,11 @@
       <Dialog.Title>
         {editing ? m.catalogs_edit() : m.catalogs_add()}
       </Dialog.Title>
-      <Dialog.Description>{m.catalogs_dialog_desc()}</Dialog.Description>
+      <Dialog.Description
+        >{side === "device"
+          ? m.catalogs_dialog_desc()
+          : m.catalogs_server_dialog_desc()}</Dialog.Description
+      >
     </Dialog.Header>
     <form
       onsubmit={(e) => {
@@ -247,7 +265,9 @@
         <Input
           id="catalog-url"
           bind:value={formUrl}
-          placeholder={m.catalogs_url_placeholder()}
+          placeholder={side === "device"
+            ? m.catalogs_url_placeholder()
+            : m.catalogs_server_url_placeholder()}
           autocapitalize="none"
           autocomplete="url"
           autocorrect="off"
@@ -285,7 +305,9 @@
           id="catalog-password"
           type="password"
           bind:value={formPassword}
-          placeholder={m.catalogs_credentials_hint()}
+          placeholder={side === "server" && editing?.hasCredentials
+            ? m.catalogs_password_keep()
+            : m.catalogs_credentials_hint()}
           autocomplete="off"
         />
       </div>

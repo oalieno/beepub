@@ -22,6 +22,7 @@
   let latestVersion = $state("");
   // Form state
   let registrationEnabled = $state(false);
+  let opdsBlockPrivate = $state(false);
   let timezone = $state("Asia/Taipei");
   let calibreBaseDir = $state("/calibre");
 
@@ -205,6 +206,7 @@
     try {
       settings = await adminApi.getSettings();
       registrationEnabled = settings.registration_enabled === "true";
+      opdsBlockPrivate = settings.opds_block_private_network === "true";
       timezone = settings.timezone;
       calibreBaseDir = settings.calibre_base_dir || "/calibre";
       geminiApiKey = settings.gemini_api_key || "";
@@ -262,6 +264,7 @@
     try {
       settings = await adminApi.updateSettings({
         registration_enabled: registrationEnabled ? "true" : "false",
+        opds_block_private_network: opdsBlockPrivate ? "true" : "false",
         timezone,
         calibre_base_dir: calibreBaseDir.trim() || "/calibre",
         gemini_api_key: geminiApiKey,
@@ -460,6 +463,30 @@
           </label>
           <p class="text-xs text-muted-foreground mt-2">
             {m.admin_settings_registration_help()}
+          </p>
+        </Card.Content>
+      </Card.Root>
+
+      <!-- OPDS catalogs -->
+      <Card.Root>
+        <Card.Header>
+          <Card.Title>{m.admin_settings_opds()}</Card.Title>
+          <Card.Description>{m.admin_settings_opds_desc()}</Card.Description>
+        </Card.Header>
+        <Card.Content>
+          <label class="flex items-center gap-3 cursor-pointer">
+            <input
+              id="opds-block-private"
+              type="checkbox"
+              bind:checked={opdsBlockPrivate}
+              class="h-4 w-4 rounded border-border text-primary focus:ring-primary/50"
+            />
+            <span class="text-sm text-foreground"
+              >{m.admin_settings_opds_block_private()}</span
+            >
+          </label>
+          <p class="text-xs text-muted-foreground mt-2">
+            {m.admin_settings_opds_block_private_help()}
           </p>
         </Card.Content>
       </Card.Root>
