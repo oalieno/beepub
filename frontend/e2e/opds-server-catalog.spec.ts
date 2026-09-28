@@ -107,18 +107,20 @@ test("a full page of covers from the server's own catalog loads", async ({
   await expect(page).toHaveURL(
     `/catalogs/${catalogId}?feed=${encodeURIComponent("/opds/all")}`,
   );
+  // Every cover on the page loads (however many books the database has).
   await expect
     .poll(
       () =>
-        page.evaluate(
-          () =>
-            [...document.querySelectorAll("main img")].filter(
-              (img) => (img as HTMLImageElement).naturalWidth > 1,
-            ).length,
-        ),
+        page.evaluate(() => {
+          const imgs = [...document.querySelectorAll("main img")];
+          return (
+            imgs.length > 0 &&
+            imgs.every((img) => (img as HTMLImageElement).naturalWidth > 1)
+          );
+        }),
       { timeout: 30_000 },
     )
-    .toBeGreaterThanOrEqual(10);
+    .toBe(true);
   // A reload lands on the same page.
   await page.reload();
   await expect(page.getByRole("heading", { level: 3 }).first()).toBeVisible();

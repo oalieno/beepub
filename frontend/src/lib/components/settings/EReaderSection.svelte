@@ -30,9 +30,14 @@
   // The clipboard API exists only on secure origins, and a home server
   // is often plain http on the LAN — there the old copy command still works.
   async function writeClipboard(text: string) {
+    // Refused too sometimes (no permission) — then the old way.
     if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      return;
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch {
+        // fall through
+      }
     }
     const area = document.createElement("textarea");
     area.value = text;

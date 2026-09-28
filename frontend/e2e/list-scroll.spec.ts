@@ -16,14 +16,24 @@ test("back from a book returns to the same spot in a reading list", async ({
   const library = libraries.find(
     (l: { name: string }) => l.name === LIBRARY_NAME,
   );
-  const all = await (
-    await page.request.get(`/api/libraries/${library.id}/books?limit=100`)
-  ).json();
+  // Enough books to scroll: a fresh database (CI) has only a few, so
+  // paper copies fill in — created once, found again by title after.
+  const listBooks = async () =>
+    (
+      await (
+        await page.request.get(`/api/libraries/${library.id}/books?limit=100`)
+      ).json()
+    ).items as Record<string, unknown>[];
+  let books = await listBooks();
+  for (let i = books.length; i < 12; i++) {
+    await page.request.post("/api/books/physical", {
+      data: { library_id: library.id, title: `E2E Scroll Filler ${i + 1}` },
+    });
+  }
+  if (books.length < 12) books = await listBooks();
   // The "read" shelf, filled with the fixture library (the list itself is
   // the page under test, not the status bookkeeping behind it).
-  const items = all.items
-    .filter((b: { file_size: number | null }) => b.file_size !== null)
-    .map((b: Record<string, unknown>) => ({
+  const items = books.map((b) => ({
       ...b,
       reading_status: "read",
       is_favorite: false,
