@@ -51,7 +51,8 @@ function toOpdsError(err: unknown): OpdsError {
   const message = (err as Error).message ?? "";
   const status = (err as { status?: number }).status;
   const kind = /^opds:(\w+)/.exec(message)?.[1];
-  if (kind === "auth" || kind === "blocked") return new OpdsError(kind, status);
+  if (kind === "auth" || kind === "blocked" || kind === "parse")
+    return new OpdsError(kind, status);
   if (status === 404) return new OpdsError("http", 404, err);
   return new OpdsError(kind === "http" ? "http" : "network", status, err);
 }

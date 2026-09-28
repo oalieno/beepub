@@ -236,6 +236,15 @@ async def fetch_feed(
         result = await fetcher.fetch(url or catalog.url, FEED_MAX_BYTES, FEED_ACCEPT)
     except OpdsFetchError as exc:
         raise _fetch_failed(exc)
+    # Only feeds go back to the client: the catalog's credentials may open
+    # more of its host than the catalog (an admin page served as HTML).
+    # "opds:parse" is what an HTML answer is to the client — a bare origin
+    # that needs /opds.
+    head = result.body[:512].lstrip()
+    if "xml" not in result.content_type.lower() and not head.startswith(
+        (b"<?xml", b"<feed", b"<OpenSearchDescription")
+    ):
+        raise HTTPException(status_code=415, detail="opds:parse")
     charset = "utf-8"
     match = re.search(r"charset=([\w.-]+)", result.content_type, re.IGNORECASE)
     if match:

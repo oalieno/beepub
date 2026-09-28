@@ -35,6 +35,10 @@ def upstream(monkeypatch):
             return httpx.Response(
                 200, text=FEED, headers={"content-type": "application/atom+xml"}
             )
+        if path == "/admin":
+            return httpx.Response(
+                200, text="<html>settings</html>", headers={"content-type": "text/html"}
+            )
         if path == "/covers/1.png":
             return httpx.Response(
                 200, content=b"\x89PNG", headers={"content-type": "image/png"}
@@ -134,6 +138,14 @@ async def test_feed_proxy_returns_the_body_and_final_url(
         params={"url": "http://169.254.169.254/latest/meta-data"},
     )
     assert outside.status_code == 403
+
+    # Only feeds come back: the catalog's login may open more of its host.
+    html = await user_client.get(
+        f"/api/opds-catalogs/{catalog['id']}/feed",
+        params={"url": "https://books.example.org/admin"},
+    )
+    assert html.status_code == 415
+    assert html.json()["detail"] == "opds:parse"
 
 
 async def test_image_proxy(admin_client, upstream):
