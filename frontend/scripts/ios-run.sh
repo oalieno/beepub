@@ -5,18 +5,27 @@
 #
 #   pnpm ios:run                 # first paired device found
 #   IOS_DEVICE=<name|udid> pnpm ios:run
-#   IOS_TEAM=<team id> pnpm ios:run
 #   IOS_SKIP_WEB=1 pnpm ios:run  # native-only change, skip the vite build
+#
+# Needs IOS_TEAM, the signing team's ID (Membership details in the Apple
+# Developer account) — in the environment or ~/.appstoreconnect/beepub.env,
+# the file ios-testflight.sh reads too.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+
+if [[ -f ~/.appstoreconnect/beepub.env ]]; then
+  # shellcheck disable=SC1090
+  source ~/.appstoreconnect/beepub.env
+fi
 
 # Use the full Xcode even when xcode-select points at the Command Line Tools.
 if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app ]]; then
   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
 
-TEAM="${IOS_TEAM:?set IOS_TEAM}"
+: "${IOS_TEAM:?set IOS_TEAM (the signing team ID), e.g. in ~/.appstoreconnect/beepub.env}"
+TEAM="$IOS_TEAM"
 DERIVED="ios/build"
 
 if [[ -z "${IOS_SKIP_WEB:-}" ]]; then

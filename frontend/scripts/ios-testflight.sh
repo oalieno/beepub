@@ -6,9 +6,10 @@
 #   ASC_KEY_ID      the key's ID
 #   ASC_ISSUER_ID   the issuer ID shown above the key list
 #   ASC_KEY_PATH    the .p8 file (default ~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8)
+#   IOS_TEAM        the signing team's ID (Membership details in the Apple
+#                   Developer account)
 # These can also live in ~/.appstoreconnect/beepub.env.
 #
-#   IOS_TEAM=<team id>          signing team
 #   IOS_BUILD_NUMBER=<n.n>      CFBundleVersion (default: UTC timestamp, always increasing)
 set -euo pipefail
 
@@ -29,7 +30,8 @@ fi
 ASC_KEY_PATH="${ASC_KEY_PATH:-$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8}"
 [[ -f "$ASC_KEY_PATH" ]] || { echo "API key not found: $ASC_KEY_PATH" >&2; exit 1; }
 
-TEAM="${IOS_TEAM:?set IOS_TEAM}"
+: "${IOS_TEAM:?set IOS_TEAM (the signing team ID), e.g. in ~/.appstoreconnect/beepub.env}"
+TEAM="$IOS_TEAM"
 BUILD_NUMBER="${IOS_BUILD_NUMBER:-$(date -u +%Y%m%d.%H%M%S)}"
 OUT="ios/build/testflight"
 ARCHIVE="$OUT/App.xcarchive"
