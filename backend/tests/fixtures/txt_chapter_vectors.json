@@ -292,6 +292,37 @@
           }
         ]
       }
+    },
+    {
+      "name": "a comma in a subtitle set off from the marker is still a title; numerals may switch style",
+      "title_hint": "燈塔旅店",
+      "text": "第1章 你來了，旅人\n　　風很大。\n第2章：留下來，好嗎？\n　　她點頭。\n第三章，她說\n第三章 燈火，未熄\n　　夜裡的燈。\n【第四章】鑰匙，在哪\n　　在口袋。\n",
+      "expect": {
+        "title": "燈塔旅店",
+        "author": null,
+        "sections": [
+          {
+            "title": "第1章 你來了，旅人",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "第2章：留下來，好嗎？",
+            "level": 2,
+            "paragraphs": 2
+          },
+          {
+            "title": "第三章 燈火，未熄",
+            "level": 2,
+            "paragraphs": 1
+          },
+          {
+            "title": "【第四章】鑰匙，在哪",
+            "level": 2,
+            "paragraphs": 1
+          }
+        ]
+      }
     }
   ]
 }

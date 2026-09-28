@@ -104,6 +104,15 @@ _SPECIAL_RE = re.compile(
     rf"^{_OPEN}(?:序章|序言|序幕|楔子|引子|前言|自序|代序|尾聲|尾声|終章|终章|"
     rf"後記|后记|番外(?:篇)?|外傳|外传|特別篇|特别篇|附錄|附录){_CLOSE}{_REST}$"
 )
+# The marker set off from its subtitle — by a space, a colon or a closing
+# bracket: "第2章 你這樣，有意思？". Such a line is a title even when the
+# subtitle carries a comma; "第二章，她說" has no separator and stays text.
+_MARKED_RE = re.compile(
+    rf"^(?:{_OPEN}第\s*{_NUM}\s*[卷部集篇章回節节話话幕折]|"
+    rf"{_OPEN}(?:序章|序言|序幕|楔子|引子|前言|自序|代序|尾聲|尾声|終章|终章|"
+    rf"後記|后记|番外(?:篇)?|外傳|外传|特別篇|特别篇|附錄|附录))"
+    r"(?:\s*[】\]）)]|\s+|\s*[:：])\s*\S"
+)
 _EN_VOLUME_RE = re.compile(
     r"^(?:part|book|volume)\s+(?:\d+|[ivxlc]+|[a-z]+)\b.*$", re.IGNORECASE
 )
@@ -127,9 +136,12 @@ def classify_heading(line: str) -> tuple[int, str] | None:
     if not s or len(s) > _MAX_HEADING_CHARS:
         return None
     # A sentence mark anywhere ("第三章的開頭寫道，他來了。") or a clause
-    # ending is body text however the line starts. Titles with a comma
-    # exist but are rare; a false split is the worse error.
-    if "。" in s or "，" in s or "," in s or s.endswith(_NOT_A_TITLE_END):
+    # ending is body text however the line starts. A comma is too, unless
+    # the marker stands apart from a subtitle — web novels put commas in
+    # titles all the time.
+    if "。" in s or s.endswith(_NOT_A_TITLE_END):
+        return None
+    if ("，" in s or "," in s) and not _MARKED_RE.match(s):
         return None
     if _VOLUME_RE.match(s) or _EN_VOLUME_RE.match(s):
         return LEVEL_PART, s
