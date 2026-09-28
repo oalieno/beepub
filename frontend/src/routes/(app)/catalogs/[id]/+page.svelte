@@ -17,7 +17,6 @@
     Check,
     ChevronRight,
     Download,
-    FolderOpen,
     Loader2,
     Lock,
     RefreshCw,
@@ -560,17 +559,9 @@
             {#if entry.kind === "nav"}
               <a
                 href={feedHref(entry.href)}
-                class="w-full bg-card card-soft rounded-2xl p-4 flex items-center gap-3 group"
+                class="w-full bg-card card-soft rounded-2xl px-5 py-4 flex items-center gap-3 group"
                 style="-webkit-tap-highlight-color: transparent;"
               >
-                <div class="p-2.5 bg-primary/10 rounded-xl shrink-0">
-                  {#if entry.iconUrl}
-                    <!-- The feed's own icon: a book reads apart from a list. -->
-                    <img src={entry.iconUrl} alt="" class="size-[18px]" />
-                  {:else}
-                    <FolderOpen class="text-primary" size={18} />
-                  {/if}
-                </div>
                 <div class="flex-1 min-w-0">
                   <h3
                     class="font-medium text-sm truncate text-foreground group-hover:text-primary transition-colors"

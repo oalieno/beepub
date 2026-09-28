@@ -63,10 +63,6 @@ export interface OpdsNavEntry {
   title: string;
   href: string;
   content?: string;
-  /** The feed's own small icon for the row, when it inlines one as a data:
-   *  image (Gutenberg marks books apart from author/subject lists this
-   *  way). Inline only — rendering it fetches nothing. */
-  iconUrl?: string;
 }
 
 export interface OpdsBookEntry {
@@ -213,12 +209,6 @@ function parseEntry(
     (l) => l.type.includes("atom+xml") && !STRUCTURAL_RELS.has(l.rel),
   );
   if (!nav) return null; // Neither a book nor a browsable feed — skip.
-  const iconUrl = childrenByName(el, ATOM_NS, "link")
-    .filter((l) =>
-      [...IMAGE_RELS, ...THUMBNAIL_RELS].includes(l.getAttribute("rel") ?? ""),
-    )
-    .map((l) => l.getAttribute("href") ?? "")
-    .find((href) => href.startsWith("data:image/"));
   return {
     kind: "nav",
     key: childText(el, ATOM_NS, "id") ?? nav.href,
@@ -228,7 +218,6 @@ function parseEntry(
       childText(el, ATOM_NS, "content") ??
       childText(el, ATOM_NS, "summary") ??
       undefined,
-    iconUrl,
   };
 }
 
