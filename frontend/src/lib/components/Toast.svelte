@@ -82,14 +82,20 @@
 
 <style>
   /* Mobile: above tab bar (56px) + safe area */
+  /* --transfer-offset: the transfer panel's height while it shows. */
   .toast-position {
-    bottom: calc(1rem + 56px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(
+      1rem + 56px + env(safe-area-inset-bottom, 0px) +
+        var(--transfer-offset, 0px)
+    );
   }
 
   /* Desktop: no tab bar, just safe area */
   @media (min-width: 768px) {
     .toast-position {
-      bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+      bottom: calc(
+        1rem + env(safe-area-inset-bottom, 0px) + var(--transfer-offset, 0px)
+      );
     }
   }
 </style>

@@ -62,7 +62,6 @@
           sectionWeights: v.section_weights ?? null,
         },
       })),
-      { label: series.series_name },
     );
   }
   let showAddToShelf = $state(false);

@@ -29,7 +29,7 @@ export async function unlinkedLocalBooks(): Promise<LocalBookEntry[]> {
 export async function uploadLocalBook(
   entry: LocalBookEntry,
   libraryId: string,
-): Promise<"uploaded" | "linked"> {
+): Promise<{ outcome: "uploaded" | "linked"; serverId: string }> {
   const { matches } = await booksApi.lookupByDigest([entry.digest]);
   const match = matches[entry.digest];
   let outcome: "uploaded" | "linked" = "linked";
@@ -49,5 +49,5 @@ export async function uploadLocalBook(
   void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
     syncLocalBook(entry.id).catch(() => {}),
   );
-  return outcome;
+  return { outcome, serverId };
 }

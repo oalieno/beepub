@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
-import { ADMIN_STATE } from "./helpers";
+import { ADMIN_STATE, transferPanel } from "./helpers";
 import {
   PLATES_BOOK,
   TOUCH_BOOK,
@@ -195,7 +195,10 @@ test.describe("with a server", () => {
 
     // The local library shows them, and takes an edit offline.
     await switchTo(page, "local");
-    await page.getByRole("link", { name: "Books", exact: true }).first().click();
+    await page
+      .getByRole("link", { name: "Books", exact: true })
+      .first()
+      .click();
     await openBookPage(page, PLATES_BOOK.title);
     await expect(page.getByText("Written on the web.")).toBeVisible();
     await page.getByRole("button", { name: "Edit" }).first().click();
@@ -221,9 +224,7 @@ test.describe("with a server", () => {
       .toBe("Rewritten on the device.");
   });
 
-  test("the device's own pages stay in the local library", async ({
-    page,
-  }) => {
+  test("the device's own pages stay in the local library", async ({ page }) => {
     await page.goto("/libraries");
     await expect(page.getByRole("link", { name: /All Books/ })).toBeVisible();
     await expect(page.getByRole("link", { name: /This device/ })).toHaveCount(
@@ -234,9 +235,7 @@ test.describe("with a server", () => {
     await page.waitForURL(/\/libraries$/);
   });
 
-  test("a local book goes up from the library's add menu", async ({
-    page,
-  }) => {
+  test("a local book goes up from the library's add menu", async ({ page }) => {
     // The server already has this file, which would link the import on
     // its own; hide it, and stand the upload in for the real one (no
     // duplicate book in the shared stack) by answering with that book.
@@ -266,7 +265,9 @@ test.describe("with a server", () => {
     await page.getByRole("menuitem", { name: "From this device" }).click();
     await page.getByRole("checkbox").first().click();
     await page.getByRole("button", { name: /^Upload 1/ }).click();
-    await expect(page.getByText("Uploaded 1", { exact: false })).toBeVisible();
+    await expect(
+      transferPanel(page).getByText("Uploaded", { exact: true }),
+    ).toBeVisible();
     expect(uploads).toBe(1);
 
     // Linked now: the book is on the Downloaded shelf, not offered again.

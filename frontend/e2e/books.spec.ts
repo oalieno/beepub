@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect } from "@playwright/test";
-import { ADMIN_STATE, LIBRARY_NAME } from "./helpers";
+import { ADMIN_STATE, LIBRARY_NAME, transferPanel } from "./helpers";
 
 const FIXTURE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -23,9 +23,10 @@ test("upload a book, open it, and read it", async ({ page }) => {
   // Files are listed before anything is sent: a chance to catch a wrong one.
   await expect(page.getByRole("dialog").getByText(/\.epub$/)).toBeVisible();
   await page.getByRole("button", { name: "Upload 1 file(s)" }).click();
-  await expect(page.getByText("Uploaded 1 book(s)")).toBeVisible({
-    timeout: 15_000,
-  });
+  // The dialog closes at once; the transfer panel reports the upload.
+  await expect(
+    transferPanel(page).getByText("Uploaded", { exact: true }),
+  ).toBeVisible({ timeout: 15_000 });
 
   await page.getByText("E2E Test Book").first().click();
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);

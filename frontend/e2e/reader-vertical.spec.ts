@@ -138,7 +138,10 @@ test("vertical pages stay on the grid with a fractional container height", async
   const first = await measure();
   // The environment must actually paginate the book (CJK-capable fonts);
   // otherwise the whole chapter collapses to one page and flips are no-ops.
-  test.skip(first.pages < 4, "vertical fragmentation unavailable (no CJK fonts)");
+  test.skip(
+    first.pages < 4,
+    "vertical fragmentation unavailable (no CJK fonts)",
+  );
 
   const tops: number[] = [first.minTop];
   for (let i = 0; i < 8; i++) {
@@ -280,7 +283,9 @@ test("backward chapter jump survives a late content shrink", async ({
   await page.evaluate(async () => {
     const handle = (
       window as unknown as {
-        __beepubReader: { rendition: { display: (href: string) => Promise<void> } };
+        __beepubReader: {
+          rendition: { display: (href: string) => Promise<void> };
+        };
       }
     ).__beepubReader;
     await handle.rendition.display("chapter2.xhtml");

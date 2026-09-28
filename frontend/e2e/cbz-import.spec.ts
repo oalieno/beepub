@@ -43,7 +43,9 @@ test("a CBZ upload becomes a right-to-left image book with ordered pages", async
   expect(pages.direction).toBe("rtl");
   expect(pages.pages).toHaveLength(6);
   expect(pages.pages.map((p: { image: string }) => p.image)).toEqual(
-    [1, 2, 3, 4, 5, 6].map((i) => `OEBPS/images/${String(i).padStart(4, "0")}.jpg`),
+    [1, 2, 3, 4, 5, 6].map(
+      (i) => `OEBPS/images/${String(i).padStart(4, "0")}.jpg`,
+    ),
   );
   expect([pages.pages[3].width, pages.pages[3].height]).toEqual([1600, 1200]);
 
@@ -65,9 +67,11 @@ test("the legacy reader opens the packed comic on its first page", async ({
     localStorage.setItem("reader-gestures-seen", "1"),
   );
   await page.goto(`/books/${bookId}/read-legacy`);
-  await expect.poll(() => legacyReaderImageLoaded(page), {
-    timeout: 30_000,
-  }).toBe(true);
+  await expect
+    .poll(() => legacyReaderImageLoaded(page), {
+      timeout: 30_000,
+    })
+    .toBe(true);
 });
 
 test("the detail page offers the original CBZ", async ({ page }) => {
@@ -79,9 +83,7 @@ test("the detail page offers the original CBZ", async ({ page }) => {
 
   await page.getByTitle("More actions").click();
   const downloadEvent = page.waitForEvent("download");
-  await page
-    .getByRole("menuitem", { name: "Download original CBZ" })
-    .click();
+  await page.getByRole("menuitem", { name: "Download original CBZ" }).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toMatch(/\.cbz$/);
 });

@@ -93,9 +93,7 @@ test("the detail page offers the original AZW3", async ({ page }) => {
 
   await page.getByTitle("More actions").click();
   const downloadEvent = page.waitForEvent("download");
-  await page
-    .getByRole("menuitem", { name: "Download original AZW3" })
-    .click();
+  await page.getByRole("menuitem", { name: "Download original AZW3" }).click();
   const download = await downloadEvent;
   expect(download.suggestedFilename()).toMatch(/\.azw3$/);
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { page } from "$app/state";
   import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { isNative } from "$lib/platform";
@@ -8,6 +8,7 @@
   import ZhConversionToggle from "$lib/components/ZhConversionToggle.svelte";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
+  import { libraryUploaded, uploadFiles } from "$lib/services/uploadQueue";
   import { toastStore } from "$lib/stores/toast";
   import { setActiveLibrary } from "$lib/stores/activeLibrary";
   import BookBrowser from "$lib/components/BookBrowser.svelte";
@@ -67,7 +68,6 @@
   let restoredFromSnapshot = $state(false);
   let pendingScrollY = $state(0);
 
-  let uploading = $state(false);
   let fileInput: HTMLInputElement;
   let showUploadModal = $state(false);
   let showLocalUpload = $state(false);
@@ -180,7 +180,6 @@
   // Two-step upload: files are listed first (a chance to catch a wrong
   // file, and to see the options that apply to them), then sent together.
   let pendingFiles = $state<File[]>([]);
-  let uploadedCount = $state(0);
   let pendingHasTxt = $derived(
     pendingFiles.some((f) => f.name.toLowerCase().endsWith(".txt")),
   );
@@ -196,7 +195,6 @@
     showUploadModal = true;
   }
   function closeUploadModal() {
-    if (uploading) return;
     showUploadModal = false;
     pendingFiles = [];
   }
@@ -216,31 +214,24 @@
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
 
-  async function uploadPending() {
-    if (pendingFiles.length === 0 || uploading || id === ALL) return;
-    uploading = true;
-    uploadedCount = 0;
-    let successCount = 0;
-    for (const file of pendingFiles) {
-      try {
-        await booksApi.upload(file, id);
-        successCount++;
-      } catch (e) {
-        toastStore.error(
-          `Failed to upload ${file.name}: ${(e as Error).message}`,
-        );
-      }
-      uploadedCount++;
-    }
-    if (successCount > 0) {
-      toastStore.success(m.library_uploaded({ count: String(successCount) }));
-      // Force the browser to remount and reload the current view.
-      reloadNonce += 1;
-    }
-    uploading = false;
+  // Sent in the background: the transfer panel reports each file, and the
+  // grid reloads when the batch lands (libraryUploaded, below).
+  function uploadPending() {
+    if (pendingFiles.length === 0 || id === ALL) return;
+    uploadFiles([...pendingFiles], id);
     pendingFiles = [];
     showUploadModal = false;
   }
+
+  // Uploads finishing into the library on screen refresh it (only ones
+  // that land while it's up — an old signal must not reload a page just
+  // restored from its snapshot).
+  const shownAt = Date.now();
+  $effect(() => {
+    const landed = $libraryUploaded;
+    if (landed && landed.libraryId === id && landed.at > shownAt)
+      untrack(() => (reloadNonce += 1));
+  });
 
   // A drop anywhere on the page lands in the dialog, not straight on the
   // server.
@@ -410,7 +401,6 @@
               type="button"
               class="text-muted-foreground hover:text-foreground disabled:opacity-40 shrink-0"
               aria-label={m.library_upload_remove({ name: file.name })}
-              disabled={uploading}
               onclick={() => pendingFiles.splice(i, 1)}
             >
               <X size={16} />
@@ -423,18 +413,9 @@
       <ZhConversionToggle />
     {/if}
     <div class="flex items-center justify-end gap-3">
-      {#if uploading}
-        <span class="flex items-center gap-2 text-primary text-sm">
-          <Spinner size="sm" />
-          {m.library_uploading_progress({
-            done: String(uploadedCount),
-            total: String(pendingFiles.length),
-          })}
-        </span>
-      {/if}
       <Button
         class="rounded-xl"
-        disabled={pendingFiles.length === 0 || uploading}
+        disabled={pendingFiles.length === 0}
         onclick={uploadPending}
       >
         {m.library_upload_confirm({ count: String(pendingFiles.length) })}
@@ -448,6 +429,5 @@
     open={showLocalUpload}
     libraryId={library.id}
     onclose={() => (showLocalUpload = false)}
-    ondone={() => (reloadNonce += 1)}
   />
 {/if}

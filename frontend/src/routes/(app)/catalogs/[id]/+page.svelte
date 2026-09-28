@@ -46,6 +46,11 @@
     type CatalogInfo,
   } from "$lib/opds/catalogs";
   import {
+    catalogItemKey,
+    catalogItemStates,
+    enqueueCatalogBook,
+  } from "$lib/opds/queue";
+  import {
     fetchServerFeed,
     fetchServerSearchTemplate,
     importableDownload,
@@ -251,102 +256,27 @@
     }
   }
 
-  // --- Download queue ---
+  // --- Fetching books ---
   //
-  // Sequential, one book at a time (the readingSync "don't stampede
-  // NAS-class servers" posture); further taps enqueue. States persist for
-  // the page session so navigating feeds keeps imported/duplicate badges.
-  type DownloadState = {
-    status: "queued" | "downloading" | "imported" | "duplicate" | "error";
-    pct: number | null;
-    /** Server: the book it became (or already was), to open from the check. */
-    bookId?: string;
-  };
-  let downloadStates = $state<Record<string, DownloadState>>({});
-  const downloadQueue: OpdsBookEntry[] = [];
-  let downloadActive = false;
-
-  function setDownloadState(key: string, state: DownloadState) {
-    downloadStates = { ...downloadStates, [key]: state };
-  }
-
+  // The queue lives in $lib/opds/queue so it outlives this page; each card
+  // reads its book's state from there, and the transfer panel reports.
   function requestDownload(entry: OpdsBookEntry) {
-    if (!downloadable(entry)) return;
-    if (side === "server" && !importLibrary) return;
-    const current = downloadStates[entry.key]?.status;
-    // error is re-tappable; everything else is settled or in flight.
-    if (current && current !== "error") return;
-    setDownloadState(entry.key, { status: "queued", pct: null });
-    downloadQueue.push(entry);
-    void pumpQueue();
-  }
-
-  async function pumpQueue() {
-    if (downloadActive) return;
-    downloadActive = true;
-    try {
-      let entry: OpdsBookEntry | undefined;
-      while ((entry = downloadQueue.shift())) {
-        await runDownload(entry);
-      }
-    } finally {
-      downloadActive = false;
-    }
-  }
-
-  async function runImport(entry: OpdsBookEntry, libraryId: string) {
-    setDownloadState(entry.key, { status: "downloading", pct: null });
-    const { importToServer } = await import("$lib/opds/server");
-    try {
-      const { status, book } = await importToServer(
+    if (!downloadable(entry) || !catalog) return;
+    if (side === "server") {
+      if (!importLibrary) return;
+      enqueueCatalogBook({
+        side,
         catalogId,
         entry,
-        libraryId,
-      );
-      setDownloadState(entry.key, { status, pct: null, bookId: book.id });
-      if (status === "imported")
-        toastStore.success(m.catalogs_import_done({ title: entry.title }));
-      else toastStore.info(m.catalogs_import_duplicate({ title: entry.title }));
-    } catch (err) {
-      setDownloadState(entry.key, { status: "error", pct: null });
-      toastStore.error(
-        err instanceof OpdsError && err.kind === "blocked"
-          ? m.catalogs_blocked_error()
-          : m.catalogs_import_error({ title: entry.title }),
-      );
-    }
-  }
-
-  async function runDownload(entry: OpdsBookEntry) {
-    if (side === "server") {
-      if (importLibrary) await runImport(entry, importLibrary);
-      return;
-    }
-    const cat = catalog;
-    if (!cat) return;
-    setDownloadState(entry.key, { status: "downloading", pct: null });
-    const { downloadAndImport } = await import("$lib/opds/download");
-    const { DuplicateBookError, InvalidEpubError } =
-      await import("$lib/services/localLibrary");
-    try {
-      const imported = await downloadAndImport(entry, cat, (pct) => {
-        setDownloadState(entry.key, { status: "downloading", pct });
+        libraryId: importLibrary,
       });
-      setDownloadState(entry.key, { status: "imported", pct: null });
-      toastStore.success(m.local_import_success({ title: imported.title }));
-    } catch (err) {
-      if (err instanceof DuplicateBookError) {
-        setDownloadState(entry.key, { status: "duplicate", pct: null });
-        toastStore.info(
-          m.local_import_duplicate({ title: err.existing.title }),
-        );
-      } else if (err instanceof InvalidEpubError) {
-        setDownloadState(entry.key, { status: "error", pct: null });
-        toastStore.error(m.local_import_invalid());
-      } else {
-        setDownloadState(entry.key, { status: "error", pct: null });
-        toastStore.error(m.catalogs_download_error({ title: entry.title }));
-      }
+    } else {
+      enqueueCatalogBook({
+        side,
+        catalogId,
+        entry,
+        auth: { username: catalog.username, password: catalog.password },
+      });
     }
   }
 
@@ -618,7 +548,9 @@
         >
           {#each bookEntries as entry (entry.key)}
             {@const coverSrc = coverOf(entry)}
-            {@const dl = downloadStates[entry.key]}
+            {@const dl = $catalogItemStates.get(
+              catalogItemKey(catalogId, entry.key),
+            )}
             <div class="group">
               <!-- Cover -->
               <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
@@ -656,8 +588,8 @@
                        must not look alike: the card is where the eye is. -->
                   {#if dl?.status === "duplicate"}
                     <svelte:element
-                      this={dl.bookId ? "a" : "span"}
-                      href={dl.bookId ? `/books/${dl.bookId}` : undefined}
+                      this={dl.href ? "a" : "span"}
+                      href={dl.href ? dl.href : undefined}
                       class="absolute bottom-1.5 right-1.5 bg-card text-foreground border border-border p-1.5 rounded-full"
                       title={side === "server"
                         ? m.catalogs_server_duplicate()
@@ -665,9 +597,9 @@
                     >
                       <BookCheck size={14} />
                     </svelte:element>
-                  {:else if dl?.status === "imported" && dl.bookId}
+                  {:else if dl?.status === "imported" && dl.href}
                     <a
-                      href={`/books/${dl.bookId}`}
+                      href={dl.href}
                       class="absolute bottom-1.5 right-1.5 bg-primary text-primary-foreground p-1.5 rounded-full"
                       title={m.catalogs_server_imported()}
                     >
@@ -745,15 +677,14 @@
                         ? m.catalogs_state_duplicate()
                         : m.catalogs_duplicate()}
                   <svelte:element
-                    this={dl.bookId ? "a" : "p"}
-                    href={dl.bookId ? `/books/${dl.bookId}` : undefined}
-                    class="mt-1 inline-flex items-center gap-0.5 text-xs font-medium {dl.status ===
+                    this={dl.href ? "a" : "p"}
+                    href={dl.href ? dl.href : undefined}
+                    class="mt-1 block text-xs font-medium {dl.status ===
                     'imported'
                       ? 'text-primary'
-                      : 'text-foreground'} {dl.bookId ? 'hover:underline' : ''}"
+                      : 'text-foreground'} {dl.href ? 'hover:underline' : ''}"
                   >
                     {outcome}
-                    {#if dl.bookId}<ChevronRight size={12} />{/if}
                   </svelte:element>
                 {/if}
                 {#if variantOf(entry)}

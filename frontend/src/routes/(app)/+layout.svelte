@@ -9,6 +9,7 @@
   import MobileTabBar from "$lib/components/MobileTabBar.svelte";
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
   import SearchModal from "$lib/components/SearchModal.svelte";
+  import TransferPanel from "$lib/components/TransferPanel.svelte";
   import { searchModalOpen } from "$lib/stores/search";
   import type { Snippet } from "svelte";
 
@@ -74,6 +75,11 @@
   {#if !localMode}
     <SearchModal bind:open={$searchModalOpen} />
   {/if}
+
+  <!-- Downloads, imports, uploads. Here and not in the root layout: the
+       reader has its own layout and never shows it. Book pages trade the
+       tab bar for a taller action bar. -->
+  <TransferPanel bottomChrome={isBookDetail ? 72 : 56} />
 {:else}
   <main>
     {@render children()}

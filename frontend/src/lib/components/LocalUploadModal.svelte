@@ -10,25 +10,21 @@
   import Spinner from "$lib/components/Spinner.svelte";
   import type { LocalBookEntry } from "$lib/services/localLibrary";
   import { toastStore } from "$lib/stores/toast";
+  import { uploadLocalBooks } from "$lib/services/uploadQueue";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
     open,
     libraryId,
     onclose,
-    ondone,
   }: {
     open: boolean;
     libraryId: string;
     onclose: () => void;
-    /** After at least one book reached the server. */
-    ondone: () => void;
   } = $props();
 
   let entries = $state<LocalBookEntry[] | null>(null);
   let selected = $state<Record<string, boolean>>({});
-  let uploading = $state(false);
-  let done = $state(0);
   let chosen = $derived(entries?.filter((e) => selected[e.id]) ?? []);
 
   $effect(() => {
@@ -50,31 +46,14 @@
   });
 
   function close() {
-    if (!uploading) onclose();
+    onclose();
   }
 
-  async function upload() {
-    if (chosen.length === 0 || uploading) return;
-    uploading = true;
-    done = 0;
-    let uploaded = 0;
-    let linked = 0;
-    const { uploadLocalBook } = await import("$lib/services/uploadLocal");
-    for (const entry of chosen) {
-      try {
-        if ((await uploadLocalBook(entry, libraryId)) === "linked") linked++;
-        else uploaded++;
-      } catch (e) {
-        toastStore.error(`${entry.title}: ${(e as Error).message}`);
-      }
-      done++;
-    }
-    uploading = false;
-    if (uploaded > 0)
-      toastStore.success(m.library_uploaded({ count: String(uploaded) }));
-    if (linked > 0)
-      toastStore.info(m.local_upload_linked({ count: String(linked) }));
-    if (uploaded + linked > 0) ondone();
+  // Runs in the background; the transfer panel reports each book and the
+  // library page refreshes when they land.
+  function upload() {
+    if (chosen.length === 0) return;
+    uploadLocalBooks(chosen, libraryId);
     onclose();
   }
 </script>
@@ -99,10 +78,7 @@
             <label
               class="flex items-center gap-3 px-3 py-2.5 text-sm cursor-pointer"
             >
-              <Checkbox
-                bind:checked={selected[entry.id]}
-                disabled={uploading}
-              />
+              <Checkbox bind:checked={selected[entry.id]} />
               <span class="flex-1 min-w-0">
                 <span class="block truncate text-foreground">{entry.title}</span
                 >
@@ -118,18 +94,9 @@
       </ul>
     {/if}
     <div class="flex items-center justify-end gap-3">
-      {#if uploading}
-        <span class="flex items-center gap-2 text-primary text-sm">
-          <Spinner size="sm" />
-          {m.library_uploading_progress({
-            done: String(done),
-            total: String(chosen.length),
-          })}
-        </span>
-      {/if}
       <Button
         class="rounded-xl"
-        disabled={chosen.length === 0 || uploading}
+        disabled={chosen.length === 0}
         onclick={upload}
       >
         {m.library_upload_confirm({ count: String(chosen.length) })}

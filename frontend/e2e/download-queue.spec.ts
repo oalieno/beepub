@@ -1,5 +1,5 @@
 import { test, expect, type Page, type Route } from "@playwright/test";
-import { ADMIN_STATE } from "./helpers";
+import { ADMIN_STATE, transferPanel } from "./helpers";
 import {
   ANCHOR_BOOK,
   CHAPTERS_BOOK,
@@ -22,27 +22,30 @@ import {
 test.use({ storageState: ADMIN_STATE });
 
 test.beforeEach(async ({ page, baseURL }) => {
-  await page.addInitScript((origin) => {
-    (
-      window as unknown as { CapacitorCustomPlatform: { name: string } }
-    ).CapacitorCustomPlatform = { name: "ios" };
-    localStorage.setItem("serverUrl", origin);
-    // The stack is plain http: no secure context, no crypto.randomUUID
-    // (the local import mints ids with it). The app always has one.
-    if (typeof crypto.randomUUID !== "function") {
-      crypto.randomUUID = () => {
-        const b = crypto.getRandomValues(new Uint8Array(16));
-        b[6] = (b[6] & 0x0f) | 0x40;
-        b[8] = (b[8] & 0x3f) | 0x80;
-        const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(
-          "",
-        );
-        return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` as ReturnType<
-          typeof crypto.randomUUID
-        >;
-      };
-    }
-  }, baseURL!.replace(/\/$/, ""));
+  await page.addInitScript(
+    (origin) => {
+      (
+        window as unknown as { CapacitorCustomPlatform: { name: string } }
+      ).CapacitorCustomPlatform = { name: "ios" };
+      localStorage.setItem("serverUrl", origin);
+      // The stack is plain http: no secure context, no crypto.randomUUID
+      // (the local import mints ids with it). The app always has one.
+      if (typeof crypto.randomUUID !== "function") {
+        crypto.randomUUID = () => {
+          const b = crypto.getRandomValues(new Uint8Array(16));
+          b[6] = (b[6] & 0x0f) | 0x40;
+          b[8] = (b[8] & 0x3f) | 0x80;
+          const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join(
+            "",
+          );
+          return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}` as ReturnType<
+            typeof crypto.randomUUID
+          >;
+        };
+      }
+    },
+    baseURL!.replace(/\/$/, ""),
+  );
 });
 
 /** Hold each book's file request until `release(id)`. */
@@ -62,15 +65,15 @@ async function holdFiles(page: Page, ids: string[]) {
 
 const downloadButton = (page: Page) =>
   page.getByRole("button", { name: "Download to this device" }).first();
-const stateOf = (page: Page) =>
-  page.locator("[data-download-state]").first();
+const stateOf = (page: Page) => page.locator("[data-download-state]").first();
 const onDevice = (page: Page) =>
-  page
-    .getByRole("button", { name: /Downloaded to this device/ })
-    .first();
+  page.getByRole("button", { name: /Downloaded to this device/ }).first();
 
 /** Make `from` and `to` adjacent volumes of one series. */
-function neighbors(page: Page, id: string, near: { previous?: string; next?: string },
+function neighbors(
+  page: Page,
+  id: string,
+  near: { previous?: string; next?: string },
 ) {
   const brief = (bid: string | undefined, title: string, index: number) =>
     bid
@@ -208,8 +211,9 @@ test("the series downloads in one go, skipping what is already here", async ({
   await expect(series).toContainText("Downloading 1/3");
   await series.click();
   release(ids[1]);
-  await expect(page.getByText('Downloaded 2 books of "E2E Lantern Series"'))
-    .toBeVisible({ timeout: 15_000 });
+  await expect(transferPanel(page).getByText("2 finished")).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(series).toHaveText("Download the other 1");
 
   // Picking up again queues only the missing volume.

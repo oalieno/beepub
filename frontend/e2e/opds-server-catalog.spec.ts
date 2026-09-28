@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { ADMIN, ADMIN_STATE } from "./helpers";
+import { ADMIN, ADMIN_STATE, transferPanel } from "./helpers";
 import { seedFixture, type Fixture } from "./ng-helpers";
 
 /**
@@ -73,11 +73,25 @@ test("browse a server catalog and import a book the server already has", async (
     name: "Already in your libraries — open",
   });
   await expect(outcome.first()).toBeVisible({ timeout: 30_000 });
-  await expect(
-    page.getByText(`"${BOOK.title}" is already on the server`),
-  ).toBeVisible();
-  await outcome.first().click();
+  // The transfer panel keeps the outcome after leaving the catalog, and
+  // its row opens the book.
+  const row = transferPanel(page).getByRole("listitem").filter({
+    hasText: BOOK.title,
+  });
+  await expect(row.getByText("Already there")).toBeVisible();
+  // In-app navigation: a reload would start a fresh app, panel and all.
+  await page.getByRole("link", { name: "Shelves" }).first().click();
+  await expect(page).toHaveURL(/\/bookshelves/);
+  await expect(row.getByText("Already there")).toBeVisible();
+  await row.getByRole("button", { name: BOOK.title }).first().click();
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
+  // The reader never shows it.
+  await page
+    .getByRole("button", { name: /Start Reading|Continue Reading/ })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/read$/);
+  await expect(transferPanel(page)).toHaveCount(0);
 });
 
 test("a full page of covers from the server's own catalog loads", async ({

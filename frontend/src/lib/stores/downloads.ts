@@ -21,6 +21,11 @@ import {
   refreshLinkedBookIds,
 } from "$lib/stores/linkedBooks";
 import { toastStore } from "$lib/stores/toast";
+import {
+  addTransfer,
+  removeTransfer,
+  updateTransfer,
+} from "$lib/stores/transfers";
 
 export interface DownloadRequest {
   bookId: string;
@@ -37,18 +42,9 @@ export interface DownloadState {
   progress: number | null;
 }
 
-/** A set of books asked for together; it reports once, when it empties. */
-interface Batch {
-  /** Names the set in the closing toast (a series). */
-  label: string;
-  size: number;
-  pending: number;
-  done: number;
-  failed: DownloadRequest[];
-}
-
 interface Job extends DownloadRequest {
-  batch: Batch;
+  /** Its row in the transfer panel, where the outcome is reported. */
+  transferId: string;
 }
 
 const store = writable<ReadonlyMap<string, DownloadState>>(new Map());
@@ -72,11 +68,9 @@ function setState(bookId: string, state: DownloadState | null) {
 const fileUrl = (bookId: string) => `${apiBase()}/books/${bookId}/file`;
 
 /** Queue books for the local library. Books already on the device or
- *  already on their way are skipped; returns how many were queued. */
-export function enqueueDownloads(
-  books: DownloadRequest[],
-  opts: { label?: string } = {},
-): number {
+ *  already on their way are skipped; returns how many were queued. Each
+ *  gets a row in the transfer panel, which reports how it went. */
+export function enqueueDownloads(books: DownloadRequest[]): number {
   const linked = get(linkedServerBookIds);
   const busy = get(store);
   const seen = new Set<string>();
@@ -86,19 +80,16 @@ export function enqueueDownloads(
     seen.add(b.bookId);
     return true;
   });
-  if (fresh.length === 0) return 0;
-  const batch: Batch = {
-    label: opts.label ?? "",
-    size: fresh.length,
-    pending: fresh.length,
-    done: 0,
-    failed: [],
-  };
   for (const b of fresh) {
-    queue.push({ ...b, batch });
+    const transferId = addTransfer({
+      kind: "download",
+      title: b.title,
+      href: `/books/${b.bookId}`,
+    });
+    queue.push({ ...b, transferId });
     setState(b.bookId, { state: "queued", progress: null });
   }
-  void pump();
+  if (fresh.length > 0) void pump();
   return fresh.length;
 }
 
@@ -110,7 +101,7 @@ export function cancelDownloads(bookIds: Iterable<string>): void {
   for (const job of queue) {
     if (ids.has(job.bookId)) {
       setState(job.bookId, null);
-      settle(job, null);
+      removeTransfer(job.transferId);
     } else {
       keep.push(job);
     }
@@ -125,89 +116,59 @@ async function pump(): Promise<void> {
     let job: Job | undefined;
     while ((job = queue.shift())) {
       setState(job.bookId, { state: "downloading", progress: 0 });
-      let outcome: "done" | Error;
+      updateTransfer(job.transferId, { status: "running", progress: 0 });
       try {
-        await fetchToLibrary(job);
-        outcome = "done";
+        const outcome = await fetchToLibrary(job);
+        updateTransfer(job.transferId, { status: outcome, progress: null });
       } catch (e) {
-        outcome = e as Error;
+        const { bookId, title, known } = job;
+        const transferId = job.transferId;
+        updateTransfer(transferId, {
+          status: "failed",
+          progress: null,
+          error: (e as Error).message,
+          retry: () => {
+            removeTransfer(transferId);
+            enqueueDownloads([{ bookId, title, known }]);
+          },
+        });
       }
       setState(job.bookId, null);
-      settle(job, outcome);
     }
   } finally {
     running = false;
   }
 }
 
-async function fetchToLibrary(job: Job): Promise<void> {
+async function fetchToLibrary(job: Job): Promise<"done" | "duplicate"> {
   const [{ downloadEpubToLibrary }, { DuplicateBookError }] = await Promise.all(
     [
       import("$lib/services/epubDownload"),
       import("$lib/services/localLibrary"),
     ],
   );
-  // A lone book reports as it lands; a batch once, when it empties.
-  const single = job.batch.size === 1;
   try {
     const entry = await downloadEpubToLibrary({
       url: fileUrl(job.bookId),
       headers: getAuthHeader(),
       title: job.title,
       known: job.known,
-      onProgress: (pct) =>
-        setState(job.bookId, { state: "downloading", progress: pct }),
+      onProgress: (pct) => {
+        setState(job.bookId, { state: "downloading", progress: pct });
+        updateTransfer(job.transferId, { progress: pct });
+      },
     });
-    if (single) toastStore.success(m.download_done({ title: entry.title }));
     // Same bytes as the server file — the digest link is guaranteed, and
     // syncing starts right away.
     void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
       linkAndSyncBook(entry),
     );
+    return "done";
   } catch (e) {
     if (!(e instanceof DuplicateBookError)) throw e;
-    if (single)
-      toastStore.info(m.local_import_duplicate({ title: e.existing.title }));
+    return "duplicate";
   } finally {
     await refreshLinkedBookIds();
-  }
-}
-
-/** One job left its batch: counted (done / failed) or cancelled (null). */
-function settle(job: Job, outcome: "done" | Error | null) {
-  const batch = job.batch;
-  batch.pending--;
-  if (outcome === "done") batch.done++;
-  else if (outcome) batch.failed.push(job);
-  if (batch.pending > 0) return;
-
-  if (batch.size === 1) {
-    if (outcome instanceof Error)
-      toastStore.error(
-        m.book_download_failed({ error: String(outcome.message) }),
-      );
-    return;
-  }
-  const label = batch.label;
-  if (batch.failed.length > 0) {
-    const retry = batch.failed.map(({ bookId, title, known }) => ({
-      bookId,
-      title,
-      known,
-    }));
-    toastStore.error(
-      m.download_batch_failed({ count: String(batch.failed.length) }),
-      {
-        action: {
-          label: m.common_retry(),
-          onclick: () => enqueueDownloads(retry, { label }),
-        },
-      },
-    );
-  } else if (batch.done > 0) {
-    toastStore.success(
-      m.download_batch_done({ title: label, count: String(batch.done) }),
-    );
   }
 }
 
