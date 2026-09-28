@@ -78,6 +78,36 @@ test("browse a server catalog and import a book the server already has", async (
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
 });
 
+test("a full page of covers from the server's own catalog loads", async ({
+  page,
+}) => {
+  // Every cover is a proxied request back into this server, whose OPDS
+  // auth needs a database connection too: holding one per waiting proxy
+  // request used to drain the pool and time everything out.
+  const catalogId = await resetCatalog(page.request);
+  await page.goto(`/catalogs/${catalogId}`);
+  await page.getByText("All books").click();
+  // Feeds on the catalog's own host are named by path.
+  await expect(page).toHaveURL(
+    `/catalogs/${catalogId}?feed=${encodeURIComponent("/opds/all")}`,
+  );
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            [...document.querySelectorAll("main img")].filter(
+              (img) => (img as HTMLImageElement).naturalWidth > 1,
+            ).length,
+        ),
+      { timeout: 30_000 },
+    )
+    .toBeGreaterThanOrEqual(10);
+  // A reload lands on the same page.
+  await page.reload();
+  await expect(page.getByRole("heading", { level: 3 }).first()).toBeVisible();
+});
+
 test("a dialog taller than the space left by the keyboard stays on screen", async ({
   page,
 }) => {

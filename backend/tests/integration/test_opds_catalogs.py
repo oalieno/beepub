@@ -7,6 +7,7 @@ import httpx
 import pytest
 from PIL import Image
 
+from app.database import engine
 from app.routers import opds_catalogs
 from app.services.opds_fetch import OpdsFetcher
 from tests.factories.epub import build_epub
@@ -27,9 +28,12 @@ EPUB = build_epub(
 def upstream(monkeypatch):
     """Route the server's catalog fetches to an in-process fake catalog."""
     seen: list[httpx.Request] = []
+    pool_in_use: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request)
+        # No database connection is held while waiting on the catalog.
+        pool_in_use.append(engine.pool.checkedout())
         path = request.url.path
         if path == "/opds":
             return httpx.Response(302, headers={"location": "/opds/root"})
@@ -67,7 +71,8 @@ def upstream(monkeypatch):
             super().__init__(url, creds, block, httpx.MockTransport(handler))
 
     monkeypatch.setattr(opds_catalogs, "OpdsFetcher", Fetcher)
-    return seen
+    yield seen
+    assert set(pool_in_use) <= {0}, pool_in_use
 
 
 async def _add(client, **extra) -> dict:

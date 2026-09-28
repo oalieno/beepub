@@ -131,13 +131,21 @@ async def _get(db: AsyncSession, catalog_id: uuid.UUID) -> OpdsCatalog:
 
 
 async def _fetcher(db: AsyncSession, catalog: OpdsCatalog) -> OpdsFetcher:
+    """What a fetch needs, read from the database — which then lets go of
+    its connection. A fetch can wait on the catalog for many seconds, and
+    a page of covers is dozens of them at once: holding a connection each
+    drained the pool, and when the catalog is this server's own /opds
+    (whose Basic auth needs a connection too) it deadlocked outright. The
+    session takes a fresh connection if the request uses it again."""
     block = await get_setting(db, "opds_block_private_network") == "true"
     creds = (
         Credentials(catalog.username, catalog.password or "")
         if catalog.username
         else None
     )
-    return OpdsFetcher(catalog.url, creds, block)
+    fetcher = OpdsFetcher(catalog.url, creds, block)
+    await db.close()
+    return fetcher
 
 
 def _fetch_failed(exc: OpdsFetchError) -> HTTPException:

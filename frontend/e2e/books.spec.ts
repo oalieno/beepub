@@ -30,27 +30,34 @@ test("upload a book, open it, and read it", async ({ page }) => {
   await page.getByText("E2E Test Book").first().click();
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
   await expect(page.getByText("E2E Author").first()).toBeVisible();
+  // Each run's copy goes again afterwards: the e2e database persists, and
+  // a library piling up copies pushes other specs' fixtures around.
+  const bookId = new URL(page.url()).pathname.split("/").pop()!;
+  try {
+    await page
+      .getByRole("button", { name: /Start Reading|Continue Reading/ })
+      .click();
+    await expect(page).toHaveURL(/\/read$/);
 
-  await page
-    .getByRole("button", { name: /Start Reading|Continue Reading/ })
-    .click();
-  await expect(page).toHaveURL(/\/read$/);
-
-  // The chapter renders inside the reader's iframe, which lives in a
-  // closed shadow root: read its text through the debug handle.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const doc: Document | undefined =
-            window.__beepubReaderNG?.core?.getContents()[0]?.doc;
-          return (
-            doc?.body?.textContent?.includes("The starship librarian") ?? false
-          );
-        }),
-      { timeout: 30_000 },
-    )
-    .toBe(true);
+    // The chapter renders inside the reader's iframe, which lives in a
+    // closed shadow root: read its text through the debug handle.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const doc: Document | undefined =
+              window.__beepubReaderNG?.core?.getContents()[0]?.doc;
+            return (
+              doc?.body?.textContent?.includes("The starship librarian") ??
+              false
+            );
+          }),
+        { timeout: 30_000 },
+      )
+      .toBe(true);
+  } finally {
+    await page.request.delete(`/api/books/${bookId}`);
+  }
 });
 
 test("add a physical book and find it via the format filter", async ({

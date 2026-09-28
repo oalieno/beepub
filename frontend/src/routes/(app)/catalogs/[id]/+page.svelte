@@ -71,6 +71,8 @@
   let error = $state<"auth" | "blocked" | "generic" | null>(null);
   let searchTerms = $state("");
   let searchBusy = $state(false);
+  // Covers that failed to load show the placeholder instead.
+  let brokenCovers = $state<Record<string, true>>({});
   // entry.key → data URI, filled lazily for credentialed catalogs.
   let coverSrcs = $state<Record<string, string>>({});
 
@@ -122,8 +124,30 @@
     entries.filter((e) => e.kind === "book") as OpdsBookEntry[],
   );
 
+  // Where in the catalog a page is. OPDS moves by the links each feed
+  // hands out (next pages, searches), so the page is named by its feed
+  // URL — kept to the path when it's on the catalog's own host.
   function feedHref(url: string): string {
-    return `/catalogs/${catalogId}?feed=${encodeURIComponent(url)}`;
+    let feed = url;
+    try {
+      const target = new URL(url);
+      if (catalog && target.origin === new URL(catalog.url).origin)
+        feed = target.pathname + target.search;
+    } catch {
+      // not a URL we can shorten; keep it whole
+    }
+    return `/catalogs/${catalogId}?feed=${encodeURIComponent(feed)}`;
+  }
+
+  /** The feed this page shows, absolute; null at the catalog's root. */
+  function currentFeed(): string | null {
+    const feed = page.url.searchParams.get("feed");
+    if (!feed || !catalog) return null;
+    try {
+      return new URL(feed, catalog.url).toString();
+    } catch {
+      return null;
+    }
   }
 
   function loadCovers(list: OpdsEntry[]) {
@@ -414,7 +438,7 @@
   // same-route gotos). Reads are synchronous so both the query param and
   // the catalog are tracked.
   $effect(() => {
-    const target = page.url.searchParams.get("feed") ?? catalog?.url;
+    const target = currentFeed() ?? catalog?.url;
     if (!catalog || !target) return;
     void loadFeed(target);
   });
@@ -475,7 +499,7 @@
           variant="outline"
           class="rounded-xl"
           onclick={() => {
-            const target = page.url.searchParams.get("feed") ?? catalog?.url;
+            const target = currentFeed() ?? catalog?.url;
             if (target) void loadFeed(target);
           }}
         >
@@ -598,9 +622,11 @@
               <!-- Cover -->
               <div class="h-56 sm:h-64 mb-3 flex items-end justify-center">
                 <div class="relative inline-flex">
-                  {#if coverSrc && side === "server"}
+                  {#if coverSrc && side === "server" && !brokenCovers[entry.key]}
                     <img
                       use:authedSrc={coverSrc}
+                      onerror={() =>
+                        (brokenCovers = { ...brokenCovers, [entry.key]: true })}
                       alt={entry.title}
                       class="max-h-56 sm:max-h-64 w-auto max-w-full rounded-sm book-shadow"
                       loading="lazy"

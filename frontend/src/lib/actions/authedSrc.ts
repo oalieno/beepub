@@ -40,14 +40,19 @@ export function authedSrc(
         "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
     }
 
+    // A failure fires the element's own error event, as a plain src would
+    // on the web, so an onerror fallback works the same on both.
     try {
       const res = await fetch(url, { headers: getAuthHeader() });
-      if (!res.ok) return;
+      if (!res.ok) {
+        img.dispatchEvent(new Event("error"));
+        return;
+      }
       const blob = await res.blob();
       objectUrl = URL.createObjectURL(blob);
       img.src = objectUrl;
     } catch {
-      // Failed to load — leave img without src
+      img.dispatchEvent(new Event("error"));
     }
   }
 
