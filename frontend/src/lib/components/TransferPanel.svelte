@@ -183,13 +183,19 @@
 {#if visible}
   <!-- Desktop card -->
   <section
-    class="hidden md:block fixed right-4 bottom-4 z-40 w-80 bg-card border border-border rounded-2xl shadow-lg overflow-hidden"
-    style="margin-bottom: env(safe-area-inset-bottom, 0px);"
+    class="hidden md:block fixed right-6 bottom-0 z-40 w-96 bg-card border border-b-0 border-border rounded-t-2xl shadow-[0_-4px_24px_rgb(0_0_0/0.12)] overflow-hidden"
+    style="padding-bottom: env(safe-area-inset-bottom, 0px);"
     aria-label={m.transfers_panel()}
     bind:offsetHeight={cardHeight}
   >
-    <header class="flex items-center gap-2 pl-4 pr-2 py-2.5">
-      <p class="flex-1 min-w-0 text-sm font-medium truncate" role="status">
+    <!-- Drive-style: anchored to the bottom edge, a tinted header. -->
+    <header
+      class="flex items-center gap-2 pl-4 pr-3 py-3 bg-[color-mix(in_srgb,var(--primary)_12%,var(--card))]"
+    >
+      <p
+        class="flex-1 min-w-0 text-[15px] font-semibold truncate"
+        role="status"
+      >
         {summary}
       </p>
       <button
@@ -209,7 +215,7 @@
       {@render closeButton()}
     </header>
     {#if !$transfersCollapsed}
-      <ul class="border-t border-border max-h-72 overflow-y-auto py-1">
+      <ul class="max-h-72 overflow-y-auto py-1">
         {#each $transfers as item (item.id)}
           {@render row(item)}
         {/each}
