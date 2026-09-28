@@ -13,6 +13,7 @@
   import { Input } from "$lib/components/ui/input";
   import BackButton from "$lib/components/BackButton.svelte";
   import {
+    BookCheck,
     BookOpen,
     Check,
     ChevronRight,
@@ -651,22 +652,31 @@
                   {/if}
 
                   <!-- Download overlay -->
-                  {#if (dl?.status === "imported" || dl?.status === "duplicate") && dl.bookId}
+                  <!-- Imported (gold check) and already-there (plain book)
+                       must not look alike: the card is where the eye is. -->
+                  {#if dl?.status === "duplicate"}
+                    <svelte:element
+                      this={dl.bookId ? "a" : "span"}
+                      href={dl.bookId ? `/books/${dl.bookId}` : undefined}
+                      class="absolute bottom-1.5 right-1.5 bg-card text-foreground border border-border p-1.5 rounded-full"
+                      title={side === "server"
+                        ? m.catalogs_server_duplicate()
+                        : m.catalogs_duplicate()}
+                    >
+                      <BookCheck size={14} />
+                    </svelte:element>
+                  {:else if dl?.status === "imported" && dl.bookId}
                     <a
                       href={`/books/${dl.bookId}`}
                       class="absolute bottom-1.5 right-1.5 bg-primary text-primary-foreground p-1.5 rounded-full"
-                      title={dl.status === "imported"
-                        ? m.catalogs_server_imported()
-                        : m.catalogs_server_duplicate()}
+                      title={m.catalogs_server_imported()}
                     >
                       <Check size={14} />
                     </a>
-                  {:else if dl?.status === "imported" || dl?.status === "duplicate"}
+                  {:else if dl?.status === "imported"}
                     <span
                       class="absolute bottom-1.5 right-1.5 bg-primary text-primary-foreground p-1.5 rounded-full"
-                      title={dl.status === "imported"
-                        ? m.catalogs_imported()
-                        : m.catalogs_duplicate()}
+                      title={m.catalogs_imported()}
                     >
                       <Check size={14} />
                     </span>
@@ -723,6 +733,28 @@
                   <p class="text-muted-foreground text-xs mt-0.5 line-clamp-1">
                     {entry.authors.join(", ")}
                   </p>
+                {/if}
+                {#if dl?.status === "imported" || dl?.status === "duplicate"}
+                  <!-- The outcome, in words, right under the book tapped. -->
+                  {@const outcome =
+                    dl.status === "imported"
+                      ? side === "server"
+                        ? m.catalogs_state_imported()
+                        : m.catalogs_imported()
+                      : side === "server"
+                        ? m.catalogs_state_duplicate()
+                        : m.catalogs_duplicate()}
+                  <svelte:element
+                    this={dl.bookId ? "a" : "p"}
+                    href={dl.bookId ? `/books/${dl.bookId}` : undefined}
+                    class="mt-1 inline-flex items-center gap-0.5 text-xs font-medium {dl.status ===
+                    'imported'
+                      ? 'text-primary'
+                      : 'text-foreground'} {dl.bookId ? 'hover:underline' : ''}"
+                  >
+                    {outcome}
+                    {#if dl.bookId}<ChevronRight size={12} />{/if}
+                  </svelte:element>
                 {/if}
                 {#if variantOf(entry)}
                   <!-- Catalogs list one book per variant (Gutenberg: with

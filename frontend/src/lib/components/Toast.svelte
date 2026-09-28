@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { fly } from "svelte/transition";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import { CircleCheck, CircleX, Info, TriangleAlert, X } from "@lucide/svelte";
@@ -23,6 +24,12 @@
       "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950 dark:border-amber-900 dark:text-amber-200",
   };
 
+  // Motion is what catches the eye at the screen's edge; without it a
+  // toast appears unnoticed. None for reduced motion.
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
   const iconColors: Record<ToastType, string> = {
     success: "text-primary",
     error: "",
@@ -40,6 +47,11 @@
       class="flex items-start gap-3 px-4 py-3 rounded-2xl border shadow-lg pointer-events-auto w-full {colors[
         toast.type
       ]}"
+      role="status"
+      in:fly={{ y: 24, duration: reducedMotion ? 0 : 220 }}
+      out:fly={{ y: 8, duration: reducedMotion ? 0 : 160 }}
+      onpointerenter={() => toastStore.pause(toast.id)}
+      onpointerleave={() => toastStore.resume(toast.id)}
     >
       <IconComponent
         size={18}

@@ -67,14 +67,16 @@ test("browse a server catalog and import a book the server already has", async (
 
   await expect(page.getByLabel("Import into")).toContainText(/.+/);
   await page.getByTitle("Import into the library").first().click();
-  // Same file, same digest: linked to the existing book, not a copy.
+  // Same file, same digest: linked to the existing book, not a copy — and
+  // the card says so, not only a toast at the screen's edge.
+  const outcome = page.getByRole("link", {
+    name: "Already in your libraries — open",
+  });
+  await expect(outcome.first()).toBeVisible({ timeout: 30_000 });
   await expect(
     page.getByText(`"${BOOK.title}" is already on the server`),
-  ).toBeVisible({ timeout: 30_000 });
-  await page
-    .getByTitle("Already on the server — open the book")
-    .first()
-    .click();
+  ).toBeVisible();
+  await outcome.first().click();
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
 });
 

@@ -932,6 +932,8 @@
   "catalogs_importing": "Importing…",
   "catalogs_server_imported": "Imported — open the book",
   "catalogs_server_duplicate": "Already on the server — open the book",
+  "catalogs_state_imported": "Imported — open",
+  "catalogs_state_duplicate": "Already in your libraries — open",
   "catalogs_import_done": "Imported \"{title}\"",
   "catalogs_import_duplicate": "\"{title}\" is already on the server",
   "catalogs_import_unsupported": "No format the server can import (EPUB, MOBI, AZW3, CBZ, TXT)",

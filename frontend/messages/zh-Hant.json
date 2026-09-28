@@ -932,6 +932,8 @@
   "catalogs_importing": "匯入中…",
   "catalogs_server_imported": "已匯入，點一下打開",
   "catalogs_server_duplicate": "伺服器上已有這本書，點一下打開",
+  "catalogs_state_imported": "已匯入，打開",
+  "catalogs_state_duplicate": "書庫裡已經有這本，打開",
   "catalogs_import_done": "已匯入「{title}」",
   "catalogs_import_duplicate": "伺服器上已有「{title}」",
   "catalogs_import_unsupported": "沒有可以匯入的格式（EPUB、MOBI、AZW3、CBZ、TXT）",
