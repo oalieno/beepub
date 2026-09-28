@@ -120,7 +120,17 @@ async def test_cover_upload_multipart(admin_client, monkeypatch, tmp_path):
         files={"file": ("cover.png", _png_bytes(), "image/png")},
     )
     assert response.status_code == 200, response.text
-    assert response.json()["cover_path"]
+    first = response.json()
+    assert first["cover_path"]
+
+    # A replacement keeps the file path; the stamp the cover URL is keyed
+    # on must still move, or browsers show the cached image.
+    again = await admin_client.post(
+        f"/api/books/{book['id']}/cover",
+        files={"file": ("cover.png", _png_bytes(), "image/png")},
+    )
+    assert again.json()["cover_path"] == first["cover_path"]
+    assert again.json()["updated_at"] > first["updated_at"]
 
     garbage = await admin_client.post(
         f"/api/books/{book['id']}/cover",

@@ -4,6 +4,7 @@
   import { ArrowDown, ArrowUp, Bookmark, Check } from "@lucide/svelte";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { editedBooks, withEdit } from "$lib/stores/editedBooks";
 
   let {
     books,
@@ -14,6 +15,9 @@
     sortValue: string;
     onSort: (value: string) => void;
   } = $props();
+
+  // A list restored on back predates an edit made on the book page.
+  let rows = $derived(books.map((b) => withEdit(b, $editedBooks)));
 
   let sortBy = $derived(sortValue.split(":")[0]);
   let sortOrder = $derived(sortValue.split(":")[1]);
@@ -88,7 +92,7 @@
       </tr>
     </thead>
     <tbody>
-      {#each books as book (book.id)}
+      {#each rows as book (book.id)}
         <tr
           class="border-b border-border/50 last:border-0 hover:bg-secondary/40 cursor-pointer transition-colors"
           role="link"

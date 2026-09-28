@@ -1895,6 +1895,9 @@ async def update_book_cover(
         raise HTTPException(status_code=502, detail="Cover download failed")
     os.replace(tmp, dest)
     book.cover_path = dest
+    # Same path as the old cover: bump the stamp the cover URL is keyed
+    # on, or browsers keep showing the cached image.
+    book.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(book)
     return book
@@ -1920,6 +1923,9 @@ async def upload_book_cover(
         raise HTTPException(status_code=422, detail="Not a decodable image")
     os.replace(tmp, dest)
     book.cover_path = dest
+    # Same path as the old cover: bump the stamp the cover URL is keyed
+    # on, or browsers keep showing the cached image.
+    book.updated_at = datetime.now(UTC)
     await db.commit()
     await db.refresh(book)
     return book

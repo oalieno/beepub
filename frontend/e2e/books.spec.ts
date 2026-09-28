@@ -170,3 +170,47 @@ test("an unknown page speaks the interface language", async ({ page }) => {
   await expect(page.getByText("找不到這個頁面")).toBeVisible();
   await expect(page.getByRole("link", { name: "回到首頁" })).toBeVisible();
 });
+
+test("a new cover shows on the library page restored on back", async ({
+  page,
+}) => {
+  const libraries: { id: string; name: string }[] = await (
+    await page.request.get("/api/libraries")
+  ).json();
+  const library = libraries.find((l) => l.name === LIBRARY_NAME)!;
+  const title = `Cover Swap E2E ${Date.now()}`;
+  const book: { id: string } = await (
+    await page.request.post("/api/books/physical", {
+      data: { library_id: library.id, title },
+    })
+  ).json();
+  try {
+    await page.goto(
+      `/libraries/${library.id}?search=${encodeURIComponent(title)}`,
+    );
+    await page.getByText(title).first().click();
+    await expect(page).toHaveURL(`/books/${book.id}`);
+
+    await page.getByRole("button", { name: "More actions" }).first().click();
+    await page.getByRole("menuitem", { name: "Edit metadata" }).click();
+    await expect(page).toHaveURL(`/books/${book.id}/edit`);
+    await page.locator("form button").first().click();
+    await page.locator('input[type="file"][accept="image/*"]').setInputFiles({
+      name: "cover.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      ),
+    });
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page).toHaveURL(`/books/${book.id}`);
+
+    // Back to the list as it was captured, before the cover existed.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/libraries\//);
+    await expect(page.getByAltText(`${title} cover`)).toBeVisible();
+  } finally {
+    await page.request.delete(`/api/books/${book.id}`);
+  }
+});

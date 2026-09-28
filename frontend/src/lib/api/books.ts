@@ -1,5 +1,6 @@
 import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
 import { feedQuery, type FeedParams } from "./libraries";
+import { noteBookEdited } from "$lib/stores/editedBooks";
 import type {
   ZhConversion,
   BookOut,
@@ -31,7 +32,9 @@ import type {
 export const booksApi = {
   /** Rebuild a TXT book's EPUB from its source as Traditional Chinese. */
   convertZh: (bookId: string, mode: ZhConversion) =>
-    post(`/books/${bookId}/zh-conversion`, { mode }) as Promise<BookOut>,
+    (post(`/books/${bookId}/zh-conversion`, { mode }) as Promise<BookOut>).then(
+      noteBookEdited,
+    ),
 
   upload: (file: File, libraryId: string) => {
     const formData = new FormData();
@@ -111,11 +114,16 @@ export const booksApi = {
       tags?: string[] | null;
       field_sources?: Record<string, string> | null;
     },
-  ) => put(`/books/${bookId}/metadata`, data) as Promise<BookOut>,
+  ) =>
+    (put(`/books/${bookId}/metadata`, data) as Promise<BookOut>).then(
+      noteBookEdited,
+    ),
 
   // Replace the cover from a source URL (server-side, allowlisted hosts).
   updateCover: (bookId: string, url: string) =>
-    put(`/books/${bookId}/cover`, { url }) as Promise<BookOut>,
+    (put(`/books/${bookId}/cover`, { url }) as Promise<BookOut>).then(
+      noteBookEdited,
+    ),
 
   uploadCover: (bookId: string, file: File) => {
     const formData = new FormData();
@@ -129,7 +137,7 @@ export const booksApi = {
         const err = (await res.json().catch(() => ({}))) as { detail?: string };
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
-      return res.json() as Promise<BookOut>;
+      return noteBookEdited((await res.json()) as BookOut);
     });
   },
 

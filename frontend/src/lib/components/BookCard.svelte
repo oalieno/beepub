@@ -15,9 +15,12 @@
   import { authedSrc } from "$lib/actions/authedSrc";
   import { linkedServerBookIds } from "$lib/stores/linkedBooks";
   import { downloads } from "$lib/stores/downloads";
+  import { editedBooks, withEdit } from "$lib/stores/editedBooks";
   import * as m from "$lib/paraglide/messages.js";
 
-  let { book }: { book: BookOut } = $props();
+  let { book: row }: { book: BookOut } = $props();
+  // A list restored on back predates an edit made on the book page.
+  let book = $derived(withEdit(row, $editedBooks));
   // On its way to this device (native only: the queue is empty on web).
   let download = $derived($downloads.get(book.id));
 
