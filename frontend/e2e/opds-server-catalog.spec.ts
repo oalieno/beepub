@@ -78,6 +78,25 @@ test("browse a server catalog and import a book the server already has", async (
   await expect(page).toHaveURL(/\/books\/[0-9a-f-]+$/);
 });
 
+test("a dialog taller than the space left by the keyboard stays on screen", async ({
+  page,
+}) => {
+  // A phone with the keyboard up: the app's viewport shrinks to this.
+  await page.setViewportSize({ width: 390, height: 420 });
+  await page.goto("/catalogs");
+  await page.getByRole("button", { name: "Add catalog" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  // Polled: the open animation scales it in.
+  await expect
+    .poll(async () => {
+      const box = (await dialog.boundingBox())!;
+      return [box.y >= 0, box.y + box.height <= 420];
+    })
+    .toEqual([true, true]);
+  await expect(page.getByRole("button", { name: "Close" })).toBeInViewport();
+});
+
 test("an admin can block catalogs on the private network", async ({ page }) => {
   const catalogId = await resetCatalog(page.request);
   expect((await blockPrivate(page.request, true)).ok()).toBeTruthy();

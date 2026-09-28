@@ -30,7 +30,7 @@
   }}
 >
   <Dialog.Content
-    class="bg-card rounded-2xl p-0 gap-0 flex flex-col sm:max-w-lg max-h-[calc(100dvh-2rem)] {contentClass}"
+    class="bg-card rounded-2xl p-0 gap-0 flex flex-col sm:max-w-lg {contentClass}"
     showCloseButton={false}
   >
     <div class="flex items-center justify-between px-6 py-5 shrink-0">
