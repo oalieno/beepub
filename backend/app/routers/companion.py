@@ -32,7 +32,7 @@ from app.services.companion import (
     get_or_create_conversation,
     stream_companion_response,
 )
-from app.services.llm import LLMNotConfiguredError, LLMStream
+from app.services.llm import LLMBusyError, LLMNotConfiguredError, LLMStream
 from app.services.sse import sse_event
 from app.services.text_chunking import is_backmatter_title, is_meta_echo_summary
 
@@ -100,6 +100,10 @@ async def _streaming_generator(
                 "message_id": str(assistant_msg_id),
             },
         )
+    except LLMBusyError as exc:
+        logger.warning(f"Companion provider busy: {exc}")
+        # The code lets the client show a localized "busy, try later" line
+        yield sse_event("error", {"message": str(exc), "code": "llm_busy"})
     except Exception as exc:
         logger.error(f"Companion streaming error: {exc}", exc_info=True)
         yield sse_event("error", {"message": str(exc)})

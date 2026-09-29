@@ -394,6 +394,7 @@
   "companion_failed_load_list": "Failed to load conversations",
   "companion_failed_load": "Failed to load conversation",
   "companion_send_failed": "Failed to get a response",
+  "companion_llm_busy": "Gemini is busy right now, please try again later",
   "companion_prompt_summarize": "Summarize what's happened so far",
   "companion_prompt_themes": "What are the main themes?",
   "companion_prompt_characters": "Who are the key characters?",

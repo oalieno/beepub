@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
@@ -61,6 +62,11 @@ class LLMProvider(Protocol):
 
 
 class GeminiProvider:
+    # Gemini answers 503 (overloaded) / 429 under load; a streamed reply is
+    # retried only before its first token — after that the user has text.
+    _RETRY_STATUSES = frozenset({429, 503})
+    _RETRY_DELAYS: tuple[float, ...] = (1.0, 2.0)
+
     def __init__(self, api_key: str, model: str) -> None:
         self._api_key = api_key
         self._model = model
@@ -150,28 +156,41 @@ class GeminiProvider:
     async def _stream_gemini(
         self, url: str, body: dict, llm_stream: LLMStream
     ) -> AsyncIterator[str]:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            async with client.stream(
-                "POST",
-                url,
-                headers={"x-goog-api-key": self._api_key},
-                json=body,
-            ) as resp:
-                resp.raise_for_status()
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    payload = json.loads(line.removeprefix("data: "))
-                    # Gemini returns usageMetadata in the last chunk
-                    if "usageMetadata" in payload:
-                        llm_stream.usage = self._parse_gemini_usage(payload)
-                    candidates = payload.get("candidates", [])
-                    if not candidates:
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts", [])
-                    for part in parts:
-                        if "text" in part:
-                            yield part["text"]
+        yielded = False
+        for attempt in range(len(self._RETRY_DELAYS) + 1):
+            try:
+                async with httpx.AsyncClient(timeout=120.0) as client:
+                    async with client.stream(
+                        "POST",
+                        url,
+                        headers={"x-goog-api-key": self._api_key},
+                        json=body,
+                    ) as resp:
+                        resp.raise_for_status()
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data: "):
+                                continue
+                            payload = json.loads(line.removeprefix("data: "))
+                            # Gemini returns usageMetadata in the last chunk
+                            if "usageMetadata" in payload:
+                                llm_stream.usage = self._parse_gemini_usage(payload)
+                            candidates = payload.get("candidates", [])
+                            if not candidates:
+                                continue
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            for part in parts:
+                                if "text" in part:
+                                    yielded = True
+                                    yield part["text"]
+                return
+            except httpx.HTTPStatusError as exc:
+                if yielded or exc.response.status_code not in self._RETRY_STATUSES:
+                    raise
+                if attempt == len(self._RETRY_DELAYS):
+                    raise LLMBusyError(
+                        "Gemini is busy, please try again later"
+                    ) from exc
+                await asyncio.sleep(self._RETRY_DELAYS[attempt])
 
 
 class OpenAICompatibleProvider:
@@ -300,6 +319,10 @@ class OpenAICompatibleProvider:
 
 class LLMNotConfiguredError(Exception):
     """Raised when no LLM provider is configured."""
+
+
+class LLMBusyError(Exception):
+    """Raised when the provider stays overloaded (429/503) through every retry."""
 
 
 def get_llm_provider_from_settings(

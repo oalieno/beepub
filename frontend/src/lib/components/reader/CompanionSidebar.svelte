@@ -290,7 +290,11 @@
                 messages = [...messages, assistantMsg];
                 streamingContent = "";
               } else if (data.message) {
-                setError(data.message);
+                setError(
+                  data.code === "llm_busy"
+                    ? m.companion_llm_busy()
+                    : data.message,
+                );
               }
             } catch {
               // Not JSON, skip

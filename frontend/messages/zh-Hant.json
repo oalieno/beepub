@@ -394,6 +394,7 @@
   "companion_failed_load_list": "無法載入對話列表",
   "companion_failed_load": "無法載入對話",
   "companion_send_failed": "無法取得回覆",
+  "companion_llm_busy": "Gemini 暫時忙碌，請稍後再試",
   "companion_prompt_summarize": "幫我摘要目前的劇情",
   "companion_prompt_themes": "這本書的主題是什麼？",
   "companion_prompt_characters": "有哪些重要角色？",
