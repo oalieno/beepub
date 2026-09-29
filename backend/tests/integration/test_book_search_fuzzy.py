@@ -63,6 +63,14 @@ async def test_punctuation_insensitive(admin_client: AsyncClient):
     assert titles == [TITLES["comma"]]
 
 
+async def test_simplified_and_traditional_find_each_other(admin_client: AsyncClient):
+    await _seed(admin_client)
+    # 064: the normalized tier folds both scripts to one.
+    assert await _search(admin_client, "三体") == [TITLES["short"]]
+    assert await _search(admin_client, "街角VR食堂 深夜篇") == [TITLES["spaced"]]
+    assert await _search(admin_client, "三十岁的礼物") == [TITLES["decoy"]]
+
+
 async def test_one_character_typo_falls_through_to_trigram(
     admin_client: AsyncClient,
 ):
