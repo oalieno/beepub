@@ -1109,5 +1109,12 @@
   "transfers_row_duplicate": "已经有了",
   "transfers_row_failed": "失败",
   "transfers_collapse": "收起",
-  "transfers_expand": "展开"
+  "transfers_expand": "展开",
+  "opened_file_title": "放到哪里？",
+  "opened_file_to_device": "添加到本地书库",
+  "opened_file_to_server": "上传到服务器",
+  "opened_file_library": "服务器书库",
+  "opened_file_device_hint": "添加到本地的书，切换到本地后就在书库里。",
+  "opened_file_device_epub_only": "本地书库只支持 EPUB 文件。",
+  "opened_file_no_upload": "没有你可以上传的服务器书库。"
 }

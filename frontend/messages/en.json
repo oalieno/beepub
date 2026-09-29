@@ -1109,5 +1109,12 @@
   "transfers_row_duplicate": "Already there",
   "transfers_row_failed": "Failed",
   "transfers_collapse": "Collapse",
-  "transfers_expand": "Expand"
+  "transfers_expand": "Expand",
+  "opened_file_title": "Where should it go?",
+  "opened_file_to_device": "Add to this device",
+  "opened_file_to_server": "Upload to the server",
+  "opened_file_library": "Server library",
+  "opened_file_device_hint": "Books added to this device are in its library once you switch to This device.",
+  "opened_file_device_epub_only": "This device's library only takes EPUB files.",
+  "opened_file_no_upload": "There is no server library you can upload to."
 }

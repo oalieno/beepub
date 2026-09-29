@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, untrack } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
   import { toastStore } from "$lib/stores/toast";
   import { confirmDialog } from "$lib/stores/confirm";
+  import { deviceImported } from "$lib/services/openedFiles";
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import {
@@ -180,6 +181,12 @@
 
   onMount(async () => {
     await loadEntries();
+  });
+
+  // A book opened from Files while the shelf is on screen shows up here.
+  const shownAt = Date.now();
+  $effect(() => {
+    if ($deviceImported > shownAt) untrack(() => void loadEntries());
   });
 </script>
 

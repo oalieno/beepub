@@ -47,5 +47,132 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Books from Files / the share sheet / AirDrop ("Open in BeePub").
+	     The set the server's upload accepts; AppDelegate.receiveOpenedBook
+	     copies each into the sandbox. Alternate: never the default opener. -->
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>EPUB</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>org.idpf.epub-container</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Plain Text</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.plain-text</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Kindle Book</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.beepub.mobi</string>
+				<string>com.beepub.azw3</string>
+			</array>
+		</dict>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Comic Book Archive</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.beepub.cbz</string>
+			</array>
+		</dict>
+	</array>
+	<!-- iOS hands over a copy (Documents/Inbox), never the original: the app
+	     keeps its own copy of the book either way. -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<false/>
+	<!-- Imported, not exported: if another installed app declares these
+	     extensions, its declaration wins and ours is only a fallback. -->
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.beepub.mobi</string>
+			<key>UTTypeDescription</key>
+			<string>Mobipocket eBook</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>mobi</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/x-mobipocket-ebook</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.beepub.azw3</string>
+			<key>UTTypeDescription</key>
+			<string>Kindle KF8 eBook</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>azw3</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.amazon.ebook</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.beepub.cbz</string>
+			<key>UTTypeDescription</key>
+			<string>Comic Book Archive (ZIP)</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.zip-archive</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>cbz</string>
+				</array>
+				<key>public.mime-type</key>
+				<array>
+					<string>application/vnd.comicbook+zip</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
 </dict>
 </plist>

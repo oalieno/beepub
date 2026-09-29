@@ -1109,5 +1109,12 @@
   "transfers_row_duplicate": "已經有了",
   "transfers_row_failed": "失敗",
   "transfers_collapse": "收合",
-  "transfers_expand": "展開"
+  "transfers_expand": "展開",
+  "opened_file_title": "放到哪裡？",
+  "opened_file_to_device": "加入本機書庫",
+  "opened_file_to_server": "上傳到伺服器",
+  "opened_file_library": "伺服器書庫",
+  "opened_file_device_hint": "加入本機的書，切換到本機後就在書庫裡。",
+  "opened_file_device_epub_only": "本機書庫只收 EPUB 檔。",
+  "opened_file_no_upload": "沒有你可以上傳的伺服器書庫。"
 }
