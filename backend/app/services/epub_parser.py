@@ -1,11 +1,8 @@
-import io
 import posixpath
 import re
-from pathlib import Path
 from typing import Any
 
-from PIL import Image
-
+from app.services.storage import save_cover_bytes
 from app.vendor import ebooklib
 from app.vendor.ebooklib import epub
 
@@ -244,26 +241,7 @@ def extract_cover(file_path: str, cover_path: str) -> bool:
         if cover_item is None:
             return False
 
-        return save_cover_image(cover_item.get_content(), cover_path)
+        return save_cover_bytes(cover_item.get_content(), cover_path)
 
-    except Exception:
-        return False
-
-
-def save_cover_image(image_data: bytes, cover_path: str) -> bool:
-    """Save and resize image data as a JPEG cover. Returns True if successful."""
-    try:
-        img = Image.open(io.BytesIO(image_data))
-        img = img.convert("RGB")
-
-        # Resize to max 400px wide keeping aspect ratio
-        max_width = 400
-        if img.width > max_width:
-            ratio = max_width / img.width
-            img = img.resize((max_width, int(img.height * ratio)), Image.LANCZOS)
-
-        Path(cover_path).parent.mkdir(parents=True, exist_ok=True)
-        img.save(cover_path, "JPEG", quality=85)
-        return True
     except Exception:
         return False

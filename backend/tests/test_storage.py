@@ -7,8 +7,10 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.storage import (
+    COVER_MAX_WIDTH,
     MAX_UPLOAD_SIZE,
     delete_file,
+    encode_cover,
     get_book_path,
     get_cover_path,
     get_illustration_path,
@@ -234,3 +236,56 @@ class TestSaveCoverBytes:
         dest = tmp_path / "cover.jpg"
         assert save_cover_bytes(b"definitely not an image", str(dest)) is False
         assert not dest.exists()
+
+
+# ---------------------------------------------------------------------------
+# encode_cover
+# ---------------------------------------------------------------------------
+
+
+def _image_bytes(mode: str, size: tuple[int, int], color, fmt: str) -> bytes:
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new(mode, size, color).save(buf, fmt)
+    return buf.getvalue()
+
+
+def _decode(data: bytes):
+    import io
+
+    from PIL import Image
+
+    img = Image.open(io.BytesIO(data))
+    img.load()
+    return img
+
+
+class TestEncodeCover:
+    def test_wide_image_is_cut_to_max_width_keeping_aspect(self):
+        img = _decode(encode_cover(_image_bytes("RGB", (2000, 3000), "red", "JPEG")))
+        assert img.format == "JPEG"
+        assert img.size == (COVER_MAX_WIDTH, 1200)
+
+    def test_small_image_is_not_upscaled(self):
+        img = _decode(encode_cover(_image_bytes("RGB", (300, 450), "red", "PNG")))
+        assert img.size == (300, 450)
+
+    def test_transparent_png_flattens_onto_white(self):
+        data = _image_bytes("RGBA", (1600, 2400), (0, 0, 0, 0), "PNG")
+        img = _decode(encode_cover(data))
+        assert img.mode == "RGB"
+        assert img.size == (COVER_MAX_WIDTH, 1200)
+        assert all(c > 245 for c in img.getpixel((400, 600)))
+
+    def test_cmyk_becomes_rgb(self):
+        data = _image_bytes("CMYK", (1000, 1500), (0, 0, 0, 0), "JPEG")
+        img = _decode(encode_cover(data))
+        assert img.mode == "RGB"
+        assert img.width == COVER_MAX_WIDTH
+
+    def test_garbage_raises(self):
+        with pytest.raises(Exception):
+            encode_cover(b"not an image")

@@ -2,12 +2,10 @@ import asyncio
 import json
 import logging
 import os
-import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import redis.asyncio as aioredis
 from sqlalchemy.orm.attributes import flag_modified
@@ -17,7 +15,7 @@ from app.database import create_task_engine
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.services.partial_md5 import compute_partial_md5
-from app.services.storage import get_cover_path
+from app.services.storage import delete_file, get_cover_path, save_cover_bytes
 from app.tasks.text_extract import extract_book_text
 
 logger = logging.getLogger(__name__)
@@ -97,12 +95,23 @@ def scan_calibre_libraries(base_dir: str = "/calibre") -> list[dict]:
 
 
 def _copy_cover(src: str, dest: str) -> bool:
-    """Copy a cover file directly without resizing."""
+    """Bring a Calibre cover over as the canonical (downscaled) JPEG. The
+    copy keeps Calibre's mtime, as copy2 did: the re-sync check compares
+    the two to spot a cover changed in Calibre."""
+    # Via a temp file, so a cover Calibre can't hand over intact never
+    # costs the book the one it already has.
+    tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
     try:
-        Path(dest).parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(src, dest)
+        with open(src, "rb") as f:
+            data = f.read()
+        if not save_cover_bytes(data, tmp):
+            return False
+        st = os.stat(src)
+        os.utime(tmp, ns=(st.st_atime_ns, st.st_mtime_ns))
+        os.replace(tmp, dest)
         return True
     except Exception:
+        delete_file(tmp)
         return False
 
 
@@ -458,7 +467,6 @@ async def sync_calibre_library(
                             "epub_tags": cal_book.tags,
                         }
 
-                        # Copy cover directly (skip Pillow resize — Calibre covers are already reasonable)
                         cover_dest = None
                         if cal_book.cover_path and os.path.exists(cal_book.cover_path):
                             dest = get_cover_path(book_id)
@@ -513,8 +521,6 @@ async def sync_calibre_library(
             calibre_ids = {cb.calibre_id for cb in calibre_books}
             orphans = [b for cid, b in existing_books.items() if cid not in calibre_ids]
             if orphans:
-                from app.services.storage import delete_file
-
                 for book in orphans:
                     # Remove library association
                     orphan_lb = await db.execute(

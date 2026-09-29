@@ -30,18 +30,49 @@ def cover_url_allowed(url: str) -> bool:
     return parsed.scheme == "https" and parsed.hostname in COVER_URL_ALLOWED_HOSTS
 
 
+# Every stored cover is at most this wide, as JPEG at this quality —
+# enough for a retina grid card, and a Calibre library's full-size
+# covers otherwise run to tens of GB.
+COVER_MAX_WIDTH = 800
+COVER_JPEG_QUALITY = 85
+
+
+def encode_cover(data: bytes) -> bytes:
+    """Arbitrary image bytes as the canonical cover JPEG: upright, RGB
+    (transparency flattened onto white), at most COVER_MAX_WIDTH wide —
+    never upscaled. Raises on anything Pillow can't decode."""
+    import io
+
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(data)) as img:
+        img = ImageOps.exif_transpose(img)
+        if img.mode in ("RGBA", "LA", "PA") or (
+            img.mode == "P" and "transparency" in img.info
+        ):
+            rgba = img.convert("RGBA")
+            img = Image.new("RGB", rgba.size, "white")
+            img.paste(rgba, mask=rgba.getchannel("A"))
+        else:
+            # CMYK, grayscale, palette: Pillow's own conversion is right.
+            img = img.convert("RGB")
+        if img.width > COVER_MAX_WIDTH:
+            height = max(1, round(img.height * COVER_MAX_WIDTH / img.width))
+            img = img.resize((COVER_MAX_WIDTH, height), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, "JPEG", quality=COVER_JPEG_QUALITY)
+        return out.getvalue()
+
+
 def save_cover_bytes(data: bytes, dest_path: str) -> bool:
     """Decode-and-re-encode arbitrary image bytes into the canonical
     JPEG cover. The decode is the validation — non-image payloads
     return False and leave no file behind."""
-    import io
-
-    from PIL import Image
-
     try:
-        with Image.open(io.BytesIO(data)) as img:
-            os.makedirs(os.path.dirname(dest_path), exist_ok=True)
-            img.convert("RGB").save(dest_path, "JPEG", quality=88)
+        encoded = encode_cover(data)
+        os.makedirs(os.path.dirname(dest_path), exist_ok=True)
+        with open(dest_path, "wb") as f:
+            f.write(encoded)
         return True
     except Exception:
         delete_file(dest_path)

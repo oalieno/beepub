@@ -10,6 +10,7 @@ import pytest
 
 from app.services.calibre import (
     _calibre_row_unchanged,
+    _copy_cover,
     get_metadata_db_mtime,
     scan_calibre_libraries,
 )
@@ -259,3 +260,30 @@ class TestMetadataChainDispatch:
         from app.tasks.metadata import auto_start_backfill
 
         assert callable(auto_start_backfill)
+
+
+class TestCopyCover:
+    def test_downscales_and_keeps_calibre_mtime(self, tmp_path):
+        import os
+
+        from PIL import Image
+
+        src = tmp_path / "cover.png"
+        Image.new("RGBA", (1600, 2400), (10, 20, 30, 255)).save(src)
+        os.utime(src, (1_000_000_000, 1_000_000_000))
+        dest = tmp_path / "covers" / "book.jpg"
+
+        assert _copy_cover(str(src), str(dest)) is True
+        with Image.open(dest) as img:
+            assert (img.format, img.size) == ("JPEG", (800, 1200))
+        assert dest.stat().st_mtime == 1_000_000_000
+
+    def test_undecodable_source_keeps_the_existing_cover(self, tmp_path):
+        src = tmp_path / "cover.jpg"
+        src.write_bytes(b"not an image")
+        dest = tmp_path / "book.jpg"
+        dest.write_bytes(b"old cover")
+
+        assert _copy_cover(str(src), str(dest)) is False
+        assert dest.read_bytes() == b"old cover"
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["book.jpg", "cover.jpg"]
