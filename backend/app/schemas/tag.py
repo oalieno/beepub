@@ -20,6 +20,7 @@ class BookTagOut(BaseModel):
 class TagWithCount(BaseModel):
     tag: str
     label: str
+    label_hans: str
     category: str
     book_count: int
 
@@ -32,6 +33,7 @@ class SimilarBookOut(BookOut):
 class TagBrowseSection(BaseModel):
     tag: str
     label: str
+    label_hans: str
     category: str
     book_count: int
     books: list[BookWithInteractionOut]

@@ -327,7 +327,11 @@
                 bookTag.confidence * 100,
               )}%"
             >
-              {localizedTagLabel(bookTag.tag, bookTag.label)}
+              {localizedTagLabel(
+                bookTag.tag,
+                bookTag.label,
+                bookTag.label_hans,
+              )}
             </button>
           {/each}
         </div>

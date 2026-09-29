@@ -4,6 +4,13 @@
   import { getLocale, setLocale, locales } from "$lib/paraglide/runtime.js";
 
   let show = $state(false);
+
+  // Each language named in itself.
+  const names: Record<string, string> = {
+    en: "English",
+    "zh-Hant": "繁體中文",
+    "zh-Hans": "简体中文",
+  };
 </script>
 
 <button
@@ -12,9 +19,7 @@
 >
   <Globe size={20} class="text-muted-foreground shrink-0" />
   <span class="text-sm font-medium flex-1">{m.profile_language()}</span>
-  <span class="text-sm text-muted-foreground"
-    >{getLocale() === "en" ? "English" : "繁體中文"}</span
-  >
+  <span class="text-sm text-muted-foreground">{names[getLocale()]}</span>
   <ChevronRight
     size={16}
     class="text-muted-foreground/50 transition-transform {show
@@ -34,9 +39,7 @@
           setLocale(locale);
         }}
       >
-        <span class="flex-1 text-left"
-          >{locale === "en" ? "English" : "繁體中文"}</span
-        >
+        <span class="flex-1 text-left">{names[locale]}</span>
         {#if active}
           <svg
             class="w-4 h-4 text-primary"

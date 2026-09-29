@@ -1044,7 +1044,7 @@ async def get_discover_browse(
     """Browse books by tag category."""
     from app.schemas.tag import TagBrowseSection
     from app.services.recommendations import get_books_by_tag_category
-    from app.services.tags import TAG_LABELS
+    from app.services.tags import TAG_LABELS, TAG_LABELS_HANS
 
     sections_data = await get_books_by_tag_category(
         db,
@@ -1085,6 +1085,7 @@ async def get_discover_browse(
             TagBrowseSection(
                 tag=section["tag"],
                 label=TAG_LABELS.get(section["tag"], section["tag"]),
+                label_hans=TAG_LABELS_HANS.get(section["tag"], section["tag"]),
                 category=section["category"],
                 book_count=section["book_count"],
                 books=[_to_item(b) for b in books],

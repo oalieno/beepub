@@ -152,7 +152,11 @@
           <div>
             <div class="flex items-center justify-between mb-3">
               <h3 class="text-lg font-semibold text-foreground">
-                {localizedTagLabel(section.tag, section.label)}
+                {localizedTagLabel(
+                  section.tag,
+                  section.label,
+                  section.label_hans,
+                )}
               </h3>
               <a
                 href="/libraries/all?tag={encodeURIComponent(section.tag)}"

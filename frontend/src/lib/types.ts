@@ -47,6 +47,7 @@ export interface BookTag {
   id: string;
   tag: string;
   label: string;
+  label_hans: string;
   category: "genre" | "subgenre" | "mood" | "theme" | "trope";
   source: string;
   confidence: number;
@@ -183,6 +184,7 @@ export interface SeriesNeighborsOut {
 export interface TagBrowseSection {
   tag: string;
   label: string;
+  label_hans: string;
   category: string;
   book_count: number;
   books: BookWithInteractionOut[];

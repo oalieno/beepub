@@ -10,6 +10,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.tag import BookTag, TagSource
+from app.services.zhconv import to_simplified
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,20 @@ for _cat, _tag_map in CURATED_TAGS_WITH_LABELS.items():
     for _slug, _label in _tag_map.items():
         _TAG_TO_CATEGORY[_slug] = _cat
         TAG_LABELS[_slug] = _label
+
+# The labels are written in Traditional Chinese; the Simplified UI gets
+# them converted once here rather than a second hand-kept vocabulary.
+# Terms the converter keeps in their Taiwan form are overridden by slug.
+_HANS_OVERRIDES = {
+    "cyberpunk": "赛博朋克",
+    "solarpunk": "太阳朋克",
+    "identity": "身份认同",
+    "virtual reality": "虚拟现实",
+}
+TAG_LABELS_HANS: dict[str, str] = {
+    slug: _HANS_OVERRIDES.get(slug) or to_simplified(label)
+    for slug, label in TAG_LABELS.items()
+}
 
 SYSTEM_PROMPT = """\
 You are a book tagger. Given a book's metadata, select appropriate tags from ONLY the provided vocabulary.

@@ -9,6 +9,7 @@ class BookTagNested(BaseModel):
     id: uuid.UUID
     tag: str
     label: str = ""
+    label_hans: str = ""
     category: str
     source: str = ""
     confidence: float
@@ -16,10 +17,12 @@ class BookTagNested(BaseModel):
     model_config = {"from_attributes": True}
 
     def model_post_init(self, __context: object) -> None:
-        if not self.label:
-            from app.services.tags import TAG_LABELS
+        from app.services.tags import TAG_LABELS, TAG_LABELS_HANS
 
+        if not self.label:
             self.label = TAG_LABELS.get(self.tag, self.tag)
+        if not self.label_hans:
+            self.label_hans = TAG_LABELS_HANS.get(self.tag, self.label)
 
 
 class BookOut(BaseModel):

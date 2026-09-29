@@ -11,7 +11,7 @@ from app.deps import get_current_user
 from app.models.tag import BookTag
 from app.models.user import User
 from app.schemas.tag import TagWithCount
-from app.services.tags import CURATED_TAGS_WITH_LABELS, TAG_LABELS
+from app.services.tags import CURATED_TAGS_WITH_LABELS, TAG_LABELS, TAG_LABELS_HANS
 
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
@@ -40,6 +40,7 @@ async def list_tags(
         TagWithCount(
             tag=row[0],
             label=TAG_LABELS.get(row[0], row[0]),
+            label_hans=TAG_LABELS_HANS.get(row[0], row[0]),
             category=row[1],
             book_count=row[2],
         )

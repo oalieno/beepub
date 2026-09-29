@@ -1,4 +1,4 @@
-"""Simplified-to-Traditional Chinese conversion (OpenCC).
+"""Chinese script conversion (OpenCC).
 
 Two configurations are offered: "s2tw" converts characters to the Taiwan
 standard and keeps every string the same length, "s2twp" also rewrites
@@ -28,3 +28,9 @@ def convert(text: str, mode: str) -> str:
 
 def convert_name(text: str) -> str:
     return _converter(NAME_MODE).convert(text)
+
+
+def to_simplified(text: str) -> str:
+    """Taiwan Traditional to Mainland Simplified, phrases included — for
+    interface text we wrote ourselves (tag labels), never book content."""
+    return _converter("tw2sp").convert(text)

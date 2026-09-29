@@ -14,9 +14,15 @@ function titleCaseTag(tag: string): string {
     .join("");
 }
 
-export function localizedTagLabel(tag: string, label?: string | null): string {
-  if (getLocale().startsWith("zh")) {
-    return label || tag;
-  }
+/** The tag as the interface language shows it. `label` is the
+ *  Traditional Chinese label, `labelHans` the Simplified one. */
+export function localizedTagLabel(
+  tag: string,
+  label?: string | null,
+  labelHans?: string | null,
+): string {
+  const locale = getLocale();
+  if (locale === "zh-Hans") return labelHans || label || tag;
+  if (locale === "zh-Hant") return label || tag;
   return titleCaseTag(tag);
 }
