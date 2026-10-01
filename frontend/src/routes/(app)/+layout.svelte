@@ -82,8 +82,8 @@
        tab bar for a taller action bar. -->
   <TransferPanel bottomChrome={isBookDetail ? 72 : 56} />
 
-  <!-- Books opened from Files / the share sheet (app only). Here too: a
-       book opened mid-read waits until the reader is left. -->
+  <!-- Books opened from Files / the share sheet (app only). The reader
+       layout mounts its own. -->
   <OpenedFilesDialog />
 {:else}
   <main>
