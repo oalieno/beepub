@@ -87,7 +87,9 @@
         >
           <div class="flex-1 min-w-0">
             <p class="text-xs text-muted-foreground">{address.label}</p>
-            <p class="text-xs [overflow-wrap:anywhere] select-all mt-0.5">
+            <p
+              class="text-xs whitespace-nowrap overflow-x-auto scrollbar-none select-all mt-0.5"
+            >
               {address.url}
             </p>
           </div>
