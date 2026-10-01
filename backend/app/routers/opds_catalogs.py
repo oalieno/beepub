@@ -44,7 +44,7 @@ from app.services.opds_fetch import (
 )
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_setting
-from app.services.storage import MAX_UPLOAD_SIZE, get_book_path
+from app.services.storage import COVER_MAX_WIDTH, MAX_UPLOAD_SIZE, get_book_path
 from app.tasks.metadata import fetch_book_metadata
 from app.tasks.text_extract import extract_book_text
 
@@ -292,7 +292,7 @@ async def fetch_image(
 
 # Catalog grids ask for the full cover (thumbnails are often ~100px wide,
 # too small for the card); it is cut to our own cover size on the way.
-IMAGE_MAX_WIDTH = 600
+IMAGE_MAX_WIDTH = COVER_MAX_WIDTH
 
 
 def _shrink_image(data: bytes, content_type: str) -> tuple[bytes, str]:
