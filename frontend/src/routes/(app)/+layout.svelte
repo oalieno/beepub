@@ -10,7 +10,6 @@
   import MobileTopBar from "$lib/components/MobileTopBar.svelte";
   import SearchModal from "$lib/components/SearchModal.svelte";
   import TransferPanel from "$lib/components/TransferPanel.svelte";
-  import OpenedFilesDialog from "$lib/components/OpenedFilesDialog.svelte";
   import { searchModalOpen } from "$lib/stores/search";
   import type { Snippet } from "svelte";
 
@@ -81,10 +80,6 @@
        reader has its own layout and never shows it. Book pages trade the
        tab bar for a taller action bar. -->
   <TransferPanel bottomChrome={isBookDetail ? 72 : 56} />
-
-  <!-- Books opened from Files / the share sheet (app only). The reader
-       layout mounts its own. -->
-  <OpenedFilesDialog />
 {:else}
   <main>
     {@render children()}

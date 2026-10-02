@@ -12,6 +12,7 @@
   import Toast from "$lib/components/Toast.svelte";
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import SplashIntro from "$lib/components/SplashIntro.svelte";
+  import OpenedFilesDialog from "$lib/components/OpenedFilesDialog.svelte";
   import { SplashScreen } from "@capacitor/splash-screen";
   import type { Snippet } from "svelte";
   import type { UserOut } from "$lib/types";
@@ -122,6 +123,11 @@
   </div>
   <Toast />
   <ConfirmDialog />
+  <!-- Books opened from Files / the share sheet, on any page including
+       the reader. Before sign-in they wait in the inbox. -->
+  {#if isLocalMode() || $authStore.user}
+    <OpenedFilesDialog />
+  {/if}
 {/if}
 {#if showIntro}
   <SplashIntro ondone={() => (showIntro = false)} />
