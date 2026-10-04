@@ -304,6 +304,7 @@
      *  gutters when the split keys are absent. */
     legacyMargin: "reader-margin",
     pageTurn: "reader-page-turn",
+    fullPage: "reader-full-page",
     dark: "reader-dark",
     pagerMode: "reader-pager-mode",
     pagerDirection: "reader-pager-direction",
@@ -383,6 +384,8 @@
   let marginY = $state(
     browser ? pick("my", [KEY.marginY, KEY.legacyMargin], 32) : 32,
   );
+  const FONT_SIZE_MAX = 48;
+  let fullPage = $state(browser ? stored(KEY.fullPage) === "1" : false);
   let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
   function initialPagerMode(): PagerMode {
     const v = stored(KEY.pagerMode);
@@ -462,7 +465,7 @@
     store(KEY.font, fontFamily);
   }
   function handleFontIncrease() {
-    if (fontSize >= 32) return;
+    if (fontSize >= FONT_SIZE_MAX) return;
     fontSize += 2;
     store(KEY.size, String(fontSize));
   }
@@ -486,6 +489,10 @@
   function handleMarginYChange(value: number) {
     marginY = value;
     store(KEY.marginY, String(value));
+  }
+  function handleFullPageChange(value: boolean) {
+    fullPage = value;
+    store(KEY.fullPage, value ? "1" : "0");
   }
   function handlePageTurnChange(value: PageTurnMode) {
     pageTurn = value;
@@ -1176,6 +1183,7 @@
             {darkMode}
             {pageTurn}
             {writingMode}
+            {fullPage}
             {sectionWeights}
             showAi={aiEnabled}
             aiBookId={aiEnabled ? aiBookId : null}
@@ -1489,6 +1497,9 @@
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
     onpageTurnChange={claimed ? undefined : handlePageTurnChange}
+    fontSizeMax={FONT_SIZE_MAX}
+    {fullPage}
+    onfullPageChange={claimed ? undefined : handleFullPageChange}
     {writingMode}
     onwritingModeChange={!claimed &&
     (writingModeOffered || writingMode !== "auto")

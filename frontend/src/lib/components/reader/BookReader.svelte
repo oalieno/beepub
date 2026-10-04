@@ -84,6 +84,7 @@
     letterSpacing = 0,
     pageTurn = "instant",
     writingMode = "auto",
+    fullPage = false,
     sectionWeights = null,
     showAi = false,
     aiBookId = null,
@@ -137,6 +138,8 @@
     /** This book's writing direction: its own, or forced horizontal /
      *  vertical. A change lays the page out again at the same place. */
     writingMode?: WritingMode;
+    /** The text fills the window instead of keeping to a measure. */
+    fullPage?: boolean;
     /** AI actions in the selection menu (BeePub-server books only). */
     showAi?: boolean;
     /** Server identity for the AI illustrations (the book's own id, or
@@ -355,7 +358,19 @@ ${darkOverrides}
   // roles between horizontal and vertical sections.
   let vertical = $state(false);
 
+  // Larger than any window: no limit.
+  const UNBOUNDED = 100000;
+
   function layoutFor(isVertical: boolean): LayoutParams {
+    if (fullPage) {
+      return {
+        gap: isVertical ? marginY : marginX,
+        margin: isVertical ? marginX : marginY,
+        maxInlineSize: UNBOUNDED,
+        maxBlockSize: UNBOUNDED,
+        maxColumnCount: MAX_COLUMN_COUNT,
+      };
+    }
     if (!isVertical) {
       return {
         gap: marginX,
@@ -1907,6 +1922,7 @@ ${darkOverrides}
     void fontSize;
     void lineHeight;
     void letterSpacing;
+    void fullPage;
     pushLayout();
   });
   $effect(() => {

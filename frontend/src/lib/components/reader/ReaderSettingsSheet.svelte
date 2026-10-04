@@ -30,6 +30,7 @@
     open = $bindable(false),
     fontFamily = "serif",
     fontSize = 16,
+    fontSizeMax = 32,
     lineHeight = 1.8,
     letterSpacing = 0,
     pageMargin = 32,
@@ -38,6 +39,7 @@
     pageTurn = "instant",
     pageTurnNote = null,
     writingMode = "auto",
+    fullPage = false,
     darkMode = false,
     isImageBook = false,
     pagerMode = "single",
@@ -57,6 +59,7 @@
     onmarginYChange,
     onpageTurnChange,
     onwritingModeChange,
+    onfullPageChange,
     onpagerModeChange,
     onpagerDirectionChange,
     onpagerShiftChange,
@@ -99,6 +102,12 @@
     onmarginYChange?: (value: number) => void;
     onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
     onwritingModeChange?: (value: WritingMode) => void;
+    /** The largest font size the reader behind the sheet takes. */
+    fontSizeMax?: number;
+    /** Whether the text fills the window instead of keeping to a
+     *  comfortable measure. Only a wide window shows the difference. */
+    fullPage?: boolean;
+    onfullPageChange?: (value: boolean) => void;
     /** Image pager rows (comics): reading mode, direction, double-page
      *  pairing and page padding. Present only while the pager renders. */
     pagerMode?: PagerMode;
@@ -307,7 +316,7 @@
               <button
                 class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
                 onclick={() => onfontIncrease?.()}
-                disabled={fontSize >= 32}
+                disabled={fontSize >= fontSizeMax}
                 aria-label={m.reader_increase_font()}
               >
                 <Plus size={14} />
@@ -409,6 +418,28 @@
                       ? activeBtnClass
                       : inactiveBtnClass}"
                     onclick={() => onmarginChange?.(option.value)}
+                  >
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if onfullPageChange}
+            <!-- The text block: a comfortable measure, or the whole
+                 window. A phone is all text either way. -->
+            <div class="hidden md:flex items-center justify-between">
+              <span class="text-sm {labelClass}">{m.reader_measure()}</span>
+              <div class="flex gap-1" data-testid="setting-measure">
+                {#each [{ value: false, label: m.reader_measure_fit }, { value: true, label: m.reader_measure_full }] as option}
+                  <button
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fullPage ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    aria-pressed={fullPage === option.value}
+                    onclick={() => onfullPageChange?.(option.value)}
                   >
                     {option.label()}
                   </button>
