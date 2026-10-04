@@ -43,7 +43,11 @@ def encode_cover(data: bytes) -> bytes:
     never upscaled. Raises on anything Pillow can't decode."""
     import io
 
-    from PIL import Image, ImageOps
+    from PIL import Image, ImageFile, ImageOps
+
+    # A file cut a few bytes short (no end marker) still shows in every
+    # browser; take it as they do rather than call the cover broken.
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
 
     with Image.open(io.BytesIO(data)) as img:
         img = ImageOps.exif_transpose(img)

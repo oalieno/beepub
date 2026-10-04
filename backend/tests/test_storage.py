@@ -289,3 +289,16 @@ class TestEncodeCover:
     def test_garbage_raises(self):
         with pytest.raises(Exception):
             encode_cover(b"not an image")
+
+
+def test_encode_cover_takes_a_jpeg_cut_short():
+    """A JPEG missing its last bytes (no end marker) is still a cover."""
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (1000, 1500), "teal").save(buf, "JPEG")
+    out = encode_cover(buf.getvalue()[:-20])
+    with Image.open(io.BytesIO(out)) as img:
+        assert img.size == (800, 1200)
