@@ -90,6 +90,12 @@ export interface PaginatorElement extends HTMLElement {
     anchor: Range | Element | number,
     select?: boolean,
   ): Promise<void>;
+  /** Load the section on screen again, landing on `anchor`; `styles`
+   *  become the injected styles of the new document (vendored addition). */
+  reload(
+    anchor: NavTarget["anchor"],
+    styles?: string | [string, string],
+  ): Promise<void>;
   destroy(): void;
 }
 
@@ -153,6 +159,10 @@ export interface ReaderCoreHandlers {
     anchor: HTMLAnchorElement;
   }) => boolean | void;
 }
+
+/** The reader's say over a book's writing direction: the book's own, or
+ *  forced horizontal / vertical (CJK books). */
+export type WritingMode = "auto" | "horizontal" | "vertical";
 
 /** One search hit: where it is and the text around it. */
 export interface SearchHit {
@@ -246,6 +256,34 @@ function attrValue(key: keyof LayoutParams, value: number): string {
   }
 }
 
+/**
+ * The rules that force a writing mode on a section. They go last in the
+ * document, important, and behind an id-weight selector, so they beat the
+ * book's own rules whatever those weigh.
+ *
+ * The root and the body carry the mode — the paginator lays the section
+ * out by the body's computed writing mode. Everything below inherits it:
+ * a book that sets its writing mode on an inner container (`div.main`,
+ * `.chapter-body`) instead of the body would otherwise keep a vertical
+ * block inside a horizontal page (or the reverse), cut off at the page
+ * edge. Inheriting is what an element does when nothing is declared, so
+ * ruby, tate-chu-yoko runs, pictures and tables behave as they do in a
+ * book written that way to begin with. The direction is pinned along
+ * with it: these are CJK books, and a stray `direction: rtl` would run
+ * the columns against the page turns.
+ */
+function writingModeCss(mode: WritingMode): string {
+  if (mode === "auto") return "";
+  const value = mode === "vertical" ? "vertical-rl" : "horizontal-tb";
+  const root = ":root:not(#beepub-writing-mode)";
+  return `
+${root}, ${root} body {
+  writing-mode: ${value} !important;
+  direction: ltr !important;
+}
+${root} body * { writing-mode: inherit !important; }`;
+}
+
 // --------------------------------------------------------------------- core
 
 const VERTICAL_RL = /writing-mode\s*:\s*vertical-rl/i;
@@ -334,7 +372,13 @@ export class ReaderCore {
    *  the same reading the paginator lays its columns out by. */
   sectionRtl = false;
   pageTurn: PageTurnMode = "instant";
+  /** The writing direction asked for (see setWritingMode). */
+  writingMode: WritingMode = "auto";
 
+  #styles: string | [string, string] = "";
+  /** The book's own text has been seen running vertically — in its
+   *  stylesheets at load, or in a section rendered as the book wrote it. */
+  #nativeVertical = false;
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
   #pristineDocs = new Map<number, Promise<Document | null>>();
@@ -384,7 +428,10 @@ export class ReaderCore {
     this.book = book;
     prefetch.open(book.sections);
     this.#language = languageInfo(book.metadata?.language);
+    // Whether a forced writing mode applies depends on the book's layout.
+    this.paginator.setStyles(this.#composedStyles());
     this.#inferredLeftward = false;
+    this.#nativeVertical = false;
     if (book.dir !== "rtl" && book.dir !== "ltr")
       void this.#inferDirection(prefetch.loader);
     this.paginator.open(book);
@@ -431,6 +478,7 @@ export class ReaderCore {
     }
     if (texts.some((text) => verticalBodyRule(text, rootClasses))) {
       this.#inferredLeftward = true;
+      this.#nativeVertical = true;
       this.#applyPageTurn();
     }
   }
@@ -507,6 +555,11 @@ export class ReaderCore {
    * a per-section reading, which flips at every plate.
    */
   advancesLeftward(): boolean {
+    // A forced writing mode outranks the book's declared progression:
+    // vertical-rl columns run right to left, horizontal CJK left to right
+    // — also in a book whose spine says rtl because it was set vertically.
+    const forced = this.forcedWritingMode();
+    if (forced) return forced === "vertical";
     const dir = this.book?.dir;
     if (dir === "rtl") return true;
     if (dir === "ltr") return false;
@@ -568,9 +621,67 @@ export class ReaderCore {
 
   /** CSS injected into every section. A pair is [before, after]: `before`
    *  is prepended to <head> (the book's own styles win), `after` appended
-   *  (ours win at equal specificity). */
+   *  (ours win at equal specificity). The forced writing mode, when there
+   *  is one, rides at the end of `after`. */
   setStyles(styles: string | [string, string]) {
-    this.paginator.setStyles(styles);
+    this.#styles = styles;
+    this.paginator.setStyles(this.#composedStyles());
+  }
+
+  #composedStyles(): string | [string, string] {
+    const forced = this.forcedWritingMode();
+    if (!forced) return this.#styles;
+    const [before, after] = Array.isArray(this.#styles)
+      ? this.#styles
+      : ["", this.#styles];
+    return [before, after + writingModeCss(forced)];
+  }
+
+  /** The writing mode in force, or null when the book's own stands: no
+   *  override asked for, or a fixed-layout book, whose pages are drawn
+   *  rather than set. */
+  forcedWritingMode(): Exclude<WritingMode, "auto"> | null {
+    if (this.writingMode === "auto") return null;
+    if (this.book?.rendition?.layout === "pre-paginated") return null;
+    return this.writingMode;
+  }
+
+  /** Whether choosing a writing direction makes sense for this book: a
+   *  Chinese, Japanese or Korean one by its declared language, or one
+   *  whose own text runs vertically (a mislabelled language is common). */
+  offersWritingMode(): boolean {
+    if (this.book?.rendition?.layout === "pre-paginated") return false;
+    return !!this.#language.isCJK || this.#nativeVertical;
+  }
+
+  /**
+   * Force the book horizontal or vertical, or hand it back to its own
+   * styles ("auto"). The paginator reads a section's writing mode once,
+   * when it loads it, so the section on screen is loaded again — at
+   * `anchor` (a CFI; the start of the visible text when omitted), which
+   * the new layout re-derives its page from. Resolves to whether a
+   * section was laid out again; before the first render the mode is only
+   * recorded.
+   */
+  async setWritingMode(mode: WritingMode, anchor?: string): Promise<boolean> {
+    if (mode === this.writingMode) return false;
+    const before = this.forcedWritingMode();
+    this.writingMode = mode;
+    const index = this.currentIndex();
+    if (index == null) {
+      this.paginator.setStyles(this.#composedStyles());
+      return false;
+    }
+    if (this.forcedWritingMode() === before) return false;
+    const cfi = anchor || this.lastLocation?.startCfi;
+    const target = cfi ? this.resolve(cfi) : null;
+    await this.paginator.reload(
+      target?.index === index && target.anchor != null
+        ? withTextStart(target).anchor
+        : (this.lastLocation?.fraction ?? 0),
+      this.#composedStyles(),
+    );
+    return true;
   }
 
   /** Declare layout parameters. Only changed values are written, so a
@@ -693,13 +804,23 @@ export class ReaderCore {
     const root = doc.documentElement;
     root.lang ||= this.#language.canonical ?? "";
     if (!this.#language.isCJK) root.dir ||= this.#language.direction ?? "";
+    if (this.forcedWritingMode()) {
+      // The paginator also reads the dir attributes, which no injected
+      // rule can outrank; the rendered copy is ours to adjust.
+      if (root.dir === "rtl") root.dir = "ltr";
+      if (doc.body.dir === "rtl") doc.body.dir = "ltr";
+    }
     const style = doc.defaultView?.getComputedStyle(doc.body);
     const writingMode = style?.writingMode;
     this.vertical = !!writingMode && writingMode.startsWith("vertical");
     // Mirrors the paginator's own getDirection() — read here because the
     // load event precedes the render that stamps the paginator's `dir`.
     this.sectionRtl = doc.body.dir === "rtl" || style?.direction === "rtl";
-    if (this.vertical || this.sectionRtl) this.#inferredLeftward = true;
+    // What a forced layout shows says nothing about the book itself.
+    if (!this.forcedWritingMode()) {
+      if (this.vertical || this.sectionRtl) this.#inferredLeftward = true;
+      if (this.vertical) this.#nativeVertical = true;
+    }
     this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });

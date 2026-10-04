@@ -53,7 +53,12 @@
     type StylePromptOut,
   } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
-  import type { Book, PageTurnMode, TocItem } from "$lib/reader/core";
+  import type {
+    Book,
+    PageTurnMode,
+    TocItem,
+    WritingMode,
+  } from "$lib/reader/core";
   import type { BookLoader } from "$lib/reader/loaders";
   import {
     isPrePaginated,
@@ -306,6 +311,9 @@
     /** Per book (suffixed with the id): whether its pairs are staggered
      *  is a fact about the file, not a preference. */
     pagerShift: "reader-pager-shift",
+    /** Per book (suffixed with the id): horizontal or vertical is chosen
+     *  for one book, not for every book the reader opens. */
+    writingMode: "reader-writing-mode",
   } as const;
 
   function stored(key: string): string | null {
@@ -409,6 +417,36 @@
   function handlePagerShiftChange(value: boolean) {
     pagerShift = value;
     store(pagerShiftKey, value ? "1" : "0");
+  }
+  // Writing direction, per book and on this device — where the reader's
+  // other display settings live. "auto" (the book's own) is the absence
+  // of a stored value.
+  function storedWritingMode(key: string): WritingMode {
+    const v = stored(key);
+    return v === "horizontal" || v === "vertical" ? v : "auto";
+  }
+  const writingModeKey = $derived(`${KEY.writingMode}:${bookId}`);
+  // Read synchronously: the reader loads its first section in this mode.
+  let writingMode = $state<WritingMode>(
+    browser
+      ? storedWritingMode(`${KEY.writingMode}:${page.params.id}`)
+      : "auto",
+  );
+  $effect(() => {
+    writingMode = storedWritingMode(writingModeKey);
+  });
+  // Whether the choice makes sense for the book on screen (the reader
+  // says: a CJK text book). A book already forced keeps the row, so the
+  // way back to "auto" never disappears.
+  let writingModeOffered = $state(false);
+  function handleWritingModeChange(value: WritingMode) {
+    writingMode = value;
+    try {
+      if (value === "auto") localStorage.removeItem(writingModeKey);
+      else localStorage.setItem(writingModeKey, value);
+    } catch {
+      /* private browsing — the setting holds for this session */
+    }
   }
   let pagerPadding = $state(
     browser ? Math.max(0, storedNum(KEY.pagerPadding) ?? 0) : 0,
@@ -1137,6 +1175,7 @@
             {marginY}
             {darkMode}
             {pageTurn}
+            {writingMode}
             {sectionWeights}
             showAi={aiEnabled}
             aiBookId={aiEnabled ? aiBookId : null}
@@ -1176,6 +1215,7 @@
               isRtl = rtl;
               isVertical = vertical;
             }}
+            onwritingmodeoffer={(offered) => (writingModeOffered = offered)}
             onkosyncposition={handleKosyncPosition}
             onrestorefallback={(pct) =>
               toastStore.info(
@@ -1449,6 +1489,11 @@
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
     onpageTurnChange={claimed ? undefined : handlePageTurnChange}
+    {writingMode}
+    onwritingModeChange={!claimed &&
+    (writingModeOffered || writingMode !== "auto")
+      ? handleWritingModeChange
+      : undefined}
     {pagerMode}
     {pagerDirection}
     {pagerShift}

@@ -17,6 +17,7 @@
     ArrowLeft,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import type { WritingMode } from "$lib/reader/core";
   import type { PagerDirection, PagerMode } from "$lib/reader/pages";
 
   /**
@@ -36,6 +37,7 @@
     marginY = 32,
     pageTurn = "instant",
     pageTurnNote = null,
+    writingMode = "auto",
     darkMode = false,
     isImageBook = false,
     pagerMode = "single",
@@ -54,6 +56,7 @@
     onmarginXChange,
     onmarginYChange,
     onpageTurnChange,
+    onwritingModeChange,
     onpagerModeChange,
     onpagerDirectionChange,
     onpagerShiftChange,
@@ -77,6 +80,9 @@
     pageTurn?: "instant" | "animated" | "follow";
     /** Why the mode does not apply to the book on screen (vertical text). */
     pageTurnNote?: string | null;
+    /** This book's writing direction; row shown when
+     *  `onwritingModeChange` is given (CJK text books). */
+    writingMode?: WritingMode;
     darkMode?: boolean;
     isImageBook?: boolean;
     /** Kosync-backed books get manual pull/push controls. */
@@ -92,6 +98,7 @@
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
     onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
+    onwritingModeChange?: (value: WritingMode) => void;
     /** Image pager rows (comics): reading mode, direction, double-page
      *  pairing and page padding. Present only while the pager renders. */
     pagerMode?: PagerMode;
@@ -155,6 +162,11 @@
     { value: "instant", label: m.reader_page_turn_instant },
     { value: "animated", label: m.reader_page_turn_slide },
     { value: "follow", label: m.reader_page_turn_follow },
+  ];
+  const writingModeOptions: { value: WritingMode; label: () => string }[] = [
+    { value: "auto", label: m.reader_writing_mode_auto },
+    { value: "horizontal", label: m.reader_writing_mode_horizontal },
+    { value: "vertical", label: m.reader_writing_mode_vertical },
   ];
   const pagerModeOptions: {
     value: PagerMode;
@@ -397,6 +409,33 @@
                       ? activeBtnClass
                       : inactiveBtnClass}"
                     onclick={() => onmarginChange?.(option.value)}
+                  >
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+
+          {#if onwritingModeChange}
+            <!-- This book's writing direction (CJK books): its own, or
+                 forced. Wraps under the label like the pager's chips. -->
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <span class="shrink-0 text-sm {labelClass}"
+                >{m.reader_writing_mode()}</span
+              >
+              <div
+                class="ml-auto flex gap-1"
+                data-testid="setting-writing-mode"
+              >
+                {#each writingModeOptions as option}
+                  <button
+                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {writingMode ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    aria-pressed={writingMode === option.value}
+                    onclick={() => onwritingModeChange?.(option.value)}
                   >
                     {option.label()}
                   </button>

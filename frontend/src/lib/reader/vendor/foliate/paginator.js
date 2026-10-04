@@ -1007,6 +1007,31 @@ export class Paginator extends HTMLElement {
                 }))
         }
     }
+    // BeePub: load the section on screen again and land on `anchor`. The
+    // View reads the body's writing mode and direction once, at load, so
+    // injected styles that change either need a fresh View. `styles`
+    // replaces the injected styles for the new document only — the one
+    // still on screen is never restyled under a layout made for the other
+    // writing mode. Unload before load: the parser's loader counts a
+    // second top-level load of a cached section once at most, so
+    // load-then-unload would revoke the blob URL being loaded.
+    async reload(anchor, styles) {
+        const index = this.#index
+        if (!this.#view || !this.#canGoToIndex(index)) return
+        if (styles !== undefined) this.#styles = styles
+        this.sections[index].unload?.()
+        const onLoad = detail => {
+            this.setStyles(this.#styles)
+            this.dispatchEvent(new CustomEvent('load', { detail }))
+        }
+        await this.#display(Promise.resolve(this.sections[index].load())
+            .then(src => ({ index, src, anchor, onLoad }))
+            .catch(e => {
+                console.warn(e)
+                console.warn(new Error(`Failed to load section ${index}`))
+                return {}
+            }))
+    }
     async goTo(target) {
         if (this.#locked) return
         const resolved = await target

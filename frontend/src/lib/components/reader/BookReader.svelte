@@ -11,7 +11,7 @@
    * Must sit inside the reader root div: .reader-light / .reader-dark
    * scope the theme tokens the chrome around it uses.
    */
-  import { onDestroy, onMount, tick } from "svelte";
+  import { onDestroy, onMount, tick, untrack } from "svelte";
   import type {
     Book,
     LayoutParams,
@@ -21,6 +21,7 @@
     ReaderCore,
     Relocation,
     TocItem,
+    WritingMode,
   } from "$lib/reader/core";
   import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
   import type { BookLoader } from "$lib/reader/loaders";
@@ -81,6 +82,7 @@
     marginY = 32,
     letterSpacing = 0,
     pageTurn = "instant",
+    writingMode = "auto",
     sectionWeights = null,
     showAi = false,
     aiBookId = null,
@@ -101,6 +103,7 @@
     onactivity,
     onticks,
     ondirection,
+    onwritingmodeoffer,
     onkosyncposition,
     onrestorefallback,
     onpeekchange,
@@ -130,6 +133,9 @@
     /** Body letter-spacing, px (applies to vertical text too). */
     letterSpacing?: number;
     pageTurn?: PageTurnMode;
+    /** This book's writing direction: its own, or forced horizontal /
+     *  vertical. A change lays the page out again at the same place. */
+    writingMode?: WritingMode;
     /** AI actions in the selection menu (BeePub-server books only). */
     showAi?: boolean;
     /** Server identity for the AI illustrations (the book's own id, or
@@ -172,6 +178,9 @@
      *  else the section on screen), and whether that section is vertical
      *  text. Fires on every section load. */
     ondirection?: (rtl: boolean, vertical: boolean) => void;
+    /** Whether a writing-direction choice makes sense for this book (a
+     *  CJK text book). Fires on every section load. */
+    onwritingmodeoffer?: (offered: boolean) => void;
     /** A newer position bridged from an e-reader: adopted outright when
      *  the book was never read here (autoJumped), otherwise offered. */
     onkosyncposition?: (detail: {
@@ -352,6 +361,42 @@ ${darkOverrides}
    *  attributes are written, so re-pushing the same layout is free. */
   function pushLayout(c: ReaderCore | null = core) {
     c?.setLayout(layoutFor(vertical));
+  }
+
+  // ------------------------------------------------------ writing mode
+
+  // The place a writing-mode switch was made from. Each layout reports
+  // the start of its own page, which lies at or before the place asked
+  // for — so switching back and forth from what the last layout reported
+  // would walk the reader backwards a little every time. Until the reader
+  // moves, every switch re-derives its page from this one place.
+  let writingModeAnchor: string | null = null;
+  let switchingWritingMode = false;
+
+  async function switchWritingMode(c: ReaderCore, mode: WritingMode) {
+    const anchor = writingModeAnchor ?? currentCfi;
+    dismissMenu();
+    showFootnote = false;
+    // Like a restore: the reader has not moved, so nothing is saved and
+    // no activity is credited. The stored position stays valid — a CFI
+    // names text, not a page of either layout.
+    restoringProgress = true;
+    switchingWritingMode = true;
+    const counts = sectionPageCounts;
+    // Page counts belong to the layout they were measured in.
+    sectionPageCounts = [];
+    try {
+      if (await c.setWritingMode(mode, anchor || undefined)) {
+        writingModeAnchor = anchor || null;
+      } else {
+        sectionPageCounts = counts;
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      restoringProgress = false;
+      switchingWritingMode = false;
+    }
   }
 
   // ------------------------------------------------------------ paging
@@ -591,6 +636,10 @@ ${darkOverrides}
     onrelocate?.(r);
     const c = core;
     if (!c) return;
+    // Any move but a switch's own landing (and the re-anchoring that
+    // follows a layout change) leaves the switch's place behind.
+    if (!switchingWritingMode && r.reason !== "anchor")
+      writingModeAnchor = null;
     // The paginator reports user moves as page/snap/scroll; navigation,
     // anchor and selection are ours.
     const userMove =
@@ -1726,6 +1775,7 @@ ${darkOverrides}
     pushLayout();
     if (core?.vertical) pinVerticalPunctuation(doc);
     ondirection?.(!!core?.advancesLeftward(), vertical);
+    onwritingmodeoffer?.(!!core?.offersWritingMode());
     attachGestures(doc);
   }
 
@@ -1772,6 +1822,9 @@ ${darkOverrides}
         : Promise.resolve([]);
       pushLayout(c);
       c.setPageTurn(pageTurn);
+      // Before anything renders: recorded only, the first section is
+      // loaded in this mode.
+      void c.setWritingMode(writingMode);
       c.setStyles(styles());
       const [book, saved] = await Promise.all([
         c.load(loader),
@@ -1834,6 +1887,12 @@ ${darkOverrides}
   $effect(() => {
     const mode = pageTurn;
     core?.setPageTurn(mode);
+  });
+  $effect(() => {
+    const mode = writingMode;
+    const c = core;
+    if (!c || mode === c.writingMode) return;
+    untrack(() => void switchWritingMode(c, mode));
   });
 
   onDestroy(() => {
