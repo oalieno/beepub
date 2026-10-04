@@ -342,6 +342,12 @@ ${darkOverrides}
   // paginator's own default. Neither is a user setting.
   const MAX_INLINE_SIZE = 720;
   const MAX_COLUMN_COUNT = 1;
+  // Vertical text is measured in characters, as its books are set: a
+  // line of at most 40, a page of at most 28 lines. 720px made lines of
+  // some 25 characters with half a tall screen empty above and below,
+  // and the paginator's 1440px block limit a strip rather than a page.
+  const VERTICAL_LINE_CHARS = 40;
+  const VERTICAL_PAGE_LINES = 28;
 
   // The current section's writing mode. The paginator's gap is inline
   // padding and its margin the block outer margin, and (vendored) its
@@ -350,10 +356,24 @@ ${darkOverrides}
   let vertical = $state(false);
 
   function layoutFor(isVertical: boolean): LayoutParams {
+    if (!isVertical) {
+      return {
+        gap: marginX,
+        margin: marginY,
+        maxInlineSize: MAX_INLINE_SIZE,
+        // The paginator's own default.
+        maxBlockSize: 1440,
+        maxColumnCount: MAX_COLUMN_COUNT,
+      };
+    }
     return {
-      gap: isVertical ? marginY : marginX,
-      margin: isVertical ? marginX : marginY,
-      maxInlineSize: MAX_INLINE_SIZE,
+      gap: marginY,
+      margin: marginX,
+      // The paginator takes the gap out of the inline size it is given.
+      maxInlineSize: Math.round(
+        VERTICAL_LINE_CHARS * (fontSize + letterSpacing) + marginY,
+      ),
+      maxBlockSize: Math.round(VERTICAL_PAGE_LINES * fontSize * lineHeight),
       maxColumnCount: MAX_COLUMN_COUNT,
     };
   }
@@ -1879,10 +1899,14 @@ ${darkOverrides}
     core?.setStyles(css);
   });
   $effect(() => {
-    // Tracked: the two gutters and the writing mode.
+    // Tracked: the two gutters and the writing mode, and what the
+    // vertical measure is counted in.
     void marginX;
     void marginY;
     void vertical;
+    void fontSize;
+    void lineHeight;
+    void letterSpacing;
     pushLayout();
   });
   $effect(() => {
