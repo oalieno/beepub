@@ -3,8 +3,30 @@ import { sequence } from "@sveltejs/kit/hooks";
 import { env } from "$env/dynamic/private";
 import { building } from "$app/environment";
 import { paraglideMiddleware } from "$lib/paraglide/server.js";
+import {
+  cookieName,
+  defineCustomServerStrategy,
+} from "$lib/paraglide/runtime.js";
+import {
+  BROWSER_LOCALE_STRATEGY,
+  localeFromAcceptLanguage,
+} from "$lib/i18n/browserLocale";
 
 const BACKEND_URL = env.BACKEND_URL || "http://backend:8000";
+
+// A visitor who hasn't picked a language gets the browser's. Paraglide
+// asks custom strategies before the cookie, so a chosen language is
+// stepped aside for here.
+defineCustomServerStrategy(BROWSER_LOCALE_STRATEGY, {
+  getLocale: (request) => {
+    const cookies = request?.headers.get("cookie") ?? "";
+    if (cookies.split(";").some((c) => c.trim().startsWith(`${cookieName}=`)))
+      return undefined;
+    return localeFromAcceptLanguage(
+      request?.headers.get("accept-language") ?? null,
+    );
+  },
+});
 
 const i18nHandle: Handle = ({ event, resolve }) =>
   paraglideMiddleware(
