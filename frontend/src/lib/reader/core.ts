@@ -20,6 +20,16 @@ import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
 import { ImagePrefetcher } from "./prefetch";
+import {
+  OWN_LAYOUT_ATTR,
+  TCY_CSS,
+  cfiFromRange,
+  combineShortNumbers,
+  forwardStart,
+  tcyFilter,
+  unwrapBoundaries,
+  wholeText,
+} from "./tcy";
 
 export type OverlayerInstance = InstanceType<typeof Overlayer>;
 
@@ -203,17 +213,25 @@ function languageInfo(lang: string | string[] | undefined) {
  * line broke at, whose zero-width box hangs at the end of the previous
  * page: a position recorded there — or navigated to — lands one page
  * early. Positions are recorded and restored through this.
+ *
+ * The text node is read as the book wrote it (`wholeText`): where a
+ * forced vertical layout wrapped a short number, the skip runs on across
+ * the wrapper exactly as it does through the unsplit node, and the point
+ * is named by the piece that holds the character it stands before.
  */
 function textStart(range: Range): Range {
-  const point = range.cloneRange();
+  const point = unwrapBoundaries(range).cloneRange();
   point.collapse(true);
   const node = point.startContainer;
   if (node.nodeType !== Node.TEXT_NODE) return point;
-  const text = node.textContent ?? "";
-  let i = point.startOffset;
+  const whole = wholeText(node, point.startOffset);
+  const { text } = whole;
+  let i = whole.offset;
   while (i < text.length && /\s/.test(text[i])) i++;
-  if (i > point.startOffset && i < text.length) {
-    point.setStart(node, i);
+  if (i >= text.length) i = whole.offset;
+  const at = whole.at(i);
+  if (at.node !== node || at.offset !== point.startOffset) {
+    point.setStart(at.node, at.offset);
     point.collapse(true);
   }
   return point;
@@ -275,13 +293,17 @@ function attrValue(key: keyof LayoutParams, value: number): string {
 function writingModeCss(mode: WritingMode): string {
   if (mode === "auto") return "";
   const value = mode === "vertical" ? "vertical-rl" : "horizontal-tb";
-  const root = ":root:not(#beepub-writing-mode)";
+  // The rules stand down while the root wears OWN_LAYOUT_ATTR: how the
+  // core reads which text the book itself set vertically (#combineNumbers).
+  const root = `:root:not(#beepub-writing-mode):not([${OWN_LAYOUT_ATTR}])`;
   return `
 ${root}, ${root} body {
   writing-mode: ${value} !important;
   direction: ltr !important;
 }
-${root} body * { writing-mode: inherit !important; }`;
+${root} body * { writing-mode: inherit !important; }${
+    mode === "vertical" ? TCY_CSS : ""
+  }`;
 }
 
 // --------------------------------------------------------------------- core
@@ -425,6 +447,28 @@ export class ReaderCore {
       ...prefetch.loader,
       sha1: undefined,
     }).init()) as unknown as Book;
+    // Every CFI the book resolves — for the paginator, the highlight
+    // layer, the anchor check — reads the section with the upright-number
+    // wrappers transparent (see tcy.ts); on a document without wrappers
+    // the filter changes nothing.
+    const resolveCFI = (
+      book.resolveCFI as (cfi: string, filter?: unknown) => NavTarget
+    ).bind(book);
+    book.resolveCFI = (cfi: string) => {
+      const target = resolveCFI(cfi, tcyFilter);
+      const { anchor } = target;
+      if (typeof anchor !== "function") return target;
+      return {
+        ...target,
+        anchor: (doc) => {
+          const result = anchor(doc);
+          // Cross-realm: the section's Range class is not this window's.
+          return result && typeof result === "object" && "collapsed" in result
+            ? forwardStart(result as Range)
+            : result;
+        },
+      };
+    };
     this.book = book;
     prefetch.open(book.sections);
     this.#language = languageInfo(book.metadata?.language);
@@ -711,7 +755,14 @@ export class ReaderCore {
   cfiOf(index: number, range: Range | null): string {
     const base = this.book?.sections[index]?.cfi ?? CFI.fake.fromIndex(index);
     if (!range) return base;
-    return CFI.joinIndir(base, CFI.fromRange(range));
+    return CFI.joinIndir(base, cfiFromRange(range));
+  }
+
+  /** The reading position a range stands for: the point CFI of where its
+   *  text starts (see textStart) — what a relocation reports as
+   *  `startCfi` and progress saves store. */
+  positionCFI(index: number, range: Range): string {
+    return this.cfiOf(index, textStart(range));
   }
 
   currentCFI(): string | null {
@@ -821,9 +872,45 @@ export class ReaderCore {
       if (this.vertical || this.sectionRtl) this.#inferredLeftward = true;
       if (this.vertical) this.#nativeVertical = true;
     }
+    if (this.forcedWritingMode() === "vertical") this.#combineNumbers(doc);
     this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
+  }
+
+  /**
+   * A book forced vertical has its short numbers stood upright (tcy.ts)
+   * — only text the force turned. Text the book itself sets vertically
+   * (the whole body, or an inner container) comes with the publisher's
+   * own markup and is left as written, as is anything the book already
+   * combines or sets upright. The section's own writing mode is read
+   * with the forced rules standing down for the moment; this runs at
+   * load, before the first layout.
+   */
+  #combineNumbers(doc: Document) {
+    const win = doc.defaultView;
+    const root = doc.documentElement;
+    if (!win) return;
+    root.setAttribute(OWN_LAYOUT_ATTR, "");
+    try {
+      combineShortNumbers(doc, (parent) => {
+        const style = win.getComputedStyle(parent);
+        const combine =
+          style.getPropertyValue("text-combine-upright") ||
+          style.getPropertyValue("-webkit-text-combine");
+        const orientation = style.getPropertyValue("text-orientation");
+        return (
+          !style.writingMode.startsWith("vertical") &&
+          !style.writingMode.startsWith("sideways") &&
+          (!combine || combine === "none") &&
+          (!orientation || orientation === "mixed")
+        );
+      });
+    } catch (e) {
+      console.error(e);
+    } finally {
+      root.removeAttribute(OWN_LAYOUT_ATTR);
+    }
   }
 
   #onCreateOverlayer({
@@ -881,7 +968,7 @@ export class ReaderCore {
       size: detail.size,
       range,
       cfi,
-      startCfi: range ? this.cfiOf(detail.index, textStart(range)) : cfi,
+      startCfi: range ? this.positionCFI(detail.index, range) : cfi,
     };
     this.lastLocation = location;
     if (detail.index !== this.#prefetchIndex) {

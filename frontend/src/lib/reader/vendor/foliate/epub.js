@@ -685,7 +685,8 @@ class Resources {
     getItemByProperty(prop) {
         return this.manifest.find(item => item.properties?.includes(prop))
     }
-    resolveCFI(cfi) {
+    // BeePub: `filter` is handed on to CFI.toRange (see VENDOR.md)
+    resolveCFI(cfi, filter) {
         const parts = CFI.parse(cfi)
         const top = (parts.parent ?? parts).shift()
         let $itemref = CFI.toElement(this.opf, top)
@@ -698,7 +699,7 @@ class Resources {
         }
         const idref = $itemref?.getAttribute('idref')
         const index = this.spine.findIndex(item => item.idref === idref)
-        const anchor = doc => CFI.toRange(doc, parts)
+        const anchor = doc => CFI.toRange(doc, parts, filter)
         return { index, anchor }
     }
 }
@@ -1042,8 +1043,8 @@ ${doc.querySelector('parsererror').innerText}`)
     getMediaOverlay() {
         return new MediaOverlay(this, this.#loadXML.bind(this))
     }
-    resolveCFI(cfi) {
-        return this.resources.resolveCFI(cfi)
+    resolveCFI(cfi, filter) {
+        return this.resources.resolveCFI(cfi, filter)
     }
     resolveHref(href) {
         const [path, hash] = href.split('#')

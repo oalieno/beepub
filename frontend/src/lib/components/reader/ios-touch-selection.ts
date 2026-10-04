@@ -8,6 +8,12 @@
  * State transitions: IDLE → WAITING → SELECTING | SWIPING
  */
 
+import {
+  forwardPoint,
+  isTcy,
+  selectedText,
+  unwrapBoundaries,
+} from "$lib/reader/tcy";
 import { snapRangeToWordBounds } from "./word-snap";
 
 export interface IOSTouchCallbacks {
@@ -222,14 +228,23 @@ export function setupIOSTouchSelection(
       doc.body.classList.remove("beepub-selecting");
       return null;
     }
-    const node = caretRange.startContainer;
+    // An upright number (a wrapped run in a book forced vertical) is one
+    // cell under the finger: wherever in it the engine puts the caret —
+    // WebKit reports its end — the press is on the whole number. A caret
+    // at the end of the text before one is the caret before it: name it
+    // by the text node that holds the character under the finger.
+    const at = unwrapBoundaries(caretRange);
+    const caret = isTcy(at.startContainer.parentNode)
+      ? { node: at.startContainer, offset: 0 }
+      : forwardPoint(at.startContainer, at.startOffset);
+    const node = caret.node;
     if (node.nodeType !== Node.TEXT_NODE) {
       doc.body.classList.remove("beepub-selecting");
       return null;
     }
     const nodeText = node.textContent || "";
-    let s = caretRange.startOffset;
-    let e = caretRange.startOffset;
+    let s = caret.offset;
+    let e = caret.offset;
     if (s < nodeText.length && isCJK(nodeText[s])) {
       e = s + 1;
     } else if (s < nodeText.length && isLatinWord(nodeText[s])) {
@@ -248,7 +263,7 @@ export function setupIOSTouchSelection(
     sel?.removeAllRanges();
     sel?.addRange(caretRange);
     currentRange = caretRange.cloneRange();
-    currentRangeText = sel?.toString().trim() ?? "";
+    currentRangeText = selectedText(sel, caretRange).trim();
     doc.body.classList.remove("beepub-selecting");
     // Whitespace under the finger: nothing selectable — don't draw a
     // ghost overlay for a menu that will never open.
@@ -295,7 +310,7 @@ export function setupIOSTouchSelection(
     sel.removeAllRanges();
     sel.addRange(range);
     currentRange = range.cloneRange();
-    currentRangeText = sel.toString().trim();
+    currentRangeText = selectedText(sel, range).trim();
     doc.body.classList.remove("beepub-selecting");
     updateSelectionOverlay(range);
   }

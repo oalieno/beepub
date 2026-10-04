@@ -26,6 +26,7 @@
   import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
   import type { BookLoader } from "$lib/reader/loaders";
   import { verifyAnchors } from "$lib/reader/anchor";
+  import { unwrapBoundaries, wholeText } from "$lib/reader/tcy";
   import {
     activeTocEntry,
     flattenToc,
@@ -1244,22 +1245,22 @@ ${darkOverrides}
 
   /** W3C TextQuoteSelector-style context around a selection, taken from
    *  the boundary text nodes — what re-anchors a highlight whose CFI
-   *  stops resolving after the book file is rewritten. */
+   *  stops resolving after the book file is rewritten. The text nodes are
+   *  read as the book wrote them: one that a forced vertical layout split
+   *  around an upright number gives the context its unsplit self would. */
   function quoteContext(range: Range): { prefix: string; suffix: string } {
     let prefix = "";
     let suffix = "";
-    const sc = range.startContainer;
+    const r = unwrapBoundaries(range);
+    const sc = r.startContainer;
     if (sc.nodeType === Node.TEXT_NODE) {
-      const t = sc.textContent ?? "";
-      prefix = t.slice(
-        Math.max(0, range.startOffset - QUOTE_CONTEXT),
-        range.startOffset,
-      );
+      const { text, offset } = wholeText(sc, r.startOffset);
+      prefix = text.slice(Math.max(0, offset - QUOTE_CONTEXT), offset);
     }
-    const ec = range.endContainer;
+    const ec = r.endContainer;
     if (ec.nodeType === Node.TEXT_NODE) {
-      const t = ec.textContent ?? "";
-      suffix = t.slice(range.endOffset, range.endOffset + QUOTE_CONTEXT);
+      const { text, offset } = wholeText(ec, r.endOffset);
+      suffix = text.slice(offset, offset + QUOTE_CONTEXT);
     }
     return { prefix, suffix };
   }

@@ -14,6 +14,7 @@
  */
 import * as CFI from "./vendor/foliate/epubcfi.js";
 import type { Book } from "./core";
+import { cfiFromRange } from "./tcy";
 
 export interface QuoteSelector {
   text: string;
@@ -156,7 +157,8 @@ export async function verifyAnchors(
   const cfiFor = (index: number, range: Range) =>
     CFI.joinIndir(
       book.sections[index]?.cfi ?? CFI.fake.fromIndex(index),
-      CFI.fromRange(range),
+      // A live (rendered) document may carry upright-number wrappers.
+      cfiFromRange(range),
     );
 
   const resolvedIndex = (cfi: string): number | null => {
