@@ -306,6 +306,35 @@ ${root} body * { writing-mode: inherit !important; }${
   }`;
 }
 
+// ------------------------------------------------------------------- plates
+
+const PLATE_ATTR = "data-beepub-plate";
+
+/**
+ * An illustration alone in its paragraph, in vertical text, is centred
+ * along the column (top to bottom on the page). The paragraph also loses
+ * its line height: the strut beside a page-wide image would make the line
+ * wider than the page and push the image off it.
+ */
+const PLATE_CSS = `
+[${PLATE_ATTR}] {
+  text-align: center !important;
+  text-indent: 0 !important;
+  line-height: 0 !important;
+}`;
+
+/** Mark the paragraphs that hold one image and no text. Attributes only,
+ *  so every CFI reads the section as before. */
+function markPlates(doc: Document) {
+  for (const el of Array.from(doc.body.querySelectorAll("img, svg"))) {
+    const block = el.parentElement;
+    if (!block || block === doc.body || block.childElementCount !== 1) continue;
+    if (/\S/.test(block.textContent ?? "")) continue;
+    const display = doc.defaultView?.getComputedStyle(block).display;
+    if (display === "block") block.setAttribute(PLATE_ATTR, "");
+  }
+}
+
 // --------------------------------------------------------------------- core
 
 const VERTICAL_RL = /writing-mode\s*:\s*vertical-rl/i;
@@ -674,11 +703,10 @@ export class ReaderCore {
 
   #composedStyles(): string | [string, string] {
     const forced = this.forcedWritingMode();
-    if (!forced) return this.#styles;
     const [before, after] = Array.isArray(this.#styles)
       ? this.#styles
       : ["", this.#styles];
-    return [before, after + writingModeCss(forced)];
+    return [before, after + PLATE_CSS + (forced ? writingModeCss(forced) : "")];
   }
 
   /** The writing mode in force, or null when the book's own stands: no
@@ -873,6 +901,7 @@ export class ReaderCore {
       if (this.vertical) this.#nativeVertical = true;
     }
     if (this.forcedWritingMode() === "vertical") this.#combineNumbers(doc);
+    if (this.vertical) markPlates(doc);
     this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });

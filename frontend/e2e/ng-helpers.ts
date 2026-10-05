@@ -96,6 +96,14 @@ export const CHAPTER_ANCHORS_BOOK: Fixture = {
   readyText: "潮汐之章第1段",
 };
 
+/** One vertical chapter with a tall illustration alone in its own
+ *  paragraph between blank lines, mid-text — a light novel's plate. */
+export const VERTICAL_PLATE_BOOK: Fixture = {
+  file: "e2e-vertical-plate-book.epub",
+  title: "風車郵差的插圖頁",
+  readyText: "風車之章第1段",
+};
+
 /** A vertical-rl book (page progression rtl) with a horizontal-tb
  *  illustration plate between its two chapters — the shape that made
  *  page turns loop at every chapter start. */

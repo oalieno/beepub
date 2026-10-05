@@ -349,8 +349,10 @@ class View {
                 'max-height': vertical
                     ? (maxHeight !== 'none' && maxHeight !== '0px' ? maxHeight : '100%')
                     : `${height - margin * 2}px`,
+                // BeePub: the vertical grid already keeps the margin outside
+                // the container, so its width is the page's.
                 'max-width': vertical
-                    ? `${width - margin * 2}px`
+                    ? `${width}px`
                     : (maxWidth !== 'none' && maxWidth !== '0px' ? maxWidth : '100%'),
                 'object-fit': 'contain',
                 'page-break-inside': 'avoid',
