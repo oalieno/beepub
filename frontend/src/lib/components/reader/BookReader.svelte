@@ -755,7 +755,9 @@ ${darkOverrides}
       fontSize,
       sectionIndex: currentIndex,
       sectionPage: currentSectionPage,
-      sectionPageCounts: sectionPageCounts.map((n) => (n > 0 ? n : 0)),
+      // Dense: a jump leaves holes for the sections it skipped, which
+      // map() would keep and JSON turn into nulls the server refuses.
+      sectionPageCounts: Array.from(sectionPageCounts, (n) => (n > 0 ? n : 0)),
       totalPages,
       // Only the xpointer computed for exactly this CFI; absent → the
       // server degrades to chapter-start synthesis.

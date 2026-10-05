@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   CHAPTERS_BOOK,
+  PLATES_BOOK,
   openBook,
   resetProgress,
   seedBook,
@@ -128,6 +129,34 @@ test("page turns save the position and a reopen restores it", async ({
   // load — never a user move.
   expect(["navigation", "anchor"]).toContain(back.reason);
   expect(await readPercent(page)).toBe(Math.round(row.percentage));
+});
+
+test("a jump over sections never opened still saves", async ({ page }) => {
+  const bookId = await seedFixture(page.request, PLATES_BOOK);
+  // No page counts on record: the sections skipped below have none.
+  await resetProgress(page.request, bookId);
+  try {
+    await openBook(page, bookId, {}, PLATES_BOOK);
+    const saved = progressPut(page);
+    const last = await page.evaluate(() => {
+      const core = window.__beepubReaderNG.core;
+      const index = core.lastLinearIndex();
+      void core.goTo(index);
+      return index;
+    });
+    expect(last).toBeGreaterThan(1);
+    // The skipped sections go out as 0 (unknown), not as holes the
+    // server refuses — which left the old position on record.
+    const response = await saved;
+    expect(response.status()).toBe(200);
+    const row = await getProgress(page, bookId);
+    expect(row.section_index).toBe(last);
+    expect(row.section_page_counts.slice(1, last)).toEqual(
+      new Array(last - 1).fill(0),
+    );
+  } finally {
+    await resetProgress(page.request, bookId);
+  }
 });
 
 test("a stored CFI that no longer resolves degrades to the stored percentage", async ({
