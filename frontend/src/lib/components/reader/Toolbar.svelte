@@ -179,7 +179,9 @@
           <span class="opacity-50 shrink-0">·</span>
         {/if}
         {#if chapterLabel}
-          <span class="truncate">{chapterLabel}</span>
+          <span class="truncate" data-testid="reader-chapter"
+            >{chapterLabel}</span
+          >
         {/if}
       </p>
     {/if}

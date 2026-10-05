@@ -57,19 +57,29 @@ function fragmentElement(doc: Document, id: string): Element | null {
   );
 }
 
-/** Whether `el` starts at or before `node` in document order. */
-function precedes(el: Element, node: Node): boolean {
-  if (el === node || el.contains(node)) return true;
-  return !!(
-    el.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING
-  );
+/** Whether the page that starts at `range` is under the entry anchored
+ *  at `el`: the anchor is at or before the start, or nothing but blank
+ *  space lies between the two. Publishers hang the anchor on an empty
+ *  element ahead of the heading, behind another empty one — the range of
+ *  the chapter's first page then starts a node before its own anchor. */
+function startsUnder(el: Element, range: Range): boolean {
+  const doc = el.ownerDocument;
+  const anchor = doc.createRange();
+  anchor.setStartBefore(el);
+  anchor.collapse(true);
+  // 0 = START_TO_START (the section's Range class is another realm's).
+  if (anchor.compareBoundaryPoints(0, range) <= 0) return true;
+  const gap = doc.createRange();
+  gap.setStart(range.startContainer, range.startOffset);
+  gap.setEndBefore(el);
+  return !/\S/.test(gap.toString());
 }
 
 /**
  * The entry the visible page is under: the last entry (in TOC order) at
  * or before the page's start. Entries of the current section that carry a
- * fragment count only once their element is at or before the start of
- * the visible range; without a range every entry of the section counts.
+ * fragment count only once the visible range starts under their element
+ * (see startsUnder); without a range every entry of the section counts.
  */
 export function activeTocEntry(
   entries: readonly TocEntry[],
@@ -83,7 +93,7 @@ export function activeTocEntry(
     if (entry.index > index) continue;
     if (entry.index === index && entry.fragment && start && doc) {
       const el = fragmentElement(doc, entry.fragment);
-      if (el && !precedes(el, start)) continue;
+      if (el && range && !startsUnder(el, range)) continue;
     }
     active = entry;
   }

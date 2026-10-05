@@ -1,0 +1,86 @@
+import { test, expect, type Page } from "@playwright/test";
+import { ADMIN_STATE } from "./helpers";
+import {
+  CHAPTER_ANCHORS_BOOK,
+  openBook,
+  resetProgress,
+  seedFixture,
+} from "./ng-helpers";
+
+/**
+ * reader-ng: the chapter named in the chrome. A chapter's first page is
+ * already that chapter — even when its TOC anchor is an empty element a
+ * node or two after the place the page's range starts — and turning into
+ * it never names an earlier chapter on the way.
+ */
+
+test.use({ storageState: ADMIN_STATE });
+test.setTimeout(90_000);
+
+const label = (page: Page) =>
+  page.locator('[data-testid="reader-chapter"]:visible');
+
+/** Every chapter name the chrome shows from now on, in order, starting
+ *  with the one it shows now. */
+async function recordLabels(page: Page) {
+  await page.evaluate(() => {
+    const w = window as unknown as { __labels: string[] };
+    w.__labels = [];
+    const read = () => {
+      const el = document.querySelector('[data-testid="reader-chapter"]');
+      const text = el?.textContent?.trim() ?? "";
+      if (text && w.__labels[w.__labels.length - 1] !== text)
+        w.__labels.push(text);
+    };
+    read();
+    new MutationObserver(read).observe(document.body, {
+      subtree: true,
+      childList: true,
+      characterData: true,
+    });
+  });
+}
+
+test("a chapter's first page names that chapter, with no detour on the way in", async ({
+  page,
+}) => {
+  const bookId = await seedFixture(page.request, CHAPTER_ANCHORS_BOOK);
+  await resetProgress(page.request, bookId);
+  await openBook(page, bookId, {}, CHAPTER_ANCHORS_BOOK);
+  await expect(label(page)).toHaveText("第一話「潮汐」");
+
+  // To the last page of the second chapter, then one turn into the third.
+  await page.evaluate(() => window.__beepubReaderNG.core.goTo(1));
+  await expect(label(page)).toHaveText("第二話「燈芯」");
+  const next = page.getByRole("button", { name: "Next page" });
+  const index = () =>
+    page.evaluate(() => window.__beepubReaderNG.core.lastLocation.index);
+  const atLastPage = () =>
+    page.evaluate(() => {
+      const l = window.__beepubReaderNG.core.lastLocation;
+      return l.fraction + l.size >= 1 - 1e-6;
+    });
+  for (let i = 0; i < 40 && !(await atLastPage()); i++) {
+    await next.click();
+    await page.waitForTimeout(300);
+  }
+  expect(await atLastPage()).toBe(true);
+  expect(await index()).toBe(1);
+  await expect(label(page)).toHaveText("第二話「燈芯」");
+
+  await recordLabels(page);
+  await next.click();
+  await expect.poll(index).toBe(2);
+  await page.waitForTimeout(600);
+  expect(
+    await page.evaluate(
+      () => window.__beepubReaderNG.core.lastLocation.fraction,
+    ),
+  ).toBe(0);
+  await expect(label(page)).toHaveText("第三話「霧笛」");
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __labels: string[] }).__labels,
+    ),
+  ).toEqual(["第二話「燈芯」", "第三話「霧笛」"]);
+});

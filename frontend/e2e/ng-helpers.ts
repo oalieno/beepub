@@ -87,6 +87,15 @@ export const CHAPTERS_BOOK: Fixture = {
   readyText: "甲章首段",
 };
 
+/** Three vertical chapters, one per section, each TOC entry pointing at
+ *  an empty <p id> that sits behind another empty <p> and ahead of the
+ *  heading — the way a publisher's export anchors its chapters. */
+export const CHAPTER_ANCHORS_BOOK: Fixture = {
+  file: "e2e-chapter-anchors-book.epub",
+  title: "守塔人的三則日誌",
+  readyText: "潮汐之章第1段",
+};
+
 /** A vertical-rl book (page progression rtl) with a horizontal-tb
  *  illustration plate between its two chapters — the shape that made
  *  page turns loop at every chapter start. */
