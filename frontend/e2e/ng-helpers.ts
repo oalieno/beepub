@@ -32,6 +32,7 @@ declare global {
     __menuLog?: string[];
     __menuT0?: number;
     __menuFrames?: { left: string; l: number; r: number }[];
+    __fades?: number[];
   }
 }
 
@@ -276,7 +277,12 @@ export function seedGesturesSeen(page: Page) {
 
 /** Open the reader at a fixed geometry and wait for the first section.
  *  `overrides` are query params, plus `restore: "1"` to keep the reader's
- *  own restored position instead of resetting to the first page. */
+ *  own restored position instead of resetting to the first page.
+ *
+ *  Page turns are bare jumps (`turn=instant`, a mode only the query
+ *  reaches) so a spec can read the page right after turning it; pass
+ *  `turn: "fade"` / `"slide"` for the reader's own modes, or `turn: ""`
+ *  to leave the choice to what is stored. */
 export async function openBook(
   page: Page,
   bookId: string,
@@ -291,8 +297,10 @@ export async function openBook(
     lh: "1.8",
     mx: "24",
     my: "48",
+    turn: "instant",
     ...query,
   });
+  if (!params.get("turn")) params.delete("turn");
   await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read?${params}`);
   await page.waitForFunction(

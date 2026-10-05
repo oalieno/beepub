@@ -20,7 +20,7 @@
    * margin seeds both gutters). Query params override for this session
    * only — probes and e2e open at a known geometry — and are not written
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
-   * &turn=instant|animated|follow.
+   * &turn=fade|slide|instant (instant — a bare jump — exists only here).
    */
   import { onDestroy, onMount } from "svelte";
   import { browser } from "$app/environment";
@@ -361,9 +361,23 @@
     if (fromQuery === "serif") return "serif";
     return stored(KEY.font) ?? "serif";
   }
+  /** What a stored or query value means today: before 2026-10 the modes
+   *  were instant / animated (a slide without the finger) / follow. */
+  function parsePageTurn(raw: string | null): "fade" | "slide" {
+    return raw === "slide" || raw === "animated" || raw === "follow"
+      ? "slide"
+      : "fade";
+  }
   function initialPageTurn(): PageTurnMode {
-    const raw = q.get("turn") ?? stored(KEY.pageTurn);
-    return raw === "animated" || raw === "follow" ? raw : "instant";
+    const fromQuery = q.get("turn");
+    if (fromQuery === "instant") return "instant";
+    if (fromQuery) return parsePageTurn(fromQuery);
+    // Values from before there were two modes are read as today's and
+    // rewritten, so the key holds one vocabulary.
+    const raw = stored(KEY.pageTurn);
+    const mode = parsePageTurn(raw);
+    if (raw != null && raw !== mode) store(KEY.pageTurn, mode);
+    return mode;
   }
   // Synchronous (fall back to the app theme) so dark-mode readers don't
   // get a white flash before onMount runs.
@@ -387,7 +401,7 @@
   );
   const FONT_SIZE_MAX = 48;
   let fullPage = $state(browser ? stored(KEY.fullPage) === "1" : false);
-  let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "instant");
+  let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "fade");
   function initialPagerMode(): PagerMode {
     const v = stored(KEY.pagerMode);
     return v === "double" ||

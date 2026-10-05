@@ -36,7 +36,7 @@
     pageMargin = 32,
     marginX = 32,
     marginY = 32,
-    pageTurn = "instant",
+    pageTurn = "fade",
     writingMode = "auto",
     fullPage = false,
     darkMode = false,
@@ -79,7 +79,8 @@
      *  handlers are given. */
     marginX?: number;
     marginY?: number;
-    pageTurn?: "instant" | "animated" | "follow";
+    /** "instant" is a session override with no button of its own. */
+    pageTurn?: "fade" | "slide" | "instant";
     /** This book's writing direction; row shown when
      *  `onwritingModeChange` is given (CJK text books). */
     writingMode?: WritingMode;
@@ -97,7 +98,7 @@
     onmarginChange?: (value: number) => void;
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
-    onpageTurnChange?: (value: "instant" | "animated" | "follow") => void;
+    onpageTurnChange?: (value: "fade" | "slide") => void;
     onwritingModeChange?: (value: WritingMode) => void;
     /** The largest font size the reader behind the sheet takes. */
     fontSizeMax?: number;
@@ -162,12 +163,11 @@
     { value: 56, label: m.reader_margin_wide },
   ];
   const pageTurnOptions: {
-    value: "instant" | "animated" | "follow";
+    value: "fade" | "slide";
     label: () => string;
   }[] = [
-    { value: "instant", label: m.reader_page_turn_instant },
-    { value: "animated", label: m.reader_page_turn_slide },
-    { value: "follow", label: m.reader_page_turn_follow },
+    { value: "fade", label: m.reader_page_turn_fade },
+    { value: "slide", label: m.reader_page_turn_slide },
   ];
   const writingModeOptions: { value: WritingMode; label: () => string }[] = [
     { value: "auto", label: m.reader_writing_mode_auto },
@@ -474,7 +474,10 @@
         {/if}
 
         {#if onpageTurnChange}
-          <div class="flex items-center justify-between">
+          <div
+            class="flex items-center justify-between"
+            data-testid="setting-page-turn"
+          >
             <span class="text-sm {labelClass}">{m.reader_page_turn()}</span>
             <div class="flex gap-1">
               {#each pageTurnOptions as option}

@@ -175,7 +175,7 @@ test("theme and page-turn mode persist", async ({ page }) => {
       localStorage.getItem("reader-dark"),
       localStorage.getItem("reader-page-turn"),
     ]),
-  ).toEqual(["1", "animated"]);
+  ).toEqual(["1", "slide"]);
 });
 
 test.describe("gutters are screen-space in both writing modes", () => {

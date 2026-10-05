@@ -66,6 +66,8 @@ async function openNg(page: Page, bookId: string, font: string) {
     mx: "24",
     my: "48",
     font,
+    // Bare jumps: the geometry is read right after each turn.
+    turn: "instant",
   });
   await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read?${params}`);

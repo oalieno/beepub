@@ -417,7 +417,7 @@ test.describe("writing direction", () => {
     await openBook(
       page,
       bookId,
-      { font: "sans", turn: "animated" },
+      { font: "sans", turn: "slide" },
       VERTICAL_BOOK,
     );
     expect(await engine(page)).toEqual({
@@ -430,7 +430,7 @@ test.describe("writing direction", () => {
     await expect(scrubber(page)).toHaveAttribute("dir", "rtl");
     const effective = () =>
       page.evaluate(() => window.__beepubReaderNG.core.effectivePageTurn());
-    expect(await effective()).toBe("instant");
+    expect(await effective()).toBe("fade");
 
     await pageForward(page, "ArrowLeft", 3);
     const place = await startCfi(page);
@@ -455,7 +455,7 @@ test.describe("writing direction", () => {
     ).toBe("ltr");
     await expect(scrubber(page)).toHaveAttribute("dir", "ltr");
     // Horizontal pages slide with the finger's axis again.
-    expect(await effective()).toBe("animated");
+    expect(await effective()).toBe("slide");
 
     expect((await location(page)).index).toBe(before.index);
     expect(await onScreen(page, place)).toBe(true);
@@ -502,7 +502,7 @@ test.describe("writing direction", () => {
       root: "vertical-rl",
     });
     await expect(scrubber(page)).toHaveAttribute("dir", "rtl");
-    expect(await effective()).toBe("instant");
+    expect(await effective()).toBe("fade");
   });
 
   test("a book that sets its writing mode on an inner container follows the forced mode whole", async ({

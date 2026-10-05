@@ -96,6 +96,9 @@ export interface PaginatorElement extends HTMLElement {
    *  section's bounds; snap() then settles on the nearest page, biased by
    *  the release velocity (px/ms). */
   snap(vx: number, vy: number): void;
+  /** No page before / after the one on screen in the whole book. */
+  readonly atStart: boolean;
+  readonly atEnd: boolean;
   scrollToAnchor(
     anchor: Range | Element | number,
     select?: boolean,
@@ -143,10 +146,32 @@ export interface LayoutParams {
   maxColumnCount?: number;
 }
 
-/** How a page turn moves: instant jump (BeePub's historical behaviour),
- *  a 300ms slide, or the page following the finger and snapping on
- *  release (the slide also applies to that snap). */
-export type PageTurnMode = "instant" | "animated" | "follow";
+/** How a page turn moves. The reader offers two: "fade" (the page fades
+ *  out, the next one fades in — the default) and "slide" (the page
+ *  follows the finger and snaps on release; taps and keys slide it over
+ *  300ms). "instant" is a bare jump with no animation, reachable only
+ *  through the `?turn=instant` session override — tests and probes read
+ *  the page right after a turn. */
+export type PageTurnMode = "fade" | "slide" | "instant";
+
+/** The fade of a page turn: out, jump, in. Short enough to read as a
+ *  blink of the page rather than a wait. */
+const FADE_OUT_MS = 40;
+const FADE_IN_MS = 100;
+/** The paginator drops turns for this long after one (its own lock). */
+const TURN_LOCK_MS = 100;
+/** How long after reaching the paginator a turn can still be inside that
+ *  lock (timers run late) rather than inside a chapter load. */
+const TURN_LOCK_SLACK_MS = TURN_LOCK_MS + 50;
+
+function prefersReducedMotion(): boolean {
+  try {
+    return !!globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")
+      .matches;
+  } catch {
+    return false;
+  }
+}
 
 export interface ReaderCoreHandlers {
   onload?: (detail: { doc: Document; index: number }) => void;
@@ -422,7 +447,7 @@ export class ReaderCore {
   /** The current section's own direction (body dir / CSS direction),
    *  the same reading the paginator lays its columns out by. */
   sectionRtl = false;
-  pageTurn: PageTurnMode = "instant";
+  pageTurn: PageTurnMode = "fade";
   /** The writing direction asked for (see setWritingMode). */
   writingMode: WritingMode = "auto";
 
@@ -443,6 +468,19 @@ export class ReaderCore {
    *  cannot flip the mapping back (and forth) the way a per-section
    *  reading did. */
   #inferredLeftward = false;
+
+  // A faded page turn in progress (see #turn).
+  #fadeTimer: ReturnType<typeof setTimeout> | null = null;
+  #fadeAnimation: Animation | null = null;
+  /** Bumped whenever the fade is abandoned, so a turn still in the
+   *  paginator's hands finds it is no longer the one being waited on. */
+  #fadeGeneration = 0;
+  /** The turn has gone to the paginator; its page is not on screen yet. */
+  #awaitingPage = false;
+  #turning = false;
+  #turnStartedAt = 0;
+  #turnAskedAt = 0;
+  #queuedTurn: 1 | -1 | null = null;
 
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
@@ -561,6 +599,7 @@ export class ReaderCore {
   async open(loader: BookLoader, target?: NavInput | null): Promise<Book> {
     const book = await this.load(loader);
     const resolved = target != null ? this.resolve(target) : null;
+    this.#cancelFade();
     await this.paginator.goTo(resolved ?? { index: this.firstLinearIndex() });
     return book;
   }
@@ -606,16 +645,130 @@ export class ReaderCore {
   async goTo(target: NavInput): Promise<NavTarget | null> {
     const resolved = this.resolve(target);
     if (!resolved) return null;
+    this.#cancelFade();
     await this.paginator.goTo(withTextStart(resolved));
     return resolved;
   }
 
   prev() {
-    return this.paginator.prev();
+    return this.#turn(-1);
   }
 
   next() {
-    return this.paginator.next();
+    return this.#turn(1);
+  }
+
+  /**
+   * One page back or forward. In the fade mode the page fades out, the
+   * paginator jumps, and the new page fades in once it is on screen (the
+   * relocation says so — across a chapter boundary that is after the
+   * load). Only page turns come through here: navigation (goTo, a
+   * writing-mode reload) never fades and abandons a fade in progress.
+   *
+   * Paging quickly must feel as it does without the fade. The paginator
+   * drops turns for 100ms after one; the fade-out pushes that window
+   * back by its own length, so a turn asked for a full lock after the
+   * previous one, yet before the paginator is free again, is kept and
+   * made the moment it is — at most one, never a backlog. (A turn asked
+   * for while a chapter is still loading is dropped, as it always was.)
+   */
+  #turn(dir: 1 | -1): Promise<void> {
+    if (
+      this.effectivePageTurn() !== "fade" ||
+      prefersReducedMotion() ||
+      this.#atEdge(dir)
+    ) {
+      this.#cancelFade();
+      return this.#paginatorTurn(dir);
+    }
+    const now = performance.now();
+    // Fading out: the previous turn is under 40ms old.
+    if (this.#fadeTimer != null) return Promise.resolve();
+    if (this.#turning) {
+      if (
+        now - this.#turnStartedAt < TURN_LOCK_SLACK_MS &&
+        now - this.#turnAskedAt >= TURN_LOCK_MS
+      ) {
+        this.#queuedTurn = dir;
+        this.#turnAskedAt = now;
+      }
+      return Promise.resolve();
+    }
+    this.#turnAskedAt = now;
+    this.#fade(0, FADE_OUT_MS);
+    this.#fadeTimer = setTimeout(() => {
+      this.#fadeTimer = null;
+      this.#fadedTurn(dir);
+    }, FADE_OUT_MS);
+    return Promise.resolve();
+  }
+
+  #paginatorTurn(dir: 1 | -1): Promise<void> {
+    return dir < 0 ? this.paginator.prev() : this.paginator.next();
+  }
+
+  /** Nothing to turn to: no fade for a turn that goes nowhere. */
+  #atEdge(dir: 1 | -1): boolean {
+    try {
+      return dir < 0 ? this.paginator.atStart : this.paginator.atEnd;
+    } catch {
+      return false; // nothing rendered yet
+    }
+  }
+
+  #fadedTurn(dir: 1 | -1) {
+    const generation = this.#fadeGeneration;
+    this.#turning = true;
+    this.#turnStartedAt = performance.now();
+    this.#awaitingPage = true;
+    const done = () => {
+      if (generation !== this.#fadeGeneration) return;
+      this.#turning = false;
+      // The paginator refused the turn (nothing relocated): the page
+      // that faded out comes back.
+      this.#showPage();
+      const queued = this.#queuedTurn;
+      this.#queuedTurn = null;
+      if (queued) this.#fadedTurn(queued);
+    };
+    this.#paginatorTurn(dir).then(done, done);
+  }
+
+  #showPage() {
+    if (!this.#awaitingPage) return;
+    this.#awaitingPage = false;
+    this.#fade(1, FADE_IN_MS);
+  }
+
+  #fade(to: 0 | 1, ms: number) {
+    const el = this.paginator;
+    if (typeof el.animate !== "function") return;
+    this.#fadeAnimation?.cancel();
+    const animation = el.animate([{ opacity: to ? 0 : 1 }, { opacity: to }], {
+      duration: ms,
+      easing: "ease-out",
+      fill: "forwards",
+    });
+    this.#fadeAnimation = animation;
+    if (to === 0) return;
+    // Faded in: drop the animation, the element's own opacity is 1.
+    animation.onfinish = () => {
+      animation.cancel();
+      if (this.#fadeAnimation === animation) this.#fadeAnimation = null;
+    };
+  }
+
+  /** Drop a fade in progress — and the turn behind it, if it has not
+   *  reached the paginator yet. The page is fully visible afterwards. */
+  #cancelFade() {
+    this.#fadeGeneration++;
+    if (this.#fadeTimer != null) clearTimeout(this.#fadeTimer);
+    this.#fadeTimer = null;
+    this.#fadeAnimation?.cancel();
+    this.#fadeAnimation = null;
+    this.#awaitingPage = false;
+    this.#turning = false;
+    this.#queuedTurn = null;
   }
 
   /**
@@ -654,36 +807,37 @@ export class ReaderCore {
   }
 
   setPageTurn(mode: PageTurnMode) {
+    if (mode !== this.pageTurn) this.#cancelFade();
     this.pageTurn = mode;
     this.#applyPageTurn();
   }
 
   /**
-   * The page-turn mode that applies to the section on screen. The slide
-   * and finger-follow modes move the paginator's scroll axis, which for
-   * vertical text runs top to bottom (pages are stacked vertically) and
-   * for a section laid out against the book's direction runs the wrong
-   * way — both would slide the page across the finger's motion, so such
-   * sections turn instantly whatever the setting says.
+   * The page-turn mode that applies to the section on screen. Sliding
+   * moves the paginator's scroll axis, which for vertical text runs top
+   * to bottom (pages are stacked vertically) and for a section laid out
+   * against the book's direction runs the wrong way — both would slide
+   * the page across the finger's motion, so such sections fade whatever
+   * the setting says.
    */
   effectivePageTurn(): PageTurnMode {
-    if (this.pageTurn === "instant") return "instant";
-    if (this.vertical) return "instant";
+    if (this.pageTurn !== "slide") return this.pageTurn;
+    if (this.vertical) return "fade";
     if (this.sectionAdvancesLeftward() !== this.advancesLeftward())
-      return "instant";
-    return this.pageTurn;
+      return "fade";
+    return "slide";
   }
 
   #applyPageTurn() {
-    // The paginator animates page turns and snaps only while `animated`
-    // is present; finger-follow wants the animated snap on release.
+    // The paginator slides page turns and snaps only while `animated`
+    // is present.
     this.paginator.toggleAttribute(
       "animated",
-      this.effectivePageTurn() !== "instant",
+      this.effectivePageTurn() === "slide",
     );
   }
 
-  /** Finger-follow paging passthroughs (see PageTurnMode). */
+  /** Finger-follow paging passthroughs (the slide mode). */
   scrollBy(dx: number, dy: number) {
     this.paginator.scrollBy(dx, dy);
   }
@@ -747,6 +901,7 @@ export class ReaderCore {
     if (this.forcedWritingMode() === before) return false;
     const cfi = anchor || this.lastLocation?.startCfi;
     const target = cfi ? this.resolve(cfi) : null;
+    this.#cancelFade();
     await this.paginator.reload(
       target?.index === index && target.anchor != null
         ? withTextStart(target).anchor
@@ -866,6 +1021,7 @@ export class ReaderCore {
   }
 
   destroy() {
+    this.#cancelFade();
     try {
       this.paginator.destroy();
     } catch {
@@ -1000,6 +1156,7 @@ export class ReaderCore {
       startCfi: range ? this.positionCFI(detail.index, range) : cfi,
     };
     this.lastLocation = location;
+    this.#showPage();
     if (detail.index !== this.#prefetchIndex) {
       this.#prefetchIndex = detail.index;
       this.#prefetch?.around(detail.index);

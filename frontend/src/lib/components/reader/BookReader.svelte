@@ -82,7 +82,7 @@
     marginX = 32,
     marginY = 32,
     letterSpacing = 0,
-    pageTurn = "instant",
+    pageTurn = "fade",
     writingMode = "auto",
     fullPage = false,
     sectionWeights = null,
@@ -1781,13 +1781,14 @@ ${darkOverrides}
       // Finger moving left pulls in the page on the right.
       onswipeleft: () => turn("right"),
       onswiperight: () => turn("left"),
-      // Finger-follow only where the section's scroll axis follows the
-      // finger (the core says which; vertical text turns instantly).
+      // The page follows the finger only in the slide mode, and only
+      // where the section's scroll axis follows the finger (the core says
+      // which; vertical text fades).
       onswipemove: (dx: number, dy: number) => {
-        if (c.effectivePageTurn() === "follow") c.scrollBy(dx, dy);
+        if (c.effectivePageTurn() === "slide") c.scrollBy(dx, dy);
       },
       onswipeend: (vx: number, vy: number) => {
-        if (c.effectivePageTurn() !== "follow") return false;
+        if (c.effectivePageTurn() !== "slide") return false;
         dismissMenu();
         c.snap(vx, vy);
         return true;

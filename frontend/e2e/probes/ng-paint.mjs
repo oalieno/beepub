@@ -69,6 +69,8 @@ const params = new URLSearchParams({
   lh: "1.8",
   mx: "24",
   my: "48",
+  // Bare page turns, no fade: the page is read right after each one.
+  turn: "instant",
 });
 if (spec.font) params.set("font", spec.font);
 await page.goto(`/books/${bookId}/read?${params}`);
