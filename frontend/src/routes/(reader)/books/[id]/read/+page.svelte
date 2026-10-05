@@ -1486,7 +1486,6 @@
     {marginX}
     {marginY}
     {pageTurn}
-    pageTurnNote={isVertical ? m.reader_page_turn_vertical_note() : null}
     {darkMode}
     {isImageBook}
     showSync={isKosync}
@@ -1499,7 +1498,7 @@
     onletterSpacingChange={handleLetterSpacingChange}
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
-    onpageTurnChange={claimed ? undefined : handlePageTurnChange}
+    onpageTurnChange={claimed || isVertical ? undefined : handlePageTurnChange}
     fontSizeMax={FONT_SIZE_MAX}
     {fullPage}
     onfullPageChange={claimed ? undefined : handleFullPageChange}

@@ -118,14 +118,13 @@ test("vertical text ignores finger-follow and turns instantly, and the sheet say
     .toBeGreaterThan(before.fraction);
   expect((await location(page)).index).toBe(before.index);
 
-  // The settings sheet explains why the mode does not apply here.
+  // The settings sheet does not offer a choice that would not apply.
   await touchTap(cdp, { x: 195, y: 420 }, 60);
   const bar = page.getByRole("toolbar", { name: "Reading controls" });
   await expect(bar).toBeVisible();
   await bar.getByRole("button", { name: "Reader settings" }).click();
-  await expect(
-    page.getByText("Vertical books always turn instantly", { exact: false }),
-  ).toBeVisible();
+  await expect(page.getByText("Line spacing")).toBeVisible();
+  await expect(page.getByText("Page turn", { exact: true })).toHaveCount(0);
 });
 
 test("page turns follow the book's direction across a horizontal plate", async ({

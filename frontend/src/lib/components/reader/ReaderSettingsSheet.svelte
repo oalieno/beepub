@@ -37,7 +37,6 @@
     marginX = 32,
     marginY = 32,
     pageTurn = "instant",
-    pageTurnNote = null,
     writingMode = "auto",
     fullPage = false,
     darkMode = false,
@@ -81,8 +80,6 @@
     marginX?: number;
     marginY?: number;
     pageTurn?: "instant" | "animated" | "follow";
-    /** Why the mode does not apply to the book on screen (vertical text). */
-    pageTurnNote?: string | null;
     /** This book's writing direction; row shown when
      *  `onwritingModeChange` is given (CJK text books). */
     writingMode?: WritingMode;
@@ -493,9 +490,6 @@
               {/each}
             </div>
           </div>
-          {#if pageTurnNote}
-            <p class="-mt-2 text-xs {labelClass}">{pageTurnNote}</p>
-          {/if}
         {/if}
 
         {#if onpagerModeChange}

@@ -353,7 +353,6 @@
   "reader_page_turn_instant": "Instant",
   "reader_page_turn_slide": "Slide",
   "reader_page_turn_follow": "Follow finger",
-  "reader_page_turn_vertical_note": "Vertical books always turn instantly: their pages are stacked top to bottom, so a slide or a finger-follow would move the wrong way.",
   "reader_writing_mode": "Writing direction",
   "reader_writing_mode_auto": "Auto",
   "reader_writing_mode_horizontal": "Horizontal",
