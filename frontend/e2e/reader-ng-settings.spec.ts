@@ -163,12 +163,9 @@ test("theme and page-turn mode persist", async ({ page }) => {
   await page.getByRole("button", { name: "Dark", exact: true }).click();
   await expect(page.locator(".reader-dark")).toHaveCount(1);
   await page.getByRole("button", { name: "Slide" }).click();
+  // The slide mode builds its second rendering of the neighbouring page.
   await expect
-    .poll(() =>
-      page.evaluate(() =>
-        window.__beepubReaderNG.paginator.hasAttribute("animated"),
-      ),
-    )
+    .poll(() => page.evaluate(() => !!window.__beepubReaderNG.core.ghost))
     .toBe(true);
   expect(
     await page.evaluate(() => [

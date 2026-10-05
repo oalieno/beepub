@@ -96,6 +96,23 @@ test("turning past the last page opens the finish overlay and marks the book fin
   );
 });
 
+test("in the slide mode the last page's turn opens the finish overlay too", async ({
+  page,
+}) => {
+  const bookId = await seedFixture(page.request, NOTES_BOOK);
+  await setSeries(page, bookId, null, null);
+  await resetStatus(page, bookId);
+  await openBook(page, bookId, { turn: "slide" }, NOTES_BOOK);
+  expect(
+    await page.evaluate(() => !!window.__beepubReaderNG.core.ghost),
+  ).toBe(true);
+
+  const overlay = await turnPastTheEnd(page);
+  await expect(overlay.getByText("You finished this book")).toBeVisible();
+  await expect.poll(() => readingStatus(page, bookId)).toBe("read");
+  await resetStatus(page, bookId);
+});
+
 test("the end of a series volume offers the next one", async ({ page }) => {
   const bookId = await seedFixture(page.request, NOTES_BOOK);
   const nextId = await seedFixture(page.request, VERTICAL_MIXED_BOOK);

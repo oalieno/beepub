@@ -26,12 +26,15 @@ export interface IOSTouchCallbacks {
    * Finger-follow paging (optional). Once a touch is classified as a swipe,
    * every move reports the finger delta (previous − current, px) and the
    * release reports the velocity (px/ms). onswipeend returns true when it
-   * consumed the gesture (the caller scrolled with the finger and snaps);
+   * consumed the gesture (the page followed the finger and settles);
    * otherwise the threshold swipe fires onswipeleft/right as usual, so the
    * mode can change at any time without re-attaching.
    */
   onswipemove?: (dx: number, dy: number) => void;
   onswipeend?: (vx: number, vy: number) => boolean | void;
+  /** The swipe will get no onswipeend (the system cancelled the touch,
+   *  or a new one began): whatever followed the finger goes back. */
+  onswipecancel?: () => void;
   /** Called on quick tap while menu is visible */
   ontapdismiss: () => void;
   /** Whether the highlight menu is currently shown */
@@ -324,6 +327,9 @@ export function setupIOSTouchSelection(
   doc.addEventListener(
     "touchstart",
     (e: TouchEvent) => {
+      // A swipe that never got its release must not leave the page
+      // where the finger dropped it.
+      callbacks.onswipecancel?.();
       if (e.touches.length !== 1) return;
       const t = e.touches[0];
       startX = t.clientX;
@@ -426,4 +432,11 @@ export function setupIOSTouchSelection(
     },
     { passive: true },
   );
+  // The system took the touch away (an edge gesture, a notification):
+  // no touchend follows.
+  doc.addEventListener("touchcancel", () => {
+    if (touchState !== "swiping") return;
+    touchState = "idle";
+    callbacks.onswipecancel?.();
+  });
 }

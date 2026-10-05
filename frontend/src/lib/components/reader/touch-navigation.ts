@@ -5,10 +5,10 @@
  * goes through ios-touch-selection.ts, whose state machine arbitrates the
  * same gesture against long-press selection.
  *
- * Gesture geometry is measured in screen coordinates: a finger-follow
- * drag scrolls the frame the events come from, so client coordinates
- * would shift under a still finger by exactly the distance just scrolled
- * and feed that back as movement (the page then oscillates).
+ * Gesture geometry is measured in screen coordinates: a page that
+ * follows the finger moves the frame the events come from, so client
+ * coordinates would shift under a still finger by exactly the distance
+ * just moved and feed that back as movement (the page then oscillates).
  */
 
 export const isIOSDevice = (): boolean =>
@@ -21,9 +21,14 @@ export interface SwipeCallbacks {
   onswiperight: () => void;
   /** Finger-follow paging (optional): see ios-touch-selection.ts. */
   onswipemove?: (dx: number, dy: number) => void;
-  /** Return true when the gesture was consumed (finger-follow snap);
+  /** Return true when the gesture was consumed (the page followed the
+   *  finger and settles by itself);
    *  otherwise the threshold swipe fires onswipeleft/right. */
   onswipeend?: (vx: number, vy: number) => boolean | void;
+  /** The gesture will get no onswipeend (the touch was cancelled, a
+   *  selection took it over, a new touch began): whatever followed the
+   *  finger goes back. */
+  onswipecancel?: () => void;
   /** A quick tap that was not a swipe (the caller checks for selection). */
   ontap?: () => void;
 }
@@ -54,6 +59,9 @@ export function setupSwipeNavigation(
   doc.addEventListener(
     "touchstart",
     (e: TouchEvent) => {
+      // A gesture that never got its release must not leave the page
+      // where the finger dropped it.
+      callbacks.onswipecancel?.();
       if (e.touches.length !== 1) {
         active = false;
         return;
@@ -108,7 +116,10 @@ export function setupSwipeNavigation(
         return;
       }
       // Don't turn the page out from under a selection in progress.
-      if (hasSelection()) return;
+      if (hasSelection()) {
+        callbacks.onswipecancel?.();
+        return;
+      }
       if (callbacks.onswipeend?.(vx, vy)) {
         // consumed by finger-follow paging
       } else if (Math.abs(dx) > SWIPE_THRESHOLD) {
@@ -118,4 +129,8 @@ export function setupSwipeNavigation(
     },
     { passive: true },
   );
+  doc.addEventListener("touchcancel", () => {
+    active = false;
+    callbacks.onswipecancel?.();
+  });
 }

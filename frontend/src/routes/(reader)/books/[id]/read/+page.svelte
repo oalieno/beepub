@@ -218,8 +218,6 @@
   // them (header, desktop scrubber) and the peek pill's way back.
   let percentage = $state<number | null>(null);
   let isRtl = $state(false);
-  // Vertical text on screen: the slide / finger-follow modes don't apply.
-  let isVertical = $state(false);
   let sectionTicks = $state<number[]>([]);
   let peekReturn = $state<{ percentage: number | null } | null>(null);
   const peekLabel = $derived(
@@ -1169,10 +1167,7 @@
                 );
             }}
             onticks={(t) => (sectionTicks = t)}
-            ondirection={(rtl, vertical) => {
-              isRtl = rtl;
-              isVertical = vertical;
-            }}
+            ondirection={(rtl) => (isRtl = rtl)}
             onrestorefallback={(pct) =>
               toastStore.info(
                 m.reader_restore_fallback({ percentage: Math.round(pct) }),
@@ -1236,10 +1231,7 @@
                 );
             }}
             onticks={(t) => (sectionTicks = t)}
-            ondirection={(rtl, vertical) => {
-              isRtl = rtl;
-              isVertical = vertical;
-            }}
+            ondirection={(rtl) => (isRtl = rtl)}
             onwritingmodeoffer={(offered) => (writingModeOffered = offered)}
             onkosyncposition={handleKosyncPosition}
             onrestorefallback={(pct) =>
@@ -1512,7 +1504,7 @@
     onletterSpacingChange={handleLetterSpacingChange}
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
-    onpageTurnChange={claimed || isVertical ? undefined : handlePageTurnChange}
+    onpageTurnChange={claimed ? undefined : handlePageTurnChange}
     fontSizeMax={FONT_SIZE_MAX}
     {fullPage}
     onfullPageChange={claimed ? undefined : handleFullPageChange}

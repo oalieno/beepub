@@ -184,15 +184,44 @@ function paint(
   }
 }
 
+/** One rendered section the annotations are drawn on. */
+interface Surface {
+  overlayer: OverlayerInstance;
+  doc: Document;
+  index: number;
+  writingMode: string;
+  /** The annotations drawn here: their Range and the rects the
+   *  overlayer last painted for it. */
+  drawn: Map<string, { range: Range; source: RectSource }>;
+}
+
+function surface(
+  overlayer: OverlayerInstance,
+  doc: Document,
+  index: number,
+): Surface {
+  // The fill is a pastel at half strength multiplied onto the page, as
+  // the old reader's marks pane draws it: on a light page the paper
+  // tints, on a dark page the text does.
+  const svg = overlayer.element as HTMLElement;
+  svg.style.setProperty("--overlayer-highlight-opacity", "0.5");
+  svg.style.setProperty("--overlayer-highlight-blend-mode", "multiply");
+  return {
+    overlayer,
+    doc,
+    index,
+    writingMode: doc.defaultView?.getComputedStyle(doc.body).writingMode ?? "",
+    drawn: new Map(),
+  };
+}
+
 export class AnnotationLayer {
   #items = new Map<string, Annotation>();
-  /** The annotations drawn in the current section: their Range and the
-   *  rects the overlayer last painted for it. */
-  #drawn = new Map<string, { range: Range; source: RectSource }>();
-  #overlayer: OverlayerInstance | null = null;
-  #doc: Document | null = null;
-  #index = -1;
-  #writingMode = "";
+  /** The section on screen. */
+  #main: Surface | null = null;
+  /** A second rendering that shows the same annotations and nothing
+   *  else — the page-turn slide's ghost. Never hit-tested. */
+  #mirror: Surface | null = null;
   #resolve: (cfi: string) => NavTarget | null;
 
   /** `resolve` turns a CFI into the paginator's navigation target (section
@@ -202,47 +231,50 @@ export class AnnotationLayer {
   }
 
   get index() {
-    return this.#index;
+    return this.#main?.index ?? -1;
   }
 
   /** A section rendered: take its overlayer and draw what belongs there. */
   attach(overlayer: OverlayerInstance, doc: Document, index: number) {
-    this.#overlayer = overlayer;
-    this.#doc = doc;
-    this.#index = index;
-    this.#drawn.clear();
-    this.#writingMode =
-      doc.defaultView?.getComputedStyle(doc.body).writingMode ?? "";
-    // The fill is a pastel at half strength multiplied onto the page, as
-    // the old reader's marks pane draws it: on a light page the paper
-    // tints, on a dark page the text does.
-    const svg = overlayer.element as HTMLElement;
-    svg.style.setProperty("--overlayer-highlight-opacity", "0.5");
-    svg.style.setProperty("--overlayer-highlight-blend-mode", "multiply");
-    for (const item of this.#items.values()) this.#draw(item);
+    const main = surface(overlayer, doc, index);
+    this.#main = main;
+    for (const item of this.#items.values()) this.#draw(main, item);
   }
 
   detach() {
-    this.#overlayer = null;
-    this.#doc = null;
-    this.#index = -1;
-    this.#drawn.clear();
+    this.#main = null;
+    this.#mirror = null;
+  }
+
+  /** The second rendering got a section: draw what belongs there too.
+   *  Every later change to the set reaches both. */
+  attachMirror(overlayer: OverlayerInstance, doc: Document, index: number) {
+    const mirror = surface(overlayer, doc, index);
+    this.#mirror = mirror;
+    for (const item of this.#items.values()) this.#draw(mirror, item);
+  }
+
+  detachMirror() {
+    this.#mirror = null;
   }
 
   set(item: Annotation) {
     this.#items.set(item.key, item);
-    if (!this.#overlayer) return;
-    this.#undraw(item.key);
-    this.#draw(item);
+    for (const s of [this.#main, this.#mirror]) {
+      if (!s) continue;
+      this.#undraw(s, item.key);
+      this.#draw(s, item);
+    }
   }
 
   delete(key: string) {
     this.#items.delete(key);
-    this.#undraw(key);
+    for (const s of [this.#main, this.#mirror]) if (s) this.#undraw(s, key);
   }
 
   replaceAll(items: Annotation[]) {
-    for (const key of Array.from(this.#items.keys())) this.#undraw(key);
+    for (const key of Array.from(this.#items.keys()))
+      for (const s of [this.#main, this.#mirror]) if (s) this.#undraw(s, key);
     this.#items.clear();
     for (const item of items) this.set(item);
   }
@@ -253,10 +285,12 @@ export class AnnotationLayer {
    *  reader's overlay buttons did, and a passage that is both
    *  highlighted and illustrated opens its picture on tap. */
   hitTest(x: number, y: number): string | null {
+    const drawn = this.#main?.drawn;
+    if (!drawn) return null;
     const hit = (kinds: (kind: AnnotationKind) => boolean) => {
       // Most recently drawn first, as the overlayer's own hit test does;
       // against the rects as painted, so no layout work per pointer move.
-      const entries = Array.from(this.#drawn.entries()).reverse();
+      const entries = Array.from(drawn.entries()).reverse();
       for (const [key, { source }] of entries) {
         const item = this.#items.get(key);
         if (!item || !kinds(item.style.kind)) continue;
@@ -275,21 +309,19 @@ export class AnnotationLayer {
 
   /** The drawn Range of an annotation in the current section. */
   rangeOf(key: string): Range | null {
-    return this.#drawn.get(key)?.range ?? null;
+    return this.#main?.drawn.get(key)?.range ?? null;
   }
 
   redraw() {
-    this.#overlayer?.redraw();
+    this.#main?.overlayer.redraw();
   }
 
-  #draw(item: Annotation) {
-    const overlayer = this.#overlayer;
-    const doc = this.#doc;
-    if (!overlayer || !doc) return;
+  #draw(s: Surface, item: Annotation) {
+    const { overlayer, doc } = s;
     let range: Range | null = null;
     try {
       const target = this.#resolve(item.cfi);
-      if (!target || target.index !== this.#index) return;
+      if (!target || target.index !== s.index) return;
       const anchor =
         typeof target.anchor === "function" ? target.anchor(doc) : null;
       // Cross-realm: the section's Range class is not this window's.
@@ -301,7 +333,7 @@ export class AnnotationLayer {
     }
     if (!range || range.collapsed) return;
     const source = rectSource(range);
-    this.#drawn.set(item.key, { range, source });
+    s.drawn.set(item.key, { range, source });
     const { style } = item;
     if (style.kind === "illustration") {
       const gradientId = ensureIllustrationGradient(
@@ -313,12 +345,12 @@ export class AnnotationLayer {
       return;
     }
     overlayer.add(item.key, source, (rects: DOMRect[]) =>
-      paint(rects, style, this.#writingMode),
+      paint(rects, style, s.writingMode),
     );
   }
 
-  #undraw(key: string) {
-    this.#overlayer?.remove(key);
-    this.#drawn.delete(key);
+  #undraw(s: Surface, key: string) {
+    s.overlayer.remove(key);
+    s.drawn.delete(key);
   }
 }

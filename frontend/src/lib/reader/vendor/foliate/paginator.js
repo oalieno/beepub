@@ -1081,7 +1081,10 @@ export class Paginator extends HTMLElement {
             index: this.#adjacentIndex(dir),
             anchor: prev ? () => 1 : () => 0,
         })
-        if (shouldGo || !this.hasAttribute('animated')) await wait(100)
+        // BeePub: `no-turn-lock` skips the pause. The cover slide times
+        // its own turns and makes the next one right after this one.
+        if ((shouldGo || !this.hasAttribute('animated'))
+            && !this.hasAttribute('no-turn-lock')) await wait(100)
         this.#locked = false
     }
     prev(distance) {

@@ -33,6 +33,7 @@ declare global {
     __menuT0?: number;
     __menuFrames?: { left: string; l: number; r: number }[];
     __fades?: number[];
+    __turns?: string[];
   }
 }
 

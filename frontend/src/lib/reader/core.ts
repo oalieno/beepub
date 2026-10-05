@@ -20,6 +20,7 @@ import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
 import { ImagePrefetcher } from "./prefetch";
+import { CoverSlide } from "./slide";
 import {
   OWN_LAYOUT_ATTR,
   TCY_CSS,
@@ -91,14 +92,17 @@ export interface PaginatorElement extends HTMLElement {
     doc: Document;
     overlayer?: OverlayerInstance;
   }[];
-  /** Finger-follow paging: the paginator overrides Element.scrollBy(dx, dy)
-   *  to move the page by a finger delta (previous − current, px) within the
-   *  section's bounds; snap() then settles on the nearest page, biased by
-   *  the release velocity (px/ms). */
-  snap(vx: number, vy: number): void;
+  /** What open() stores: the spine, and the book's page progression. */
+  sections: BookSection[];
+  bookDir?: string;
   /** No page before / after the one on screen in the whole book. */
   readonly atStart: boolean;
   readonly atEnd: boolean;
+  /** The page on screen and the section's page count, as the paginator
+   *  counts them: a blank page pads each end, so text pages run from 1
+   *  to pages − 2. Both throw before the first render. */
+  readonly page: number;
+  readonly pages: number;
   scrollToAnchor(
     anchor: Range | Element | number,
     select?: boolean,
@@ -147,11 +151,11 @@ export interface LayoutParams {
 }
 
 /** How a page turn moves. The reader offers two: "fade" (the page fades
- *  out, the next one fades in — the default) and "slide" (the page
- *  follows the finger and snaps on release; taps and keys slide it over
- *  300ms). "instant" is a bare jump with no animation, reachable only
- *  through the `?turn=instant` session override — tests and probes read
- *  the page right after a turn. */
+ *  out, the next one fades in — the default) and "slide" (one page
+ *  slides over the other, following the finger; taps and keys play the
+ *  same slide on their own — see slide.ts). "instant" is a bare jump
+ *  with no animation, reachable only through the `?turn=instant` session
+ *  override — tests and probes read the page right after a turn. */
 export type PageTurnMode = "fade" | "slide" | "instant";
 
 /** The fade of a page turn: out, jump, in. Short enough to read as a
@@ -193,6 +197,26 @@ export interface ReaderCoreHandlers {
     index: number;
     anchor: HTMLAnchorElement;
   }) => boolean | void;
+  /** A section loaded into the slide's ghost (the second, inert
+   *  rendering of the neighbouring page — slide.ts), before it is laid
+   *  out. It has had the core's own per-section adjustments; whatever
+   *  the integration layer does to a live section's look at `onload`
+   *  belongs here too, and the ghost's layout (setGhostLayout) for the
+   *  writing mode reported. */
+  onghostload?: (detail: {
+    doc: Document;
+    index: number;
+    vertical: boolean;
+  }) => void;
+  /** The ghost's overlayer for the section it shows, or null once the
+   *  ghost is gone. */
+  onghostoverlayer?: (
+    detail: {
+      doc: Document;
+      index: number;
+      overlayer: OverlayerInstance;
+    } | null,
+  ) => void;
 }
 
 /** The reader's say over a book's writing direction: the book's own, or
@@ -360,6 +384,46 @@ function markPlates(doc: Document) {
   }
 }
 
+// ----------------------------------------------------------------- sections
+
+/**
+ * Let more than one paginator hold a section. The parser's loader mints
+ * a section's blob URL on load and revokes it on unload, and its count
+ * of repeated loads of one section is not balanced (a second holder's
+ * unload can revoke the URL the first is still showing). With the live
+ * paginator and the slide's ghost both loading sections, every load and
+ * unload is counted here instead: the parser sees one load when the
+ * first holder arrives and one unload when the last has left.
+ */
+function shareSections(sections: BookSection[]) {
+  for (const section of sections) {
+    const load = section.load.bind(section);
+    const unload = section.unload.bind(section);
+    let holders = 0;
+    let pending: Promise<string> | null = null;
+    section.load = () => {
+      holders++;
+      if (!pending) {
+        const p: Promise<string> = Promise.resolve().then(load);
+        pending = p;
+        // A failed load is nobody's to unload, and the next one retries.
+        p.catch(() => {
+          if (pending !== p) return;
+          pending = null;
+          holders = 0;
+        });
+      }
+      return pending;
+    };
+    section.unload = () => {
+      if (holders === 0) return;
+      if (--holders > 0) return;
+      pending = null;
+      unload();
+    };
+  }
+}
+
 // --------------------------------------------------------------------- core
 
 const VERTICAL_RL = /writing-mode\s*:\s*vertical-rl/i;
@@ -482,8 +546,15 @@ export class ReaderCore {
   #turnAskedAt = 0;
   #queuedTurn: 1 | -1 | null = null;
 
+  /** The slide mode's second rendering and its layers (slide.ts); only
+   *  there while the mode is "slide" and a reflowable book is open. */
+  #slide: CoverSlide | null = null;
+  #container: HTMLElement;
+  #pageColor = "";
+
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
+    this.#container = container;
     this.paginator = document.createElement(
       "foliate-paginator",
     ) as unknown as PaginatorElement;
@@ -506,6 +577,8 @@ export class ReaderCore {
     // sections ahead are answered from memory when the paginator turns
     // into them.
     this.#prefetch?.destroy();
+    // The ghost belongs to the book it was made for.
+    this.#dropSlide();
     const prefetch = new ImagePrefetcher(loader);
     this.#prefetch = prefetch;
     this.#prefetchIndex = -1;
@@ -536,6 +609,7 @@ export class ReaderCore {
         },
       };
     };
+    shareSections(book.sections);
     this.book = book;
     prefetch.open(book.sections);
     this.#language = languageInfo(book.metadata?.language);
@@ -546,6 +620,7 @@ export class ReaderCore {
     if (book.dir !== "rtl" && book.dir !== "ltr")
       void this.#inferDirection(prefetch.loader);
     this.paginator.open(book);
+    this.#applyPageTurn();
     return book;
   }
 
@@ -590,7 +665,6 @@ export class ReaderCore {
     if (texts.some((text) => verticalBodyRule(text, rootClasses))) {
       this.#inferredLeftward = true;
       this.#nativeVertical = true;
-      this.#applyPageTurn();
     }
   }
 
@@ -599,7 +673,7 @@ export class ReaderCore {
   async open(loader: BookLoader, target?: NavInput | null): Promise<Book> {
     const book = await this.load(loader);
     const resolved = target != null ? this.resolve(target) : null;
-    this.#cancelFade();
+    this.#cancelTurn();
     await this.paginator.goTo(resolved ?? { index: this.firstLinearIndex() });
     return book;
   }
@@ -645,7 +719,7 @@ export class ReaderCore {
   async goTo(target: NavInput): Promise<NavTarget | null> {
     const resolved = this.resolve(target);
     if (!resolved) return null;
-    this.#cancelFade();
+    this.#cancelTurn();
     await this.paginator.goTo(withTextStart(resolved));
     return resolved;
   }
@@ -659,11 +733,45 @@ export class ReaderCore {
   }
 
   /**
-   * One page back or forward. In the fade mode the page fades out, the
-   * paginator jumps, and the new page fades in once it is on screen (the
-   * relocation says so — across a chapter boundary that is after the
-   * load). Only page turns come through here: navigation (goTo, a
-   * writing-mode reload) never fades and abandons a fade in progress.
+   * One page back or forward. Only page turns come through here:
+   * navigation (goTo, a writing-mode reload) never animates and abandons
+   * a turn in progress.
+   *
+   * In the slide mode the turn is the cover slide (slide.ts) wherever
+   * its second rendering has the neighbouring page ready; a turn it
+   * cannot show fades instead. A reader who asked for reduced motion,
+   * and a turn that goes nowhere (first or last page), get the bare
+   * paginator.
+   */
+  #turn(dir: 1 | -1): Promise<void> {
+    const mode = this.effectivePageTurn();
+    const slide =
+      mode === "slide" && !prefersReducedMotion() ? this.#slide : null;
+    // A slide under way takes the turn itself (it ends early and this
+    // one follows), whatever the page still on screen says about edges.
+    if (slide?.busy) {
+      slide.turn(dir);
+      return Promise.resolve();
+    }
+    if (mode === "instant" || prefersReducedMotion() || this.#atEdge(dir)) {
+      this.#cancelTurn();
+      return this.#paginatorTurn(dir);
+    }
+    // A fade already on its way (a turn the slide could not show) keeps
+    // the turns that pile onto it: two kinds of turn must not overlap.
+    if (!this.#fading() && slide?.turn(dir)) return Promise.resolve();
+    return this.#fadeTurn(dir);
+  }
+
+  /** A faded turn is somewhere between its fade-out and its page. */
+  #fading(): boolean {
+    return this.#fadeTimer != null || this.#turning || this.#awaitingPage;
+  }
+
+  /**
+   * The faded turn: the page fades out, the paginator jumps, and the new
+   * page fades in once it is on screen (the relocation says so — across
+   * a chapter boundary that is after the load).
    *
    * Paging quickly must feel as it does without the fade. The paginator
    * drops turns for 100ms after one; the fade-out pushes that window
@@ -672,15 +780,7 @@ export class ReaderCore {
    * made the moment it is — at most one, never a backlog. (A turn asked
    * for while a chapter is still loading is dropped, as it always was.)
    */
-  #turn(dir: 1 | -1): Promise<void> {
-    if (
-      this.effectivePageTurn() !== "fade" ||
-      prefersReducedMotion() ||
-      this.#atEdge(dir)
-    ) {
-      this.#cancelFade();
-      return this.#paginatorTurn(dir);
-    }
+  #fadeTurn(dir: 1 | -1): Promise<void> {
     const now = performance.now();
     // Fading out: the previous turn is under 40ms old.
     if (this.#fadeTimer != null) return Promise.resolve();
@@ -744,6 +844,9 @@ export class ReaderCore {
     const el = this.paginator;
     if (typeof el.animate !== "function") return;
     this.#fadeAnimation?.cancel();
+    // What lies under a fading page is the reader's background, not the
+    // slide's other sheet.
+    if (to === 0) this.#slide?.conceal();
     const animation = el.animate([{ opacity: to ? 0 : 1 }, { opacity: to }], {
       duration: ms,
       easing: "ease-out",
@@ -755,6 +858,7 @@ export class ReaderCore {
     animation.onfinish = () => {
       animation.cancel();
       if (this.#fadeAnimation === animation) this.#fadeAnimation = null;
+      this.#slide?.reveal();
     };
   }
 
@@ -769,6 +873,13 @@ export class ReaderCore {
     this.#awaitingPage = false;
     this.#turning = false;
     this.#queuedTurn = null;
+    this.#slide?.reveal();
+  }
+
+  /** Abandon a page turn in progress, faded or sliding. */
+  #cancelTurn() {
+    this.#cancelFade();
+    this.#slide?.cancel();
   }
 
   /**
@@ -807,43 +918,102 @@ export class ReaderCore {
   }
 
   setPageTurn(mode: PageTurnMode) {
-    if (mode !== this.pageTurn) this.#cancelFade();
+    if (mode !== this.pageTurn) this.#cancelTurn();
     this.pageTurn = mode;
     this.#applyPageTurn();
   }
 
-  /**
-   * The page-turn mode that applies to the section on screen. Sliding
-   * moves the paginator's scroll axis, which for vertical text runs top
-   * to bottom (pages are stacked vertically) and for a section laid out
-   * against the book's direction runs the wrong way — both would slide
-   * the page across the finger's motion, so such sections fade whatever
-   * the setting says.
-   */
+  /** The page-turn mode in force. The slide moves whole pages over one
+   *  another, so it applies to every section alike — vertical text and a
+   *  section laid out against the book's direction included. */
   effectivePageTurn(): PageTurnMode {
-    if (this.pageTurn !== "slide") return this.pageTurn;
-    if (this.vertical) return "fade";
-    if (this.sectionAdvancesLeftward() !== this.advancesLeftward())
-      return "fade";
-    return "slide";
+    return this.pageTurn;
   }
 
+  /** Build the slide's second rendering when the mode asks for it, and
+   *  take it down when it does not: the other modes pay nothing. */
   #applyPageTurn() {
-    // The paginator slides page turns and snaps only while `animated`
-    // is present.
-    this.paginator.toggleAttribute(
-      "animated",
-      this.effectivePageTurn() === "slide",
-    );
+    const book = this.book;
+    const wanted =
+      this.pageTurn === "slide" &&
+      !!book &&
+      book.rendition?.layout !== "pre-paginated";
+    if (!wanted) {
+      this.#dropSlide();
+      return;
+    }
+    if (this.#slide) return;
+    // The slide ends a turn itself; the paginator's 100ms pause after
+    // each one would drop the turn that follows a skipped slide.
+    this.paginator.setAttribute("no-turn-lock", "");
+    const slide = new CoverSlide({
+      container: this.#container,
+      live: this.paginator,
+      book,
+      styles: () => this.#composedStyles(),
+      leftward: () => this.advancesLeftward(),
+      reducedMotion: prefersReducedMotion,
+      turnLive: (dir) => this.#paginatorTurn(dir),
+      request: (dir) => void this.#turn(dir),
+      fallback: (dir) => void this.#fadeTurn(dir),
+      visible: () => this.lastLocation?.range ?? null,
+      onload: (detail) => this.#onGhostLoad(detail),
+      onoverlayer: ({ doc, index, attach }) => {
+        const overlayer = new Overlayer();
+        attach(overlayer);
+        this.#handlers.onghostoverlayer?.({ doc, index, overlayer });
+      },
+    });
+    slide.setBackground(this.#pageColor);
+    this.#slide = slide;
+    // Already reading: the ghost goes to the neighbour of this page.
+    if (this.lastLocation) slide.relocated();
   }
 
-  /** Finger-follow paging passthroughs (the slide mode). */
-  scrollBy(dx: number, dy: number) {
-    this.paginator.scrollBy(dx, dy);
+  #dropSlide() {
+    const slide = this.#slide;
+    if (!slide) return;
+    this.#slide = null;
+    slide.destroy();
+    this.paginator.removeAttribute("no-turn-lock");
+    this.#handlers.onghostoverlayer?.(null);
   }
 
-  snap(vx: number, vy: number) {
-    this.paginator.snap(vx, vy);
+  /** The slide's ghost paginator, when there is one — for probes and
+   *  tests; nothing in the reader reads positions from it. */
+  get ghost(): PaginatorElement | null {
+    return this.#slide?.ghost ?? null;
+  }
+
+  /** The section and visible text the ghost last settled on. */
+  get ghostLocation(): { index: number; range: Range | null } | null {
+    return this.#slide?.shown ?? null;
+  }
+
+  /** The page's own colour. In the slide mode it backs both renderings,
+   *  so a sheet hides the one under it whatever the book's CSS leaves
+   *  transparent. */
+  setPageColor(color: string) {
+    this.#pageColor = color;
+    this.#slide?.setBackground(color);
+  }
+
+  /** The slide following the finger: the gesture layer reports each
+   *  move (previous − current, px along the screen's x axis)… */
+  dragBy(dx: number): boolean {
+    if (this.effectivePageTurn() !== "slide" || this.#fading()) return false;
+    return this.#slide?.dragBy(dx) ?? false;
+  }
+
+  /** …and the release, with its velocity (px/ms). False when the slide
+   *  did not have the gesture: it is a plain threshold swipe then. */
+  dragEnd(vx: number): boolean {
+    return this.#slide?.dragEnd(vx) ?? false;
+  }
+
+  /** The touch was cancelled, or another began. */
+  dragCancel() {
+    this.#slide?.dragCancel();
   }
 
   /** CSS injected into every section. A pair is [before, after]: `before`
@@ -852,7 +1022,9 @@ export class ReaderCore {
    *  is one, rides at the end of `after`. */
   setStyles(styles: string | [string, string]) {
     this.#styles = styles;
-    this.paginator.setStyles(this.#composedStyles());
+    const composed = this.#composedStyles();
+    this.paginator.setStyles(composed);
+    this.#slide?.ghost?.setStyles(composed);
   }
 
   #composedStyles(): string | [string, string] {
@@ -901,7 +1073,10 @@ export class ReaderCore {
     if (this.forcedWritingMode() === before) return false;
     const cfi = anchor || this.lastLocation?.startCfi;
     const target = cfi ? this.resolve(cfi) : null;
-    this.#cancelFade();
+    this.#cancelTurn();
+    // The ghost read its section's writing mode at load too: a fresh one
+    // follows the page the reload lands on.
+    this.#slide?.reset();
     await this.paginator.reload(
       target?.index === index && target.anchor != null
         ? withTextStart(target).anchor
@@ -914,13 +1089,26 @@ export class ReaderCore {
   /** Declare layout parameters. Only changed values are written, so a
    *  re-declaration of the same layout triggers no re-render. */
   setLayout(params: LayoutParams) {
+    this.#writeLayout(this.paginator, params);
+  }
+
+  /** The same declaration for the slide's ghost. Its section may be
+   *  written the other way from the one on screen (a horizontal plate in
+   *  a vertical book), so its layout is declared on its own — see
+   *  `onghostload`. */
+  setGhostLayout(params: LayoutParams) {
+    const ghost = this.#slide?.ghost;
+    if (ghost) this.#writeLayout(ghost, params);
+  }
+
+  #writeLayout(paginator: PaginatorElement, params: LayoutParams) {
     for (const key of Object.keys(params) as (keyof LayoutParams)[]) {
       const value = params[key];
       if (value == null) continue;
       const attr = ATTR_FOR[key];
       const next = attrValue(key, value);
-      if (this.paginator.getAttribute(attr) !== next) {
-        this.paginator.setAttribute(attr, next);
+      if (paginator.getAttribute(attr) !== next) {
+        paginator.setAttribute(attr, next);
       }
     }
   }
@@ -1022,6 +1210,7 @@ export class ReaderCore {
 
   destroy() {
     this.#cancelFade();
+    this.#dropSlide();
     try {
       this.paginator.destroy();
     } catch {
@@ -1035,7 +1224,15 @@ export class ReaderCore {
     this.book = null;
   }
 
-  #onLoad({ doc, index }: { doc: Document; index: number }) {
+  /**
+   * What every rendered copy of a section gets before it is laid out —
+   * the live one and the slide's ghost alike, so the two read the same:
+   * language and direction where the document names none, the direction
+   * a forced writing mode needs, upright numbers, illustration plates.
+   * Returns the section's writing mode and direction as the paginator
+   * is about to read them.
+   */
+  #prepareSection(doc: Document): { vertical: boolean; rtl: boolean } {
     const root = doc.documentElement;
     root.lang ||= this.#language.canonical ?? "";
     if (!this.#language.isCJK) root.dir ||= this.#language.direction ?? "";
@@ -1047,20 +1244,34 @@ export class ReaderCore {
     }
     const style = doc.defaultView?.getComputedStyle(doc.body);
     const writingMode = style?.writingMode;
-    this.vertical = !!writingMode && writingMode.startsWith("vertical");
+    const vertical = !!writingMode && writingMode.startsWith("vertical");
     // Mirrors the paginator's own getDirection() — read here because the
     // load event precedes the render that stamps the paginator's `dir`.
-    this.sectionRtl = doc.body.dir === "rtl" || style?.direction === "rtl";
+    const rtl = doc.body.dir === "rtl" || style?.direction === "rtl";
+    if (this.forcedWritingMode() === "vertical") this.#combineNumbers(doc);
+    if (vertical) markPlates(doc);
+    return { vertical, rtl };
+  }
+
+  #onLoad({ doc, index }: { doc: Document; index: number }) {
+    const { vertical, rtl } = this.#prepareSection(doc);
+    this.vertical = vertical;
+    this.sectionRtl = rtl;
     // What a forced layout shows says nothing about the book itself.
     if (!this.forcedWritingMode()) {
       if (this.vertical || this.sectionRtl) this.#inferredLeftward = true;
       if (this.vertical) this.#nativeVertical = true;
     }
-    if (this.forcedWritingMode() === "vertical") this.#combineNumbers(doc);
-    if (this.vertical) markPlates(doc);
-    this.#applyPageTurn();
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
+  }
+
+  /** A section for the slide's ghost: the same adjustments, none of the
+   *  reader's state (the writing mode on screen, the inferred direction)
+   *  and none of its listeners. */
+  #onGhostLoad({ doc, index }: { doc: Document; index: number }) {
+    const { vertical } = this.#prepareSection(doc);
+    this.#handlers.onghostload?.({ doc, index, vertical });
   }
 
   /**
@@ -1157,6 +1368,7 @@ export class ReaderCore {
     };
     this.lastLocation = location;
     this.#showPage();
+    this.#slide?.relocated();
     if (detail.index !== this.#prefetchIndex) {
       this.#prefetchIndex = detail.index;
       this.#prefetch?.around(detail.index);

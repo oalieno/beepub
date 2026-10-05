@@ -428,9 +428,20 @@ test.describe("writing direction", () => {
       root: "vertical-rl",
     });
     await expect(scrubber(page)).toHaveAttribute("dir", "rtl");
-    const effective = () =>
-      page.evaluate(() => window.__beepubReaderNG.core.effectivePageTurn());
-    expect(await effective()).toBe("fade");
+    // The slide mode, with its second rendering of the neighbouring
+    // page (the ghost): that one has to follow every switch too.
+    const ghostBody = () =>
+      page.evaluate(() => {
+        const doc: Document | undefined =
+          window.__beepubReaderNG.core.ghost?.getContents()[0]?.doc;
+        return doc?.body ? getComputedStyle(doc.body).writingMode : null;
+      });
+    expect(
+      await page.evaluate(() =>
+        window.__beepubReaderNG.core.effectivePageTurn(),
+      ),
+    ).toBe("slide");
+    await expect.poll(ghostBody).toBe("vertical-rl");
 
     await pageForward(page, "ArrowLeft", 3);
     const place = await startCfi(page);
@@ -454,8 +465,7 @@ test.describe("writing direction", () => {
       ),
     ).toBe("ltr");
     await expect(scrubber(page)).toHaveAttribute("dir", "ltr");
-    // Horizontal pages slide with the finger's axis again.
-    expect(await effective()).toBe("slide");
+    await expect.poll(ghostBody).toBe("horizontal-tb");
 
     expect((await location(page)).index).toBe(before.index);
     expect(await onScreen(page, place)).toBe(true);
@@ -502,7 +512,7 @@ test.describe("writing direction", () => {
       root: "vertical-rl",
     });
     await expect(scrubber(page)).toHaveAttribute("dir", "rtl");
-    expect(await effective()).toBe("fade");
+    await expect.poll(ghostBody).toBe("vertical-rl");
   });
 
   test("a book that sets its writing mode on an inner container follows the forced mode whole", async ({

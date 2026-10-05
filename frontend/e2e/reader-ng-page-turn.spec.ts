@@ -2,7 +2,6 @@ import { test, expect, type CDPSession, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   TOUCH_BOOK,
-  VERTICAL_LONG_BOOK,
   VERTICAL_MIXED_BOOK,
   VERTICAL_MIXED_UNDECLARED_BOOK,
   RAINY_POST_OFFICE_BOOK,
@@ -16,51 +15,15 @@ import {
 
 /**
  * reader-ng page-turn modes on device-shaped input. Two modes: a fast
- * fade (the default) and a slide in which the page follows the finger.
- * The slide must track the finger instead of oscillating (gesture
- * geometry in screen coordinates — the drag scrolls the very frame the
- * touch events come from); vertical text fades whatever the mode says
- * (its pages are stacked vertically); and every turn follows the book's
- * declared page progression even on a horizontal illustration plate
- * inside a vertical-rl book.
+ * fade (the default) and a slide in which one page moves over the other
+ * (its own spec: reader-ng-slide.spec.ts). Here: the fade, the stored
+ * choice, and that every turn follows the book's declared page
+ * progression even on a horizontal illustration plate inside a
+ * vertical-rl book.
  */
 
 test.use({ storageState: ADMIN_STATE, ...iphone });
 test.setTimeout(60_000);
-
-/** The paginator's scroll offset along its paging axis. */
-function scrollOffset(page: Page): Promise<number> {
-  return page.evaluate(() => window.__beepubReaderNG.paginator.start as number);
-}
-
-/** A slow horizontal drag in equal steps, sampling the scroll offset
- *  after each step; the finger lifts at the end. */
-async function dragSampling(
-  cdp: CDPSession,
-  page: Page,
-  from: { x: number; y: number },
-  dx: number,
-  steps: number,
-): Promise<number[]> {
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: from.x, y: from.y }],
-  });
-  const samples: number[] = [];
-  for (let i = 1; i <= steps; i++) {
-    await new Promise((resolve) => setTimeout(resolve, 16));
-    await cdp.send("Input.dispatchTouchEvent", {
-      type: "touchMove",
-      touchPoints: [{ x: from.x + (dx * i) / steps, y: from.y }],
-    });
-    samples.push(await scrollOffset(page));
-  }
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  return samples;
-}
 
 /** Record every opacity animation the reader starts on the page (the
  *  fade of a page turn) from here on. */
@@ -106,7 +69,11 @@ function turnMode(page: Page) {
     return {
       set: core.pageTurn as string,
       effective: core.effectivePageTurn() as string,
-      slides: paginator.hasAttribute("animated") as boolean,
+      // The slide's second rendering of the neighbouring page: built for
+      // that mode only.
+      ghost: !!core.ghost,
+      // The old finger-follow push is gone from every mode.
+      pushes: paginator.hasAttribute("animated") as boolean,
     };
   });
 }
@@ -127,7 +94,8 @@ test("a page turn fades by default: it lands on the next page, fully visible", a
   expect(await turnMode(page)).toEqual({
     set: "fade",
     effective: "fade",
-    slides: false,
+    ghost: false,
+    pushes: false,
   });
   await watchFades(page);
 
@@ -227,7 +195,8 @@ test("modes stored before there were two are read as today's", async ({
     expect(await turnMode(page)).toEqual({
       set: mode,
       effective: mode,
-      slides: mode === "slide",
+      ghost: mode === "slide",
+      pushes: false,
     });
     expect(
       await page.evaluate(() => localStorage.getItem("reader-page-turn")),
@@ -257,83 +226,12 @@ test("the settings sheet offers the two modes and stores the choice", async ({
   expect(await turnMode(page)).toEqual({
     set: "fade",
     effective: "fade",
-    slides: false,
+    ghost: false,
+    pushes: false,
   });
   expect(
     await page.evaluate(() => localStorage.getItem("reader-page-turn")),
   ).toBe("fade");
-});
-
-test("the slide tracks the finger monotonically and snaps to the next page", async ({
-  page,
-  context,
-}) => {
-  const bookId = await seedFixture(page.request, TOUCH_BOOK);
-  await openBook(page, bookId, { turn: "slide" });
-  const cdp = await context.newCDPSession(page);
-
-  // Finger moving left pulls in the page on the right: the offset grows
-  // with the finger and never runs back (a drag measured in the moving
-  // frame's own coordinates fed each scroll back as a reverse move).
-  // (The offset counts from the paginator's leading spacer page, so
-  // only its growth is meaningful.)
-  const samples = await dragSampling(cdp, page, { x: 320, y: 400 }, -200, 20);
-  for (let i = 1; i < samples.length; i++) {
-    expect(samples[i]).toBeGreaterThanOrEqual(samples[i - 1]!);
-  }
-  const travelled = samples[samples.length - 1]! - samples[0]!;
-  expect(travelled).toBeGreaterThan(150);
-  expect(travelled).toBeLessThanOrEqual(205);
-
-  // Released past half a page, it settles on the next page.
-  await expect
-    .poll(async () => (await location(page)).fraction, { timeout: 3_000 })
-    .toBeGreaterThan(0);
-  expect((await location(page)).reason).toBe("snap");
-});
-
-test("vertical text does not slide: it fades, and the sheet offers no choice", async ({
-  page,
-  context,
-}) => {
-  const bookId = await seedFixture(page.request, VERTICAL_LONG_BOOK);
-  await openBook(
-    page,
-    bookId,
-    { turn: "slide", font: "sans" },
-    VERTICAL_LONG_BOOK,
-  );
-  expect(await turnMode(page)).toEqual({
-    set: "slide",
-    effective: "fade",
-    slides: false,
-  });
-  const before = await location(page);
-  const pages = (await page.evaluate(() => {
-    const l = window.__beepubReaderNG.core.lastLocation;
-    return l.size ? Math.round(1 / l.size) : 1;
-  })) as number;
-  test.skip(pages < 3, "vertical fragmentation degenerate — CJK fonts missing");
-  const cdp = await context.newCDPSession(page);
-  await watchFades(page);
-
-  // Finger moving right (forward in a vertical-rl book): the page does
-  // not creep along its vertical scroll axis under a horizontal drag…
-  const samples = await dragSampling(cdp, page, { x: 100, y: 400 }, 160, 12);
-  expect(new Set(samples).size).toBe(1);
-  // …and the release is an ordinary threshold swipe: one page forward,
-  // faded.
-  await expect
-    .poll(async () => (await location(page)).fraction, { timeout: 3_000 })
-    .toBeGreaterThan(before.fraction);
-  expect((await location(page)).index).toBe(before.index);
-  await expect.poll(() => pageOpaque(page)).toBe(true);
-  expect(await fades(page)).toEqual([0, 1]);
-
-  // The settings sheet does not offer a choice that would not apply.
-  await openSettings(page, cdp);
-  await expect(page.getByTestId("setting-page-turn")).toHaveCount(0);
-  await expect(page.getByText("Page turn", { exact: true })).toHaveCount(0);
 });
 
 test("page turns follow the book's direction across a horizontal plate", async ({

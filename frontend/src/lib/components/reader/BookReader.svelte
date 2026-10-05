@@ -277,6 +277,11 @@
 ${mingFaces.join("\n")}`;
   }
 
+  // The page's own colours (the themed body below; the slide's two
+  // sheets are backed with the same).
+  const PAGE_LIGHT = "#ffffff";
+  const PAGE_DARK = "#171310";
+
   function selectionTint() {
     return darkMode
       ? { rgb: "245, 158, 11", opacity: 0.4 }
@@ -302,7 +307,7 @@ body {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   color: ${dark ? "#ece5da" : "#1a1a1a"};
-  background: ${dark ? "#171310" : "#ffffff"};
+  background: ${dark ? PAGE_DARK : PAGE_LIGHT};
 }
 ${darkOverrides}
 ::selection { background: rgba(${tint.rgb}, ${tint.opacity}); }`;
@@ -357,6 +362,11 @@ ${darkOverrides}
   // grid follows the writing mode — so the screen-space gutters swap
   // roles between horizontal and vertical sections.
   let vertical = $state(false);
+  // The writing mode of the section in the slide's ghost (the second
+  // rendering of the neighbouring page): its layout is declared for its
+  // own mode — a horizontal plate in a vertical book sits beside pages
+  // written the other way.
+  let ghostVertical = $state(false);
 
   // Larger than any window: no limit.
   const UNBOUNDED = 100000;
@@ -397,6 +407,7 @@ ${darkOverrides}
    *  attributes are written, so re-pushing the same layout is free. */
   function pushLayout(c: ReaderCore | null = core) {
     c?.setLayout(layoutFor(vertical));
+    c?.setGhostLayout(layoutFor(ghostVertical));
   }
 
   // ------------------------------------------------------ writing mode
@@ -1781,18 +1792,18 @@ ${darkOverrides}
       // Finger moving left pulls in the page on the right.
       onswipeleft: () => turn("right"),
       onswiperight: () => turn("left"),
-      // The page follows the finger only in the slide mode, and only
-      // where the section's scroll axis follows the finger (the core says
-      // which; vertical text fades).
-      onswipemove: (dx: number, dy: number) => {
-        if (c.effectivePageTurn() === "slide") c.scrollBy(dx, dy);
-      },
-      onswipeend: (vx: number, vy: number) => {
-        if (c.effectivePageTurn() !== "slide") return false;
+      // In the slide mode the page follows the finger (the core has the
+      // sheets; in the other modes it declines and the release is a
+      // threshold swipe). Where the slide has nothing to show — the last
+      // page, a chapter not loaded yet — it declines the release too, so
+      // the swipe still reaches turn() and the end of the book.
+      onswipemove: (dx: number) => {
+        if (!c.dragBy(dx)) return;
         dismissMenu();
-        c.snap(vx, vy);
-        return true;
+        showFootnote = false;
       },
+      onswipeend: (vx: number) => c.dragEnd(vx),
+      onswipecancel: () => c.dragCancel(),
     };
 
     if (isIOSDevice()) {
@@ -1843,6 +1854,22 @@ ${darkOverrides}
     attachGestures(doc);
   }
 
+  /** A section for the slide's ghost — the inert second rendering of the
+   *  neighbouring page. It must look as the live one will: the layout
+   *  for its own writing mode before it is laid out, and what handleLoad
+   *  does to a section's look. No gestures, no keys: it is not read. */
+  function handleGhostLoad({
+    doc,
+    vertical: isVertical,
+  }: {
+    doc: Document;
+    vertical: boolean;
+  }) {
+    ghostVertical = isVertical;
+    core?.setGhostLayout(layoutFor(isVertical));
+    if (isVertical) pinVerticalPunctuation(doc);
+  }
+
   // ------------------------------------------------------------ lifecycle
 
   onMount(async () => {
@@ -1861,11 +1888,21 @@ ${darkOverrides}
       onoverlayer: ({ doc, index, overlayer }) =>
         layer?.attach(overlayer, doc, index),
       onlink: handleLink,
+      onghostload: handleGhostLoad,
+      // Saved highlights and illustration markers ride along on the
+      // ghost's overlayer: a mark must not vanish while its page slides.
+      onghostoverlayer: (detail) => {
+        if (detail)
+          layer?.attachMirror(detail.overlayer, detail.doc, detail.index);
+        else layer?.detachMirror();
+      },
     });
     core = c;
     layer = new AnnotationLayer((cfi) => c.resolve(cfi));
     // Debug handle — the only way e2e probes and a device Web Inspector
-    // reach engine internals (same convention as __beepubReader).
+    // reach engine internals (same convention as __beepubReader). The
+    // slide's ghost is `core.ghost`; `paginator` and getContents() are
+    // always the live section.
     (window as unknown as { __beepubReaderNG?: unknown }).__beepubReaderNG = {
       core: c,
       paginator: c.paginator,
@@ -1885,6 +1922,7 @@ ${darkOverrides}
         ? booksApi.getIllustrations(aiBookId).catch(() => [])
         : Promise.resolve([]);
       pushLayout(c);
+      c.setPageColor(darkMode ? PAGE_DARK : PAGE_LIGHT);
       c.setPageTurn(pageTurn);
       // Before anything renders: recorded only, the first section is
       // loaded in this mode.
@@ -1947,11 +1985,16 @@ ${darkOverrides}
     void marginX;
     void marginY;
     void vertical;
+    void ghostVertical;
     void fontSize;
     void lineHeight;
     void letterSpacing;
     void fullPage;
     pushLayout();
+  });
+  $effect(() => {
+    const color = darkMode ? PAGE_DARK : PAGE_LIGHT;
+    core?.setPageColor(color);
   });
   $effect(() => {
     const mode = pageTurn;
@@ -2002,9 +2045,12 @@ ${darkOverrides}
   style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
 >
   <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <!-- relative + clipped + its own stacking context: in the slide mode
+       two paginators are layered here and one of them slides out past
+       the edge. -->
   <div
     bind:this={container}
-    class="h-full w-full"
+    class="relative isolate h-full w-full overflow-hidden"
     onclick={handleMarginClick}
   ></div>
 
