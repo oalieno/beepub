@@ -111,13 +111,31 @@ test("the end of a series volume offers the next one", async ({ page }) => {
     await expect(overlay.getByText("Book 2 of 2")).toBeVisible();
 
     // "Start reading" opens the next volume in this same reader.
+    // The app is not reloaded (that would replay its launch animation):
+    // a mark left on the window survives, and the reader is a fresh one.
+    await page.evaluate(() => {
+      const w = window as unknown as Record<string, unknown>;
+      w.__sameDocument = true;
+      w.__previousCore = window.__beepubReaderNG.core;
+    });
     await overlay.getByRole("button", { name: "Start reading" }).click();
     await page.waitForURL(new RegExp(`/books/${nextId}/read`));
     await page.waitForFunction(
-      () => !!window.__beepubReaderNG?.core?.lastLocation,
+      () => {
+        const w = window as unknown as Record<string, unknown>;
+        const core = window.__beepubReaderNG?.core;
+        return !!core?.lastLocation && core !== w.__previousCore;
+      },
       null,
       { timeout: 30_000 },
     );
+    expect(
+      await page.evaluate(
+        () => (window as unknown as Record<string, unknown>).__sameDocument,
+      ),
+    ).toBe(true);
+    await expect(page.getByTestId("book-end")).toBeHidden();
+    await expect(page).toHaveTitle(new RegExp(VERTICAL_MIXED_BOOK.title));
   } finally {
     await setSeries(page, bookId, null, null);
     await setSeries(page, nextId, null, null);

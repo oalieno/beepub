@@ -24,6 +24,7 @@
    */
   import { onDestroy, onMount } from "svelte";
   import { browser } from "$app/environment";
+  import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { aiApi } from "$lib/api/bookshelves";
@@ -824,9 +825,11 @@
   }
 
   /** The same reader route for another book (this page, whatever path
-   *  it is mounted at). A full load: the reader's state is per book. */
+   *  it is mounted at). The reader's state is per book, so the layout
+   *  keys this page on the book id and the navigation mounts a fresh
+   *  one — without reloading the app, which would replay its intro. */
   function openBookHere(id: string) {
-    window.location.href = page.url.pathname.replace(bookId, id);
+    void goto(page.url.pathname.replace(bookId, id));
   }
 
   // ------------------------------------------------------- illustrations
