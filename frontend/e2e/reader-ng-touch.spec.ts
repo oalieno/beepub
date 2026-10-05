@@ -9,8 +9,10 @@ import {
   overlayState,
   pointOnWord,
   seedBook,
+  seedFixture,
   swipe,
   touchTap,
+  VERTICAL_LONG_BOOK,
 } from "./ng-helpers";
 
 /**
@@ -59,6 +61,91 @@ test("tap zones: left quarter back, right quarter forward, independent of the ga
   await expect(
     page.getByTestId("book-reader").getByRole("button", { name: /page/i }),
   ).toHaveCount(0);
+});
+
+test("the page margins turn the page too: the side gutters of vertical text, the top strip of horizontal", async ({
+  page,
+  context,
+}) => {
+  const cdp = await context.newCDPSession(page);
+  const reader = () =>
+    page
+      .getByTestId("book-reader")
+      .evaluate((el) => el.getBoundingClientRect().toJSON());
+
+  // Vertical text keeps its side gutters (mx=24) outside the section
+  // document: a tap there used to reach nothing.
+  const verticalId = await seedFixture(page.request, VERTICAL_LONG_BOOK);
+  await openBook(page, verticalId, {}, VERTICAL_LONG_BOOK);
+  let box = await reader();
+  let start = await location(page);
+  // Vertical text reads leftward: the left edge is forward.
+  await touchTap(cdp, { x: box.x + 6, y: box.y + box.height / 2 }, 60);
+  await expect.poll(() => location(page)).toMatchObject({ reason: "page" });
+  await page.waitForTimeout(200);
+  let after = await location(page);
+  expect(after.fraction > start.fraction || after.index > start.index).toBe(
+    true,
+  );
+  await touchTap(
+    cdp,
+    { x: box.x + box.width - 6, y: box.y + box.height / 2 },
+    60,
+  );
+  await page.waitForTimeout(400);
+  expect((await location(page)).fraction).toBeCloseTo(start.fraction, 3);
+
+  // Horizontal text: the top strip (my=48) is the paginator's margin.
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId);
+  box = await reader();
+  start = await location(page);
+  await touchTap(cdp, { x: box.x + box.width * 0.875, y: box.y + 10 }, 60);
+  await expect.poll(() => location(page)).toMatchObject({ reason: "page" });
+  await page.waitForTimeout(200);
+  after = await location(page);
+  expect(after.fraction > start.fraction || after.index > start.index).toBe(
+    true,
+  );
+  // The middle of the strip is the chrome tap, like the middle of the
+  // page: it brings up the phone bottom bar.
+  const bar = page.getByRole("toolbar", { name: "Reading controls" });
+  await expect(bar).toBeHidden();
+  await touchTap(cdp, { x: box.x + box.width / 2, y: box.y + 10 }, 60);
+  await expect(bar).toBeVisible();
+});
+
+test("a tap on the page margin dismisses the menu and the selection", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId);
+  const pt = await pointOnWord(page, "whispering", 1);
+  expect(pt).toBeTruthy();
+  const cdp = await context.newCDPSession(page);
+  await touchTap(cdp, pt!, 900);
+  await page.waitForTimeout(1200);
+  await expect(page.getByTestId("highlight-menu")).toBeVisible();
+
+  const start = await location(page);
+  const box = await page
+    .getByTestId("book-reader")
+    .evaluate((el) => el.getBoundingClientRect().toJSON());
+  // The bottom strip, in the page-turn zone: it only puts the menu away.
+  await touchTap(
+    cdp,
+    { x: box.x + box.width * 0.875, y: box.y + box.height - 10 },
+    60,
+  );
+  await expect(page.getByTestId("highlight-menu")).toBeHidden();
+  await page.waitForTimeout(400);
+  expect(await location(page)).toMatchObject({
+    index: start.index,
+    fraction: start.fraction,
+  });
+  // The selection's own paint is gone with the menu.
+  expect(await overlayState(page)).toBeNull();
 });
 
 test("a horizontal swipe turns the page", async ({ page, context }) => {

@@ -472,7 +472,8 @@ ${darkOverrides}
   // tap's own click, so they are independent of the page margins (a zero
   // margin used to leave nothing to tap) and never block long-press
   // selection at the edges — the state machine already tells a tap from a
-  // hold. Links and saved highlights in a zone still win.
+  // hold. Links and saved highlights in a zone still win. The margins
+  // around the document answer the same way (handleMarginClick).
   const TAP_ZONE = 0.25;
 
   function tapZone(
@@ -485,6 +486,30 @@ ${darkOverrides}
     if (x < wr.width * TAP_ZONE) return "left";
     if (x > wr.width * (1 - TAP_ZONE)) return "right";
     return "middle";
+  }
+
+  /** A tap on the reader outside the section document — the page margins
+   *  the paginator keeps around it, the space beside a capped measure. A
+   *  click inside the document never bubbles out of its frame, so the two
+   *  paths don't meet; this one follows the same order: put a selection
+   *  or its menu away, else act on the zone. */
+  function handleMarginClick(e: MouseEvent) {
+    if (!core || !container.contains(e.target as Node | null)) return;
+    const now = Date.now();
+    if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
+    if (now - imageZoomAt < 700) return;
+    const doc = core.getContents()[0]?.doc;
+    const win = doc?.defaultView;
+    if (showMenu || selectedRange || (win && hasLiveSelection(win))) {
+      dismissMenu();
+      clearSelectionIn(doc);
+      return;
+    }
+    const wr = wrapper.getBoundingClientRect();
+    const x = e.clientX - wr.left;
+    if (x < wr.width * TAP_ZONE) turn("left");
+    else if (x > wr.width * (1 - TAP_ZONE)) turn("right");
+    else ontap?.();
   }
 
   function handleKey(e: KeyboardEvent) {
@@ -1975,7 +2000,12 @@ ${darkOverrides}
   class="relative h-full w-full"
   style="-webkit-touch-callout: none; -webkit-user-select: none; user-select: none;"
 >
-  <div bind:this={container} class="h-full w-full"></div>
+  <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+  <div
+    bind:this={container}
+    class="h-full w-full"
+    onclick={handleMarginClick}
+  ></div>
 
   {#if showMenu}
     <div
