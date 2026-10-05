@@ -66,7 +66,7 @@
     HIGHLIGHT_LINE_COLORS,
     parseHighlightColor,
   } from "./highlight-style";
-  import { setupIOSTouchSelection } from "./ios-touch-selection";
+  import { blockScripts, setupIOSTouchSelection } from "./ios-touch-selection";
   import { isIOSDevice, setupSwipeNavigation } from "./touch-navigation";
   import { snapRangeToWordBounds } from "./word-snap";
 
@@ -1868,6 +1868,8 @@ ${darkOverrides}
     ghostVertical = isVertical;
     core?.setGhostLayout(layoutFor(isVertical));
     if (isVertical) pinVerticalPunctuation(doc);
+    // The live document gets this from the gesture layer.
+    if (isIOSDevice()) blockScripts(doc);
   }
 
   // ------------------------------------------------------------ lifecycle

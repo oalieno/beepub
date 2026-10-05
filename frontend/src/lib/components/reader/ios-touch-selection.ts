@@ -57,6 +57,15 @@ const LONG_PRESS_MS = 300;
 const MOVE_THRESHOLD = 10;
 const DRAG_THRESHOLD = 15;
 
+/** Block the EPUB's inline scripts via CSP — for every rendering of a
+ *  section on iOS, the inert second one of the slide included. */
+export function blockScripts(doc: Document) {
+  const cspMeta = doc.createElement("meta");
+  cspMeta.setAttribute("http-equiv", "Content-Security-Policy");
+  cspMeta.setAttribute("content", "script-src 'none'");
+  doc.head.insertBefore(cspMeta, doc.head.firstChild);
+}
+
 /**
  * Attach iOS touch selection handlers to an epub iframe document.
  * Injects required styles and CSP, registers touch listeners.
@@ -75,11 +84,7 @@ export function setupIOSTouchSelection(
   ].join("\n");
   doc.head.appendChild(style);
 
-  // Block epub inline scripts via CSP
-  const cspMeta = doc.createElement("meta");
-  cspMeta.setAttribute("http-equiv", "Content-Security-Policy");
-  cspMeta.setAttribute("content", "script-src 'none'");
-  doc.head.insertBefore(cspMeta, doc.head.firstChild);
+  blockScripts(doc);
 
   // Selection overlay: draw theme-tinted rectangles over selected text
   let overlayContainer: HTMLDivElement | null = null;

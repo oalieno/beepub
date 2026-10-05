@@ -18,6 +18,7 @@ import {
   iphone,
   location,
   openBook,
+  seedBook,
   seedFixture,
   touchTap,
   type Fixture,
@@ -1060,6 +1061,28 @@ test("after a slide the live page is the only one that answers; a highlight ride
   expect(await marksOn(page, "live")).toEqual([ghostMark]);
 
   await clearHighlights(page.request, bookId);
+});
+
+test("the ghost page blocks the book's scripts the way the live page does", async ({
+  page,
+}) => {
+  const bookId = await seedBook(page.request);
+  await openBook(page, bookId, { turn: "slide" });
+  await ghostReady(page);
+  const policy = (doc: "live" | "ghost") =>
+    page.evaluate((which) => {
+      const { core, paginator } = window.__beepubReaderNG;
+      const view = which === "live" ? paginator : core.ghost;
+      const d: Document = view.getContents()[0].doc;
+      return (
+        d
+          .querySelector('meta[http-equiv="Content-Security-Policy"]')
+          ?.getAttribute("content") ?? null
+      );
+    }, doc);
+  // The emulated iPhone counts as iOS: the live page carries the policy.
+  expect(await policy("live")).toBe("script-src 'none'");
+  expect(await policy("ghost")).toBe("script-src 'none'");
 });
 
 test("the fade mode builds no second rendering, and switching modes builds and removes it", async ({
