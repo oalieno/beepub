@@ -15,39 +15,99 @@ export interface Toast {
 }
 
 // Long enough to be read after the eye comes back from where the user
-// acted: a base plus reading time for the text, capped.
-const MIN_TOAST_DURATION = 4000;
-const MAX_TOAST_DURATION = 8000;
+// acted: a base plus reading time for the text, capped. Errors and
+// warnings stay longer than a confirmation, and one that offers an
+// action longer still — but every toast leaves by itself: a message
+// that has to be tapped away outlives what it was about.
 const PER_CHAR_MS = 60;
+const DURATION = {
+  passing: { min: 4000, max: 8000 },
+  problem: { min: 6000, max: 10000 },
+};
+const PROBLEM_WITH_ACTION_MS = 15000;
 
-function readingTime(message: string): number {
+function readingTime(message: string, band: { min: number; max: number }) {
   return Math.min(
-    MAX_TOAST_DURATION,
-    Math.max(MIN_TOAST_DURATION, 2000 + message.length * PER_CHAR_MS),
+    band.max,
+    Math.max(band.min, band.min - 2000 + message.length * PER_CHAR_MS),
   );
+}
+
+function defaultDuration(
+  message: string,
+  type: ToastType,
+  action?: ToastAction,
+): number {
+  if (type !== "error" && type !== "warning")
+    return readingTime(message, DURATION.passing);
+  return action
+    ? PROBLEM_WITH_ACTION_MS
+    : readingTime(message, DURATION.problem);
 }
 
 function createToastStore() {
   const { subscribe, update } = writable<Toast[]>([]);
+  let current: Toast[] = [];
+  subscribe((toasts) => (current = toasts));
 
+  // Messages that are not to be shown for now (see mute).
+  const muted = new Set<(message: string) => boolean>();
+
+  /**
+   * Show a toast. `duration` (ms) overrides the default; 0 keeps the
+   * toast until it is dismissed. A message that is already showing is
+   * not shown twice: the one on screen starts its time over.
+   */
   function add(
     message: string,
     type: ToastType = "info",
     opts?: { action?: ToastAction; duration?: number },
   ) {
+    for (const test of muted) if (test(message)) return "";
+    const duration =
+      opts?.duration ?? defaultDuration(message, type, opts?.action);
+    const showing = current.find(
+      (t) => t.message === message && t.type === type,
+    );
+    if (showing) {
+      const id = showing.id;
+      const action = opts?.action;
+      if (action)
+        update((toasts) =>
+          toasts.map((t) => (t.id === id ? { ...t, action } : t)),
+        );
+      const timer = timers.get(id);
+      const paused = !!timer && !timer.handle;
+      if (timer?.handle) clearTimeout(timer.handle);
+      timers.delete(id);
+      if (duration) {
+        timers.set(id, { remaining: duration, started: Date.now() });
+        // (Under the pointer it stays paused; leaving resumes it.)
+        if (!paused) schedule(id);
+      }
+      return id;
+    }
     const id = Math.random().toString(36).slice(2);
     update((toasts) => [
       ...toasts,
       { id, message, type, action: opts?.action },
     ]);
-    const duration =
-      opts?.duration ??
-      (type === "error" || type === "warning" ? null : readingTime(message));
     if (duration) {
       timers.set(id, { remaining: duration, started: Date.now() });
       schedule(id);
     }
     return id;
+  }
+
+  /**
+   * Keep messages `test` accepts off the screen — those showing are
+   * removed, new ones are dropped — until the returned function is
+   * called. For a surface that is already saying the same thing.
+   */
+  function mute(test: (message: string) => boolean): () => void {
+    muted.add(test);
+    for (const t of current.filter((t) => test(t.message))) remove(t.id);
+    return () => void muted.delete(test);
   }
 
   // Auto-dismiss timers, paused while the pointer rests on a toast.
@@ -109,6 +169,7 @@ function createToastStore() {
       opts?: { action?: ToastAction; duration?: number },
     ) => add(message, "warning", opts),
     remove,
+    mute,
     pause,
     resume,
   };
