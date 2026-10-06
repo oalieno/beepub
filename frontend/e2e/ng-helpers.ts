@@ -34,6 +34,9 @@ declare global {
     __menuFrames?: { left: string; l: number; r: number }[];
     __fades?: number[];
     __turns?: string[];
+    __lift?: { ghostIndex: number | null } | null;
+    __restoreLoad?: () => void;
+    __stuckGhost?: unknown;
   }
 }
 

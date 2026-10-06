@@ -1794,9 +1794,9 @@ ${darkOverrides}
       onswiperight: () => turn("left"),
       // In the slide mode the page follows the finger (the core has the
       // sheets; in the other modes it declines and the release is a
-      // threshold swipe). Where the slide has nothing to show — the last
-      // page, a chapter not loaded yet — it declines the release too, so
-      // the swipe still reaches turn() and the end of the book.
+      // threshold swipe). Where the slide has nothing to show — the first
+      // and the last page — it declines the release too, so the swipe
+      // still reaches turn() and the end of the book.
       onswipemove: (dx: number) => {
         if (!c.dragBy(dx)) return;
         dismissMenu();

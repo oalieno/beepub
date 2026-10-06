@@ -29,11 +29,15 @@
  * position the reader reports, saves or selects in is therefore the live
  * paginator's, exactly as without the slide.
  *
- * Nothing here blocks on the ghost: a turn it cannot show (the
- * neighbouring section still loading, the two layouts disagreeing on the
- * page count) is handed back to the caller, which fades instead.
+ * The ghost has one page at a time, and the page a turn needs may be in
+ * a section it has not loaded — the turn back from a chapter's first
+ * page, the first turn after opening. Such a turn waits for it, briefly
+ * (READY_WAIT_MS); a finger already pulling is joined by the sheet the
+ * moment the page is there. Only a ghost that does not make it in that
+ * time (or whose layout disagrees with the live one on the page count)
+ * hands the turn back to the caller, which fades instead.
  */
-import type { Book, NavTarget, PaginatorElement } from "./core";
+import type { Book, BookSection, NavTarget, PaginatorElement } from "./core";
 
 type Dir = 1 | -1;
 
@@ -86,6 +90,24 @@ const SHADOW = "0 0 24px rgba(0, 0, 0, 0.3)";
 /** How long the ghost stays over a newly loaded section while that gets
  *  its fonts and pictures. */
 const LANDING_WAIT_MS = 300;
+/** How long a turn waits for a ghost that is still fetching its page
+ *  (another section: an iframe load and a layout) before it fades
+ *  instead. The top of what still reads as the page answering the hand —
+ *  beyond a fifth of a second a reader takes the turn for missed and
+ *  asks again — and several times what the load takes once the section's
+ *  document is held ready (see #keepWarm). */
+const READY_WAIT_MS = 200;
+/** A sheet that joins a drag already under way reaches the finger over
+ *  this long instead of jumping to it… */
+const CATCH_UP_MS = 110;
+/** …unless the finger has barely left: under this it is no jump. */
+const CATCH_UP_MIN_PX = 24;
+/** A step of the ghost that has not reported after this long never will
+ *  (an iframe whose load event was lost): the ghost is replaced. */
+const STALL_MS = 5000;
+/** Near a chapter's end the next section's document is held ready this
+ *  many pages ahead of the ghost needing it. */
+const WARM_AHEAD_PAGES = 2;
 
 // Stacking inside the container. The live paginator keeps its level; the
 // ghost and the dim move around it.
@@ -143,16 +165,29 @@ export class CoverSlide {
    *  finishes its step, and must not hold up the one that replaces it. */
   #pumpToken = 0;
   #busy = false;
-  /** The step in hand loads another section (anything else is done
-   *  within the current task). */
-  #loading = false;
+  /** The ghost's step never reported: a new ghost at the next request. */
+  #stalled = false;
+  /** Gives back whatever sections the ghost still holds. */
+  #release: (() => void) | null = null;
+  /** Sections whose documents are held loaded for the ghost to come. */
+  #warm = new Set<BookSection>();
   /** What the ghost last reported showing — for probes. */
   #shown: { index: number; range: Range | null } | null = null;
 
   // The drag.
   #x = 0;
+  /** The way the sheet under the finger is turning; 0 while there is no
+   *  sheet to move (nothing that way, or the ghost is not there yet). */
   #dragDir: Dir | 0 = 0;
   #movedAt = 0;
+  /** How far the sheet stands (0..1) — behind the finger while a sheet
+   *  that joined late is catching up. */
+  #progress = 0;
+  /** When the sheet joined a drag already under way (0: it follows 1:1). */
+  #joinedAt = 0;
+  #frame = 0;
+  /** The ghost step a waiting drag is to be told the end of. */
+  #joining: Promise<void> | null = null;
 
   constructor(host: SlideHost) {
     this.#host = host;
@@ -206,7 +241,38 @@ export class CoverSlide {
     });
     // What open() does, without its listener on the book: the parser
     // already rewrites stylesheets once for the live paginator.
-    ghost.sections = book.sections;
+    //
+    // The sections are handed over through a tally of what this ghost
+    // holds: a ghost thrown away while a section is loading never makes
+    // the unload the paginator pairs with that load, and the section
+    // would stay held for good.
+    const holds = new Map<BookSection, number>();
+    let gone = false;
+    ghost.sections = book.sections.map((section) => {
+      const held: BookSection = Object.create(section);
+      held.load = () => {
+        if (gone) return new Promise<string>(() => {});
+        holds.set(section, (holds.get(section) ?? 0) + 1);
+        const loading = section.load();
+        // A failed load has no holders left (see shareSections).
+        loading.catch(() => holds.delete(section));
+        return loading;
+      };
+      held.unload = () => {
+        const count = holds.get(section) ?? 0;
+        if (gone || !count) return;
+        if (count > 1) holds.set(section, count - 1);
+        else holds.delete(section);
+        section.unload();
+      };
+      return held;
+    });
+    this.#release = () => {
+      gone = true;
+      for (const [section, count] of holds)
+        for (let i = 0; i < count; i++) section.unload();
+      holds.clear();
+    };
     ghost.bookDir = book.dir;
     ghost.setStyles(this.#host.styles());
     // Until its first section says which way it is written, the layout
@@ -240,12 +306,15 @@ export class CoverSlide {
     this.#pumpToken++;
     this.#pump = null;
     this.#busy = false;
-    this.#loading = false;
+    this.#stalled = false;
+    this.#joining = null;
     try {
       ghost.destroy();
-    } catch {
-      // nothing was loaded into it yet
+    } catch (e) {
+      console.warn(e);
     }
+    this.#release?.();
+    this.#release = null;
     ghost.remove();
   }
 
@@ -260,6 +329,8 @@ export class CoverSlide {
   destroy() {
     this.cancel();
     this.#destroyGhost();
+    for (const section of this.#warm) section.unload();
+    this.#warm.clear();
     this.#dim.remove();
     const { style } = this.#host.live;
     style.zIndex = "";
@@ -346,15 +417,15 @@ export class CoverSlide {
     return !this.#busy && this.#at(target);
   }
 
-  /** Whether stepping to `target` is a matter of the current task: the
-   *  section is the one the ghost has, and no other is being loaded. */
-  #within(target: Target): boolean {
-    return !this.#loading && this.#ghostIndex() === target.index;
-  }
-
   /** Ask the ghost for `target`. Requests collapse: only the latest one
    *  still wanted when the paginator is free is made. */
   #show(target: Target): Promise<void> {
+    if (this.#stalled) {
+      // The step that never reported still has the paginator: a fresh
+      // ghost takes the request.
+      this.#destroyGhost();
+      this.#createGhost();
+    }
     this.#want = target;
     if (!this.#pump) {
       const token = this.#pumpToken;
@@ -376,7 +447,7 @@ export class CoverSlide {
         this.#want = null;
         if (!ghost || !target) return;
         if (this.#at(target)) continue;
-        this.#loading = this.#ghostIndex() !== target.index;
+        const loads = this.#ghostIndex() !== target.index;
         const nav: NavTarget = {
           index: target.index,
           // A fraction, read off the ghost's own page count once the
@@ -387,19 +458,65 @@ export class CoverSlide {
             return textPages > 1 ? (target.page - 1) / (textPages - 1) : 0;
           },
         };
-        try {
-          await ghost.goTo(nav);
-        } catch (e) {
-          console.warn(e);
-        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const stalled = await Promise.race([
+          ghost.goTo(nav).then(
+            () => false,
+            (e) => {
+              console.warn(e);
+              return false;
+            },
+          ),
+          new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => resolve(true), STALL_MS);
+          }),
+        ]);
+        clearTimeout(timer);
         if (token !== this.#pumpToken) return;
-        this.#loading = false;
+        if (stalled) {
+          console.warn(
+            new Error(`The slide's page for ${target.index} stalled`),
+          );
+          this.#stalled = true;
+          return;
+        }
+        if (loads) {
+          // A section just loaded is laid out once more within a frame
+          // or two (the observers on its body, its fonts), and the page
+          // count can change with it: let that pass, then look whether
+          // the ghost is still on the page asked for. A turn must not
+          // start on a page that is about to shift.
+          await painted();
+          if (token !== this.#pumpToken) return;
+          this.#want ??= target;
+        }
       }
     } finally {
-      if (token === this.#pumpToken) {
-        this.#loading = false;
-        this.#busy = false;
-      }
+      if (token === this.#pumpToken) this.#busy = false;
+    }
+  }
+
+  /** Ask the ghost for `target` and say whether it has it — at once
+   *  within the section it is in, after a load otherwise, and not at all
+   *  past READY_WAIT_MS (or once the turn `generation` has been
+   *  abandoned). */
+  async #awaitReady(target: Target, generation: number): Promise<boolean> {
+    const deadline = performance.now() + READY_WAIT_MS;
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms));
+    let misses = 0;
+    for (;;) {
+      const left = deadline - performance.now();
+      await Promise.race([this.#show(target), sleep(Math.max(0, left))]);
+      if (generation !== this.#generation) return false;
+      if (this.#ready(target)) return true;
+      if (performance.now() >= deadline || this.#stalled) return false;
+      // The step is over without the page: the two layouts disagree on
+      // the page count. Right after a relayout that passes within a
+      // frame; a disagreement that stays is not worth the whole wait.
+      if (!this.#busy && ++misses >= 3) return false;
+      await Promise.race([painted(), sleep(Math.max(0, left))]);
+      if (generation !== this.#generation) return false;
     }
   }
 
@@ -411,10 +528,61 @@ export class CoverSlide {
       this.#neighbour(this.#lastDir) ??
       this.#neighbour(this.#lastDir > 0 ? -1 : 1);
     if (target) void this.#show(target);
+    this.#keepWarm();
+  }
+
+  /**
+   * The ghost shows one page, the one ahead; a turn the other way out of
+   * a chapter's first (or last) page needs another section in it. What
+   * can be had beforehand without moving the ghost is that section's
+   * document: loaded here, the parser's share of the work (reading the
+   * markup, rewriting its links, minting its resources) is done when the
+   * ghost asks, and only the iframe's load and the layout are left for
+   * the turn to wait on. The same for the section ahead, a couple of
+   * pages before the ghost gets to it, for a reader paging quickly.
+   *
+   * Loads and unloads are the counted ones (shareSections), so a section
+   * held here and by a paginator is loaded once and unloaded when the
+   * last of them lets go. At most two sections, and only near a chapter
+   * boundary.
+   */
+  #keepWarm() {
+    const { live, book } = this.#host;
+    const wanted = new Set<BookSection>();
+    let index: number | undefined;
+    try {
+      index = live.getContents()[0]?.index;
+      if (index != null && live.pages >= 3) {
+        const behind = this.#neighbour(this.#lastDir > 0 ? -1 : 1);
+        if (behind && behind.index !== index)
+          wanted.add(book.sections[behind.index]);
+        const toEdge =
+          this.#lastDir > 0 ? live.pages - 2 - live.page : live.page - 1;
+        const ahead = this.#adjacent(index, this.#lastDir);
+        if (ahead != null && toEdge <= WARM_AHEAD_PAGES)
+          wanted.add(book.sections[ahead]);
+      }
+    } catch {
+      // nothing on screen yet
+    }
+    for (const section of wanted) {
+      if (this.#warm.has(section)) continue;
+      this.#warm.add(section);
+      // A failed load has no holders left: nothing of ours to unload.
+      section.load().catch(() => this.#warm.delete(section));
+    }
+    for (const section of Array.from(this.#warm)) {
+      if (wanted.has(section)) continue;
+      this.#warm.delete(section);
+      section.unload();
+    }
   }
 
   /** The live paginator settled on a page (a turn, a jump, a relayout). */
   relocated() {
+    // Also in the middle of a turn, when the ghost itself is not moved:
+    // a reader paging quickly is the one about to need the next section.
+    if (this.#ghost && !this.#host.reducedMotion()) this.#keepWarm();
     this.#sync();
   }
 
@@ -487,6 +655,15 @@ export class CoverSlide {
     this.#state = "idle";
     this.#dragDir = 0;
     this.#x = 0;
+    this.#progress = 0;
+    this.#joining = null;
+    this.#stopCatchUp();
+  }
+
+  #stopCatchUp() {
+    this.#joinedAt = 0;
+    if (this.#frame) cancelAnimationFrame(this.#frame);
+    this.#frame = 0;
   }
 
   async #animate(dir: Dir, from: number, to: number, ms: number) {
@@ -615,7 +792,8 @@ export class CoverSlide {
 
   /**
    * A page turn without the finger (tap zone, key, wheel, toolbar).
-   * Returns false when the slide cannot show it — the caller fades.
+   * Returns false when there is nothing to slide to; a turn taken here
+   * that the ghost then fails to show goes back through `fallback`.
    *
    * A turn asked for while another is still sliding ends that slide at
    * once and follows it; at most one waits, so quick paging keeps pace
@@ -637,20 +815,22 @@ export class CoverSlide {
     }
     const target = this.#neighbour(dir);
     if (!target) return false;
+    this.#begin(dir, target);
+    return true;
+  }
+
+  /** Play the turn to `target` from rest, as soon as the ghost has the
+   *  page: at once within its section, after a short wait when it has to
+   *  load another. A ghost that does not make it hands the turn back. */
+  #begin(dir: Dir, target: Target) {
     // Whatever becomes of this turn, the reader is going this way: the
     // ghost waits on that side afterwards.
     this.#lastDir = dir;
-    if (!this.#within(target)) {
-      // Another section, not there yet: fade now, and have it ready for
-      // a turn back.
-      void this.#show(target);
-      return false;
-    }
     const generation = this.#generation;
     this.#state = "prepare";
-    void this.#show(target).then(() => {
+    void this.#awaitReady(target, generation).then((ready) => {
       if (generation !== this.#generation || this.#state !== "prepare") return;
-      if (!this.#ready(target)) {
+      if (!ready) {
         this.#state = "idle";
         this.#pending = null;
         this.#host.fallback(dir);
@@ -658,14 +838,14 @@ export class CoverSlide {
       }
       void this.#run(dir, 0, 1, TURN_MS);
     });
-    return true;
   }
 
   /**
    * The finger moved by (previous − current) px along the screen's x
-   * axis. Returns whether the slide has the gesture; while it cannot
-   * show the page the finger is pulling toward (the end of the book, a
-   * neighbouring section not loaded yet) nothing moves.
+   * axis. Returns whether the slide has the gesture. Toward the end of
+   * the book nothing moves; toward a page the ghost does not have yet
+   * (another section) nothing moves until it has, and then the sheet
+   * joins the finger where it is by now.
    */
   dragBy(dx: number): boolean {
     if (!this.#ghost || this.#host.reducedMotion()) return false;
@@ -673,50 +853,119 @@ export class CoverSlide {
       this.#state = "drag";
       this.#x = 0;
       this.#dragDir = 0;
+      this.#progress = 0;
     } else if (this.#state !== "drag") return false;
     this.#x -= dx;
     this.#movedAt = performance.now();
-    const p = ((this.#host.leftward() ? 1 : -1) * this.#x) / this.#width();
-    const dir: Dir | 0 = p > 0 ? 1 : p < 0 ? -1 : 0;
+    this.#follow(false);
+    return true;
+  }
+
+  /** The way the finger has pulled so far. */
+  #pull(): Dir | 0 {
+    const p = (this.#host.leftward() ? 1 : -1) * this.#x;
+    return p > 0 ? 1 : p < 0 ? -1 : 0;
+  }
+
+  /** Put the sheet where the finger is — or, while the ghost does not
+   *  have the page it is pulling toward, send for it. `joining`: the
+   *  ghost has just finished a step this drag was waiting on. */
+  #follow(joining: boolean) {
+    const dir = this.#pull();
     const target = dir ? this.#neighbour(dir) : null;
     if (!dir || !target || !this.#ready(target)) {
       if (this.#dragDir) this.#flatten(Z_GHOST_UNDER);
       this.#dragDir = 0;
-      // Within the section the ghost is there by the next move; another
-      // section is at least on its way for the swipe that follows.
-      if (target && dir) {
-        this.#lastDir = dir;
-        void this.#show(target);
-      }
-      return true;
+      this.#progress = 0;
+      this.#stopCatchUp();
+      if (!dir || !target) return;
+      this.#lastDir = dir;
+      // (A step that ended without the page — the two layouts disagree —
+      // is not asked for again until the finger moves.)
+      if (joining) return;
+      const step = this.#show(target);
+      if (this.#joining === step) return;
+      this.#joining = step;
+      void step.then(() => {
+        if (this.#joining !== step) return;
+        this.#joining = null;
+        if (this.#state === "drag" && !this.#dragDir) this.#follow(true);
+      });
+      return;
     }
-    this.#dragDir = dir;
-    this.#arrange(dir, Math.min(1, Math.abs(p)));
-    return true;
+    if (this.#dragDir !== dir) {
+      this.#dragDir = dir;
+      this.#joining = null;
+      // The sheet appears under a finger that is already some way off:
+      // it runs up to it rather than jump.
+      this.#stopCatchUp();
+      if (Math.abs(this.#x) > CATCH_UP_MIN_PX)
+        this.#joinedAt = performance.now();
+    }
+    this.#paint();
+  }
+
+  #paint() {
+    const dir = this.#dragDir;
+    if (!dir) return;
+    let p = Math.min(1, Math.abs(this.#x) / this.#width());
+    if (this.#joinedAt) {
+      const t = (performance.now() - this.#joinedAt) / CATCH_UP_MS;
+      if (t >= 1) this.#joinedAt = 0;
+      // Ease-out toward wherever the finger is by now.
+      else p *= 1 - (1 - t) ** 3;
+    }
+    this.#progress = p;
+    this.#arrange(dir, p);
+    if (this.#joinedAt && !this.#frame)
+      this.#frame = requestAnimationFrame(() => {
+        this.#frame = 0;
+        if (this.#state === "drag") this.#paint();
+      });
+  }
+
+  /** Whether a release `p` of the way across, moving at `vx`, makes the
+   *  turn `dir`. */
+  #completes(dir: Dir, p: number, vx: number): boolean {
+    const side = this.#host.leftward() ? 1 : -1;
+    const stale = performance.now() - this.#movedAt > VELOCITY_STALE_MS;
+    // Velocity toward completing the turn.
+    const toward = stale || !Number.isFinite(vx) ? 0 : side * -vx * dir;
+    return toward > FLICK || (p > 0.5 && toward > -FLICK);
   }
 
   /**
    * The finger lifted, moving at `vx` px/ms (previous − current). How far
-   * the sheet has come and how fast it was going decide between making
-   * the turn and springing back. Returns false when the slide never had
-   * the page to show: the caller treats the gesture as a plain swipe.
+   * it has come and how fast it was going decide between making the turn
+   * and springing back. Returns false when there was no page to pull
+   * toward (the end of the book): the caller treats the gesture as a
+   * plain swipe.
+   *
+   * A finger that lifts before the ghost has the page is judged the same
+   * way, and its turn played from rest once the page is there.
    */
   dragEnd(vx: number): boolean {
     if (this.#state !== "drag") return false;
+    const p = Math.min(1, Math.abs(this.#x / this.#width()));
     const dir = this.#dragDir;
     if (!dir) {
+      const pulled = this.#pull();
+      const target = pulled ? this.#neighbour(pulled) : null;
+      const complete = !!pulled && this.#completes(pulled, p, vx);
       this.#rest();
-      return false;
+      if (!pulled || !target) return false;
+      if (complete) this.#begin(pulled, target);
+      else this.#afterTurn();
+      return true;
     }
-    const side = this.#host.leftward() ? 1 : -1;
-    const p = Math.min(1, Math.abs(this.#x / this.#width()));
-    const stale = performance.now() - this.#movedAt > VELOCITY_STALE_MS;
-    // Velocity toward completing the turn.
-    const toward = stale || !Number.isFinite(vx) ? 0 : side * -vx * dir;
-    const complete = toward > FLICK || (p > 0.5 && toward > -FLICK);
-    const left = complete ? 1 - p : p;
+    const complete = this.#completes(dir, p, vx);
+    // From where the sheet stands, which is short of the finger while it
+    // is still catching up.
+    const from = this.#progress;
+    this.#stopCatchUp();
+    const left = complete ? 1 - from : from;
     const ms = Math.max(SETTLE_MIN_MS, Math.round(TURN_MS * left));
-    void this.#run(dir, p, complete ? 1 : 0, ms);
+    void this.#run(dir, from, complete ? 1 : 0, ms);
     return true;
   }
 
@@ -729,7 +978,8 @@ export class CoverSlide {
       this.#rest();
       return;
     }
-    const p = Math.min(1, Math.abs(this.#x / this.#width()));
-    void this.#run(dir, p, 0, SETTLE_MIN_MS);
+    const from = this.#progress;
+    this.#stopCatchUp();
+    void this.#run(dir, from, 0, SETTLE_MIN_MS);
   }
 }

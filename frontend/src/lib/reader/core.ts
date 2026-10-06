@@ -737,9 +737,10 @@ export class ReaderCore {
    * navigation (goTo, a writing-mode reload) never animates and abandons
    * a turn in progress.
    *
-   * In the slide mode the turn is the cover slide (slide.ts) wherever
-   * its second rendering has the neighbouring page ready; a turn it
-   * cannot show fades instead. A reader who asked for reduced motion,
+   * In the slide mode the turn is the cover slide (slide.ts); it waits a
+   * moment for its second rendering when the neighbouring page is in a
+   * section that is not loaded there yet, and a turn it still cannot
+   * show then fades instead. A reader who asked for reduced motion,
    * and a turn that goes nowhere (first or last page), get the bare
    * paginator.
    */
@@ -1006,7 +1007,8 @@ export class ReaderCore {
   }
 
   /** …and the release, with its velocity (px/ms). False when the slide
-   *  did not have the gesture: it is a plain threshold swipe then. */
+   *  did not have the gesture or had no page to pull toward: it is a
+   *  plain threshold swipe then. */
   dragEnd(vx: number): boolean {
     return this.#slide?.dragEnd(vx) ?? false;
   }

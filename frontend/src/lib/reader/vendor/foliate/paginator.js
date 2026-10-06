@@ -1138,7 +1138,9 @@ export class Paginator extends HTMLElement {
     }
     destroy() {
         this.#observer.unobserve(this)
-        this.#view.destroy()
+        // BeePub: a paginator destroyed before its first section loaded
+        // has no view; the listener below must still come off.
+        this.#view?.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()
         this.#mediaQuery.removeEventListener('change', this.#mediaQueryListener)
