@@ -175,7 +175,7 @@ async def test_image_proxy(admin_client, upstream):
         params={"url": "https://books.example.org/covers/big.png"},
     )
     assert big.headers["content-type"] == "image/jpeg"
-    assert Image.open(io.BytesIO(big.content)).size == (600, 900)
+    assert Image.open(io.BytesIO(big.content)).size == (800, 1200)
     not_image = await admin_client.get(
         f"/api/opds-catalogs/{catalog['id']}/image", params={"url": ROOT + "/root"}
     )
