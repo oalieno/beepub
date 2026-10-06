@@ -201,6 +201,7 @@ async function doFetch(
   path: string,
   bodyContent: string | URLSearchParams | undefined,
   baseHeaders: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<Response> {
   let res: Response;
   try {
@@ -209,8 +210,12 @@ async function doFetch(
       headers: { ...getAuthHeader(), ...baseHeaders },
       body: bodyContent,
       credentials: "include",
+      signal,
     });
-  } catch {
+  } catch (e) {
+    // The caller gave the request up: that says nothing about the
+    // server, and is the caller's own error to recognise (AbortError).
+    if (signal?.aborted) throw e;
     // fetch rejects only when the server never answered (no network,
     // server down, wrong network). On native this flips the app into
     // offline mode instead of surfacing raw errors on every screen.
@@ -226,6 +231,7 @@ async function request(
   path: string,
   body?: unknown,
   extraHeaders?: Record<string, string>,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const baseHeaders: Record<string, string> = { ...extraHeaders };
 
@@ -237,7 +243,7 @@ async function request(
     bodyContent = JSON.stringify(body);
   }
 
-  let res = await doFetch(method, path, bodyContent, baseHeaders);
+  let res = await doFetch(method, path, bodyContent, baseHeaders, signal);
 
   // On 401, try to silently refresh the access token once and retry.
   // Skip for the auth endpoints themselves to avoid infinite loops.
@@ -248,7 +254,7 @@ async function request(
   if (res.status === 401 && !isAuthEndpoint && typeof window !== "undefined") {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
-      res = await doFetch(method, path, bodyContent, baseHeaders);
+      res = await doFetch(method, path, bodyContent, baseHeaders, signal);
     }
   }
 
@@ -290,8 +296,13 @@ async function request(
   return res.text();
 }
 
-export function get(path: string): Promise<unknown> {
-  return request("GET", path);
+/** `signal` aborts the request: the promise then rejects with the
+ *  signal's AbortError, and the connection is not counted as lost. */
+export function get(
+  path: string,
+  opts?: { signal?: AbortSignal },
+): Promise<unknown> {
+  return request("GET", path, undefined, undefined, opts?.signal);
 }
 
 export function post(

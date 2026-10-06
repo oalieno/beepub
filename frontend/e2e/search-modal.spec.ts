@@ -1,5 +1,21 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
+
+/** Open the global search (⌘K) and return its input. The shortcut only
+ *  works once the page has hydrated, which the first load after a stack
+ *  rebuild can take a moment to do: keep pressing until the modal
+ *  answers. */
+async function openSearch(page: Page) {
+  const input = page.getByRole("dialog").getByRole("textbox");
+  await expect(async () => {
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(input).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  return input;
+}
+
+const SEARCH = "**/api/books/search*";
+const bookPage = /\/books\/[0-9a-f-]{36}/;
 
 /**
  * Regression for the global-search empty-state flash: debounced typing
@@ -24,24 +40,21 @@ test("a stale search response cannot flash the empty state", async ({
     call += 1;
     if (call === 1) {
       await new Promise((r) => setTimeout(r, 1500));
-      await route.fulfill({
-        contentType: "application/json",
-        body: JSON.stringify({ items: [], total: 0 }),
-      });
+      // (The modal has given this request up by now; answering it is
+      // answering nobody.)
+      await route
+        .fulfill({
+          contentType: "application/json",
+          body: JSON.stringify({ items: [], total: 0 }),
+        })
+        .catch(() => {});
       return;
     }
     await route.continue();
   });
 
   await page.goto("/");
-  // The shortcut only works once the page has hydrated, which the first
-  // load after a stack rebuild can take a moment to do: keep pressing
-  // until the modal answers.
-  const input = page.getByRole("textbox");
-  await expect(async () => {
-    await page.keyboard.press("ControlOrMeta+k");
-    await expect(input).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
+  const input = await openSearch(page);
 
   // Watch for any appearance of the empty state inside the modal's
   // results panel from now on (the string also exists in page content
@@ -91,4 +104,185 @@ test("a stale search response cannot flash the empty state", async ({
     () => (window as unknown as { __sawEmpty: boolean }).__sawEmpty,
   );
   expect(sawEmpty).toBe(false);
+});
+
+/**
+ * Enter submits the search; it does not pick a result. It used to open
+ * the first book — at once if the results were in, or whenever a slow
+ * response landed — so pressing Enter after typing threw the user into a
+ * book they had not chosen. Now, with nothing selected, Enter on the
+ * Books tab goes to the library's own search (all libraries) with the
+ * query; on the passage tabs it runs the search and leaves the results
+ * up. A result is opened only when it was picked.
+ */
+
+test("Enter with results on screen goes to the library search, not into the first book", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const input = await openSearch(page);
+  await input.fill("E2E Test");
+  const first = page.getByRole("dialog").getByText("E2E Test Book").first();
+  await expect(first).toBeVisible({ timeout: 10_000 });
+
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/libraries\/all\?search=E2E(%20|\+)Test$/);
+  await expect(page.getByRole("dialog")).toBeHidden();
+  await expect(page.getByPlaceholder("Search all libraries...")).toHaveValue(
+    "E2E Test",
+  );
+  await expect(page.getByText("E2E Test Book").first()).toBeVisible();
+  await page.waitForTimeout(1000);
+  expect(page.url()).not.toMatch(bookPage);
+});
+
+test("Enter before a slow search answers does not open a book when the answer lands", async ({
+  page,
+}) => {
+  const visited: string[] = [];
+  page.on("framenavigated", (f) => {
+    if (f === page.mainFrame()) visited.push(f.url());
+  });
+  await page.route(SEARCH, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue().catch(() => {});
+  });
+  await page.goto("/");
+  const input = await openSearch(page);
+  const asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  await input.fill("E2E Test");
+  await asked;
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/libraries\/all\?search=/);
+  // Well past the slow answer.
+  await page.waitForTimeout(2500);
+  await expect(page).toHaveURL(/\/libraries\/all\?search=/);
+  expect(visited.filter((u) => bookPage.test(u))).toEqual([]);
+  await expect(page.getByPlaceholder("Search all libraries...")).toHaveValue(
+    "E2E Test",
+  );
+});
+
+test("from the library itself, Enter searches that list; Back returns to it as it was", async ({
+  page,
+}) => {
+  await page.goto("/libraries/all");
+  const search = page.getByPlaceholder("Search all libraries...");
+  await expect(search).toHaveValue("");
+  const input = await openSearch(page);
+  await input.fill("E2E Test");
+  const listed = page.waitForRequest(
+    (r) =>
+      /\/api\/books\/(all|feed)\?/.test(r.url()) &&
+      new URL(r.url()).searchParams.get("search") === "E2E Test",
+  );
+  await input.press("Enter");
+  await listed;
+  await expect(page).toHaveURL(/\/libraries\/all\?search=/);
+  await expect(search).toHaveValue("E2E Test");
+  await expect(page.getByText("E2E Test Book").first()).toBeVisible();
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/libraries\/all$/);
+  await expect(search).toHaveValue("");
+});
+
+test("a result picked with the arrow keys is opened by Enter", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const input = await openSearch(page);
+  await input.fill("E2E Test");
+  await expect(
+    page.getByRole("dialog").getByText("E2E Test Book").first(),
+  ).toBeVisible({ timeout: 10_000 });
+  await input.press("ArrowDown");
+  await input.press("Enter");
+  await expect(page).toHaveURL(bookPage);
+});
+
+test("typing on aborts the search it has made pointless", async ({ page }) => {
+  // Every search is slow: the first is still out when the second key
+  // comes.
+  await page.route(SEARCH, async (route) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    await route.continue().catch(() => {});
+  });
+  const aborted: string[] = [];
+  page.on("requestfailed", (r) => {
+    if (r.url().includes("/books/search"))
+      aborted.push(
+        `${new URL(r.url()).searchParams.get("q")}: ${r.failure()?.errorText}`,
+      );
+  });
+  await page.goto("/");
+  const input = await openSearch(page);
+  let asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  await input.fill("E2");
+  await asked;
+  asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  await input.fill("E2E Test");
+  await expect.poll(() => aborted).toEqual(["E2: net::ERR_ABORTED"]);
+  await asked;
+  // The one that is wanted is answered …
+  await expect(
+    page.getByRole("dialog").getByText("E2E Test Book").first(),
+  ).toBeVisible({ timeout: 10_000 });
+  // … and closing the modal gives up what it is still waiting for.
+  asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  await input.fill("E2E Te");
+  await asked;
+  await page.keyboard.press("Escape");
+  await expect
+    .poll(() => aborted)
+    .toEqual(["E2: net::ERR_ABORTED", "E2E Te: net::ERR_ABORTED"]);
+  // An abandoned request is not a lost connection: no error is shown.
+  await expect(page.locator(".toast-position [role=status]")).toHaveCount(0);
+});
+
+test("on the passage tabs Enter runs the search and leaves the results up", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route("**/api/search/keyword*", async (route) => {
+    calls += 1;
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        query: "lantern",
+        total: 1,
+        results: [
+          {
+            book_id: "00000000-0000-4000-8000-000000000001",
+            book_title: "The Lantern Ledger",
+            book_author: "A. Keeper",
+            passage: "The lantern was lit at dusk.",
+            spine_index: 0,
+            char_offset_start: 0,
+            char_offset_end: 28,
+          },
+        ],
+      }),
+    });
+  });
+  await page.goto("/");
+  const start = page.url();
+  const input = await openSearch(page);
+  await page.getByRole("tab", { name: "Full Text" }).click();
+  await input.fill("lantern");
+  // Typing alone does not search here.
+  await page.waitForTimeout(600);
+  expect(calls).toBe(0);
+
+  await input.press("Enter");
+  const hit = page.getByRole("dialog").getByText("The Lantern Ledger");
+  await expect(hit).toBeVisible();
+  expect(calls).toBe(1);
+  // Enter again: the results are already there; nothing is opened and
+  // nothing is asked twice.
+  await input.press("Enter");
+  await page.waitForTimeout(600);
+  await expect(hit).toBeVisible();
+  expect(calls).toBe(1);
+  expect(page.url()).toBe(start);
 });

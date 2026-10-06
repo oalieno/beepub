@@ -11,6 +11,7 @@
   import type { BookOut } from "$lib/types";
   import { searchModalQuery } from "$lib/stores/search";
   import { get } from "svelte/store";
+  import { untrack } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
@@ -34,8 +35,8 @@
     total: number;
     loading: boolean;
     error: string;
-    // Query the current results answer — lets Enter distinguish
-    // "open the first result" from "this query hasn't run yet".
+    // Query the current results answer — Enter does not ask again for
+    // what is already on screen.
     forQuery: string;
   };
 
@@ -49,66 +50,99 @@
 
   let selectedIndex = $state(-1);
 
-  // Debounced typing keeps several requests in flight at once; only the
-  // newest may touch the state. Without this an older request's finally
-  // cleared `loading` while the newer one was still running — the UI
-  // read "not loading + no results" and flashed the empty state — and an
-  // older response arriving last would overwrite the newer results.
-  let bookSeq = 0;
-  let contentSeq = 0;
-  let keywordSeq = 0;
+  // One request per tab at a time, and only the newest may touch the
+  // state. A request the user has typed past is aborted, so that the
+  // server is not left running searches nobody will read; the sequence
+  // number covers an answer that was already on its way back. (Without
+  // it an older request's finally cleared `loading` while the newer one
+  // was still running — the UI read "not loading + no results" and
+  // flashed the empty state — and an older response arriving last would
+  // overwrite the newer results.)
+  const seq: Record<Tab, number> = { books: 0, content: 0, keyword: 0 };
+  const inFlight: Record<Tab, { q: string; abort: () => void } | null> = {
+    books: null,
+    content: null,
+    keyword: null,
+  };
 
-  function doBookSearch(openFirst = false) {
+  /** Give up whatever `tab` is waiting for. */
+  function abandon(tab: Tab) {
+    seq[tab] += 1;
+    inFlight[tab]?.abort();
+    inFlight[tab] = null;
+  }
+
+  /** Give up `tab`'s request and start the one for `q`: its number and
+   *  signal. */
+  function supersede(tab: Tab, q: string): { id: number; signal: AbortSignal } {
+    abandon(tab);
+    const controller = new AbortController();
+    inFlight[tab] = { q, abort: () => controller.abort() };
+    return { id: seq[tab], signal: controller.signal };
+  }
+
+  function abandonAll() {
+    clearTimeout(debounceTimer);
+    abandon("books");
+    abandon("content");
+    abandon("keyword");
+    books.loading = false;
+    content.loading = false;
+    keyword.loading = false;
+  }
+
+  function doBookSearch() {
     const q = query.trim();
-    const seq = ++bookSeq;
     if (!q) {
+      abandon("books");
       books = createSearchState();
       return;
     }
+    const { id, signal } = supersede("books", q);
     books.loading = true;
     booksApi
-      .search(q)
+      .search(q, 20, signal)
       .then((resp) => {
-        if (seq !== bookSeq) return;
+        if (id !== seq.books) return;
         books.results = resp.items;
         books.total = resp.total;
         books.forQuery = q;
         selectedIndex = -1;
-        if (openFirst && query.trim() === q && resp.items[0]) {
-          selectBookResult(resp.items[0]);
-        }
       })
       .catch(() => {
-        if (seq !== bookSeq) return;
+        if (id !== seq.books) return;
         books.results = [];
         books.total = 0;
       })
       .finally(() => {
-        if (seq !== bookSeq) return;
+        if (id !== seq.books) return;
+        inFlight.books = null;
         books.loading = false;
       });
   }
 
   function doContentSearch() {
     const q = query.trim();
-    const seq = ++contentSeq;
     if (!q) {
+      abandon("content");
       content = createSearchState();
       return;
     }
+    const { id, signal } = supersede("content", q);
     content.loading = true;
     content.error = "";
     searchApi
-      .semantic(q)
+      .semantic(q, 10, signal)
       .then((resp) => {
-        if (seq !== contentSeq) return;
+        if (id !== seq.content) return;
         content.results = resp.results;
         content.forQuery = q;
         selectedIndex = -1;
       })
       .catch((err) => {
-        if (seq !== contentSeq) return;
+        if (id !== seq.content) return;
         content.results = [];
+        content.forQuery = "";
         // The api client localizes error messages, so match on the 503
         // the backend sends for "not configured" rather than the text.
         content.error =
@@ -117,37 +151,41 @@
             : m.search_unavailable();
       })
       .finally(() => {
-        if (seq !== contentSeq) return;
+        if (id !== seq.content) return;
+        inFlight.content = null;
         content.loading = false;
       });
   }
 
   function doKeywordSearch() {
     const q = query.trim();
-    const seq = ++keywordSeq;
     if (!q) {
+      abandon("keyword");
       keyword = createSearchState();
       return;
     }
+    const { id, signal } = supersede("keyword", q);
     keyword.loading = true;
     keyword.error = "";
     searchApi
-      .keyword(q)
+      .keyword(q, 10, signal)
       .then((resp) => {
-        if (seq !== keywordSeq) return;
+        if (id !== seq.keyword) return;
         keyword.results = resp.results;
         keyword.total = resp.total;
         keyword.forQuery = q;
         selectedIndex = -1;
       })
       .catch(() => {
-        if (seq !== keywordSeq) return;
+        if (id !== seq.keyword) return;
         keyword.results = [];
         keyword.total = 0;
+        keyword.forQuery = "";
         keyword.error = m.search_unavailable();
       })
       .finally(() => {
-        if (seq !== keywordSeq) return;
+        if (id !== seq.keyword) return;
+        inFlight.keyword = null;
         keyword.loading = false;
       });
   }
@@ -164,12 +202,11 @@
       // otherwise "no results + not loading" renders the empty state for
       // 300ms before the fetch even starts (BookBrowser learned the same
       // lesson).
-      if (query.trim()) {
-        books.loading = true;
-      } else {
-        bookSeq += 1;
-        books = createSearchState();
-      }
+      // What was asked for the text before this keystroke is no longer
+      // wanted.
+      abandon("books");
+      if (query.trim()) books.loading = true;
+      else books = createSearchState();
       debounceTimer = setTimeout(doBookSearch, 300);
     }
     // Content tab: search on Enter only (embedding is expensive)
@@ -188,6 +225,8 @@
   }
 
   function switchTab(tab: Tab) {
+    // (The tab being left asks again when it is come back to.)
+    abandonAll();
     activeTab = tab;
     selectedIndex = -1;
     // Re-run search if there's a query
@@ -205,7 +244,17 @@
     return keyword.results.length;
   }
 
+  /** The library's own search, across every library: the full list for
+   *  this query, with its sorting and filters. */
+  function openLibrarySearch(q: string) {
+    open = false;
+    goto(`/libraries/all?search=${encodeURIComponent(q)}`);
+  }
+
   function handleKeydown(e: KeyboardEvent) {
+    // An Enter that confirms an input-method composition (Zhuyin,
+    // Pinyin, kana) is the keyboard's, not a command.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       selectedIndex = Math.min(selectedIndex + 1, currentResults() - 1);
@@ -222,30 +271,21 @@
         selectContentResult(keyword.results[selectedIndex]);
       }
     } else if (e.key === "Enter" && selectedIndex < 0) {
-      // No explicit selection: open the first result if the current
-      // query has already been searched, otherwise run the search.
+      // No explicit selection: Enter submits the search. It never opens
+      // a result — only a result the user picked (arrow keys, pointer)
+      // is opened. Books: the list for this query is the library's own
+      // search view. Passages: run the search and leave its results up.
       const q = query.trim();
       if (!q) return;
       e.preventDefault();
       if (activeTab === "books") {
-        clearTimeout(debounceTimer);
-        if (books.forQuery === q) {
-          if (books.results[0]) selectBookResult(books.results[0]);
-        } else {
-          doBookSearch(true);
-        }
+        openLibrarySearch(q);
       } else if (activeTab === "content") {
-        if (content.forQuery === q && content.results[0]) {
-          selectContentResult(content.results[0]);
-        } else {
+        if (content.forQuery !== q && inFlight.content?.q !== q)
           doContentSearch();
-        }
       } else {
-        if (keyword.forQuery === q && keyword.results[0]) {
-          selectContentResult(keyword.results[0]);
-        } else {
+        if (keyword.forQuery !== q && inFlight.keyword?.q !== q)
           doKeywordSearch();
-        }
       }
     }
     // Escape is handled by the dialog primitive.
@@ -253,17 +293,22 @@
 
   $effect(() => {
     if (open) {
-      // A page can prefill the query via the store (no-results bridge).
-      const prefill = get(searchModalQuery).trim();
-      searchModalQuery.set("");
-      query = prefill;
-      books = createSearchState();
-      content = createSearchState();
-      keyword = createSearchState();
-      selectedIndex = -1;
-      activeTab = "books";
-      if (prefill) doBookSearch();
-      setTimeout(() => inputEl?.focus(), 50);
+      untrack(() => {
+        // A page can prefill the query via the store (no-results bridge).
+        const prefill = get(searchModalQuery).trim();
+        searchModalQuery.set("");
+        query = prefill;
+        books = createSearchState();
+        content = createSearchState();
+        keyword = createSearchState();
+        selectedIndex = -1;
+        activeTab = "books";
+        if (prefill) doBookSearch();
+        setTimeout(() => inputEl?.focus(), 50);
+      });
+    } else {
+      // Closed: nothing it asked for is wanted any more.
+      untrack(abandonAll);
     }
   });
 </script>
@@ -340,6 +385,7 @@
             aria-label={m.common_clear()}
             onclick={() => {
               query = "";
+              abandonAll();
               books = createSearchState();
               content = createSearchState();
               keyword = createSearchState();

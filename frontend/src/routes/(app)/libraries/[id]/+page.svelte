@@ -96,9 +96,18 @@
 
   // Also runs on same-route navigation (library A -> library B), which does
   // NOT remount this component — every bit of per-library state resets here.
-  afterNavigate(async () => {
+  afterNavigate(async (nav) => {
+    // The same library, reached again without leaving it (the global
+    // search's Enter sends its query here; Back returns from that): the
+    // browser reads its query — or the state to restore — only when it
+    // is created, so it is created again.
+    const sameLibrary =
+      !!bookBrowser &&
+      nav.from?.route.id === nav.to?.route.id &&
+      nav.from?.params?.id === nav.to?.params?.id;
     if (restoredFromSnapshot) {
       restoredFromSnapshot = false;
+      if (sameLibrary) reloadNonce += 1;
       await tick();
       await tick();
       window.scrollTo(0, pendingScrollY);
@@ -106,6 +115,9 @@
       return;
     }
     restoreData = null;
+    const asked = (nav.to?.url.searchParams.get("search") ?? "").trim();
+    if (sameLibrary && asked !== bookBrowser!.getState().searchQuery.trim())
+      reloadNonce += 1;
     library = null;
     if (id === ALL) {
       setActiveLibrary(ALL);

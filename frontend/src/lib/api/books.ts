@@ -304,9 +304,9 @@ export const booksApi = {
   getEpubImages: (bookId: string) =>
     get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
 
-  search: (query: string, limit: number = 20) => {
+  search: (query: string, limit: number = 20, signal?: AbortSignal) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
-    return get(`/books/search?${params}`) as Promise<{
+    return get(`/books/search?${params}`, { signal }) as Promise<{
       items: (BookOut & { library_name: string | null })[];
       total: number;
     }>;

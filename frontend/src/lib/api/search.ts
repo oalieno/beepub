@@ -33,15 +33,23 @@ export interface KeywordSearchResponse {
 }
 
 export const searchApi = {
-  semantic(q: string, limit = 10): Promise<SemanticSearchResponse> {
-    return get(
-      `/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`,
-    ) as Promise<SemanticSearchResponse>;
+  semantic(
+    q: string,
+    limit = 10,
+    signal?: AbortSignal,
+  ): Promise<SemanticSearchResponse> {
+    return get(`/search/semantic?q=${encodeURIComponent(q)}&limit=${limit}`, {
+      signal,
+    }) as Promise<SemanticSearchResponse>;
   },
 
-  keyword(q: string, limit = 10): Promise<KeywordSearchResponse> {
-    return get(
-      `/search/keyword?q=${encodeURIComponent(q)}&limit=${limit}`,
-    ) as Promise<KeywordSearchResponse>;
+  keyword(
+    q: string,
+    limit = 10,
+    signal?: AbortSignal,
+  ): Promise<KeywordSearchResponse> {
+    return get(`/search/keyword?q=${encodeURIComponent(q)}&limit=${limit}`, {
+      signal,
+    }) as Promise<KeywordSearchResponse>;
   },
 };
