@@ -20,7 +20,7 @@ import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
 import { ImagePrefetcher } from "./prefetch";
-import { CoverSlide } from "./slide";
+import { CoverSlide, type SlideEvent } from "./slide";
 import {
   OWN_LAYOUT_ATTR,
   TCY_CSS,
@@ -197,25 +197,27 @@ export interface ReaderCoreHandlers {
     index: number;
     anchor: HTMLAnchorElement;
   }) => boolean | void;
-  /** A section loaded into the slide's ghost (the second, inert
-   *  rendering of the neighbouring page — slide.ts), before it is laid
+  /** A section loaded into one of the slide's ghosts (the inert
+   *  renderings of the pages a turn away — slide.ts), before it is laid
    *  out. It has had the core's own per-section adjustments; whatever
    *  the integration layer does to a live section's look at `onload`
-   *  belongs here too, and the ghost's layout (setGhostLayout) for the
+   *  belongs here too, and the ghosts' layout (setGhostLayout) for the
    *  writing mode reported. */
   onghostload?: (detail: {
     doc: Document;
     index: number;
     vertical: boolean;
   }) => void;
-  /** The ghost's overlayer for the section it shows, or null once the
-   *  ghost is gone. */
+  /** A ghost's overlayer for the section it shows (`ghost` tells the
+   *  ghosts apart) — or null once that ghost is gone, or, with no ghost
+   *  named, all of them are. */
   onghostoverlayer?: (
     detail: {
       doc: Document;
       index: number;
       overlayer: OverlayerInstance;
     } | null,
+    ghost?: object,
   ) => void;
 }
 
@@ -546,9 +548,13 @@ export class ReaderCore {
   #turnAskedAt = 0;
   #queuedTurn: 1 | -1 | null = null;
 
-  /** The slide mode's second rendering and its layers (slide.ts); only
-   *  there while the mode is "slide" and a reflowable book is open. */
+  /** The slide mode's further renderings and their layers (slide.ts);
+   *  only there while the mode is "slide" and a reflowable book is open. */
   #slide: CoverSlide | null = null;
+  /** Which way each of its ghosts' sections is written. */
+  #ghostVertical = new WeakMap<object, boolean>();
+  /** A turn asked for while one the slide could not show was fading. */
+  #afterFade: 1 | -1 | null = null;
   #container: HTMLElement;
   #pageColor = "";
 
@@ -758,9 +764,14 @@ export class ReaderCore {
       this.#cancelTurn();
       return this.#paginatorTurn(dir);
     }
-    // A fade already on its way (a turn the slide could not show) keeps
-    // the turns that pile onto it: two kinds of turn must not overlap.
-    if (!this.#fading() && slide?.turn(dir)) return Promise.resolve();
+    // A fade already on its way (a turn the slide could not show): two
+    // kinds of turn must not overlap, and a turn must not be lost
+    // either. The latest one asked for is made when the fade is over.
+    if (slide && this.#fading()) {
+      this.#afterFade = dir;
+      return Promise.resolve();
+    }
+    if (slide?.turn(dir)) return Promise.resolve();
     return this.#fadeTurn(dir);
   }
 
@@ -830,7 +841,13 @@ export class ReaderCore {
       this.#showPage();
       const queued = this.#queuedTurn;
       this.#queuedTurn = null;
-      if (queued) this.#fadedTurn(queued);
+      if (queued) {
+        this.#fadedTurn(queued);
+        return;
+      }
+      const kept = this.#afterFade;
+      this.#afterFade = null;
+      if (kept) void this.#turn(kept);
     };
     this.#paginatorTurn(dir).then(done, done);
   }
@@ -874,6 +891,7 @@ export class ReaderCore {
     this.#awaitingPage = false;
     this.#turning = false;
     this.#queuedTurn = null;
+    this.#afterFade = null;
     this.#slide?.reveal();
   }
 
@@ -931,8 +949,8 @@ export class ReaderCore {
     return this.pageTurn;
   }
 
-  /** Build the slide's second rendering when the mode asks for it, and
-   *  take it down when it does not: the other modes pay nothing. */
+  /** Build the slide's further renderings when the mode asks for them,
+   *  and take them down when it does not: the other modes pay nothing. */
   #applyPageTurn() {
     const book = this.book;
     const wanted =
@@ -958,17 +976,18 @@ export class ReaderCore {
       request: (dir) => void this.#turn(dir),
       fallback: (dir) => void this.#fadeTurn(dir),
       visible: () => this.lastLocation?.range ?? null,
-      onload: (detail) => this.#onGhostLoad(detail),
-      onoverlayer: ({ doc, index, attach }) => {
+      onload: (detail, ghost) => this.#onGhostLoad(detail, ghost),
+      onoverlayer: ({ doc, index, attach }, ghost) => {
         const overlayer = new Overlayer();
         attach(overlayer);
-        this.#handlers.onghostoverlayer?.({ doc, index, overlayer });
+        this.#handlers.onghostoverlayer?.({ doc, index, overlayer }, ghost);
       },
+      ongone: (ghost) => this.#handlers.onghostoverlayer?.(null, ghost),
     });
     slide.setBackground(this.#pageColor);
     this.#slide = slide;
-    // Already reading: the ghost goes to the neighbour of this page.
-    if (this.lastLocation) slide.relocated();
+    // Already reading: a ghost goes to the neighbour of this page.
+    if (this.lastLocation) slide.sync();
   }
 
   #dropSlide() {
@@ -980,15 +999,34 @@ export class ReaderCore {
     this.#handlers.onghostoverlayer?.(null);
   }
 
-  /** The slide's ghost paginator, when there is one — for probes and
-   *  tests; nothing in the reader reads positions from it. */
+  /** One of the slide's ghost paginators, when there is any — the one
+   *  in the turn under way, else the one on the page ahead. For probes
+   *  and tests, like the handles after it; nothing in the reader reads
+   *  positions from a ghost. */
   get ghost(): PaginatorElement | null {
     return this.#slide?.ghost ?? null;
   }
 
-  /** The section and visible text the ghost last settled on. */
+  /** The section and visible text that ghost last settled on. */
   get ghostLocation(): { index: number; range: Range | null } | null {
     return this.#slide?.shown ?? null;
+  }
+
+  /** Every ghost there is: one in the middle of a chapter, more near a
+   *  chapter boundary. */
+  get ghosts(): PaginatorElement[] {
+    return this.#slide?.ghosts ?? [];
+  }
+
+  /** The ghost holding the page one turn back (−1) or forward (1). */
+  ghostFor(dir: 1 | -1): PaginatorElement | null {
+    return this.#slide?.ghostFor(dir) ?? null;
+  }
+
+  /** What became of the slide's last turns, and the sections loaded
+   *  into its ghosts. */
+  get slideLog(): SlideEvent[] {
+    return this.#slide?.log ?? [];
   }
 
   /** The page's own colour. In the slide mode it backs both renderings,
@@ -1002,13 +1040,15 @@ export class ReaderCore {
   /** The slide following the finger: the gesture layer reports each
    *  move (previous − current, px along the screen's x axis)… */
   dragBy(dx: number): boolean {
-    if (this.effectivePageTurn() !== "slide" || this.#fading()) return false;
-    return this.#slide?.dragBy(dx) ?? false;
+    if (this.effectivePageTurn() !== "slide") return false;
+    // (While a fallback fade has the page the finger is only kept track
+    // of: a sheet joins it once the fade is over.)
+    return this.#slide?.dragBy(dx, this.#fading()) ?? false;
   }
 
   /** …and the release, with its velocity (px/ms). False when the slide
-   *  did not have the gesture or had no page to pull toward: it is a
-   *  plain threshold swipe then. */
+   *  did not have the gesture, had no page to pull toward, or a fade was
+   *  in its way: it is a plain threshold swipe then. */
   dragEnd(vx: number): boolean {
     return this.#slide?.dragEnd(vx) ?? false;
   }
@@ -1026,7 +1066,7 @@ export class ReaderCore {
     this.#styles = styles;
     const composed = this.#composedStyles();
     this.paginator.setStyles(composed);
-    this.#slide?.ghost?.setStyles(composed);
+    this.#slide?.setStyles(composed);
   }
 
   #composedStyles(): string | [string, string] {
@@ -1076,8 +1116,8 @@ export class ReaderCore {
     const cfi = anchor || this.lastLocation?.startCfi;
     const target = cfi ? this.resolve(cfi) : null;
     this.#cancelTurn();
-    // The ghost read its section's writing mode at load too: a fresh one
-    // follows the page the reload lands on.
+    // The ghosts read their sections' writing mode at load too: fresh
+    // ones follow the page the reload lands on.
     this.#slide?.reset();
     await this.paginator.reload(
       target?.index === index && target.anchor != null
@@ -1094,13 +1134,16 @@ export class ReaderCore {
     this.#writeLayout(this.paginator, params);
   }
 
-  /** The same declaration for the slide's ghost. Its section may be
-   *  written the other way from the one on screen (a horizontal plate in
-   *  a vertical book), so its layout is declared on its own — see
-   *  `onghostload`. */
-  setGhostLayout(params: LayoutParams) {
-    const ghost = this.#slide?.ghost;
-    if (ghost) this.#writeLayout(ghost, params);
+  /** The same declaration for the slide's ghosts. A ghost's section may
+   *  be written the other way from the one on screen (a horizontal plate
+   *  in a vertical book), so each gets the layout for its own section's
+   *  writing mode — see `onghostload`. */
+  setGhostLayout(layoutFor: (vertical: boolean) => LayoutParams) {
+    for (const ghost of this.#slide?.ghosts ?? [])
+      this.#writeLayout(
+        ghost,
+        layoutFor(this.#ghostVertical.get(ghost) ?? this.vertical),
+      );
   }
 
   #writeLayout(paginator: PaginatorElement, params: LayoutParams) {
@@ -1268,11 +1311,15 @@ export class ReaderCore {
     this.#handlers.onload?.({ doc, index });
   }
 
-  /** A section for the slide's ghost: the same adjustments, none of the
-   *  reader's state (the writing mode on screen, the inferred direction)
-   *  and none of its listeners. */
-  #onGhostLoad({ doc, index }: { doc: Document; index: number }) {
+  /** A section for one of the slide's ghosts: the same adjustments,
+   *  none of the reader's state (the writing mode on screen, the inferred
+   *  direction) and none of its listeners. */
+  #onGhostLoad(
+    { doc, index }: { doc: Document; index: number },
+    ghost: PaginatorElement,
+  ) {
     const { vertical } = this.#prepareSection(doc);
+    this.#ghostVertical.set(ghost, vertical);
     this.#handlers.onghostload?.({ doc, index, vertical });
   }
 

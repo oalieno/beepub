@@ -5,6 +5,10 @@
  * goes through ios-touch-selection.ts, whose state machine arbitrates the
  * same gesture against long-press selection.
  *
+ * The reader also attaches it, on every platform, to the element around
+ * the section document: nothing can be selected there, and a swipe that
+ * starts on it is a page turn like any other.
+ *
  * Gesture geometry is measured in screen coordinates: a page that
  * follows the finger moves the frame the events come from, so client
  * coordinates would shift under a still finger by exactly the distance
@@ -37,7 +41,7 @@ const SWIPE_THRESHOLD = 50;
 const MOVE_THRESHOLD = 10;
 
 export function setupSwipeNavigation(
-  doc: Document,
+  doc: Document | HTMLElement,
   win: Window,
   callbacks: SwipeCallbacks,
 ) {
@@ -58,7 +62,8 @@ export function setupSwipeNavigation(
 
   doc.addEventListener(
     "touchstart",
-    (e: TouchEvent) => {
+    (ev: Event) => {
+      const e = ev as TouchEvent;
       // A gesture that never got its release must not leave the page
       // where the finger dropped it.
       callbacks.onswipecancel?.();
@@ -79,7 +84,8 @@ export function setupSwipeNavigation(
 
   doc.addEventListener(
     "touchmove",
-    (e: TouchEvent) => {
+    (ev: Event) => {
+      const e = ev as TouchEvent;
       if (!active) return;
       const t = e.touches[0];
       if (
@@ -106,7 +112,8 @@ export function setupSwipeNavigation(
 
   doc.addEventListener(
     "touchend",
-    (e: TouchEvent) => {
+    (ev: Event) => {
+      const e = ev as TouchEvent;
       if (!active) return;
       active = false;
       const endX = e.changedTouches[0]?.screenX ?? startX;

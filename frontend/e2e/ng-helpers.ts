@@ -36,6 +36,8 @@ declare global {
     __turns?: string[];
     __lift?: { ghostIndex: number | null } | null;
     __restoreLoad?: () => void;
+    __armLift?: () => void;
+    __liveLoads?: number;
     __stuckGhost?: unknown;
   }
 }
@@ -144,6 +146,15 @@ export const IMPORT_SHELL_BOOK: Fixture = {
   file: "e2e-import-shell-book.epub",
   title: "縱組範本試驗帖",
   readyText: "縱組範本首行",
+};
+
+/** Three long horizontal chapters (some sixty phone pages each) of
+ *  numbered log entries: laying one out is real work, the way a novel's
+ *  chapter is on a phone. */
+export const LONG_CHAPTERS_BOOK: Fixture = {
+  file: "e2e-long-chapters-book.epub",
+  title: "Signal Station Daybooks",
+  readyText: "Signal log northgate entry 0001",
 };
 
 /** Nested TOC with fragment entries, a same-file footnote, a cross-file

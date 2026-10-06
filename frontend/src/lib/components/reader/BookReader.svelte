@@ -362,11 +362,6 @@ ${darkOverrides}
   // grid follows the writing mode — so the screen-space gutters swap
   // roles between horizontal and vertical sections.
   let vertical = $state(false);
-  // The writing mode of the section in the slide's ghost (the second
-  // rendering of the neighbouring page): its layout is declared for its
-  // own mode — a horizontal plate in a vertical book sits beside pages
-  // written the other way.
-  let ghostVertical = $state(false);
 
   // Larger than any window: no limit.
   const UNBOUNDED = 100000;
@@ -407,7 +402,10 @@ ${darkOverrides}
    *  attributes are written, so re-pushing the same layout is free. */
   function pushLayout(c: ReaderCore | null = core) {
     c?.setLayout(layoutFor(vertical));
-    c?.setGhostLayout(layoutFor(ghostVertical));
+    // The slide's ghosts (the renderings of the pages a turn away) each
+    // get the layout for their own section's writing mode — a horizontal
+    // plate in a vertical book sits beside pages written the other way.
+    c?.setGhostLayout(layoutFor);
   }
 
   // ------------------------------------------------------ writing mode
@@ -1725,6 +1723,26 @@ ${darkOverrides}
     }
   }
 
+  function swipeCallbacks(c: ReaderCore) {
+    return {
+      // Finger moving left pulls in the page on the right.
+      onswipeleft: () => turn("right"),
+      onswiperight: () => turn("left"),
+      // In the slide mode the page follows the finger (the core has the
+      // sheets; in the other modes it declines and the release is a
+      // threshold swipe). Where the slide has nothing to show — the first
+      // and the last page — it declines the release too, so the swipe
+      // still reaches turn() and the end of the book.
+      onswipemove: (dx: number) => {
+        if (!c.dragBy(dx)) return;
+        dismissMenu();
+        showFootnote = false;
+      },
+      onswipeend: (vx: number) => c.dragEnd(vx),
+      onswipecancel: () => c.dragCancel(),
+    };
+  }
+
   function attachGestures(doc: Document) {
     const win = doc.defaultView;
     if (!win) return;
@@ -1788,23 +1806,7 @@ ${darkOverrides}
       else turn(zone);
     });
 
-    const swipe = {
-      // Finger moving left pulls in the page on the right.
-      onswipeleft: () => turn("right"),
-      onswiperight: () => turn("left"),
-      // In the slide mode the page follows the finger (the core has the
-      // sheets; in the other modes it declines and the release is a
-      // threshold swipe). Where the slide has nothing to show — the first
-      // and the last page — it declines the release too, so the swipe
-      // still reaches turn() and the end of the book.
-      onswipemove: (dx: number) => {
-        if (!c.dragBy(dx)) return;
-        dismissMenu();
-        showFootnote = false;
-      },
-      onswipeend: (vx: number) => c.dragEnd(vx),
-      onswipecancel: () => c.dragCancel(),
-    };
+    const swipe = swipeCallbacks(c);
 
     if (isIOSDevice()) {
       setupIOSTouchSelection(doc, win, {
@@ -1854,8 +1856,8 @@ ${darkOverrides}
     attachGestures(doc);
   }
 
-  /** A section for the slide's ghost — the inert second rendering of the
-   *  neighbouring page. It must look as the live one will: the layout
+  /** A section for one of the slide's ghosts — the inert renderings of
+   *  the pages a turn away. It must look as the live one will: the layout
    *  for its own writing mode before it is laid out, and what handleLoad
    *  does to a section's look. No gestures, no keys: it is not read. */
   function handleGhostLoad({
@@ -1865,8 +1867,7 @@ ${darkOverrides}
     doc: Document;
     vertical: boolean;
   }) {
-    ghostVertical = isVertical;
-    core?.setGhostLayout(layoutFor(isVertical));
+    core?.setGhostLayout(layoutFor);
     if (isVertical) pinVerticalPunctuation(doc);
     // The live document gets this from the gesture layer.
     if (isIOSDevice()) blockScripts(doc);
@@ -1891,14 +1892,24 @@ ${darkOverrides}
         layer?.attach(overlayer, doc, index),
       onlink: handleLink,
       onghostload: handleGhostLoad,
-      // Saved highlights and illustration markers ride along on the
+      // Saved highlights and illustration markers ride along on every
       // ghost's overlayer: a mark must not vanish while its page slides.
-      onghostoverlayer: (detail) => {
-        if (detail)
-          layer?.attachMirror(detail.overlayer, detail.doc, detail.index);
-        else layer?.detachMirror();
+      onghostoverlayer: (detail, ghost) => {
+        if (detail && ghost)
+          layer?.attachMirror(
+            detail.overlayer,
+            detail.doc,
+            detail.index,
+            ghost,
+          );
+        else layer?.detachMirror(ghost);
       },
     });
+    // The page's own document hears a swipe that starts on it. One that
+    // starts beside it — in the gutters the paginator keeps around the
+    // document, or anywhere at all while a slide is finishing and the
+    // page takes no touches — lands here.
+    setupSwipeNavigation(container, window, swipeCallbacks(c));
     core = c;
     layer = new AnnotationLayer((cfi) => c.resolve(cfi));
     // Debug handle — the only way e2e probes and a device Web Inspector
@@ -1987,7 +1998,6 @@ ${darkOverrides}
     void marginX;
     void marginY;
     void vertical;
-    void ghostVertical;
     void fontSize;
     void lineHeight;
     void letterSpacing;

@@ -219,9 +219,10 @@ export class AnnotationLayer {
   #items = new Map<string, Annotation>();
   /** The section on screen. */
   #main: Surface | null = null;
-  /** A second rendering that shows the same annotations and nothing
-   *  else — the page-turn slide's ghost. Never hit-tested. */
-  #mirror: Surface | null = null;
+  /** Further renderings that show the same annotations and nothing
+   *  else — the page-turn slide's ghosts, each under its own key. Never
+   *  hit-tested. */
+  #mirrors = new Map<object, Surface>();
   #resolve: (cfi: string) => NavTarget | null;
 
   /** `resolve` turns a CFI into the paginator's navigation target (section
@@ -243,25 +244,37 @@ export class AnnotationLayer {
 
   detach() {
     this.#main = null;
-    this.#mirror = null;
+    this.#mirrors.clear();
   }
 
-  /** The second rendering got a section: draw what belongs there too.
-   *  Every later change to the set reaches both. */
-  attachMirror(overlayer: OverlayerInstance, doc: Document, index: number) {
+  /** Another rendering (`key` names it) got a section: draw what
+   *  belongs there too. Every later change to the set reaches them all. */
+  attachMirror(
+    overlayer: OverlayerInstance,
+    doc: Document,
+    index: number,
+    key: object,
+  ) {
     const mirror = surface(overlayer, doc, index);
-    this.#mirror = mirror;
+    this.#mirrors.set(key, mirror);
     for (const item of this.#items.values()) this.#draw(mirror, item);
   }
 
-  detachMirror() {
-    this.#mirror = null;
+  /** That rendering is gone — or, without a key, all of them are. */
+  detachMirror(key?: object) {
+    if (key) this.#mirrors.delete(key);
+    else this.#mirrors.clear();
+  }
+
+  #surfaces(): Surface[] {
+    return this.#main
+      ? [this.#main, ...this.#mirrors.values()]
+      : Array.from(this.#mirrors.values());
   }
 
   set(item: Annotation) {
     this.#items.set(item.key, item);
-    for (const s of [this.#main, this.#mirror]) {
-      if (!s) continue;
+    for (const s of this.#surfaces()) {
       this.#undraw(s, item.key);
       this.#draw(s, item);
     }
@@ -269,12 +282,12 @@ export class AnnotationLayer {
 
   delete(key: string) {
     this.#items.delete(key);
-    for (const s of [this.#main, this.#mirror]) if (s) this.#undraw(s, key);
+    for (const s of this.#surfaces()) this.#undraw(s, key);
   }
 
   replaceAll(items: Annotation[]) {
     for (const key of Array.from(this.#items.keys()))
-      for (const s of [this.#main, this.#mirror]) if (s) this.#undraw(s, key);
+      for (const s of this.#surfaces()) this.#undraw(s, key);
     this.#items.clear();
     for (const item of items) this.set(item);
   }
