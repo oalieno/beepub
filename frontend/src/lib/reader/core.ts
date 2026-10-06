@@ -507,7 +507,13 @@ function selectorReachesBody(
 export class ReaderCore {
   readonly paginator: PaginatorElement;
   book: Book | null = null;
+  /** The page the reader is on. In the slide mode that is the page the
+   *  sheets show: for a moment after a turn, a ghost's (its range is
+   *  then in the ghost's document), until the live paginator has made
+   *  the same turn and its own report of the page replaces it. */
   lastLocation: Relocation | null = null;
+  /** What the live paginator last reported of itself. */
+  #liveLocation: Relocation | null = null;
   /** Writing mode of the current section, from its computed style. */
   vertical = false;
   /** The current section's own direction (body dir / CSS direction),
@@ -761,6 +767,8 @@ export class ReaderCore {
       return Promise.resolve();
     }
     if (mode === "instant" || prefersReducedMotion() || this.#atEdge(dir)) {
+      if (this.#slide?.covering)
+        return this.#landLive().then(() => this.#paginatorTurn(dir));
       this.#cancelTurn();
       return this.#paginatorTurn(dir);
     }
@@ -937,7 +945,7 @@ export class ReaderCore {
   }
 
   setPageTurn(mode: PageTurnMode) {
-    if (mode !== this.pageTurn) this.#cancelTurn();
+    if (mode !== this.pageTurn) void this.#landLive();
     this.pageTurn = mode;
     this.#applyPageTurn();
   }
@@ -975,7 +983,7 @@ export class ReaderCore {
       turnLive: (dir) => this.#paginatorTurn(dir),
       request: (dir) => void this.#turn(dir),
       fallback: (dir) => void this.#fadeTurn(dir),
-      visible: () => this.lastLocation?.range ?? null,
+      visible: () => this.#liveLocation?.range ?? null,
       onload: (detail, ghost) => this.#onGhostLoad(detail, ghost),
       onoverlayer: ({ doc, index, attach }, ghost) => {
         const overlayer = new Overlayer();
@@ -983,6 +991,8 @@ export class ReaderCore {
         this.#handlers.onghostoverlayer?.({ doc, index, overlayer }, ghost);
       },
       ongone: (ghost) => this.#handlers.onghostoverlayer?.(null, ghost),
+      shown: (detail, turned) => this.#onShown(detail, turned),
+      uncovered: () => this.#onUncovered(),
     });
     slide.setBackground(this.#pageColor);
     this.#slide = slide;
@@ -1010,6 +1020,18 @@ export class ReaderCore {
   /** The section and visible text that ghost last settled on. */
   get ghostLocation(): { index: number; range: Range | null } | null {
     return this.#slide?.shown ?? null;
+  }
+
+  /** The ghost lying over the live paginator, while that is still
+   *  making the turn the reader has already seen (null otherwise). */
+  get cover(): PaginatorElement | null {
+    return this.#slide?.cover ?? null;
+  }
+
+  /** Resolves once the page on screen is the live paginator's own: at
+   *  once as a rule, after its catch-up when a slide has just landed. */
+  settle(): Promise<void> {
+    return this.#slide?.flush() ?? Promise.resolve();
   }
 
   /** Every ghost there is: one in the middle of a chapter, more near a
@@ -1105,6 +1127,12 @@ export class ReaderCore {
    */
   async setWritingMode(mode: WritingMode, anchor?: string): Promise<boolean> {
     if (mode === this.writingMode) return false;
+    // The section laid out again is the one the reader is on: the live
+    // paginator first makes whatever turn it still owes a slide.
+    if (this.#slide?.covering) {
+      await this.settle();
+      if (mode === this.writingMode) return false;
+    }
     const before = this.forcedWritingMode();
     this.writingMode = mode;
     const index = this.currentIndex();
@@ -1397,16 +1425,16 @@ export class ReaderCore {
     });
   }
 
-  #onRelocate(detail: {
+  #locate(detail: {
     reason: string;
     index: number;
     fraction?: number;
     size?: number;
     range?: Range | null;
-  }) {
+  }): Relocation {
     const range = detail.range ?? null;
     const cfi = this.cfiOf(detail.index, range);
-    const location: Relocation = {
+    return {
       reason: detail.reason,
       index: detail.index,
       fraction: detail.fraction ?? 0,
@@ -1415,13 +1443,82 @@ export class ReaderCore {
       cfi,
       startCfi: range ? this.positionCFI(detail.index, range) : cfi,
     };
-    this.lastLocation = location;
+  }
+
+  #onRelocate(detail: {
+    reason: string;
+    index: number;
+    fraction?: number;
+    size?: number;
+    range?: Range | null;
+  }) {
+    const location = this.#locate(detail);
+    this.#liveLocation = location;
     this.#showPage();
     this.#slide?.relocated();
-    if (detail.index !== this.#prefetchIndex) {
-      this.#prefetchIndex = detail.index;
-      this.#prefetch?.around(detail.index);
+    // Under one of the slide's ghosts the live paginator is catching up
+    // with a page the reader is already on, and has been told of
+    // (#onShown): its way there is nobody's news.
+    if (this.#slide?.covering) return;
+    this.#report(location);
+  }
+
+  #report(location: Relocation) {
+    this.lastLocation = location;
+    if (location.index !== this.#prefetchIndex) {
+      this.#prefetchIndex = location.index;
+      this.#prefetch?.around(location.index);
     }
     this.#handlers.onrelocate?.(location);
+  }
+
+  /** A slide has landed: the reader is on the page a ghost shows, and
+   *  everything that follows the reader's place — the chapter named, the
+   *  progress, the position saved — hears of it now, as the page turn it
+   *  is. The same section rendered from the same inputs yields the same
+   *  CFIs (cfiOf reads a ghost's document as it reads the live one). */
+  #onShown(
+    detail: {
+      index: number;
+      fraction?: number;
+      size?: number;
+      range: Range | null;
+    },
+    turned: boolean,
+  ) {
+    this.#report(
+      this.#locate({ ...detail, reason: turned ? "page" : "anchor" }),
+    );
+  }
+
+  /** Give up a slide whose turn the live paginator has not made yet
+   *  without losing the turn: the live paginator goes to the page the
+   *  reader was shown. For what ends the slide but is not itself a
+   *  navigation (the mode switched off, reduced motion switched on). */
+  #landLive(): Promise<void> {
+    const shown = this.#slide?.covering ? this.lastLocation : null;
+    this.#cancelTurn();
+    const target = shown ? this.resolve(shown.startCfi) : null;
+    if (!target) return Promise.resolve();
+    return this.paginator.goTo(withTextStart(target));
+  }
+
+  /** The live paginator is the page on screen again. Normally it stands
+   *  where the ghost did and only its range (in the live document) takes
+   *  the ghost's place; were it anywhere else, that is the truth and is
+   *  reported. */
+  #onUncovered() {
+    const live = this.#liveLocation;
+    const shown = this.lastLocation;
+    if (!live || live === shown) return;
+    if (
+      shown &&
+      live.index === shown.index &&
+      live.startCfi === shown.startCfi
+    ) {
+      this.lastLocation = { ...live, reason: shown.reason };
+      return;
+    }
+    this.#report(live);
   }
 }

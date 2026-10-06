@@ -4,6 +4,7 @@ import {
   NOTES_BOOK,
   VERTICAL_MIXED_BOOK,
   openBook,
+  resetProgress,
   seedFixture,
 } from "./ng-helpers";
 
@@ -102,6 +103,16 @@ test("in the slide mode the last page's turn opens the finish overlay too", asyn
   const bookId = await seedFixture(page.request, NOTES_BOOK);
   await setSeries(page, bookId, null, null);
   await resetStatus(page, bookId);
+  // (Not opened at the end, where the last run left it: the mark below
+  // is to be this run's.)
+  await resetProgress(page.request, bookId);
+  // The last page is reached on a sheet first and by the live paginator
+  // a moment later: it is the end once, not twice.
+  const marks: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "PUT" && r.url().endsWith("/reading-status"))
+      marks.push(r.postData() ?? "");
+  });
   await openBook(page, bookId, { turn: "slide" }, NOTES_BOOK);
   expect(
     await page.evaluate(() => !!window.__beepubReaderNG.core.ghost),
@@ -109,7 +120,10 @@ test("in the slide mode the last page's turn opens the finish overlay too", asyn
 
   const overlay = await turnPastTheEnd(page);
   await expect(overlay.getByText("You finished this book")).toBeVisible();
+  await expect(overlay).toHaveCount(1);
   await expect.poll(() => readingStatus(page, bookId)).toBe("read");
+  await page.waitForTimeout(800);
+  expect(marks).toHaveLength(1);
   await resetStatus(page, bookId);
 });
 

@@ -84,3 +84,67 @@ test("a chapter's first page names that chapter, with no detour on the way in", 
     ),
   ).toEqual(["第二話「燈芯」", "第三話「霧笛」"]);
 });
+
+test("in the slide mode the name changes as the slide lands, and back with the turn back", async ({
+  page,
+}) => {
+  const bookId = await seedFixture(page.request, CHAPTER_ANCHORS_BOOK);
+  await resetProgress(page.request, bookId);
+  await openBook(page, bookId, { turn: "slide" }, CHAPTER_ANCHORS_BOOK);
+  await page.evaluate(() => window.__beepubReaderNG.core.goTo(1));
+  await expect(label(page)).toHaveText("第二話「燈芯」");
+  const next = page.getByRole("button", { name: "Next page" });
+  const where = () =>
+    page.evaluate(() => {
+      const { core, paginator } = window.__beepubReaderNG;
+      const l = core.lastLocation;
+      return {
+        index: l.index as number,
+        last: l.fraction + l.size >= 1 - 1e-6,
+        first: l.fraction === 0,
+        liveIndex: paginator.getContents()[0]?.index as number,
+      };
+    });
+  for (let i = 0; i < 40 && !(await where()).last; i++) {
+    await next.click();
+    await page.waitForTimeout(500);
+  }
+  expect(await where()).toMatchObject({ index: 1, last: true });
+  // Both neighbouring pages rendered, as after a moment on the page.
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const { core } = window.__beepubReaderNG;
+        return [1, -1].map(
+          (dir) => core.ghostFor(dir)?.getContents()[0]?.index ?? null,
+        );
+      }),
+    )
+    .toEqual([2, 1]);
+  await page.waitForTimeout(300);
+
+  // Into the third chapter: named the moment the slide (280ms) has
+  // landed, while the live paginator is still in the second.
+  await recordLabels(page);
+  await next.click();
+  await page.waitForTimeout(330);
+  await expect(label(page)).toHaveText("第三話「霧笛」");
+  expect(await where()).toMatchObject({ index: 2, first: true, liveIndex: 1 });
+  // The live paginator follows, and nothing changes for it.
+  await expect.poll(async () => (await where()).liveIndex).toBe(2);
+  await page.waitForTimeout(600);
+  expect(await where()).toMatchObject({ index: 2, first: true });
+
+  // And back: the second chapter again, as its last page lands.
+  await page.getByRole("button", { name: "Previous page" }).click();
+  await page.waitForTimeout(330);
+  await expect(label(page)).toHaveText("第二話「燈芯」");
+  expect(await where()).toMatchObject({ index: 1, last: true });
+  await expect.poll(async () => (await where()).liveIndex).toBe(1);
+  await page.waitForTimeout(600);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __labels: string[] }).__labels,
+    ),
+  ).toEqual(["第二話「燈芯」", "第三話「霧笛」", "第二話「燈芯」"]);
+});

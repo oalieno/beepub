@@ -296,9 +296,10 @@ export class AnnotationLayer {
    *  document's client coordinates (a click's clientX/Y). Illustration
    *  markers sit above the marks whatever the draw order — the old
    *  reader's overlay buttons did, and a passage that is both
-   *  highlighted and illustrated opens its picture on tap. */
-  hitTest(x: number, y: number): string | null {
-    const drawn = this.#main?.drawn;
+   *  highlighted and illustrated opens its picture on tap. With
+   *  `mirror`, the same question of that rendering and its document. */
+  hitTest(x: number, y: number, mirror?: object): string | null {
+    const drawn = (mirror ? this.#mirrors.get(mirror) : this.#main)?.drawn;
     if (!drawn) return null;
     const hit = (kinds: (kind: AnnotationKind) => boolean) => {
       // Most recently drawn first, as the overlayer's own hit test does;

@@ -514,11 +514,29 @@ ${darkOverrides}
       clearSelectionIn(doc);
       return;
     }
+    if (onCoveredTarget(e)) return;
     const wr = wrapper.getBoundingClientRect();
     const x = e.clientX - wr.left;
     if (x < wr.width * TAP_ZONE) turn("left");
     else if (x > wr.width * (1 - TAP_ZONE)) turn("right");
     else ontap?.();
+  }
+
+  /** Just after a slide the page on screen is still a ghost's, which
+   *  takes no touches: the tap lands here. One on a link or a saved mark
+   *  of that page was not meant for a tap zone — it turns nothing, and
+   *  the live page is brought up at once so the next tap reaches it. */
+  function onCoveredTarget(e: MouseEvent): boolean {
+    const cover = core?.cover;
+    const doc = cover?.getContents()[0]?.doc;
+    const frame = doc?.defaultView?.frameElement?.getBoundingClientRect();
+    if (!core || !cover || !doc || !frame) return false;
+    const x = e.clientX - frame.left;
+    const y = e.clientY - frame.top;
+    const link = doc.elementFromPoint(x, y)?.closest?.("a[href]");
+    if (!link && !layer?.hitTest(x, y, cover)) return false;
+    void core.settle();
+    return true;
   }
 
   function handleKey(e: KeyboardEvent) {

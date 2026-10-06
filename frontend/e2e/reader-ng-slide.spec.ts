@@ -1730,6 +1730,312 @@ test("one ghost in the middle of a chapter, a second near its edge, given back a
   expect(await turns(page)).toEqual(["live:slide"]);
 });
 
+/** Where the reader says it is, where the live paginator is, and
+ *  whether a ghost still lies over it. */
+function whereabouts(page: Page) {
+  return page.evaluate(() => {
+    const { core, paginator } = window.__beepubReaderNG;
+    const l = core.lastLocation;
+    return {
+      covered: !!core.cover,
+      index: l.index as number,
+      startCfi: l.startCfi as string,
+      liveIndex: paginator.getContents()[0]?.index as number,
+      chapter:
+        document
+          .querySelector('[data-testid="reader-chapter"]')
+          ?.textContent?.trim() ?? "",
+    };
+  });
+}
+
+async function savedProgress(page: Page, bookId: string) {
+  return (await page.request.get(`/api/books/${bookId}/progress`)).json();
+}
+
+test("the chapter named and the position saved follow the page shown, not the live paginator still behind it", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(page.request, LONG_CHAPTERS_BOOK);
+  const cdp = await context.newCDPSession(page);
+  /** Open on the last page of the first chapter, both neighbours
+   *  rendered; returns that page's position. */
+  const toBoundary = async () => {
+    await openBook(page, bookId, { turn: "slide" }, LONG_CHAPTERS_BOOK);
+    await goTo(page, { index: 0, fraction: 1 });
+    await expect
+      .poll(async () => {
+        const { live } = await layers(page);
+        return live.index === 0 && live.page === live.pages - 2;
+      })
+      .toBe(true);
+    await ghostReady(page, 1);
+    await ghostReady(page, -1);
+    await page.waitForTimeout(200);
+    return whereabouts(page);
+  };
+  /** The slide into the second chapter has landed — and (`ahead`) the
+   *  live paginator has not followed yet. */
+  const landed = async (ahead: boolean) => {
+    // Looked at in the frame the reader first says so.
+    const here = await page.evaluate(
+      () =>
+        new Promise<{
+          covered: boolean;
+          startCfi: string;
+          liveIndex: number;
+          chapter: string;
+        } | null>((resolve) => {
+          const { core, paginator } = window.__beepubReaderNG;
+          const started = performance.now();
+          const tick = () => {
+            const l = core.lastLocation;
+            if (l.index === 1)
+              resolve({
+                covered: !!core.cover,
+                startCfi: l.startCfi,
+                liveIndex: paginator.getContents()[0]?.index,
+                chapter:
+                  document
+                    .querySelector('[data-testid="reader-chapter"]')
+                    ?.textContent?.trim() ?? "",
+              });
+            else if (performance.now() - started > 10_000) resolve(null);
+            else requestAnimationFrame(tick);
+          };
+          tick();
+        }),
+    );
+    expect(here).not.toBeNull();
+    expect(here!.chapter).toBe("Midwater");
+    if (ahead) expect(here).toMatchObject({ covered: true, liveIndex: 0 });
+    return here!;
+  };
+
+  // Leave by loading another page a moment after the slide lands (the
+  // unload save): the row names the new chapter, and the book reopens on
+  // the page that was on screen.
+  const end = await toBoundary();
+  expect(end.chapter).toBe("Northgate");
+  await page.keyboard.press("PageDown");
+  let here = await landed(true);
+  await page.goto("/");
+  await expect
+    .poll(async () => (await savedProgress(page, bookId)).section_index)
+    .toBe(1);
+  expect((await savedProgress(page, bookId)).cfi).toBe(here.startCfi);
+  await openBook(
+    page,
+    bookId,
+    { turn: "slide", restore: "1" },
+    { ...LONG_CHAPTERS_BOOK, readyText: "Signal log midwater entry 0001" },
+  );
+  await expect
+    .poll(async () => {
+      const { live } = await layers(page);
+      return [live.index, live.page];
+    })
+    .toEqual([1, 1]);
+  // The live paginator's own report of that page is the same position.
+  expect((await whereabouts(page)).startCfi).toBe(here.startCfi);
+
+  // Leave through the reader's own back link (the component's last
+  // save), on a slow phone.
+  await toBoundary();
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 6 });
+  try {
+    await page.keyboard.press("PageDown");
+    here = await landed(true);
+    await page.getByRole("button", { name: "Back to book detail" }).click();
+    await page.waitForURL((url) => !url.pathname.endsWith("/read"));
+  } finally {
+    await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
+  }
+  await expect
+    .poll(async () => (await savedProgress(page, bookId)).cfi)
+    .toBe(here.startCfi);
+  expect((await savedProgress(page, bookId)).section_index).toBe(1);
+
+  // Forward, back, forward in quick succession, then away: the page
+  // shown last is the one saved…
+  await toBoundary();
+  const from = (await slideLog(page)).length;
+  for (const key of ["PageDown", "PageUp", "PageDown"]) {
+    await page.keyboard.press(key);
+    await page.waitForTimeout(150);
+  }
+  await expect.poll(async () => (await slideLog(page, from)).slid).toBe(3);
+  here = await landed(false);
+  await page.goto("/");
+  await expect
+    .poll(async () => (await savedProgress(page, bookId)).cfi)
+    .toBe(here.startCfi);
+
+  // …and a pair of turns that undo each other leaves it on the page it
+  // began on, named as it was.
+  const begun = await toBoundary();
+  const pair = (await slideLog(page)).length;
+  await page.keyboard.press("PageDown");
+  await page.waitForTimeout(150);
+  await page.keyboard.press("PageUp");
+  await expect.poll(async () => (await slideLog(page, pair)).slid).toBe(2);
+  await expect.poll(async () => (await whereabouts(page)).index).toBe(0);
+  expect(await whereabouts(page)).toMatchObject({
+    startCfi: begun.startCfi,
+    chapter: "Northgate",
+    liveIndex: 0,
+  });
+  await page.goto("/");
+  await expect
+    .poll(async () => (await savedProgress(page, bookId)).cfi)
+    .toBe(begun.startCfi);
+  expect((await savedProgress(page, bookId)).section_index).toBe(0);
+});
+
+/** Make one turn and return what the reader said of the new page while
+ *  a ghost was showing it, and what it says once the live paginator has
+ *  taken over. */
+function turnAndCompare(page: Page, dir: 1 | -1) {
+  return page.evaluate(
+    (dir) =>
+      new Promise<{
+        shown: { index: number; startCfi: string; cfi: string } | null;
+        live: { index: number; startCfi: string; cfi: string };
+      }>((resolve) => {
+        const { core } = window.__beepubReaderNG;
+        const read = () => {
+          const l = core.lastLocation;
+          return { index: l.index, startCfi: l.startCfi, cfi: l.cfi };
+        };
+        let shown: ReturnType<typeof read> | null = null;
+        const before = core.lastLocation;
+        const started = performance.now();
+        void (dir > 0 ? core.next() : core.prev());
+        const tick = () => {
+          if (core.cover && core.lastLocation !== before) shown ??= read();
+          const done =
+            (shown && !core.cover) || performance.now() - started > 5000;
+          if (done) resolve({ shown, live: read() });
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+    dir,
+  );
+}
+
+test("a ghost reports the very position the live page does — vertical text, upright numbers, an illustration plate, across a chapter", async ({
+  page,
+}) => {
+  const compare = async (turnsToMake: (1 | -1)[]) => {
+    for (const dir of turnsToMake) {
+      const { shown, live } = await turnAndCompare(page, dir);
+      expect(shown).not.toBeNull();
+      expect(live).toEqual(shown);
+      await expect.poll(() => settled(page)).toBe(true);
+    }
+  };
+
+  // Forced vertical: both documents carry the wrappers that stand short
+  // numbers upright, and both are read through them.
+  const digits = await seedFixture(page.request, DIGITS_BOOK);
+  await page.goto("/");
+  await page.evaluate(
+    (key) => localStorage.setItem(key, "vertical"),
+    `reader-writing-mode:${digits}`,
+  );
+  await openBook(page, digits, { turn: "slide", font: "sans" }, DIGITS_BOOK);
+  expect(
+    await page.evaluate(
+      () =>
+        window.__beepubReaderNG.core
+          .getContents()[0]
+          .doc.querySelectorAll("beepub-tcy").length,
+    ),
+  ).toBeGreaterThan(0);
+  await ghostReady(page, 1);
+  await compare([1, 1, -1, 1]);
+  await page.evaluate(
+    (key) => localStorage.removeItem(key),
+    `reader-writing-mode:${digits}`,
+  );
+
+  // A chapter with a marked plate: onto the plate's page and past it.
+  const plates = await seedFixture(page.request, VERTICAL_PLATE_BOOK);
+  await openBook(
+    page,
+    plates,
+    { turn: "slide", size: "24" },
+    VERTICAL_PLATE_BOOK,
+  );
+  await ghostReady(page, 1);
+  const pages = (await layers(page)).live.pages - 2;
+  await compare(Array(Math.min(pages - 1, 8)).fill(1));
+  await compare([-1, -1]);
+
+  // Across a chapter boundary and back (the live paginator loads the
+  // chapter the ghost already showed).
+  const chapters = await seedFixture(page.request, CHAPTER_ANCHORS_BOOK);
+  await openBook(
+    page,
+    chapters,
+    { turn: "slide", font: "sans" },
+    CHAPTER_ANCHORS_BOOK,
+  );
+  await goTo(page, { index: 0, fraction: 1 });
+  await expect.poll(async () => (await layers(page)).live.index).toBe(0);
+  await ghostReady(page, 1);
+  await compare([1]);
+  expect((await layers(page)).live.index).toBe(1);
+  await ghostReady(page, -1);
+  await compare([-1]);
+  expect((await layers(page)).live.index).toBe(0);
+});
+
+test("just after a slide, a tap on a link of the page shown turns nothing", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(page.request, LONG_CHAPTERS_BOOK);
+  await openBook(page, bookId, { turn: "slide" }, LONG_CHAPTERS_BOOK);
+  const cdp = await context.newCDPSession(page);
+  await goTo(page, { index: 0, fraction: 1 });
+  await expect
+    .poll(async () => {
+      const { live } = await layers(page);
+      return live.index === 0 && live.page === live.pages - 2;
+    })
+    .toBe(true);
+  await ghostReady(page, 1);
+  // The next chapter's heading, in the ghost that will show it, made a
+  // link: it lies in the tap zone that turns back.
+  const at = await page.evaluate(() => {
+    const { core } = window.__beepubReaderNG;
+    const ghost = core.ghostFor(1);
+    const doc: Document = ghost.getContents()[0].doc;
+    const h1 = doc.querySelector("h1")!;
+    h1.innerHTML = `<a href="#nowhere">${h1.textContent}</a>`;
+    const frame = (
+      doc.defaultView!.frameElement as HTMLIFrameElement
+    ).getBoundingClientRect();
+    const r = h1.querySelector("a")!.getBoundingClientRect();
+    return { x: frame.left + r.left + 12, y: frame.top + r.top + r.height / 2 };
+  });
+  expect(at.x).toBeLessThan(90);
+  const from = (await slideLog(page)).length;
+  await page.keyboard.press("PageDown");
+  await expect.poll(async () => (await whereabouts(page)).index).toBe(1);
+  expect((await whereabouts(page)).covered).toBe(true);
+  await touchTap(cdp, at, 40);
+  // Nothing turned; the live page was brought up for the next tap.
+  await expect.poll(() => settled(page)).toBe(true);
+  expect((await layers(page)).live).toMatchObject({ index: 1, page: 1 });
+  expect(await slideLog(page, from)).toMatchObject({ slid: 1, sprung: 0 });
+  await page.waitForTimeout(400);
+  expect((await layers(page)).live).toMatchObject({ index: 1, page: 1 });
+});
+
 test("the fade mode builds no second rendering, and switching modes builds and removes it", async ({
   page,
   context,

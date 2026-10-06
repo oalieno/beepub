@@ -36,9 +36,17 @@
  * A ghost never becomes the live page. A completed turn ends with the
  * ghost lying over the live paginator — the cover — while that makes the
  * same turn underneath with its own page arithmetic; once the live page
- * has painted, the cover goes back under. Every position the reader
- * reports, saves or selects in is therefore the live paginator's, exactly
+ * has painted, the cover goes back under. Selections, links and the
+ * layout a setting changes are therefore the live paginator's, exactly
  * as without the slide.
+ *
+ * The page the reader is ON, though, is the one the sheets show. While a
+ * cover is up that is the cover's page, and it is reported as such
+ * (`shown`) the moment the turn lands: the chapter named in the chrome,
+ * the progress, the position saved all follow what is on screen, not a
+ * live paginator that may still be a chapter behind. When the live page
+ * has caught up and the cover goes (`uncovered`), its own report of the
+ * same page takes over.
  *
  * The live paginator's turn into another chapter is a load — the whole
  * chapter laid out, with the page's own thread busy for as long — and
@@ -104,6 +112,21 @@ export interface SlideHost {
   ): void;
   /** A ghost was taken down. */
   ongone(ghost: PaginatorElement): void;
+  /** The page the reader is on is now a ghost's (the cover's): what
+   *  that paginator reports of it — after a turn, or (`turned` false)
+   *  because the cover was laid out again. */
+  shown(detail: Shown, turned: boolean): void;
+  /** The cover is gone: the page on screen is the live paginator's
+   *  again. */
+  uncovered(): void;
+}
+
+/** A page as its paginator reports it on a relocation. */
+export interface Shown {
+  index: number;
+  range: Range | null;
+  fraction?: number;
+  size?: number;
 }
 
 /** What became of a turn, for probes and tests: it slid, sprang back
@@ -223,8 +246,8 @@ class Ghost {
   readonly el: PaginatorElement;
   /** The section it is in, or on its way to. */
   section: number | null = null;
-  /** What it last reported showing — for probes. */
-  shown: { index: number; range: Range | null } | null = null;
+  /** What it last reported showing. */
+  shown: Shown | null = null;
   /** A step is under way. */
   busy = false;
   /** A step never reported: the ghost is to be replaced. */
@@ -246,6 +269,7 @@ class Ghost {
     background: string,
     agrees: (index: number, pages: number) => boolean,
     loaded: (index: number, ms: number) => void,
+    relocated: (ghost: Ghost) => void,
   ) {
     this.#agrees = agrees;
     this.#loaded = loaded;
@@ -313,8 +337,9 @@ class Ghost {
       host.onoverlayer((e as CustomEvent).detail, el),
     );
     el.addEventListener("relocate", (e) => {
-      const { index, range } = (e as CustomEvent).detail;
-      this.shown = { index, range: range ?? null };
+      const { index, range, fraction, size } = (e as CustomEvent).detail;
+      this.shown = { index, range: range ?? null, fraction, size };
+      relocated(this);
     });
     this.el = el;
   }
@@ -494,6 +519,8 @@ export class CoverSlide {
   #background = "";
   #concealed = false;
   #relocating: ReturnType<typeof setTimeout> | null = null;
+  /** Callers waiting for the live paginator to have caught up. */
+  #flushed: (() => void)[] = [];
   #log: SlideEvent[] = [];
 
   // The finger.
@@ -560,6 +587,41 @@ export class CoverSlide {
     return this.#ghosts.find((g) => g.section === target.index)?.el ?? null;
   }
 
+  /** A ghost lies over the live paginator: the page on screen is its. */
+  get covering(): boolean {
+    return !!this.#cover;
+  }
+
+  /** That ghost. */
+  get cover(): PaginatorElement | null {
+    return this.#cover?.el ?? null;
+  }
+
+  /** Have the live paginator catch up with the page shown now, whatever
+   *  it was waiting for; resolves once the page on screen is its own. */
+  flush(): Promise<void> {
+    if (!this.#cover) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.#flushed.push(resolve);
+      this.#catchUp(true);
+    });
+  }
+
+  /** Tell the reader which page the cover shows. */
+  #report(turned: boolean) {
+    const cover = this.#cover;
+    const shown = cover?.shown;
+    if (cover && shown && shown.index === cover.index)
+      this.#host.shown(shown, turned);
+  }
+
+  #released(uncovered: boolean) {
+    if (uncovered) this.#host.uncovered();
+    const waiting = this.#flushed;
+    this.#flushed = [];
+    for (const resolve of waiting) resolve();
+  }
+
   /** What became of the last turns (see SlideEvent). */
   get log(): SlideEvent[] {
     return this.#log;
@@ -608,6 +670,12 @@ export class CoverSlide {
         }
       },
       (index, ms) => this.#note({ at: this.#now(), load: index, ms }),
+      // The cover laid out again (a setting, a rotation): the page the
+      // reader is on is what it shows now.
+      (ghost) => {
+        if (ghost === this.#cover && this.#state === "idle")
+          this.#report(false);
+      },
     );
     if (this.#concealed) ghost.el.style.visibility = "hidden";
     container.insertBefore(ghost.el, this.#dim);
@@ -981,6 +1049,8 @@ export class CoverSlide {
       this.#owed += dir;
     }
     this.#flat();
+    // The reader is on the cover's page from this moment.
+    if (to === 1) this.#report(true);
     this.#settled();
   }
 
@@ -1097,6 +1167,7 @@ export class CoverSlide {
     this.#dwell = null;
     this.#flat();
     this.#host.live.style.pointerEvents = "";
+    this.#released(true);
     return true;
   }
 
@@ -1132,6 +1203,7 @@ export class CoverSlide {
     const animations = this.#animations;
     this.#animations = [];
     for (const a of animations) a.cancel();
+    const covered = !!this.#cover;
     this.#cover = null;
     this.#owed = 0;
     this.#chasing = false;
@@ -1141,6 +1213,9 @@ export class CoverSlide {
     this.#letGo();
     this.#flat();
     this.#host.live.style.pointerEvents = "";
+    // (The live paginator is on screen again wherever it had got to:
+    // the caller, who is navigating, says where it goes from here.)
+    if (covered) this.#released(false);
   }
 
   // ---------------------------------------------------------------- turns
