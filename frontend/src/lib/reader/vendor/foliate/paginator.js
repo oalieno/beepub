@@ -960,6 +960,10 @@ export class Paginator extends HTMLElement {
     }
     async #display(promise) {
         const { index, src, anchor, onLoad, select } = await promise
+        // BeePub: a section that failed to load ({} from the callers'
+        // catch) changes nothing — the page on screen stays the page the
+        // paginator is on.
+        if (index == null) return
         this.#index = index
         const hasFocus = this.#view?.document?.hasFocus()
         if (src) {

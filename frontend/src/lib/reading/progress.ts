@@ -49,16 +49,21 @@ export function percentFromPosition(
   fractionInSection: number,
 ): number {
   if (weights.length === 0) return 0;
+  // A position that is not one (no section, no fraction) is the start of
+  // the book: the result is always a number.
+  const at = Number.isFinite(sectionIndex) ? Math.trunc(sectionIndex) : 0;
+  const fraction = Number.isFinite(fractionInSection) ? fractionInSection : 0;
   let total = 0;
   let before = 0;
   for (let i = 0; i < weights.length; i++) {
     total += weights[i]!;
-    if (i < sectionIndex) before += weights[i]!;
+    if (i < at) before += weights[i]!;
   }
-  if (total <= 0) return 0;
-  const index = Math.min(weights.length - 1, Math.max(0, sectionIndex));
-  const within = clamp01(fractionInSection) * weights[index]!;
-  return Math.min(100, Math.max(0, ((before + within) / total) * 100));
+  if (!(total > 0)) return 0;
+  const index = Math.min(weights.length - 1, Math.max(0, at));
+  const within = clamp01(fraction) * weights[index]!;
+  const percent = ((before + within) / total) * 100;
+  return Number.isFinite(percent) ? Math.min(100, Math.max(0, percent)) : 0;
 }
 
 /** The inverse: which section (and how far into it) a percentage lands on.

@@ -26,6 +26,7 @@
   import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
   import type { BookLoader } from "$lib/reader/loaders";
   import { verifyAnchors } from "$lib/reader/anchor";
+  import { isSectionLoadError } from "$lib/reader/load-error";
   import { unwrapBoundaries, wholeText } from "$lib/reader/tcy";
   import {
     activeTocEntry,
@@ -51,6 +52,7 @@
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
   import type { SearchResult } from "./EpubReader.svelte";
+  import Spinner from "$lib/components/Spinner.svelte";
   import FootnotePopup from "./FootnotePopup.svelte";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
@@ -114,6 +116,8 @@
     onillustrate,
     onillustrationschange,
     onillustrationclick,
+    onloadfailure,
+    onunavailable,
   }: {
     bookId: string;
     source: BookSource;
@@ -208,6 +212,14 @@
     onillustrationschange?: (illustrations: IllustrationOut[]) => void;
     /** A completed illustration's marker was tapped. */
     onillustrationclick?: (illustration: IllustrationOut) => void;
+    /** A chapter the reader asked for could not be loaded (true) — they
+     *  are still where they were, and `retryLoad()` asks again — or that
+     *  is over (false: they moved on, retried, or dismissed it). */
+    onloadfailure?: (failed: boolean) => void;
+    /** The TOC hrefs whose chapter cannot be shown right now: the book
+     *  is streamed, the connection is gone and the chapter's document is
+     *  not in memory. Empty otherwise. Kept current. */
+    onunavailable?: (hrefs: string[]) => void;
   } = $props();
 
   let wrapper: HTMLDivElement;
@@ -646,7 +658,10 @@ ${darkOverrides}
     return usableWeights(sectionWeights, core?.book?.sections.length ?? 0);
   }
 
+  /** A whole number 0..100, whatever comes in: a percentage that is not
+   *  a number is shown and saved as none of the book read, never as NaN. */
   function clampPercentage(value: number): number {
+    if (!Number.isFinite(value)) return 0;
     return Math.min(100, Math.max(0, Math.round(value)));
   }
 
@@ -721,9 +736,10 @@ ${darkOverrides}
   }
 
   function handleRelocate(r: Relocation) {
-    onrelocate?.(r);
     const c = core;
-    if (!c) return;
+    // (Never a place the reader is: a report without a section.)
+    if (!c || !Number.isInteger(r.index) || !c.book?.sections[r.index]) return;
+    onrelocate?.(r);
     // Any move but a switch's own landing (and the re-anchoring that
     // follows a layout change) leaves the switch's place behind.
     if (!switchingWritingMode && r.reason !== "anchor")
@@ -757,6 +773,8 @@ ${darkOverrides}
     if (userMove) {
       userNavigated = true;
       peekSaveHold = false;
+      // Reading on: a chapter that would not load is behind them.
+      clearFailure();
     }
     const wasAtEnd = isAtEnd;
     isAtEnd = r.index === c.lastLinearIndex() && page >= pages;
@@ -883,15 +901,113 @@ ${darkOverrides}
     }
   }
 
+  // ------------------------------------------- waiting for a chapter
+
+  // A destination in a chapter that still has to be fetched is waited
+  // for (the core keeps the reader on the page they came from meanwhile)
+  // and a wait that gets long says so: a small spinner, only once it has
+  // lasted this long.
+  const SPINNER_DELAY_MS = 400;
+  let showSpinner = $state(false);
+  let spinnerTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handlePending(waiting: boolean) {
+    if (spinnerTimer) clearTimeout(spinnerTimer);
+    spinnerTimer = null;
+    if (!waiting) {
+      showSpinner = false;
+      return;
+    }
+    spinnerTimer = setTimeout(() => {
+      spinnerTimer = null;
+      showSpinner = true;
+    }, SPINNER_DELAY_MS);
+  }
+
+  // Whether the book comes over the network section by section (a copy
+  // on the device never waits and never fails this way).
+  let streamed = false;
+  // The destination that could not be loaded, as a way to ask again.
+  let failure: { retry: () => unknown } | null = null;
+
+  function setFailure(retry: () => unknown) {
+    failure = { retry };
+    onloadfailure?.(true);
+  }
+
+  function clearFailure() {
+    if (!failure) return;
+    failure = null;
+    onloadfailure?.(false);
+  }
+
+  /** The page shows the notice; this is its "try again". */
+  export function retryLoad() {
+    const f = failure;
+    if (!f) return;
+    clearFailure();
+    return f.retry();
+  }
+
+  export function dismissLoadFailure() {
+    clearFailure();
+  }
+
+  type Outcome = "reached" | "unresolved" | "failed";
+
+  /**
+   * Go to `target`. "unresolved": it names nothing in this book (or no
+   * place in its section) — the caller may know a coarser one. "failed":
+   * its chapter could not be loaded, or the reader went elsewhere first;
+   * they are where they were, nothing about their place has changed, and
+   * (for a failed load) the notice offers `again`.
+   *
+   * Offline, a chapter known not to be in memory is not even asked for:
+   * the answer is already known, and comes at once.
+   */
+  async function reach(
+    target: NavInput,
+    again: () => unknown,
+  ): Promise<Outcome> {
+    const c = core;
+    if (!c) return "failed";
+    if (offline && streamed) {
+      const index = c.resolve(target)?.index;
+      if (index != null && !c.sectionAvailable(index)) {
+        setFailure(again);
+        return "failed";
+      }
+    }
+    try {
+      if ((await c.goTo(target)) == null) return "unresolved";
+      clearFailure();
+      return "reached";
+    } catch (e) {
+      if (!isSectionLoadError(e)) return "unresolved";
+      // (The core has reported the failure; asking again goes the way
+      // the reader came.)
+      if (!e.abandoned && failure) failure.retry = again;
+      return "failed";
+    }
+  }
+
+  /** A turn's chapter could not be loaded (a jump's failure passes
+   *  through reach(), which then puts its own way back in). */
+  function handleLoadFail() {
+    setFailure(() => core?.retry().catch(() => null));
+  }
+
   /** Programmatic navigation that must not count as reading. Resolves to
-   *  whether the target was reached. */
+   *  whether the target was reached; rejects when its chapter could not
+   *  be loaded (the book cannot be opened there). */
   async function navigateQuietly(target: NavInput): Promise<boolean> {
     const c = core;
     if (!c) return false;
     restoringProgress = true;
     try {
       return (await c.goTo(target)) != null;
-    } catch {
+    } catch (e) {
+      if (isSectionLoadError(e)) throw e;
       return false;
     } finally {
       restoringProgress = false;
@@ -900,7 +1016,9 @@ ${darkOverrides}
 
   /** Open at the saved position: the explicit target as a visit, else the
    *  saved CFI, else (the file was rewritten since it was recorded) the
-   *  stored percentage, else the first section. */
+   *  stored percentage, else the first section. A chapter that does not
+   *  load ends the attempt — opening somewhere else instead would put the
+   *  reader, and soon their saved place, where they never were. */
   async function restorePosition(c: ReaderCore, saved: SavedProgress | null) {
     sectionPageCounts = (saved?.sectionPageCounts ?? []).map((n) =>
       typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0,
@@ -919,46 +1037,70 @@ ${darkOverrides}
     }
     if (saved?.cfi) {
       if (await navigateQuietly(saved.cfi)) return;
-      if (
-        saved.percentage != null &&
-        (await displayPercentage(saved.percentage))
-      ) {
-        onrestorefallback?.(saved.percentage);
-        return;
+      const landing =
+        saved.percentage != null ? percentTarget(saved.percentage) : null;
+      if (saved.percentage != null && landing) {
+        dismissMenu();
+        if (await navigateQuietly(landing)) {
+          onrestorefallback?.(saved.percentage);
+          return;
+        }
       }
     }
     await navigateQuietly(c.firstLinearIndex());
   }
 
+  /** Where a percentage lands on the weight scale: the section, and the
+   *  fraction of it. */
+  function percentTarget(pct: number): NavInput | null {
+    if (!core?.book) return null;
+    const weights = progressWeights();
+    if (!weights.length) return null;
+    const { sectionIndex, fraction } = positionFromPercent(weights, pct);
+    return { index: sectionIndex, fraction };
+  }
+
+  async function reachPercentage(
+    pct: number,
+    again: () => unknown,
+  ): Promise<Outcome> {
+    const target = percentTarget(pct);
+    if (!target) return "unresolved";
+    dismissMenu();
+    return reach(target, again);
+  }
+
   /** Seek to a percentage on the weight scale: the section it lands in,
    *  then the page at that fraction of it. */
   export async function displayPercentage(pct: number): Promise<boolean> {
-    const c = core;
-    if (!c?.book) return false;
-    const weights = progressWeights();
-    if (!weights.length) return false;
-    const { sectionIndex, fraction } = positionFromPercent(weights, pct);
-    dismissMenu();
-    try {
-      return (await c.goTo({ index: sectionIndex, fraction })) != null;
-    } catch {
-      return false;
-    }
+    const outcome = await reachPercentage(pct, () => displayPercentage(pct));
+    return outcome === "reached";
+  }
+
+  /** A move the reader makes themselves ends a peek and counts as
+   *  reading from the moment it is asked for — unless it never happens
+   *  (its chapter does not load): then nothing has changed. */
+  async function asReader(move: () => Promise<Outcome>): Promise<boolean> {
+    const before = { userNavigated, peekSaveHold };
+    userNavigated = true;
+    peekSaveHold = false;
+    const outcome = await move();
+    if (outcome === "failed") ({ userNavigated, peekSaveHold } = before);
+    return outcome === "reached";
   }
 
   /** The scrubber: a seek is the reader choosing to read elsewhere. */
   export function seekPercentage(pct: number): Promise<boolean> {
-    userNavigated = true;
-    peekSaveHold = false;
-    return displayPercentage(pct);
+    return asReader(() => reachPercentage(pct, () => seekPercentage(pct)));
   }
 
   /** Navigate as the reader (TOC, search): ends a peek, counts as a move. */
-  export function displayCfi(target: NavInput) {
-    userNavigated = true;
-    peekSaveHold = false;
+  export function displayCfi(
+    target: NavInput,
+    again: () => unknown = () => displayCfi(target),
+  ): Promise<boolean> {
     dismissMenu();
-    return core?.goTo(target).catch(() => null);
+    return asReader(() => reach(target, again));
   }
 
   export function getCurrentCfi(): string {
@@ -974,19 +1116,24 @@ ${darkOverrides}
 
   export async function returnFromPeek() {
     const c = core;
-    if (!peekReturn || !c) return;
-    const { cfi, percentage } = peekReturn;
+    const peek = peekReturn;
+    if (!peek || !c) return;
+    const { cfi, percentage } = peek;
     peekReturn = null;
     peekSaveHold = false;
     onpeekchange?.(null);
     dismissMenu();
-    let landed = false;
-    try {
-      landed = (await c.goTo(cfi)) != null;
-    } catch {
-      landed = false;
+    const again = () => returnFromPeek();
+    let outcome = await reach(cfi, again);
+    if (outcome === "unresolved" && percentage != null)
+      outcome = await reachPercentage(percentage, again);
+    // The way back did not load: still visiting, the way back still
+    // offered.
+    if (outcome === "failed" && !peekReturn) {
+      peekReturn = peek;
+      peekSaveHold = true;
+      onpeekchange?.({ percentage });
     }
-    if (!landed && percentage != null) await displayPercentage(percentage);
   }
 
   /**
@@ -1062,6 +1209,29 @@ ${darkOverrides}
   let tocEntries: TocEntry[] = [];
   let activeTocHref: string | null = null;
 
+  // Which entries lead to a chapter that cannot be shown right now: the
+  // connection is gone and the chapter's document is not in memory.
+  // Re-derived when the connection changes and whenever one more
+  // section's document arrives — never by asking the network.
+  let tocVersion = $state(0);
+  let availability = $state(0);
+  let unavailableKey = "";
+  $effect(() => {
+    void tocVersion;
+    void availability;
+    const c = core;
+    const hrefs =
+      c && offline && untrack(() => streamed)
+        ? tocEntries
+            .filter((entry) => !c.sectionAvailable(entry.index))
+            .map((entry) => entry.href)
+        : [];
+    const key = hrefs.join("\n");
+    if (key === unavailableKey) return;
+    unavailableKey = key;
+    onunavailable?.(hrefs);
+  });
+
   function trackChapter(index: number, range: Range | null) {
     const entry = activeTocEntry(tocEntries, index, range);
     const href = entry?.href ?? null;
@@ -1125,8 +1295,8 @@ ${darkOverrides}
    *  the page like any highlight and never touches the section DOM. */
   export async function displaySearchResult(cfi: string) {
     clearSearchFlash();
-    await displayCfi(cfi);
-    if (destroyed) return;
+    const reached = await displayCfi(cfi, () => displaySearchResult(cfi));
+    if (destroyed || !reached) return;
     layer?.set({
       key: SEARCH_FLASH_KEY,
       cfi,
@@ -1481,15 +1651,25 @@ ${darkOverrides}
   /** Jump to a highlight as a visit: the pre-jump position stays the
    *  saved progress (and the pill's return target) until the reader turns
    *  a page. One known to be un-anchorable jumps to its section instead. */
-  export function displayHighlight(hl: HighlightOut) {
+  export async function displayHighlight(hl: HighlightOut) {
     dismissMenu();
-    if (!peekSaveHold) startPeek(currentCfi || null, currentPercentage);
+    const before = { userNavigated, peek: peekReturn };
+    const visiting = peekSaveHold;
+    if (!visiting) startPeek(currentCfi || null, currentPercentage);
     userNavigated = true;
-    if (brokenHighlightIds.has(hl.id)) {
-      const index = sectionIndexOf(hl);
-      if (index != null) return core?.goTo(index).catch(() => null);
+    const index = brokenHighlightIds.has(hl.id) ? sectionIndexOf(hl) : null;
+    const outcome = await reach(index ?? hl.cfi_range, () =>
+      displayHighlight(hl),
+    );
+    // Its chapter did not load: no visit began.
+    if (outcome === "failed") {
+      userNavigated = before.userNavigated;
+      if (!visiting && peekReturn && peekReturn !== before.peek) {
+        peekReturn = before.peek;
+        peekSaveHold = false;
+        onpeekchange?.(null);
+      }
     }
-    return core?.goTo(hl.cfi_range).catch(() => null);
   }
 
   // --------------------------------------------------- selection + menu
@@ -1909,6 +2089,9 @@ ${darkOverrides}
       onoverlayer: ({ doc, index, overlayer }) =>
         layer?.attach(overlayer, doc, index),
       onlink: handleLink,
+      onpending: handlePending,
+      onloadfail: handleLoadFail,
+      onavailable: () => (availability += 1),
       onghostload: handleGhostLoad,
       // Saved highlights and illustration markers ride along on every
       // ghost's overlayer: a mark must not vanish while its page slides.
@@ -1941,6 +2124,7 @@ ${darkOverrides}
     };
     try {
       const payload = await source.openBook(bookId);
+      streamed = payload.kind === "stream";
       const { loaderFromPayload } = await import("$lib/reader/loaders");
       const loader = await loaderFromPayload(payload);
       // The list loads alongside the book; a failure leaves the page
@@ -1970,6 +2154,7 @@ ${darkOverrides}
       // Before the first relocation, so the restore already reports the
       // chapter it lands in.
       tocEntries = flattenToc(book, book.toc);
+      tocVersion += 1;
       ontoc?.(book.toc ?? []);
       const devicePos = saved?.devicePosition;
       if (!initialCfi && typeof devicePos?.percentage === "number") {
@@ -2042,6 +2227,7 @@ ${darkOverrides}
     if (progressTimer) clearInterval(progressTimer);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     if (flashTimer) clearTimeout(flashTimer);
+    if (spinnerTimer) clearTimeout(spinnerTimer);
     window.removeEventListener("beforeunload", handleBeforeUnload);
     void saveProgress(false);
     healAbort?.abort();
@@ -2083,6 +2269,20 @@ ${darkOverrides}
     class="relative isolate h-full w-full overflow-hidden"
     onclick={handleMarginClick}
   ></div>
+
+  {#if showSpinner}
+    <!-- A chapter is on its way and has been for a moment. Over the
+         page, taking no room and no touches. -->
+    <div
+      class="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+      data-testid="reader-pending"
+    >
+      <Spinner
+        size="sm"
+        class="opacity-70 {darkMode ? 'border-ink-500' : 'border-ink-300'}"
+      />
+    </div>
+  {/if}
 
   {#if showMenu}
     <div

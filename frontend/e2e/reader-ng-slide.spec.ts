@@ -566,7 +566,7 @@ test("the very first turn slides, before the second rendering has loaded", async
   expect(await turns(page)).toEqual(["live:slide"]);
 });
 
-test("a page no ghost has yet: a finger lifted before it is there still gets its slide; one that takes too long fades instead", async ({
+test("a page no ghost has yet: a finger lifted before it is there still gets its slide; one that takes long slides over bare paper", async ({
   page,
   context,
 }) => {
@@ -685,37 +685,41 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
   await expect.poll(() => settled(page)).toBe(true);
   expect(await turns(page)).toEqual(["ghost:slide"]);
 
-  // Too slow (well past the wait): the turn does not hang on the ghost —
-  // it fades, and lands on the same page. Two more turns asked for while
-  // it fades are not lost: the later one is made when the fade is over.
+  // Too slow (well past the wait): the turn does not hang on the ghost
+  // and does not change its kind either — it slides, a sheet of bare
+  // paper standing in for the page, which comes up on it when it is
+  // there.
   await page.evaluate(() => window.__restoreLoad!());
   await arrive(900, "ask");
   await touchDown(cdp, at(330));
   await touchMove(cdp, at(330), at(210), 4);
   await touchUp(cdp);
-  await expect
-    .poll(async () => (await turns(page)).includes("live:fade"))
-    .toBe(true);
+  const paper = () =>
+    page.evaluate(() => {
+      const blank = document.querySelector<HTMLElement>("[data-beepub-blank]")!;
+      return (
+        getComputedStyle(blank).display !== "none" &&
+        blank.getBoundingClientRect().left === 0
+      );
+    });
+  await expect.poll(paper).toBe(true);
   expect(
     await page.evaluate(() => {
       const { core } = window.__beepubReaderNG;
-      const last = core.slideLog[core.slideLog.length - 1];
-      return [last.how, last.why];
+      const last = core.slideLog.filter((e: any) => e.how).at(-1);
+      return [last.how, last.blank];
     }),
-  ).toEqual(["fade", "wait"]);
-  await page.evaluate(() => {
-    const { core } = window.__beepubReaderNG;
-    void core.next();
-    void core.prev();
-  });
+  ).toEqual(["slide", true]);
   await expect
     .poll(async () => {
       const { live } = await layers(page);
       return [live.index, live.pages - 2 - live.page];
     })
-    .toEqual([0, 1]);
+    .toEqual([0, 0]);
   await expect.poll(() => settled(page)).toBe(true);
-  expect((await turns(page)).slice(0, 2)).toEqual(["live:fade", "live:fade"]);
+  expect(await paper()).toBe(false);
+  expect((await layers(page)).live.text).toBe(end.text);
+  expect((await turns(page)).filter((t) => t.endsWith("fade"))).toEqual([]);
 
   // The ghosts catch up afterwards and the next turn slides again.
   await page.evaluate(() => window.__restoreLoad!());
@@ -727,7 +731,7 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
       const { live } = await layers(page);
       return [live.index, live.pages - 2 - live.page];
     })
-    .toEqual([0, 2]);
+    .toEqual([0, 1]);
   await expect.poll(() => settled(page)).toBe(true);
   expect(await turns(page)).toEqual(["ghost:slide"]);
 });
@@ -783,13 +787,16 @@ test("a ghost whose section never arrives is replaced, and the slide comes back"
     .toBe(true);
   await watchTurns(page);
   await page.keyboard.press("PageUp");
-  await expect.poll(async () => (await layers(page)).live.index).toBe(0);
+  // The turn slides onto bare paper and waits there; when the step is
+  // given up for lost a new ghost takes it over, and the page comes.
+  // Nothing fades.
+  await expect
+    .poll(async () => (await layers(page)).live.index, { timeout: 20_000 })
+    .toBe(0);
   await expect.poll(() => settled(page)).toBe(true);
-  expect(await turns(page)).toEqual(["live:fade", "live:fade"]);
+  expect((await turns(page)).filter((t) => t.endsWith("fade"))).toEqual([]);
 
-  // Past the point where the step is given up for lost, the next turn
-  // gets a new ghost…
-  await page.waitForTimeout(5500);
+  // The ghost that stalled is gone…
   const before = (await layers(page)).live;
   await page.keyboard.press("PageUp");
   await expect

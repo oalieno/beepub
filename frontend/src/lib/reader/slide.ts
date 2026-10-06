@@ -63,10 +63,19 @@
  *
  * A page no ghost has (a jump into a chapter's edge, the first turn
  * after opening) is waited for, briefly (READY_WAIT_MS); a finger already
- * pulling is joined by the sheet the moment the page is there. Only a
- * ghost that does not make it in that time (or whose layout disagrees
- * with the live one on the page count) hands the turn back to the
- * caller, which fades instead.
+ * pulling is joined by the sheet the moment the page is there.
+ *
+ * A page that is still not there — its chapter is being fetched — does
+ * not change the turn: it slides all the same, with a sheet of bare
+ * paper standing in for the page (the page on screen slides away off it,
+ * or it slides in over the page on screen), and the page's content
+ * fades in on that sheet when it has come. Nothing else moves until
+ * then: the reader's page, the live paginator and what is owed to it are
+ * those of the page the reader came from, and if the chapter fails to
+ * load, or the reader turns back first, the paper goes away again and
+ * that page is where they are (`failed` tells the host, which says so
+ * to the reader). Only two layouts that disagree on a section's page
+ * count hand a turn back to the caller, which fades it instead.
  */
 import type { Book, BookSection, NavTarget, PaginatorElement } from "./core";
 
@@ -93,8 +102,15 @@ export interface SlideHost {
   turnLive(dir: Dir): Promise<void>;
   /** A turn that waited for the one before it: asked for again. */
   request(dir: Dir): void;
-  /** A turn the slide cannot show after all: fade this one. */
+  /** A turn the slide cannot show (its layout of the section and the
+   *  live one disagree on the page count): fade this one. */
   fallback(dir: Dir): void;
+  /** A turn is waiting, on bare paper, for its page (true) — or no
+   *  longer (false). */
+  pending(waiting: boolean): void;
+  /** The section of the page a turn `dir` leads to could not be loaded.
+   *  The reader is on the page the turn began from. */
+  failed(index: number, dir: Dir): void;
   /** The text the live paginator has on screen. */
   visible(): Range | null;
   /** A section loaded into a ghost, before it is laid out. */
@@ -135,8 +151,9 @@ export interface Shown {
  *  ghost had stalled) — and the sections put into ghosts, with how long
  *  each took. */
 export type SlideEvent =
-  | { at: number; dir: Dir; how: "slide" | "spring" }
-  | { at: number; dir: Dir; how: "fade"; why: "wait" | "pages" | "stall" }
+  | { at: number; dir: Dir; how: "slide" | "spring"; blank?: boolean }
+  | { at: number; dir: Dir; how: "fade"; why: "pages" }
+  | { at: number; dir: Dir; how: "failed" | "abandoned" }
   | { at: number; load: number; ms: number };
 
 /** A turn made without the finger, start to end. */
@@ -158,11 +175,17 @@ const SHADOW = "0 0 24px rgba(0, 0, 0, 0.3)";
  *  its fonts and pictures. */
 const LANDING_WAIT_MS = 300;
 /** How long a turn waits for a ghost that is still fetching its page
- *  (another section: an iframe load and a layout) before it fades
- *  instead. The top of what still reads as the page answering the hand —
- *  beyond a fifth of a second a reader takes the turn for missed and
- *  asks again. */
+ *  (another section: an iframe load and a layout) before it is played
+ *  over bare paper instead. The top of what still reads as the page
+ *  answering the hand — beyond a fifth of a second a reader takes the
+ *  turn for missed and asks again. */
 const READY_WAIT_MS = 200;
+/** The longest a turn stays on bare paper. A request that has stalled
+ *  is given up by the loader long before (loaders/server.ts); this only
+ *  bounds what nothing else does. */
+const PENDING_MAX_MS = 60_000;
+/** The page's content comes up on the paper over this long. */
+const ARRIVE_MS = 150;
 /** A sheet that joins a drag already under way reaches the finger over
  *  this long instead of jumping to it… */
 const CATCH_UP_MS = 110;
@@ -177,8 +200,10 @@ const SEEN_MS = CATCH_UP_MS + 90;
  *  and forth; short of the time it takes to begin reading the page (the
  *  page under a cover takes no selection and follows no link). */
 const DWELL_MS = 300;
-/** A step of a ghost that has not reported after this long never will
- *  (an iframe whose load event was lost): the ghost is replaced. */
+/** A step of a ghost that has not reported after this long may never
+ *  (an iframe whose load event was lost): the ghost is replaced. One
+ *  that was only waiting for a slow section loses nothing by it — its
+ *  successor joins the same load. */
 const STALL_MS = 5000;
 /** The neighbouring chapter gets its ghost this many pages before the
  *  boundary… */
@@ -204,6 +229,8 @@ const Z_LIVE = "3";
 const Z_COVER = "4";
 const Z_DIM_OVER = "5";
 const Z_OVER = "6";
+/** The bare paper, once the turn onto it has landed. */
+const Z_BLANK = "7";
 
 const LAYOUT_ATTRS = [
   "gap",
@@ -252,6 +279,9 @@ class Ghost {
   busy = false;
   /** A step never reported: the ghost is to be replaced. */
   stalled = false;
+  /** The section last asked of it could not be loaded. Asking again
+   *  tries again — once per request, never by itself. */
+  failed = false;
 
   #want: Target | null = null;
   #pump: Promise<void> | null = null;
@@ -427,6 +457,7 @@ class Ghost {
         if (this.at(target)) continue;
         const loads = this.index !== target.index;
         const started = performance.now();
+        if (loads) this.failed = false;
         const nav: NavTarget = {
           index: target.index,
           // A fraction, read off the ghost's own page count once the
@@ -437,26 +468,33 @@ class Ghost {
             return textPages > 1 ? (target.page - 1) / (textPages - 1) : 0;
           },
         };
+        // (A section that fails to load leaves the paginator as it was —
+        // the vendored guard — which is how it is told below.)
+        const step = ghost.goTo(nav).then(
+          () => "done" as const,
+          (e) => {
+            console.warn(e);
+            return "done" as const;
+          },
+        );
         let timer: ReturnType<typeof setTimeout> | undefined;
-        const stalled = await Promise.race([
-          ghost.goTo(nav).then(
-            () => false,
-            (e) => {
-              console.warn(e);
-              return false;
-            },
-          ),
-          new Promise<boolean>((resolve) => {
-            timer = setTimeout(() => resolve(true), STALL_MS);
+        const outcome = await Promise.race([
+          step,
+          new Promise<"stalled">((resolve) => {
+            timer = setTimeout(() => resolve("stalled"), STALL_MS);
           }),
         ]);
         clearTimeout(timer);
         if (this.#gone) return;
-        if (stalled) {
+        if (outcome === "stalled") {
           console.warn(
             new Error(`The slide's page for ${target.index} stalled`),
           );
           this.stalled = true;
+          return;
+        }
+        if (loads && this.index !== target.index) {
+          this.failed = true;
           return;
         }
         if (loads) {
@@ -490,14 +528,26 @@ class Ghost {
   }
 }
 
+/** What asking for a page came to: the ghost that has it, or why none
+ *  does — the wait is over, the two layouts disagree, the ghost's frame
+ *  stalled, only the cover could show it, its section failed to load —
+ *  or null once the turn was abandoned. */
+type Ready = Ghost | "wait" | "pages" | "stall" | "cover" | "failed" | null;
+
 export class CoverSlide {
   #host: SlideHost;
   #enabled = true;
   #ghosts: Ghost[] = [];
   #dim: HTMLDivElement;
   /** idle · drag (a sheet is the finger's) · prepare (a ghost is
-   *  stepping to the page a turn needs) · settle (the animation). */
-  #state: "idle" | "drag" | "prepare" | "settle" = "idle";
+   *  stepping to the page a turn needs) · settle (the animation) ·
+   *  pending (a turn has slid onto bare paper and waits for its page). */
+  #state: "idle" | "drag" | "prepare" | "settle" | "pending" = "idle";
+  /** The sheet of bare paper a turn slides over (or in) when its page
+   *  has not come yet. */
+  #blank: HTMLDivElement;
+  /** The way of the turn that is waiting on it. */
+  #pendingDir: Dir | 0 = 0;
   /** The ghost lying over the live paginator, showing the page the
    *  reader is on, until the live one has made the turns it is owed. */
   #cover: Ghost | null = null;
@@ -558,8 +608,19 @@ export class CoverSlide {
       zIndex: Z_DIM_UNDER,
     });
     this.#dim = dim;
+    const blank = document.createElement("div");
+    blank.setAttribute("aria-hidden", "true");
+    blank.setAttribute("data-beepub-blank", "");
+    Object.assign(blank.style, {
+      position: "absolute",
+      inset: "0",
+      display: "none",
+      zIndex: Z_BLANK,
+    });
+    this.#blank = blank;
     live.style.zIndex = Z_LIVE;
     container.insertBefore(dim, live);
+    container.append(blank);
   }
 
   /** The ghost a probe most likely means: the one in the turn under
@@ -717,6 +778,7 @@ export class CoverSlide {
     this.#relocating = null;
     this.#dropAll();
     this.#dim.remove();
+    this.#blank.remove();
     const { style } = this.#host.live;
     style.zIndex = "";
     style.background = "";
@@ -727,6 +789,7 @@ export class CoverSlide {
   setBackground(color: string) {
     this.#background = color;
     this.#host.live.style.background = color;
+    this.#blank.style.background = color;
     for (const ghost of this.#ghosts) ghost.el.style.background = color;
   }
 
@@ -865,8 +928,9 @@ export class CoverSlide {
   async #awaitReady(
     target: Target,
     generation: number,
-  ): Promise<Ghost | "wait" | "pages" | "stall" | "cover" | null> {
-    const deadline = performance.now() + READY_WAIT_MS;
+    wait = READY_WAIT_MS,
+  ): Promise<Ready> {
+    const deadline = performance.now() + wait;
     let misses = 0;
     for (;;) {
       const ghost = this.#ghostFor(target);
@@ -875,6 +939,7 @@ export class CoverSlide {
       await Promise.race([ghost.show(target), sleep(left)]);
       if (generation !== this.#generation) return null;
       if (ghost.ready(target)) return ghost;
+      if (ghost.failed && !ghost.busy) return "failed";
       if (ghost.stalled) return "stall";
       if (performance.now() >= deadline) return "wait";
       // The step is over without the page: the two layouts disagree on
@@ -929,18 +994,18 @@ export class CoverSlide {
 
   /** The two sheets of a turn `dir` onto `ghost`'s page, `p` of the way:
    *  the lower page number above, and moving. */
-  #arrange(dir: Dir, p: number, ghost: Ghost) {
+  #arrange(dir: Dir, p: number, sheet: HTMLElement) {
     const live = this.#host.live;
     const dim = this.#dim;
     const top = this.#top();
-    const upper = dir > 0 ? top : ghost.el;
-    const lower = dir > 0 ? ghost.el : top;
+    const upper = dir > 0 ? top : sheet;
+    const lower = dir > 0 ? sheet : top;
     for (const other of this.#ghosts) {
       if (other.el === upper || other.el === lower) continue;
       flatten(other.el);
       other.el.style.zIndex = Z_IDLE;
     }
-    ghost.el.style.visibility = "";
+    sheet.style.visibility = "";
     flatten(lower);
     if (upper === live) {
       lower.style.zIndex = Z_UNDER;
@@ -984,8 +1049,14 @@ export class CoverSlide {
     this.#stopCatchUp();
   }
 
-  async #animate(dir: Dir, from: number, to: number, ms: number, ghost: Ghost) {
-    const mover = dir > 0 ? this.#top() : ghost.el;
+  async #animate(
+    dir: Dir,
+    from: number,
+    to: number,
+    ms: number,
+    sheet: HTMLElement,
+  ) {
+    const mover = dir > 0 ? this.#top() : sheet;
     if (typeof mover.animate !== "function") return;
     const options = { duration: ms, easing: EASE_OUT };
     const animations = [
@@ -1036,8 +1107,8 @@ export class CoverSlide {
     this.#host.live.style.pointerEvents = "none";
     this.#note({ at: this.#now(), dir, how: to ? "slide" : "spring" });
     // The end state stands in the styles; the animation plays over it.
-    this.#arrange(dir, to, ghost);
-    if (from !== to) await this.#animate(dir, from, to, ms, ghost);
+    this.#arrange(dir, to, ghost.el);
+    if (from !== to) await this.#animate(dir, from, to, ms, ghost.el);
     if (generation !== this.#generation) return;
     this.#state = "idle";
     this.#letGo();
@@ -1209,9 +1280,12 @@ export class CoverSlide {
     this.#chasing = false;
     if (this.#dwell != null) clearTimeout(this.#dwell);
     this.#dwell = null;
+    const waiting = this.#state === "pending";
     this.#state = "idle";
     this.#letGo();
     this.#flat();
+    this.#putBlankAway();
+    if (waiting) this.#host.pending(false);
     this.#host.live.style.pointerEvents = "";
     // (The live paginator is on screen again wherever it had got to:
     // the caller, who is navigating, says where it goes from here.)
@@ -1247,6 +1321,11 @@ export class CoverSlide {
       case "prepare":
         this.#queue(dir);
         return true;
+      case "pending":
+        // The turn back gives the waiting turn up; the same turn again
+        // is already on its way.
+        if (dir === -this.#pendingDir) void this.#giveUp();
+        return true;
     }
     // A turn is already waiting for the live page under the cover.
     if (this.#pending) {
@@ -1277,6 +1356,11 @@ export class CoverSlide {
       this.#state = "idle";
       const queued = this.#pending;
       this.#pending = null;
+      if (result === "failed") {
+        // Known before anything moved: nothing does.
+        this.#fail(dir, target);
+        return;
+      }
       if (this.#cover || result === "cover") {
         // The page is the cover's own to show, or still on its way: the
         // turn is played once the live page has caught up. (Nothing
@@ -1286,15 +1370,143 @@ export class CoverSlide {
         else this.#catchUp(true);
         return;
       }
-      this.#note({
-        at: this.#now(),
-        dir,
-        how: "fade",
-        why: result === "pages" || result === "stall" ? result : "wait",
-      });
-      this.#host.fallback(dir);
-      if (queued) this.#host.request(queued);
+      if (result === "pages") {
+        this.#note({ at: this.#now(), dir, how: "fade", why: "pages" });
+        this.#host.fallback(dir);
+        if (queued) this.#host.request(queued);
+        return;
+      }
+      // The page is on its way: the turn is made onto bare paper. (A
+      // turn back asked for meanwhile has taken this one away.)
+      if (queued === -dir) {
+        this.#afterTurn();
+        return;
+      }
+      void this.#runBlank(dir, target);
     });
+  }
+
+  /** The section a turn leads into could not be loaded: every sheet as
+   *  it was, and the host is told. */
+  #fail(dir: Dir, target: Target) {
+    this.#note({ at: this.#now(), dir, how: "failed" });
+    this.#host.failed(target.index, dir);
+    // (No plan: the ghost would only ask for the same section again.
+    // The next turn, or the reader's own retry, does.)
+    if (this.#uncover()) this.#host.live.style.pointerEvents = "";
+    const pending = this.#pending;
+    this.#pending = null;
+    if (pending && pending !== dir) this.#host.request(pending);
+  }
+
+  #putBlankAway() {
+    const blank = this.#blank;
+    for (const a of blank.getAnimations?.() ?? []) a.cancel();
+    blank.style.display = "none";
+    blank.style.opacity = "";
+    flatten(blank);
+    this.#pendingDir = 0;
+  }
+
+  /**
+   * The turn `dir` to a page that has not come yet. It slides as any
+   * turn does, the bare paper standing in for the page; there it waits.
+   * When a ghost has the page, that ghost is laid under the paper as the
+   * cover — from that moment the turn is made, and reported — and the
+   * paper fades off it. If the section fails to load, the paper fades
+   * off the page the reader never left.
+   */
+  async #runBlank(dir: Dir, target: Target) {
+    const generation = this.#generation;
+    const blank = this.#blank;
+    const live = this.#host.live;
+    this.#state = "settle";
+    this.#pendingDir = dir;
+    live.style.pointerEvents = "none";
+    this.#note({ at: this.#now(), dir, how: "slide", blank: true });
+    blank.style.display = "";
+    blank.style.opacity = "";
+    this.#arrange(dir, 1, blank);
+    await this.#animate(dir, 0, 1, TURN_MS, blank);
+    if (generation !== this.#generation) return;
+    // Landed: the paper lies over everything, flat.
+    this.#flat();
+    flatten(blank);
+    blank.style.zIndex = Z_BLANK;
+    this.#state = "pending";
+    this.#host.pending(true);
+    let result: Ready = "wait";
+    const deadline = performance.now() + PENDING_MAX_MS;
+    for (;;) {
+      const left = deadline - performance.now();
+      result = await this.#awaitReady(target, generation, left);
+      // A ghost that stalled is replaced, and the wait goes on.
+      if (result !== "stall" || performance.now() >= deadline) break;
+    }
+    if (generation !== this.#generation) return;
+    this.#host.pending(false);
+    this.#state = "settle";
+    const arrived = result && typeof result === "object" ? result : null;
+    if (arrived) {
+      this.#lastDir = dir;
+      this.#cover = arrived;
+      this.#owed += dir;
+      this.#flat();
+      this.#report(true);
+    }
+    await this.#fadeBlank();
+    if (generation !== this.#generation) return;
+    this.#putBlankAway();
+    this.#state = "idle";
+    this.#letGo();
+    if (arrived) {
+      this.#settled();
+      return;
+    }
+    live.style.pointerEvents = "";
+    if (result === "pages") {
+      this.#note({ at: this.#now(), dir, how: "fade", why: "pages" });
+      this.#host.fallback(dir);
+    } else if (result === "cover") this.#host.request(dir);
+    else {
+      this.#note({ at: this.#now(), dir, how: "failed" });
+      this.#host.failed(target.index, dir);
+    }
+  }
+
+  async #fadeBlank() {
+    const blank = this.#blank;
+    if (typeof blank.animate !== "function") return;
+    const animation = blank.animate([{ opacity: 1 }, { opacity: 0 }], {
+      duration: ARRIVE_MS,
+      easing: "ease-out",
+      fill: "forwards",
+    });
+    const guard = setTimeout(() => animation.finish(), ARRIVE_MS + 150);
+    await animation.finished.catch(() => {});
+    clearTimeout(guard);
+  }
+
+  /** The reader turned back from the bare paper: the wait is over, and
+   *  the sheet slides back the way it came. The section may still
+   *  arrive, in its ghost, for the next time it is asked for. */
+  async #giveUp() {
+    const dir = this.#pendingDir;
+    if (this.#state !== "pending" || !dir) return;
+    const generation = ++this.#generation;
+    const blank = this.#blank;
+    this.#host.pending(false);
+    this.#note({ at: this.#now(), dir, how: "abandoned" });
+    this.#state = "settle";
+    this.#arrange(dir, 0, blank);
+    await this.#animate(dir, 1, 0, TURN_MS, blank);
+    if (generation !== this.#generation) return;
+    this.#putBlankAway();
+    this.#state = "idle";
+    this.#letGo();
+    this.#flat();
+    this.#host.live.style.pointerEvents = "";
+    this.#afterTurn();
   }
 
   /**
@@ -1390,7 +1602,7 @@ export class CoverSlide {
       else p *= 1 - (1 - t) ** 3;
     }
     this.#progress = p;
-    this.#arrange(dir, p, ghost);
+    this.#arrange(dir, p, ghost.el);
     if (this.#joinedAt && !this.#frame)
       this.#frame = requestAnimationFrame(() => {
         this.#frame = 0;
@@ -1438,6 +1650,12 @@ export class CoverSlide {
     const pulled = this.#pull();
     if (this.#state !== "drag") {
       if (this.#state === "idle") return false;
+      if (this.#state === "pending") {
+        // A swipe back from the bare paper gives the waiting turn up.
+        if (pulled && pulled === -this.#pendingDir && this.#swiped(pulled, vx))
+          void this.#giveUp();
+        return true;
+      }
       // A turn is finishing: this one follows it.
       if (pulled && this.#swiped(pulled, vx)) this.#queue(pulled);
       return true;

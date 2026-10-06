@@ -157,6 +157,16 @@ export const LONG_CHAPTERS_BOOK: Fixture = {
   readyText: "Signal log northgate entry 0001",
 };
 
+/** Nine vertical chapters, one per section and TOC entry (the last a
+ *  short 版權頁), some seventeen phone pages each; the fifth carries a
+ *  small inline picture. Enough sections that opening the book does not
+ *  fetch them all: the reader's prefetch reaches three ahead. */
+export const NINE_CHAPTERS_BOOK: Fixture = {
+  file: "e2e-nine-chapters-book.epub",
+  title: "渡船九日誌",
+  readyText: "啟航之章第1段",
+};
+
 /** Nested TOC with fragment entries, a same-file footnote, a cross-file
  *  note reference, a plain cross-file link, one unique search token
  *  ("quillstorm") and one frequent one ("lantern"). */

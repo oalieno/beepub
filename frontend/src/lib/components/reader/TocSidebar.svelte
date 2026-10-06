@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { X } from "@lucide/svelte";
+  import { CloudOff, X } from "@lucide/svelte";
   import { tick } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { RecapOut } from "$lib/types";
@@ -17,6 +17,8 @@
     darkMode = false,
     currentHref = "",
     loadRecap = null,
+    unavailable = null,
+    onunavailable,
     onchapter,
     onspine,
     onclose,
@@ -26,6 +28,12 @@
     currentHref?: string;
     // Server books only — null hides the recap tab entirely.
     loadRecap?: (() => Promise<RecapOut>) | null;
+    /** Hrefs of the entries whose chapter cannot be shown right now (a
+     *  streamed book, offline, the chapter not in memory). They are
+     *  marked, and a tap on one goes to `onunavailable` instead of
+     *  navigating; the sidebar stays open. */
+    unavailable?: Set<string> | null;
+    onunavailable?: (href: string) => void;
     onchapter?: (href: string) => void;
     onspine?: (spineIndex: number) => void;
     onclose?: () => void;
@@ -88,8 +96,10 @@
 {#snippet tocLevel(items: TocItem[], depth: number)}
   {#each items as item}
     {@const active = isActive(item.href)}
+    {@const missing = !!unavailable?.has(item.href)}
     <button
-      class="w-full text-left pr-3 rounded-lg transition-colors {depth === 0
+      class="flex w-full items-center gap-2 text-left pr-3 rounded-lg transition-colors {depth ===
+      0
         ? 'py-2 text-sm'
         : 'py-1.5 text-xs'} {active
         ? darkMode
@@ -104,12 +114,28 @@
             : 'hover:bg-accent text-muted-foreground'}"
       style="padding-left: {12 + depth * 16}px"
       data-toc-active={active ? "" : undefined}
+      data-toc-unavailable={missing ? "" : undefined}
+      aria-disabled={missing ? "true" : undefined}
+      title={missing ? m.reader_toc_unavailable() : undefined}
       onclick={() => {
+        if (missing) {
+          onunavailable?.(item.href);
+          return;
+        }
         onchapter?.(item.href);
         onclose?.();
       }}
     >
-      {item.label}
+      <span class="min-w-0 flex-1 {missing ? 'opacity-45' : ''}"
+        >{item.label}</span
+      >
+      {#if missing}
+        <CloudOff
+          size={14}
+          class="shrink-0 opacity-60"
+          aria-label={m.reader_toc_unavailable()}
+        />
+      {/if}
     </button>
     {#if item.subitems?.length}
       {@render tocLevel(item.subitems, depth + 1)}

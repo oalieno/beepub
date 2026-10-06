@@ -22,7 +22,7 @@
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
    * &turn=fade|slide|instant (instant — a bare jump — exists only here).
    */
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy, onMount, untrack } from "svelte";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
@@ -76,6 +76,7 @@
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
+  import ReaderLoadNotice from "$lib/components/reader/ReaderLoadNotice.svelte";
   import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
   import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
   import ReaderTopBar from "$lib/components/reader/ReaderTopBar.svelte";
@@ -159,11 +160,37 @@
     return () => clearTimeout(timer);
   });
   function retryLoad() {
+    loadFailed = false;
+    unavailableToc = new Set();
     loadError = false;
     rendered = false;
     claimed = null;
     readerKey += 1;
   }
+
+  // A streamed book's chapters come over the network as they are
+  // reached. The app's own connectivity store only watches on the native
+  // app (on the web it always says online), so the browser's word counts
+  // too.
+  let browserOnline = $state(browser ? navigator.onLine : true);
+  const readerOffline = $derived(!$isOnline || !browserOnline);
+  // A chapter the reader asked for could not be loaded: they are still
+  // where they were, and the notice offers to try again.
+  let loadFailed = $state(false);
+  // TOC entries whose chapter cannot be shown while offline.
+  let unavailableToc = $state<Set<string>>(new Set());
+  function retryChapter() {
+    activeSidebar = null;
+    void reader?.retryLoad();
+  }
+  // The connection is back while the notice still stands: ask once more,
+  // unprompted. Nothing happens by itself otherwise.
+  let wasOffline = false;
+  $effect(() => {
+    const off = readerOffline;
+    if (wasOffline && !off && untrack(() => loadFailed)) retryChapter();
+    wasOffline = off;
+  });
 
   // Auto reading status. Beepub books track it on the server interaction;
   // local books keep a device record that LWW-syncs once linked (and just
@@ -1086,7 +1113,11 @@
   <title>{m.reader_page_title({ title: title || "Reading" })}</title>
 </svelte:head>
 
-<svelte:window onkeydown={handleGlobalKeydown} />
+<svelte:window
+  onkeydown={handleGlobalKeydown}
+  ononline={() => (browserOnline = true)}
+  onoffline={() => (browserOnline = false)}
+/>
 
 <div
   class="flex h-[100dvh] min-h-0 flex-col {darkMode
@@ -1199,7 +1230,9 @@
             {sectionWeights}
             showAi={aiEnabled}
             aiBookId={aiEnabled ? aiBookId : null}
-            offline={!$isOnline}
+            offline={readerOffline}
+            onloadfailure={(failed) => (loadFailed = failed)}
+            onunavailable={(hrefs) => (unavailableToc = new Set(hrefs))}
             onbook={(b) => {
               // The file's own title unless the record supplied one.
               if (!hasDbTitle && typeof b.metadata?.title === "string")
@@ -1376,6 +1409,15 @@
       </div>
     {/if}
 
+    {#if loadFailed && !loadError}
+      <ReaderLoadNotice
+        offline={readerOffline}
+        {darkMode}
+        onretry={retryChapter}
+        ondismiss={() => reader?.dismissLoadFailure()}
+      />
+    {/if}
+
     {#if showGestureHint}
       <GestureHintOverlay {darkMode} {isRtl} onclose={dismissGestureHint} />
     {/if}
@@ -1385,6 +1427,8 @@
         {toc}
         {darkMode}
         {currentHref}
+        unavailable={unavailableToc}
+        onunavailable={(href) => void activeReader()?.displayChapter(href)}
         loadRecap={aiBookId && !isImageBook
           ? () => booksApi.getRecap(aiBookId!, reader?.getCurrentCfi() ?? "")
           : null}

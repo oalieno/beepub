@@ -19,6 +19,7 @@ import { Overlayer } from "./vendor/foliate/overlayer.js";
 import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
+import { SectionLoadError, isSectionLoadError } from "./load-error";
 import { ImagePrefetcher } from "./prefetch";
 import { CoverSlide, type SlideEvent } from "./slide";
 import {
@@ -197,6 +198,17 @@ export interface ReaderCoreHandlers {
     index: number;
     anchor: HTMLAnchorElement;
   }) => boolean | void;
+  /** A destination whose section has to be loaded is being waited for
+   *  (true), or the wait is over (false: it arrived, failed, or was
+   *  abandoned). The page shown, and everything reported of it, is the
+   *  one the reader came from until the destination has loaded. */
+  onpending?: (waiting: boolean) => void;
+  /** A destination's section could not be loaded (see SectionLoadError;
+   *  never for the book's first page — open() just rejects). The reader
+   *  is where it was; `retry()` asks for that destination again. */
+  onloadfail?: (detail: { index: number }) => void;
+  /** One more section's document is in memory (see sectionAvailable). */
+  onavailable?: () => void;
   /** A section loaded into one of the slide's ghosts (the inert
    *  renderings of the pages a turn away — slide.ts), before it is laid
    *  out. It has had the core's own per-section adjustments; whatever
@@ -403,24 +415,41 @@ function shareSections(sections: BookSection[]) {
     const unload = section.unload.bind(section);
     let holders = 0;
     let pending: Promise<string> | null = null;
+    let loaded = false;
     section.load = () => {
       holders++;
       if (!pending) {
         const p: Promise<string> = Promise.resolve().then(load);
         pending = p;
-        // A failed load is nobody's to unload, and the next one retries.
-        p.catch(() => {
-          if (pending !== p) return;
-          pending = null;
-          holders = 0;
-        });
+        loaded = false;
+        p.then(
+          () => {
+            if (pending !== p) return;
+            // Everyone who asked has gone again (a destination given up
+            // while it loaded): the parser's load is given back now.
+            if (holders === 0) {
+              pending = null;
+              unload();
+            } else loaded = true;
+          },
+          // A failed load is nobody's to unload, and the next one retries.
+          () => {
+            if (pending !== p) return;
+            pending = null;
+            holders = 0;
+          },
+        );
       }
       return pending;
     };
     section.unload = () => {
       if (holders === 0) return;
       if (--holders > 0) return;
+      // Still on its way: unloaded when it lands, unless someone has
+      // asked for it again by then (who joins the same load).
+      if (!loaded) return;
       pending = null;
+      loaded = false;
       unload();
     };
   }
@@ -564,6 +593,15 @@ export class ReaderCore {
   #container: HTMLElement;
   #pageColor = "";
 
+  /** Bumped by every destination that has to be waited for, and by
+   *  whatever abandons one: the latest intent is the only one served. */
+  #nav = 0;
+  /** A destination is being waited for; `dir` is the page turn it is (0:
+   *  a jump). */
+  #waiting: { dir: 1 | -1 | 0 } | null = null;
+  /** The last destination that could not be loaded (see retry). */
+  #failed: NavTarget | null = null;
+
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
     this.#container = container;
@@ -593,6 +631,9 @@ export class ReaderCore {
     this.#dropSlide();
     const prefetch = new ImagePrefetcher(loader);
     this.#prefetch = prefetch;
+    prefetch.onavailable = () => this.#handlers.onavailable?.();
+    this.#abandonWait();
+    this.#failed = null;
     this.#prefetchIndex = -1;
     // sha1 undefined = foliate's WebCrypto default (font deobfuscation keys)
     const book = (await new EPUB({
@@ -686,7 +727,8 @@ export class ReaderCore {
     const book = await this.load(loader);
     const resolved = target != null ? this.resolve(target) : null;
     this.#cancelTurn();
-    await this.paginator.goTo(resolved ?? { index: this.firstLinearIndex() });
+    const to = resolved ?? { index: this.firstLinearIndex() };
+    await this.#reach(to, 0, () => this.paginator.goTo(to));
     return book;
   }
 
@@ -727,13 +769,147 @@ export class ReaderCore {
   }
 
   /** Rejects when the target resolves to a section but not to a place in
-   *  it (a CFI whose in-document path no longer exists). */
+   *  it (a CFI whose in-document path no longer exists) — and, with a
+   *  SectionLoadError, when its section could not be loaded or another
+   *  destination was chosen first. The reader is then where it was. */
   async goTo(target: NavInput): Promise<NavTarget | null> {
     const resolved = this.resolve(target);
     if (!resolved) return null;
-    this.#cancelTurn();
-    await this.paginator.goTo(withTextStart(resolved));
+    await this.#jump(resolved);
     return resolved;
+  }
+
+  /** Ask again for the destination that last failed to load. */
+  async retry(): Promise<NavTarget | null> {
+    const target = this.#failed;
+    if (!target) return null;
+    await this.#jump(target);
+    return target;
+  }
+
+  async #jump(target: NavTarget) {
+    // The latest destination is the one the reader wants.
+    this.#abandonWait();
+    this.#failed = null;
+    await this.#reach(target, 0, async () => {
+      this.#cancelTurn();
+      await this.paginator.goTo(withTextStart(target));
+    });
+  }
+
+  /** Whether section `index` can be shown without the network: its
+   *  document is in memory (read, prefetched, or loaded for a ghost).
+   *  Never a probe. */
+  sectionAvailable(index: number): boolean {
+    const section = this.book?.sections[index];
+    return !!section && !!this.#prefetch?.available(section.id);
+  }
+
+  /**
+   * Every move into another section comes through here, and the section
+   * is loaded BEFORE the paginator hears of the move: a load that has
+   * not succeeded changes nothing. Until it has, the paginator, the
+   * slide's ghosts, `lastLocation` and everything reported from them
+   * stay on the page the reader came from; if it fails, or the reader
+   * turns away first, that is still where they are.
+   *
+   * The wait shows as follows. A jump (dir 0) leaves the page on screen
+   * as it is — there is nothing to return to if it fails. A faded turn
+   * fades the page out to the bare paper and back in on whatever comes:
+   * the next chapter, or the same page again. (The slide has its own
+   * sheet of bare paper — slide.ts.) `onpending` lets the integration
+   * layer show that something is on its way when the wait gets long.
+   */
+  async #reach(
+    target: NavTarget,
+    dir: 1 | -1 | 0,
+    proceed: () => Promise<void>,
+  ): Promise<void> {
+    const book = this.book;
+    const { index } = target;
+    const section = book?.sections[index];
+    if (!section || index === this.currentIndex()) return proceed();
+    const id = ++this.#nav;
+    this.#waiting = { dir };
+    if (dir && this.effectivePageTurn() === "fade" && !prefersReducedMotion()) {
+      this.#fade(0, FADE_OUT_MS);
+      this.#awaitingPage = true;
+    }
+    this.#handlers.onpending?.(true);
+    try {
+      await section.load();
+    } catch (e) {
+      if (id !== this.#nav) throw new SectionLoadError(index, true);
+      console.warn(e);
+      this.#endWait();
+      // (Nothing on screen yet: the book could not be opened, which is
+      // the caller's to say.)
+      if (this.lastLocation) {
+        this.#failed = target;
+        this.#handlers.onloadfail?.({ index });
+      }
+      throw new SectionLoadError(index);
+    }
+    if (id !== this.#nav || this.book !== book) {
+      section.unload();
+      throw new SectionLoadError(index, true);
+    }
+    try {
+      // The paginator's own load of the section is this one, landed.
+      await proceed();
+    } finally {
+      section.unload();
+      if (id === this.#nav) this.#endWait();
+    }
+  }
+
+  #endWait() {
+    if (!this.#waiting) return;
+    this.#waiting = null;
+    this.#showPage();
+    this.#handlers.onpending?.(false);
+  }
+
+  /** Give up the destination being waited for: the page is the reader's
+   *  again, as it was. */
+  #abandonWait() {
+    if (!this.#waiting) return;
+    this.#nav++;
+    this.#endWait();
+  }
+
+  /** The section a turn from the page the live paginator is on leads
+   *  into; null while the turn stays inside the section, or at either
+   *  end of the book. */
+  #crossing(dir: 1 | -1): number | null {
+    const sections = this.book?.sections;
+    const from = this.currentIndex();
+    if (!sections || from == null) return null;
+    try {
+      const { page, pages } = this.paginator;
+      if (dir > 0 ? page < pages - 2 : page > 1) return null;
+    } catch {
+      return null; // nothing rendered yet
+    }
+    for (let i = from + dir; i >= 0 && i < sections.length; i += dir)
+      if (sections[i].linear !== "no") return i;
+    return null;
+  }
+
+  /** A turn into section `index`, once that has loaded. A section that
+   *  does not load leaves the page where it is (onloadfail has said so). */
+  #reachTurn(index: number, dir: 1 | -1): Promise<void> {
+    return this.#reach({ index, anchor: dir > 0 ? 0 : 1 }, dir, () =>
+      this.#paginatorTurn(dir),
+    ).catch((e) => {
+      if (!isSectionLoadError(e)) throw e;
+    });
+  }
+
+  /** A turn with no animation of its own. */
+  #bareTurn(dir: 1 | -1): Promise<void> {
+    const into = this.#crossing(dir);
+    return into == null ? this.#paginatorTurn(dir) : this.#reachTurn(into, dir);
   }
 
   prev() {
@@ -749,14 +925,24 @@ export class ReaderCore {
    * navigation (goTo, a writing-mode reload) never animates and abandons
    * a turn in progress.
    *
-   * In the slide mode the turn is the cover slide (slide.ts); it waits a
-   * moment for its second rendering when the neighbouring page is in a
-   * section that is not loaded there yet, and a turn it still cannot
-   * show then fades instead. A reader who asked for reduced motion,
+   * In the slide mode the turn is the cover slide (slide.ts); a turn
+   * whose page is in a section that has not loaded yet still slides,
+   * over a sheet of bare paper. A reader who asked for reduced motion,
    * and a turn that goes nowhere (first or last page), get the bare
    * paginator.
+   *
+   * While a destination is being waited for, a turn is how the reader
+   * gives it up: the turn back from a pending turn, any turn from a
+   * pending jump (which is then made, from the page still on screen).
+   * The same turn again is already on its way.
    */
   #turn(dir: 1 | -1): Promise<void> {
+    if (this.#waiting) {
+      const waited = this.#waiting.dir;
+      if (waited === dir) return Promise.resolve();
+      this.#abandonWait();
+      if (waited !== 0) return Promise.resolve();
+    }
     const mode = this.effectivePageTurn();
     const slide =
       mode === "slide" && !prefersReducedMotion() ? this.#slide : null;
@@ -768,9 +954,9 @@ export class ReaderCore {
     }
     if (mode === "instant" || prefersReducedMotion() || this.#atEdge(dir)) {
       if (this.#slide?.covering)
-        return this.#landLive().then(() => this.#paginatorTurn(dir));
+        return this.#landLive().then(() => this.#bareTurn(dir));
       this.#cancelTurn();
-      return this.#paginatorTurn(dir);
+      return this.#bareTurn(dir);
     }
     // A fade already on its way (a turn the slide could not show): two
     // kinds of turn must not overlap, and a turn must not be lost
@@ -814,6 +1000,9 @@ export class ReaderCore {
       }
       return Promise.resolve();
     }
+    // Into another section: that is loaded first, behind the faded page.
+    const into = this.#crossing(dir);
+    if (into != null) return this.#reachTurn(into, dir);
     this.#turnAskedAt = now;
     this.#fade(0, FADE_OUT_MS);
     this.#fadeTimer = setTimeout(() => {
@@ -850,7 +1039,9 @@ export class ReaderCore {
       const queued = this.#queuedTurn;
       this.#queuedTurn = null;
       if (queued) {
-        this.#fadedTurn(queued);
+        const into = this.#crossing(queued);
+        if (into != null) void this.#reachTurn(into, queued);
+        else this.#fadedTurn(queued);
         return;
       }
       const kept = this.#afterFade;
@@ -983,6 +1174,11 @@ export class ReaderCore {
       turnLive: (dir) => this.#paginatorTurn(dir),
       request: (dir) => void this.#turn(dir),
       fallback: (dir) => void this.#fadeTurn(dir),
+      pending: (waiting) => this.#handlers.onpending?.(waiting),
+      failed: (index, dir) => {
+        this.#failed = { index, anchor: dir > 0 ? 0 : 1 };
+        this.#handlers.onloadfail?.({ index });
+      },
       visible: () => this.#liveLocation?.range ?? null,
       onload: (detail, ghost) => this.#onGhostLoad(detail, ghost),
       onoverlayer: ({ doc, index, attach }, ghost) => {
@@ -1056,6 +1252,9 @@ export class ReaderCore {
    *  transparent. */
   setPageColor(color: string) {
     this.#pageColor = color;
+    // What shows while a page has faded out and its chapter is on its
+    // way: the bare paper, not the reader's backdrop.
+    this.#container.style.background = color;
     this.#slide?.setBackground(color);
   }
 
@@ -1143,6 +1342,7 @@ export class ReaderCore {
     if (this.forcedWritingMode() === before) return false;
     const cfi = anchor || this.lastLocation?.startCfi;
     const target = cfi ? this.resolve(cfi) : null;
+    this.#abandonWait();
     this.#cancelTurn();
     // The ghosts read their sections' writing mode at load too: fresh
     // ones follow the page the reload lands on.
@@ -1282,6 +1482,8 @@ export class ReaderCore {
   }
 
   destroy() {
+    this.#nav++;
+    this.#waiting = null;
     this.#cancelFade();
     this.#dropSlide();
     try {
@@ -1421,7 +1623,10 @@ export class ReaderCore {
         })
       )
         return;
-      this.goTo(href).catch((err) => console.error(err));
+      this.goTo(href).catch((err) => {
+        // (A section that would not load has been reported already.)
+        if (!isSectionLoadError(err)) console.error(err);
+      });
     });
   }
 
@@ -1452,6 +1657,9 @@ export class ReaderCore {
     size?: number;
     range?: Range | null;
   }) {
+    // (Never a place: what a paginator reports of a section it does not
+    // have.)
+    if (!Number.isInteger(detail.index) || detail.index < 0) return;
     const location = this.#locate(detail);
     this.#liveLocation = location;
     this.#showPage();
