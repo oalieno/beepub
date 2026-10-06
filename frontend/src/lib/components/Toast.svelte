@@ -83,18 +83,32 @@
 <style>
   /* Mobile: above tab bar (56px) + safe area */
   /* --transfer-offset: the transfer panel's height while it shows. */
+  /* In the reader, a chapter notice at the bottom (ReaderLoadNotice:
+     --reader-notice-height while it shows, above the bottom bar's
+     --reader-chrome-offset) keeps its place and the toasts sit above
+     it. Without one the second term is far below the screen. */
   .toast-position {
-    bottom: calc(
-      1rem + 56px + env(safe-area-inset-bottom, 0px) +
-        var(--transfer-offset, 0px)
+    --above-reader-notice: calc(
+      max(env(safe-area-inset-bottom, 0px), var(--reader-chrome-offset, 0px)) +
+        1.25rem + var(--reader-notice-height, -100vh)
+    );
+    bottom: max(
+      calc(
+        1rem + 56px + env(safe-area-inset-bottom, 0px) +
+          var(--transfer-offset, 0px)
+      ),
+      var(--above-reader-notice)
     );
   }
 
   /* Desktop: no tab bar, just safe area */
   @media (min-width: 768px) {
     .toast-position {
-      bottom: calc(
-        1rem + env(safe-area-inset-bottom, 0px) + var(--transfer-offset, 0px)
+      bottom: max(
+        calc(
+          1rem + env(safe-area-inset-bottom, 0px) + var(--transfer-offset, 0px)
+        ),
+        var(--above-reader-notice)
       );
     }
   }

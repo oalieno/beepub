@@ -207,7 +207,13 @@
       <X size={16} />
     </button>
   </div>
-  <div class="flex-1 overflow-y-auto p-2" bind:this={scrollContainer}>
+  <!-- (The chapter notice lies over the foot of the list while it
+       shows: the last entries scroll clear of it.) -->
+  <div
+    class="flex-1 overflow-y-auto p-2"
+    style="padding-bottom: max(0.5rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem + var(--reader-notice-height, -100vh)));"
+    bind:this={scrollContainer}
+  >
     {#if activeTab === "recap"}
       {#if recapError}
         <p

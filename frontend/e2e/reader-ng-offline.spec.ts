@@ -1,4 +1,5 @@
 import {
+  devices,
   test,
   expect,
   type BrowserContext,
@@ -10,7 +11,9 @@ import { ADMIN_STATE } from "./helpers";
 import {
   NINE_CHAPTERS_BOOK,
   iphone,
+  marks,
   openBook,
+  pointOnWord,
   resetProgress,
   seedFixture,
   touchTap,
@@ -29,6 +32,11 @@ import {
  * long. A chapter that fails to load leaves the reader where they were,
  * with a notice that offers to try again — and, offline, the table of
  * contents marks the chapters that cannot be opened.
+ *
+ * The notice sits at the bottom of the screen, above the phone's bottom
+ * bar while that shows and below any toast. Trying again is seen to be
+ * tried: the button waits while the request is out, the notice stays if
+ * it fails (and says so once more), and goes when the chapter is there.
  *
  * Every test routes the book's content requests (`gate`), which also
  * keeps the browser's HTTP cache out of it: what is "not fetched" here
@@ -56,6 +64,8 @@ async function gate(page: Page): Promise<Gate> {
     const url = decodeURIComponent(route.request().url());
     for (const part of failing) if (url.includes(part)) return route.abort();
     for (const [part, released] of held) if (url.includes(part)) await released;
+    // (A request that was held can be let go into a failure.)
+    for (const part of failing) if (url.includes(part)) return route.abort();
     await route.continue().catch(() => {});
   });
   return {
@@ -663,4 +673,246 @@ test("offline, a seek into a chapter that is not loaded is answered at once, wit
     .toBe(7);
   await expect(notice(page)).toBeHidden();
   expectSound(seen);
+});
+
+const toasts = (page: Page) => page.locator(".toast-position [role=status]");
+const readingBar = (page: Page) =>
+  page.getByRole("toolbar", { name: "Reading controls" });
+
+async function rect(locator: ReturnType<Page["locator"]>) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return { top: box!.y, bottom: box!.y + box!.height, ...box! };
+}
+
+test("the notice sits at the bottom, above the bar and below a toast; Retry waits, stays when it fails and goes when the chapter is there", async ({
+  page,
+  context,
+}) => {
+  const { seen, gate, bookId } = await open(page, "fade");
+  const existing: { id: string }[] = await (
+    await page.request.get(`/api/books/${bookId}/highlights`)
+  ).json();
+  const before = await where(page);
+  const viewport = page.viewportSize()!;
+  const cdp = await context.newCDPSession(page);
+  const asked: string[] = [];
+  page.on("request", (r) => {
+    if (decodeURIComponent(r.url()).includes("c-009")) asked.push(r.url());
+  });
+
+  let mend = gate.fail("c-009");
+  await openToc(page, context);
+  await tocDialog(page).getByRole("button", { name: "版權頁" }).click();
+  await expect(notice(page)).toContainText("couldn't be loaded");
+  await expect(tocDialog(page)).toBeHidden();
+
+  // No bar: at the foot of the screen.
+  await expect(readingBar(page)).toBeHidden();
+  let box = await rect(notice(page));
+  expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(8);
+  expect(viewport.height - box.bottom).toBeLessThanOrEqual(16);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+
+  // The bar comes up: the notice is above it, not under it.
+  await touchTap(cdp, { x: 195, y: 420 }, 60);
+  await expect(readingBar(page)).toBeVisible();
+  await expect
+    .poll(async () => {
+      const bar = await rect(readingBar(page));
+      return bar.top - (await rect(notice(page))).bottom;
+    })
+    .toBeGreaterThanOrEqual(8);
+  box = await rect(notice(page));
+  expect((await rect(readingBar(page))).top - box.bottom).toBeLessThanOrEqual(
+    16,
+  );
+
+  try {
+    // While it is up, "cannot reach the server" would say the same thing
+    // again: a save that does not get through raises no toast.
+    await page.route("**/api/books/*/highlights", (route) =>
+      route.request().method() === "POST" ? route.abort() : route.continue(),
+    );
+    const refused = page.waitForEvent("requestfailed", (r) =>
+      r.url().endsWith("/highlights"),
+    );
+    const pt = await pointOnWord(page, "啟航之章第1段", 0);
+    await touchTap(cdp, pt!, 900);
+    const menu = page.getByTestId("highlight-menu");
+    await menu.getByTitle("Highlight", { exact: true }).click();
+    await refused;
+    await page.waitForTimeout(400);
+    await expect(toasts(page)).toHaveCount(0);
+    await expect(notice(page)).toBeVisible();
+    await page.unroute("**/api/books/*/highlights");
+
+    // A toast that does show stands above the notice, clear of it.
+    await touchTap(cdp, pt!, 900);
+    await menu.getByTitle("Highlight", { exact: true }).click();
+    const toast = toasts(page).filter({ hasText: "Highlight saved" });
+    await expect(toast).toBeVisible();
+    await expect.poll(() => marks(page)).not.toHaveLength(0);
+    // (The toast flies in: read its place once it has settled.)
+    await expect
+      .poll(async () => {
+        const t = await rect(toast);
+        return (await rect(notice(page))).top - t.bottom;
+      })
+      .toBeGreaterThanOrEqual(4);
+    await toast.getByRole("button", { name: "Close" }).click();
+    await expect(toasts(page)).toHaveCount(0);
+  } finally {
+    const now: { id: string }[] = await (
+      await page.request.get(`/api/books/${bookId}/highlights`)
+    ).json();
+    for (const h of now)
+      if (!existing.some((e) => e.id === h.id))
+        await page.request.delete(`/api/books/${bookId}/highlights/${h.id}`);
+  }
+  await expect(notice(page)).toBeVisible();
+  expect(await where(page)).toEqual(before);
+
+  // Retry, with the request out: the button waits, the notice stays, and
+  // the list the reader has open stays open.
+  mend();
+  const release = gate.hold("c-009");
+  await openToc(page, context);
+  const retry = notice(page).getByRole("button", { name: "Retry" });
+  await expect(retry).toBeEnabled();
+  await expect(retry).toHaveAttribute("aria-busy", "false");
+  await retry.click();
+  await expect(retry).toBeDisabled();
+  await expect(retry).toHaveAttribute("aria-busy", "true");
+  await expect(retry.locator("svg")).toBeVisible();
+  await page.waitForTimeout(800);
+  await expect(retry).toBeDisabled();
+  await expect(notice(page)).toBeVisible();
+  await expect(tocDialog(page)).toBeVisible();
+  expect(await where(page)).toEqual(before);
+
+  // It fails: the button is a button again, the notice is still there
+  // and has said so.
+  await expect(notice(page)).toHaveAttribute("data-failures", "0");
+  mend = gate.fail("c-009");
+  release();
+  await expect(retry).toBeEnabled();
+  await expect(retry).toHaveAttribute("aria-busy", "false");
+  await expect(notice(page)).toHaveAttribute("data-failures", "1");
+  await expect(notice(page)).toContainText("couldn't be loaded");
+  await expect(tocDialog(page)).toBeVisible();
+  expect(await where(page)).toEqual(before);
+
+  // Offline it is still tried — and seen to be, though the answer comes
+  // at once.
+  await context.setOffline(true);
+  await expect(notice(page)).toContainText("offline");
+  const tries = asked.length;
+  await retry.click();
+  await expect(retry).toBeDisabled();
+  await expect(retry).toBeEnabled();
+  await expect(notice(page)).toHaveAttribute("data-failures", "2");
+  expect(asked.length).toBeGreaterThan(tries);
+  expect(await where(page)).toEqual(before);
+
+  // The connection returns: tried unprompted, the chapter opens, and the
+  // notice and the list are gone.
+  mend();
+  await context.setOffline(false);
+  await expect
+    .poll(async () => (await where(page)).index, { timeout: 15_000 })
+    .toBe(8);
+  await expect(notice(page)).toBeHidden();
+  await expect(tocDialog(page)).toBeHidden();
+  expect((await where(page)).label).toBe("版權頁");
+  expectSound(seen);
+});
+
+test("a retry made just before the connection returns is made again with it", async ({
+  page,
+  context,
+}) => {
+  const { seen } = await open(page, "fade");
+  await context.setOffline(true);
+  await openToc(page, context);
+  await tocDialog(page).getByRole("button", { name: "版權頁" }).click({ force: true });
+  await expect(notice(page)).toContainText("offline");
+  // The attempt made offline is still out when the connection comes
+  // back, and then fails: the chapter is asked for once more.
+  let first = true;
+  let letGo: () => void = () => {};
+  const heldBack = new Promise<void>((resolve) => (letGo = resolve));
+  await page.route(CONTENT, async (route: Route) => {
+    const url = decodeURIComponent(route.request().url());
+    if (!url.includes("c-009") || !first) return route.fallback();
+    first = false;
+    await heldBack;
+    await route.abort();
+  });
+  const retry = notice(page).getByRole("button", { name: "Retry" });
+  await retry.click();
+  await expect(retry).toBeDisabled();
+  await expect.poll(() => first).toBe(false);
+  await context.setOffline(false);
+  await page.waitForTimeout(300);
+  await expect(retry).toBeDisabled();
+  letGo();
+  await expect
+    .poll(async () => (await where(page)).index, { timeout: 15_000 })
+    .toBe(8);
+  await expect(notice(page)).toBeHidden();
+  await expect(tocDialog(page)).toBeHidden();
+  expectSound(seen);
+});
+
+test.describe("on a desktop", () => {
+  const { defaultBrowserType: _chromium, ...desktop } =
+    devices["Desktop Chrome"];
+  test.use(desktop);
+
+  test("the notice is at the foot of the window, and Retry after a failed page turn opens the chapter", async ({
+    page,
+  }) => {
+    const seen = watch(page);
+    const g = await gate(page);
+    const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
+    await resetProgress(page.request, bookId);
+    await openBook(page, bookId, { turn: "fade" }, NINE_CHAPTERS_BOOK);
+    await expect.poll(() => available(page, 3)).toBe(true);
+    await expect(readingBar(page)).toBeHidden();
+    const viewport = page.viewportSize()!;
+
+    expect(await available(page, 4)).toBe(false);
+    const mend = g.fail("c-005");
+    await goTo(page, { index: 3, fraction: 1 });
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__beepubReaderNG.core.lastLocation.index),
+      )
+      .toBe(3);
+    await page.waitForTimeout(400);
+    await page.keyboard.press("PageDown");
+    await expect(notice(page)).toContainText("couldn't be loaded");
+
+    const box = await rect(notice(page));
+    expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(8);
+    expect(viewport.height - box.bottom).toBeLessThanOrEqual(16);
+    const centre = box.x + box.width / 2;
+    expect(Math.abs(centre - viewport.width / 2)).toBeLessThan(2);
+
+    const retry = notice(page).getByRole("button", { name: "Retry" });
+    await retry.click();
+    await expect(notice(page)).toHaveAttribute("data-failures", "1");
+    await expect(retry).toBeEnabled();
+    mend();
+    await retry.click();
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.__beepubReaderNG.core.lastLocation.index),
+      )
+      .toBe(4);
+    await expect(notice(page)).toBeHidden();
+    expect(seen.errors).toEqual([]);
+  });
 });

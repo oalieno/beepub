@@ -929,6 +929,8 @@ ${darkOverrides}
   let streamed = false;
   // The destination that could not be loaded, as a way to ask again.
   let failure: { retry: () => unknown } | null = null;
+  // The notice's "try again", while it is in flight.
+  let retrying: Promise<boolean> | null = null;
 
   function setFailure(retry: () => unknown) {
     failure = { retry };
@@ -941,12 +943,34 @@ ${darkOverrides}
     onloadfailure?.(false);
   }
 
-  /** The page shows the notice; this is its "try again". */
-  export function retryLoad() {
+  /**
+   * The page shows the notice; this is its "try again". Resolves to
+   * whether the notice is answered: the chapter is on screen (or the
+   * reader has moved on). The failure stands while the attempt is in
+   * flight — the notice stays up, saying it is being tried — and still
+   * stands if it fails.
+   *
+   * Asked for by hand, the chapter is asked for even offline (reach()
+   * otherwise answers for the network): the browser's HTTP cache may
+   * hold it, and a request that cannot go out fails at once.
+   */
+  export function retryLoad(): Promise<boolean> {
+    if (retrying) return retrying;
     const f = failure;
-    if (!f) return;
-    clearFailure();
-    return f.retry();
+    if (!f) return Promise.resolve(true);
+    retrying = (async () => {
+      // (Not before the next tick: `retrying` is set by then, which is
+      // what lets the request out while offline.)
+      await Promise.resolve();
+      try {
+        await f.retry();
+      } catch (e) {
+        console.warn(e);
+      }
+      retrying = null;
+      return failure === null;
+    })();
+    return retrying;
   }
 
   export function dismissLoadFailure() {
@@ -963,7 +987,8 @@ ${darkOverrides}
    * (for a failed load) the notice offers `again`.
    *
    * Offline, a chapter known not to be in memory is not even asked for:
-   * the answer is already known, and comes at once.
+   * the answer is already known, and comes at once. (Except for the
+   * notice's "try again" — see retryLoad.)
    */
   async function reach(
     target: NavInput,
@@ -971,7 +996,7 @@ ${darkOverrides}
   ): Promise<Outcome> {
     const c = core;
     if (!c) return "failed";
-    if (offline && streamed) {
+    if (offline && streamed && !retrying) {
       const index = c.resolve(target)?.index;
       if (index != null && !c.sectionAvailable(index)) {
         setFailure(again);
@@ -994,7 +1019,13 @@ ${darkOverrides}
   /** A turn's chapter could not be loaded (a jump's failure passes
    *  through reach(), which then puts its own way back in). */
   function handleLoadFail() {
-    setFailure(() => core?.retry().catch(() => null));
+    // (Nothing in a successful retry says the failure is over the way
+    // reach() does for a jump: said here.)
+    setFailure(() =>
+      core?.retry().then(clearFailure, (e: unknown) => {
+        if (!isSectionLoadError(e)) console.warn(e);
+      }),
+    );
   }
 
   /** Programmatic navigation that must not count as reading. Resolves to

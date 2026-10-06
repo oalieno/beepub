@@ -179,17 +179,60 @@
   let loadFailed = $state(false);
   // TOC entries whose chapter cannot be shown while offline.
   let unavailableToc = $state<Set<string>>(new Set());
-  function retryChapter() {
-    activeSidebar = null;
-    void reader?.retryLoad();
+  // The notice's "try again": in flight (its button waits), and how
+  // often it has come back empty-handed (the notice says so each time).
+  let retrying = $state(false);
+  let retryFailures = $state(0);
+  // An answer that comes at once — offline there is nothing to wait
+  // for — still has to be seen to have been asked for.
+  const RETRY_MIN_MS = 500;
+  let retryAgain = false;
+  async function retryChapter() {
+    const r = reader;
+    if (!r) return;
+    if (retrying) {
+      // (The connection came back during an attempt that was made
+      // without it: once more when that one is done.)
+      retryAgain = true;
+      return;
+    }
+    retrying = true;
+    const since = performance.now();
+    const ok = await r.retryLoad().catch(() => false);
+    if (ok) {
+      retrying = false;
+      retryAgain = false;
+      // The chapter is on the page: the list it was picked from is
+      // done with, as after any jump from it.
+      if (activeSidebar === "toc") activeSidebar = null;
+      return;
+    }
+    const left = RETRY_MIN_MS - (performance.now() - since);
+    if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+    retrying = false;
+    if (retryAgain && loadFailed) {
+      retryAgain = false;
+      return retryChapter();
+    }
+    retryAgain = false;
+    retryFailures += 1;
   }
   // The connection is back while the notice still stands: ask once more,
   // unprompted. Nothing happens by itself otherwise.
   let wasOffline = false;
   $effect(() => {
     const off = readerOffline;
-    if (wasOffline && !off && untrack(() => loadFailed)) retryChapter();
+    if (wasOffline && !off && untrack(() => loadFailed))
+      untrack(() => void retryChapter());
     wasOffline = off;
+  });
+  // The notice already says the chapter cannot be fetched; "cannot reach
+  // the server" beside it says the same thing twice.
+  $effect(() => {
+    if (!loadFailed || loadError) return;
+    return toastStore.mute(
+      (message) => message === m.error_server_unreachable(),
+    );
   });
 
   // Auto reading status. Beepub books track it on the server interaction;
@@ -1413,6 +1456,8 @@
       <ReaderLoadNotice
         offline={readerOffline}
         {darkMode}
+        {retrying}
+        failures={retryFailures}
         onretry={retryChapter}
         ondismiss={() => reader?.dismissLoadFailure()}
       />
