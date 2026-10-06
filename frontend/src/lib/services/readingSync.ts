@@ -57,6 +57,14 @@ const FULL_SYNC_COOLDOWN_MS = 30_000;
  *  looking at keeps pre-sync numbers until something remounts it. */
 export const readingSyncStamp = writable(0);
 
+// Debug handle (same convention as __beepubReaderNG): a pass only runs in
+// the app with linked books on the device, so this is how an e2e probe
+// says "a sync pass just finished".
+if (typeof window !== "undefined") {
+  (window as unknown as { __beepubReadingSync?: unknown }).__beepubReadingSync =
+    { stamp: readingSyncStamp };
+}
+
 let initialized = false;
 let fullSyncInFlight: Promise<void> | null = null;
 let lastFullSyncAt = 0;

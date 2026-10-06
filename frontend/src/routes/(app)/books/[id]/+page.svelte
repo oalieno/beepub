@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import { page } from "$app/state";
   import { goto, afterNavigate } from "$app/navigation";
   import { keyboardVisible } from "$lib/stores/keyboard";
@@ -222,15 +223,31 @@
   });
 
   // A background sync just merged offline reading into the server row —
-  // the progress this page shows is stale until refetched.
+  // the reading state this page shows is stale until refetched. Quietly:
+  // the page is on screen and stays as it is (only the first load and
+  // another book put the skeleton up), and a refresh that fails leaves
+  // what was there.
   let prevSyncStamp = $readingSyncStamp;
   $effect(() => {
     const stamp = $readingSyncStamp;
     if (stamp !== prevSyncStamp) {
       prevSyncStamp = stamp;
-      if (!loading) void loadData();
+      void untrack(refreshReadingState);
     }
   });
+
+  async function refreshReadingState() {
+    const id = bookId;
+    // (Still loading: that load reads the merged rows itself.)
+    if (loading || !book) return;
+    const [fresh, marks] = await Promise.all([
+      booksApi.getInteraction(id).catch(() => null),
+      beepubSync.listHighlights(id).catch(() => null),
+    ]);
+    if (id !== bookId || loading) return;
+    if (fresh) interaction = fresh;
+    if (marks) bookHighlights = marks;
+  }
 
   let notFound = $state(false);
 

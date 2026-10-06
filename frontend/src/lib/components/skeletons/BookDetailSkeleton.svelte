@@ -2,7 +2,7 @@
   import { Skeleton } from "$lib/components/ui/skeleton";
 </script>
 
-<div role="status" aria-label="Loading">
+<div role="status" aria-label="Loading" data-testid="book-detail-skeleton">
   <!-- Hero Section -->
   <div class="flex flex-col md:flex-row gap-12">
     <!-- Cover -->
