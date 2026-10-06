@@ -933,10 +933,20 @@ async def search_books(
 
     # Rank by relevance so a short query like "小王子" surfaces the closest
     # titles first instead of an arbitrary UUID-ordered slice.
-    ranked_query = base_query.order_by(*relevance_order(search, q), Book.id)
-
-    result = await db.execute(ranked_query.limit(limit))
-    rows = result.all()
+    # Ranked over ids alone, the page's books fetched afterwards: a
+    # one-character query matches a third of a library, and sorting that
+    # many full rows to keep twenty is most of the request.
+    ranked_query = base_query.with_only_columns(
+        Book.id, func.min(Library.name).label("library_name")
+    ).order_by(*relevance_order(search, q), Book.id)
+    ranked = (await db.execute(ranked_query.limit(limit))).all()
+    books_by_id = {
+        book.id: book
+        for book in await db.scalars(
+            select(Book).where(Book.id.in_([row.id for row in ranked]))
+        )
+    }
+    rows = [(books_by_id[row.id], row.library_name) for row in ranked]
 
     # Enrich with edition_count
     from app.services.work_propagation import get_edition_count_map

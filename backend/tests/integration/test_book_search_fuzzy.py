@@ -6,8 +6,11 @@ Tier semantics under test, through the real API:
 3. trigram word_similarity — tolerates a wrong character
 """
 
+from contextlib import contextmanager
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import event
 
 from tests.integration.util import create_library, upload_epub
 
@@ -212,3 +215,105 @@ async def test_relevance_without_a_query_falls_back(admin_client: AsyncClient):
         response = await admin_client.get(url, params={"sort": "relevance"})
         assert response.status_code == 200, response.text
         assert response.json()["total"] == 4, url
+
+
+@contextmanager
+def _recorded_sql():
+    """Every statement the app sends while the block runs."""
+    from app.database import engine
+
+    statements: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", record)
+
+
+async def test_search_never_folds_a_column(admin_client: AsyncClient):
+    """065: beepub_norm() is far too slow to run per book (it carries
+    the 064 script map), and a pattern shorter than a trigram reads
+    every book — so no search statement may apply it to a column. The
+    folded text comes from the stored columns; only the query is folded.
+    """
+    library_id = await _seed(admin_client)
+    queries = [
+        "三體",  # two characters: no trigram index can answer it
+        "體",
+        "街角VR食堂",
+        "明日明日又明天",  # fuzzy tier
+        "街角 深夜",  # every-token
+        "三體 明日 不存在的關鍵詞",  # any-token
+        "zzzz查無此書zzzz",  # nothing anywhere
+    ]
+    with _recorded_sql() as statements:
+        for q in queries:
+            for url, params in [
+                ("/api/books/search", {"q": q}),
+                (
+                    f"/api/libraries/{library_id}/books",
+                    {"search": q, "sort": "relevance"},
+                ),
+                (
+                    f"/api/libraries/{library_id}/feed",
+                    {"search": q, "sort": "relevance"},
+                ),
+                ("/api/books/all", {"search": q, "sort": "relevance"}),
+            ]:
+                response = await admin_client.get(url, params=params)
+                assert response.status_code == 200, response.text
+
+    folding = [s for s in statements if "beepub_norm" in s]
+    assert folding, "the query itself is still folded in SQL"
+    assert [s for s in folding if "books" in s] == []
+    # ...and the fuzzy tier did run, on the stored columns.
+    assert any("<%" in s and "books.title_norm" in s for s in statements)
+
+
+async def test_stored_fold_follows_the_book(admin_client: AsyncClient):
+    await _seed(admin_client)
+    response = await admin_client.get("/api/books/search", params={"q": "Clean Code"})
+    book_id = response.json()["items"][0]["id"]
+    response = await admin_client.put(
+        f"/api/books/{book_id}/metadata",
+        json={"title": "整潔的程式碼", "series": "匠藝叢書"},
+    )
+    assert response.status_code == 200, response.text
+    # Written Traditional, searched Simplified: the stored columns were
+    # regenerated with the row.
+    assert await _search(admin_client, "整洁的程式码") == ["整潔的程式碼"]
+    assert await _search(admin_client, "匠艺丛书") == ["整潔的程式碼"]
+
+
+async def test_short_miss_does_not_try_the_fuzzy_tier(admin_client: AsyncClient):
+    await _seed(admin_client)
+    # Two characters make three trigrams; passing the threshold needs
+    # the one that holds both, i.e. a substring hit — already ruled out.
+    with _recorded_sql() as statements:
+        assert await _search(admin_client, "查無") == []
+        assert await _search(admin_client, "zq") == []
+    assert [s for s in statements if "<%" in s] == []
+
+
+async def test_one_character_query(admin_client: AsyncClient):
+    await _seed(admin_client)
+    assert await _search(admin_client, "體") == [TITLES["short"]]
+    assert await _search(admin_client, "体") == [TITLES["short"]]
+
+
+async def test_match_does_not_span_two_fields(admin_client: AsyncClient):
+    await _seed(admin_client)
+    # The folded fields sit in one column; the end of a title and the
+    # start of the author ("Test Author") are still not one text.
+    assert await _search(admin_client, "Code") == [TITLES["latin"]]
+    assert await _search(admin_client, "CodeTest") == []
+
+
+async def test_percent_sign_is_not_a_wildcard(admin_client: AsyncClient):
+    await _seed(admin_client)
+    # As a LIKE wildcard this would be "C…e" and match Clean Code.
+    assert await _search(admin_client, "C%e") == []

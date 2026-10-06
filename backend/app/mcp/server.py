@@ -31,7 +31,7 @@ from app.models.book_text import BookTextChunk
 from app.models.reading import Highlight, UserBookInteraction
 from app.models.user import User, UserRole
 from app.routers.libraries import accessible_book_ids_select
-from app.services.book_search import tiered_book_search
+from app.services.book_search import normalized_title, tiered_book_search
 
 INSTRUCTIONS = """\
 BeePub is the user's personal ebook library. All tools are read-only.
@@ -137,7 +137,7 @@ async def _resolve_book(
     title_col = func.coalesce(Book.title, Book.epub_title)
     stmt = scope.where(or_(*search.conditions))
     if search.normalized_query is not None:
-        norm_title = func.beepub_norm(title_col)
+        norm_title = normalized_title()
         stmt = stmt.order_by(
             case(
                 (norm_title == search.normalized_query, 0),
@@ -264,7 +264,7 @@ async def search_books(
         if rank is not None and sort == "relevance":
             stmt = stmt.order_by(rank.desc(), title_col)
         elif query.strip() and sort == "relevance" and normalized is not None:
-            norm_title = func.beepub_norm(title_col)
+            norm_title = normalized_title()
             stmt = stmt.order_by(
                 case(
                     (norm_title == normalized, 0),

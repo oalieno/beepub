@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    Computed,
     DateTime,
     Float,
     ForeignKey,
@@ -29,6 +30,11 @@ if TYPE_CHECKING:
     from app.models.tag import BookTag
     from app.models.user import User
     from app.models.work import Work
+
+
+def _search_fold(expression: str):
+    """A stored generated column holding ``expression`` (see Book)."""
+    return mapped_column(Text, Computed(expression, persisted=True), deferred=True)
 
 
 class Book(Base, TimestampMixin):
@@ -75,6 +81,47 @@ class Book(Base, TimestampMixin):
     # Where each override's current value came from — {"description":
     # "readmoo", "title": "manual", ...}; a cleared override loses its key.
     field_sources: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Search-folded copies of the search columns (migration 065): stored
+    # generated columns, so beepub_norm() runs when a book is written and
+    # never while searching — its Traditional→Simplified map makes it far
+    # too slow to evaluate per row. Trigram-indexed; read only inside SQL
+    # (services/book_search.py), hence deferred. The expressions here
+    # document the columns; the migration is what defines them.
+    title_norm: Mapped[str | None] = _search_fold("beepub_norm(title)")
+    epub_title_norm: Mapped[str | None] = _search_fold("beepub_norm(epub_title)")
+    authors_norm: Mapped[str | None] = _search_fold(
+        "beepub_norm(beepub_join_authors(authors))"
+    )
+    epub_authors_norm: Mapped[str | None] = _search_fold(
+        "beepub_norm(beepub_join_authors(epub_authors))"
+    )
+    series_norm: Mapped[str | None] = _search_fold("beepub_norm(series)")
+    epub_series_norm: Mapped[str | None] = _search_fold("beepub_norm(epub_series)")
+    tags_norm: Mapped[str | None] = _search_fold(
+        "beepub_norm(beepub_join_authors(tags))"
+    )
+    epub_tags_norm: Mapped[str | None] = _search_fold(
+        "beepub_norm(beepub_join_authors(epub_tags))"
+    )
+    # All eight, newline-separated — one column for the substring tiers to
+    # read. A folded string never contains whitespace, so a pattern
+    # cannot match across two fields.
+    search_norm: Mapped[str | None] = _search_fold(
+        " || E'\\n' || ".join(
+            f"coalesce({expr}, '')"
+            for expr in (
+                "beepub_norm(title)",
+                "beepub_norm(epub_title)",
+                "beepub_norm(beepub_join_authors(authors))",
+                "beepub_norm(beepub_join_authors(epub_authors))",
+                "beepub_norm(series)",
+                "beepub_norm(epub_series)",
+                "beepub_norm(beepub_join_authors(tags))",
+                "beepub_norm(beepub_join_authors(epub_tags))",
+            )
+        )
+    )
 
     word_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_image_book: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

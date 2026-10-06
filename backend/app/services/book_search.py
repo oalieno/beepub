@@ -5,8 +5,11 @@ tried only when the previous one has no hit within the caller's scope,
 so an exact match never gets diluted by fuzzy noise:
 
 1. plain ILIKE substring over the search columns (incl. tags)
-2. normalized ILIKE — both sides folded through beepub_norm() (056):
-   whitespace/punctuation/width-insensitive substring
+2. normalized LIKE — the query folded through beepub_norm() (056),
+   the columns read from their stored folded copy (065):
+   whitespace/punctuation/width/script-insensitive substring
+   (1 and 2 are one step; when the query folds to something usable,
+   2 contains every hit of 1 and runs alone — see _substring_conditions)
 3. trigram word_similarity over the normalized columns — tolerates a
    wrong or extra character; threshold tuned for despaced CJK where
    per-character trigrams make short strings noisy
@@ -27,7 +30,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import Select, and_, case, exists, func, literal, or_, select, text
+from sqlalchemy import (
+    Select,
+    and_,
+    case,
+    exists,
+    false,
+    func,
+    literal,
+    or_,
+    select,
+    text,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
@@ -40,9 +54,21 @@ FUZZY_WORD_SIMILARITY_THRESHOLD = 0.4
 
 # beepub_norm() can fold a query down to almost nothing ("C++" → "c");
 # a 1-character normalized substring would match most of the library.
+# A query that was one character to begin with is searched as asked.
 MIN_NORMALIZED_QUERY_LEN = 2
 
+# Fewer alphanumerics than this and the fuzzy tier cannot find anything
+# the substring tiers did not (see tiered_book_search).
+MIN_FUZZY_QUERY_CHARS = 3
+
 MAX_QUERY_TOKENS = 8
+
+
+def _no_match() -> list:
+    """What a search that matched nothing filters with: the probes
+    already know the answer, so the caller's count and page queries
+    read no rows."""
+    return [false()]
 
 
 def book_search_conditions(q: str) -> list:
@@ -68,26 +94,70 @@ def book_search_conditions(q: str) -> list:
     ]
 
 
-# Normalized expressions must mirror the 056/058 index expressions
-# exactly or the planner falls back to a sequential scan. No ISBN here.
+# Folded text is read from stored generated columns (065), never
+# computed while searching: beepub_norm() costs ~0.3 ms per title since
+# it folds Chinese scripts (064), and a pattern shorter than a trigram —
+# any two-character Chinese word — is answered by reading every row.
+#
+# One column per search field, trigram-indexed, for the fuzzy tier. No
+# ISBN here.
 def _normalized_columns() -> list:
     return [
-        func.beepub_norm(Book.title),
-        func.beepub_norm(Book.epub_title),
-        func.beepub_norm(func.beepub_join_authors(Book.authors)),
-        func.beepub_norm(func.beepub_join_authors(Book.epub_authors)),
-        func.beepub_norm(Book.series),
-        func.beepub_norm(Book.epub_series),
-        func.beepub_norm(func.beepub_join_authors(Book.tags)),
-        func.beepub_norm(func.beepub_join_authors(Book.epub_tags)),
+        Book.title_norm,
+        Book.epub_title_norm,
+        Book.authors_norm,
+        Book.epub_authors_norm,
+        Book.series_norm,
+        Book.epub_series_norm,
+        Book.tags_norm,
+        Book.epub_tags_norm,
     ]
 
 
+def normalized_title():
+    """beepub_norm() of the displayed title, from the stored columns.
+
+    beepub_norm() is strict, so coalescing the folded columns equals
+    folding the coalesced one.
+    """
+    return func.coalesce(Book.title_norm, Book.epub_title_norm)
+
+
+def normalized_series():
+    return func.coalesce(Book.series_norm, Book.epub_series_norm)
+
+
+def _usable_fold(raw: str, norm: str | None) -> str | None:
+    """The folded query, or None when the fold left too little of it."""
+    if not norm:
+        return None
+    if len(norm) >= MIN_NORMALIZED_QUERY_LEN:
+        return norm
+    # Folding dropped nothing (it only maps, or lowercases): 「的」, "a".
+    return norm if len("".join(raw.split())) == len(norm) else None
+
+
+def _like_literal(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
 def _substring_conditions(raw: str, norm: str | None) -> list:
-    conds = book_search_conditions(raw)
-    if norm:
-        conds = conds + [col.like(f"%{norm}%") for col in _normalized_columns()]
-    return conds
+    """The text appears somewhere in the book's fields (tiers 1 and 2).
+
+    With a usable folded query the folded view alone decides: the fold
+    drops or maps single characters, so text containing the raw query
+    always folds to text containing the folded query — the plain ILIKEs
+    could only repeat its hits. It reads Book.search_norm, every folded
+    field in one column, so a pattern too short for the trigram index
+    costs one LIKE per book rather than seventeen. The ISBN is not
+    folded and keeps its plain match.
+    """
+    if norm is None:
+        return book_search_conditions(raw)
+    return [
+        Book.search_norm.like(f"%{_like_literal(norm)}%"),
+        Book.epub_isbn.ilike(f"%{_like_literal(raw)}%"),
+    ]
 
 
 @dataclass
@@ -118,15 +188,22 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
     applied. The returned conditions are meant to be attached to that
     same query via ``.where(or_(*result.conditions))``.
 
-    The fuzzy branch sets ``pg_trgm.word_similarity_threshold`` with SET
-    LOCAL, so the caller's real query must run in the same transaction
-    (the normal single-session request flow).
+    Two settings are made with SET LOCAL — the planning mode below, and
+    ``pg_trgm.word_similarity_threshold`` in the fuzzy branch — so the
+    caller's real query must run in the same transaction (the normal
+    single-session request flow).
     """
     tokens = q.split()[:MAX_QUERY_TOKENS]
 
-    norm_q = await db.scalar(select(func.beepub_norm(q)))
-    if not norm_q or len(norm_q) < MIN_NORMALIZED_QUERY_LEN:
-        norm_q = None
+    # Plan every search statement for the pattern it actually carries.
+    # The driver prepares statements, and after five runs PostgreSQL
+    # swaps in a generic plan that cannot know whether the pattern is
+    # selective: for the EXISTS probes it walks the whole table testing
+    # each row, on the off chance of an early hit, instead of asking
+    # the trigram indexes — which settle a miss in under a millisecond.
+    await db.execute(text("SET LOCAL plan_cache_mode = force_custom_plan"))
+
+    norm_q = _usable_fold(q, await db.scalar(select(func.beepub_norm(q))))
 
     # The exact and normalized views are one query semantically — "this
     # text appears in the book's fields" — differing only in formatting,
@@ -144,12 +221,7 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
             await db.execute(select(*[func.beepub_norm(t) for t in tokens]))
         ).one()
         per_token = [
-            or_(
-                *_substring_conditions(
-                    token,
-                    n if n and len(n) >= MIN_NORMALIZED_QUERY_LEN else None,
-                )
-            )
+            or_(*_substring_conditions(token, _usable_fold(token, n)))
             for token, n in zip(tokens, norm_row)
         ]
 
@@ -169,16 +241,20 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
                 rank=rank,
                 tokens=tokens,
             )
-        return TieredSearch(phrase, norm_q, fuzzy=False, mode="phrase")
+        return TieredSearch(_no_match(), norm_q, fuzzy=False, mode="phrase")
 
     if norm_q is None:
-        return TieredSearch(phrase, norm_q, fuzzy=False, mode="phrase")
+        return TieredSearch(_no_match(), norm_q, fuzzy=False, mode="phrase")
 
     # Trigram extraction only sees alphanumerics (CJK included) — "c++"
     # is a single-letter word to pg_trgm, and one letter word-similarity-
-    # matches half the library. Symbols still work in the substring tier.
-    if sum(ch.isalnum() for ch in norm_q) < 2:
-        return TieredSearch(phrase, norm_q, fuzzy=False, mode="phrase")
+    # matches half the library. Two characters make three trigrams, and
+    # reaching the threshold takes two of them — which only text that
+    # contains both characters side by side has: a substring hit, and
+    # the tier above just ruled that out. Symbols still work in the
+    # substring tier.
+    if sum(ch.isalnum() for ch in norm_q) < MIN_FUZZY_QUERY_CHARS:
+        return TieredSearch(_no_match(), norm_q, fuzzy=False, mode="phrase")
 
     # SET doesn't take bind parameters; the value is a module constant.
     await db.execute(
@@ -191,8 +267,7 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
     if await db.scalar(select_exists(scope, fuzzy)):
         return TieredSearch(fuzzy, norm_q, fuzzy=True, mode="fuzzy")
 
-    # Nothing matches anywhere — behave like today's empty result.
-    return TieredSearch(phrase, norm_q, fuzzy=False, mode="phrase")
+    return TieredSearch(_no_match(), norm_q, fuzzy=False, mode="phrase")
 
 
 def select_exists(scope: Select, conditions: list):
@@ -213,10 +288,10 @@ def relevance_score(search: TieredSearch, q: str):
     series_col = func.coalesce(Book.series, Book.epub_series)
     if search.normalized_query is not None:
         norm_q = search.normalized_query
-        norm_title = func.beepub_norm(title_col)
+        norm_title = normalized_title()
         tier = case(
             (norm_title == norm_q, 0),
-            (func.beepub_norm(series_col) == norm_q, 1),
+            (normalized_series() == norm_q, 1),
             (norm_title.like(f"{norm_q}%"), 2),
             else_=3,
         )
