@@ -27,11 +27,12 @@ import {
 
 /**
  * reader-ng: the slide page turn. One page is a sheet that moves over
- * another that stays still, and the lower page number is always the
- * upper sheet: going forward the page on screen slides away off the page
- * beneath it, going back the previous page slides in over the one on
- * screen. The still page is a second, inert rendering (a ghost) of the
- * neighbouring page; only a layer's horizontal position moves, so
+ * another, and the lower page number is always the upper sheet: going
+ * forward the page on screen slides away off the page beneath it, going
+ * back the previous page slides in over the one on screen. The page
+ * underneath drifts the same way, a quarter as far (the parallax). The
+ * other page is a second, inert rendering (a ghost) of the neighbouring
+ * page; only the layers' horizontal positions move, so
  * vertical text and a plate laid out against the book's direction slide
  * like any other page. There is a ghost for every section a turn could
  * reach: one in the middle of a chapter, another for the neighbouring
@@ -160,6 +161,10 @@ function watchTurns(page: Page) {
       options: unknown,
     ) {
       const last = keyframes[keyframes.length - 1]!;
+      // The sheet that slides is the one with the shadow; the page
+      // drifting underneath it is not a turn of its own.
+      if ("transform" in last && !this.style.boxShadow)
+        return animate.call(this, keyframes, options);
       window.__turns!.push(
         `${this === paginator ? "live" : "ghost"}:${"transform" in last ? "slide" : "fade"}`,
       );
@@ -211,6 +216,15 @@ function touchUp(cdp: CDPSession) {
 
 const at = (x: number): Point => ({ x, y: 400 });
 
+/** The page under the sheet travels this much of the width (slide.ts). */
+const PARALLAX = 0.25;
+
+/** Where a layer stands, to the pixel or two a rounded transform gives. */
+function expectLeft(layer: Layer | null, left: number) {
+  expect(layer).not.toBeNull();
+  expect(Math.abs(layer!.left - left)).toBeLessThanOrEqual(2);
+}
+
 /** Wait for a layer to stand `left` px from the reader's left edge and
  *  return both layers. (A touch move is delivered with the next frame,
  *  after CDP has answered: the state has to be polled for.) */
@@ -254,11 +268,12 @@ test("a horizontal book: the page on screen follows the finger off the next page
   const width = rest.live.width;
 
   // Forward in a left-to-right book: the finger goes left, and the page
-  // on screen goes with it, 1:1. The next page lies still underneath.
+  // on screen goes with it, 1:1. The next page lies underneath…
   await touchDown(cdp, at(320));
   await touchMove(cdp, at(320), at(200), 10);
   const mid = await layersWhen(page, "live", -120);
-  expect(mid.ghost!.left).toBe(0);
+  // …pushed a little to the right, on its way to rest.
+  expectLeft(mid.ghost, PARALLAX * (width - 120));
   expect(mid.ghost!.z).toBeLessThan(mid.live.z);
   expect(mid.ghost).toMatchObject({
     index: rest.live.index,
@@ -294,11 +309,11 @@ test("a horizontal book: the page on screen follows the finger off the next page
   expect((await layers(page)).live.page).toBe(next.live.page);
 
   // Back: the finger goes right and pulls the previous page in from the
-  // left, over the page on screen, which stays where it is.
+  // left, over the page on screen, which gives way a little.
   await touchDown(cdp, at(60));
   await touchMove(cdp, at(60), at(210), 10);
   const back = await layersWhen(page, "ghost", 150 - width);
-  expect(back.live.left).toBe(0);
+  expectLeft(back.live, PARALLAX * 150);
   expect(back.ghost!.z).toBeGreaterThan(back.live.z);
   expect(back.ghost).toMatchObject({
     index: rest.live.index,
@@ -346,7 +361,7 @@ test("a vertical book slides too, the other way round, and the sheet offers the 
   await touchDown(cdp, at(80));
   await touchMove(cdp, at(80), at(200), 10);
   const mid = await layersWhen(page, "live", 120);
-  expect(mid.ghost!.left).toBe(0);
+  expectLeft(mid.ghost, -PARALLAX * (width - 120));
   expect(mid.ghost!.z).toBeLessThan(mid.live.z);
   expect(mid.ghost).toMatchObject({
     index: rest.live.index,
@@ -372,11 +387,11 @@ test("a vertical book slides too, the other way round, and the sheet offers the 
   expect((await layers(page)).live.page).toBe(rest.live.page + 1);
 
   // Back: the finger goes left, the previous page comes in from the
-  // right over the still page.
+  // right over the page on screen.
   await touchDown(cdp, at(330));
   await touchMove(cdp, at(330), at(180), 10);
   const back = await layersWhen(page, "ghost", width - 150);
-  expect(back.live.left).toBe(0);
+  expectLeft(back.live, -PARALLAX * 150);
   expect(back.ghost!.z).toBeGreaterThan(back.live.z);
   expect(back.ghost!.text).toBe(rest.live.text);
   await touchMove(cdp, at(180), at(50), 6);
@@ -393,6 +408,199 @@ test("a vertical book slides too, the other way round, and the sheet offers the 
     page.getByTestId("setting-page-turn").getByRole("button"),
   ).toHaveText(["Fast fade", "Slide"]);
 });
+
+/** Whether the two sheets of the turn under way leave any of the
+ *  reader's width bare, and where each stands. (Only those two: a third
+ *  rendering lying idle beneath them would hide a gap from this probe,
+ *  not from the eye that knows the page.) */
+interface Sheets {
+  bare: boolean;
+  live: number;
+  ghost: number;
+}
+
+/** Put the probe in the page: `__sheets()` reads the two sheets now. */
+function installSheets(page: Page) {
+  return page.evaluate(() => {
+    (window as any).__sheets = (): Sheets => {
+      const { core, paginator } = window.__beepubReaderNG;
+      const box = paginator.parentElement.getBoundingClientRect();
+      const live = paginator.getBoundingClientRect();
+      const ghost = (core.ghost as HTMLElement).getBoundingClientRect();
+      const [a, b] = live.left <= ghost.left ? [live, ghost] : [ghost, live];
+      const bare =
+        a.left > box.left + 0.5 ||
+        b.left > a.right + 0.5 ||
+        Math.max(a.right, b.right) < box.right - 0.5;
+      return {
+        bare,
+        live: live.left - box.left,
+        ghost: ghost.left - box.left,
+      };
+    };
+  });
+}
+
+/** Sample the sheets every frame from now until stopSampling. */
+function startSampling(page: Page) {
+  return page.evaluate(() => {
+    const samples: Sheets[] = [];
+    let on = true;
+    const tick = () => {
+      if (!on) return;
+      try {
+        samples.push((window as any).__sheets());
+      } catch {
+        // between two ghosts
+      }
+      requestAnimationFrame(tick);
+    };
+    tick();
+    (window as any).__stopSampling = () => {
+      on = false;
+      return samples;
+    };
+  });
+}
+
+function stopSampling(page: Page): Promise<Sheets[]> {
+  return page.evaluate(() => (window as any).__stopSampling());
+}
+
+for (const kind of ["horizontal", "vertical"] as const) {
+  test(`the page under the sheet drifts a quarter as far, the same way, and no edge is ever bare: ${kind}`, async ({
+    page,
+    context,
+  }) => {
+    const fixture = kind === "vertical" ? CHAPTER_ANCHORS_BOOK : ANCHOR_BOOK;
+    const bookId = await seedFixture(page.request, fixture);
+    await openBook(
+      page,
+      bookId,
+      kind === "vertical"
+        ? { turn: "slide", font: "sans" }
+        : { turn: "slide", size: "24" },
+      fixture,
+    );
+    const cdp = await context.newCDPSession(page);
+    await ghostReady(page, 1);
+    const rest = await layers(page);
+    test.skip(
+      rest.live.pages - 2 < 3,
+      "vertical fragmentation degenerate — CJK fonts missing",
+    );
+    const width = rest.live.width;
+    const leftward = await page.evaluate(() =>
+      window.__beepubReaderNG.core.advancesLeftward(),
+    );
+    expect(leftward).toBe(kind === "vertical");
+    // The way the finger goes to turn forward, and the side the upper
+    // sheet goes off at: left in a left-to-right book.
+    const s = leftward ? 1 : -1;
+    const DRAG = 190; // just short of half the page
+    const pull = async (sign: number, px: number) => {
+      const from = sign > 0 ? 50 : 340;
+      await touchDown(cdp, at(from));
+      await touchMove(cdp, at(from), at(from + sign * px), 10);
+      return from + sign * px;
+    };
+    await installSheets(page);
+    const sheets = (): Promise<Sheets> =>
+      page.evaluate(() => (window as any).__sheets());
+
+    // Forward, the finger held just short of half way: the page on
+    // screen has gone with it, and the next page, underneath, stands
+    // half of its quarter-width short of rest, on the side the sheet is
+    // not — it is moving the way the sheet moves.
+    let x = await pull(s, DRAG);
+    let mid = await layersWhen(page, "live", s * DRAG);
+    expectLeft(mid.ghost, -s * PARALLAX * (width - DRAG));
+    expect(mid.ghost!.z).toBeLessThan(mid.live.z);
+    expect((await sheets()).bare).toBe(false);
+    // Let go there, at rest: it springs back, and both lie flat again.
+    await page.waitForTimeout(250);
+    await startSampling(page);
+    await touchUp(cdp);
+    await expect.poll(() => settled(page)).toBe(true);
+    let seen = await stopSampling(page);
+    expect(seen.length).toBeGreaterThan(3);
+    expect(seen.filter((f) => f.bare)).toEqual([]);
+    expect((await layers(page)).live.page).toBe(rest.live.page);
+
+    // Again, and through: the page underneath comes to rest as the
+    // sheet leaves, never ahead of it and never the other way.
+    await ghostReady(page, 1);
+    x = await pull(s, DRAG);
+    await layersWhen(page, "live", s * DRAG);
+    await startSampling(page);
+    await touchMove(cdp, at(x), at(x + s * 100), 6);
+    await touchUp(cdp);
+    await expect
+      .poll(async () => (await layers(page)).live.page)
+      .toBe(rest.live.page + 1);
+    await expect.poll(() => settled(page)).toBe(true);
+    seen = await stopSampling(page);
+    expect(seen.filter((f) => f.bare)).toEqual([]);
+    // (Until the turn lands the ghost is the page underneath.)
+    const under = seen
+      .filter((f) => Math.abs(f.live) > 1)
+      .map((f) => -s * f.ghost);
+    expect(under.length).toBeGreaterThan(3);
+    for (const offset of under) {
+      expect(offset).toBeGreaterThanOrEqual(-1);
+      expect(offset).toBeLessThanOrEqual(PARALLAX * (width - DRAG) + 2);
+    }
+    for (let i = 1; i < under.length; i++)
+      expect(under[i]!).toBeLessThanOrEqual(under[i - 1]! + 1);
+
+    // Back: the previous page comes in over the page on screen, which
+    // gives way before it — half of its quarter-width by half way.
+    x = await pull(-s, DRAG);
+    mid = await layersWhen(page, "ghost", s * (width - DRAG));
+    expectLeft(mid.live, -s * PARALLAX * DRAG);
+    expect(mid.ghost!.z).toBeGreaterThan(mid.live.z);
+    expect((await sheets()).bare).toBe(false);
+    await page.waitForTimeout(250);
+    await startSampling(page);
+    await touchUp(cdp);
+    await expect.poll(() => settled(page)).toBe(true);
+    seen = await stopSampling(page);
+    expect(seen.length).toBeGreaterThan(3);
+    expect(seen.filter((f) => f.bare)).toEqual([]);
+    expect((await layers(page)).live.page).toBe(rest.live.page + 1);
+
+    x = await pull(-s, DRAG);
+    await layersWhen(page, "ghost", s * (width - DRAG));
+    await startSampling(page);
+    await touchMove(cdp, at(x), at(x - s * 100), 6);
+    await touchUp(cdp);
+    await expect
+      .poll(async () => (await layers(page)).live.page)
+      .toBe(rest.live.page);
+    await expect.poll(() => settled(page)).toBe(true);
+    seen = await stopSampling(page);
+    expect(seen.filter((f) => f.bare)).toEqual([]);
+    expect((await layers(page)).live.text).toBe(rest.live.text);
+
+    // Reduced motion: no sheet follows the finger, and nothing drifts.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await pull(s, DRAG);
+    await page.waitForTimeout(150);
+    const still = await page.evaluate(() => {
+      const { core, paginator } = window.__beepubReaderNG;
+      return [paginator, ...(core.ghosts as HTMLElement[])].map(
+        (el) =>
+          `${el.style.transform}|${Math.round(el.getBoundingClientRect().left)}`,
+      );
+    });
+    expect(still).toEqual(still.map(() => "|0"));
+    await touchUp(cdp);
+    await expect
+      .poll(async () => (await layers(page)).live.page)
+      .toBe(rest.live.page + 1);
+    expect(await settled(page)).toBe(true);
+  });
+}
 
 test("across a chapter boundary: forward onto the next chapter's first page, back onto the previous chapter's last", async ({
   page,
@@ -467,7 +675,7 @@ test("across a chapter boundary: forward onto the next chapter's first page, bac
   await touchDown(cdp, at(330));
   await touchMove(cdp, at(330), at(180), 10);
   const back = await layersWhen(page, "ghost", end.live.width - 150);
-  expect(back.live.left).toBe(0);
+  expectLeft(back.live, -PARALLAX * 150);
   expect(back.live.index).toBe(1);
   expect(back.ghost!.z).toBeGreaterThan(back.live.z);
   expect(back.ghost!.index).toBe(0);
@@ -603,8 +811,7 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
             "touchend",
             () => {
               window.__lift = {
-                ghostIndex:
-                  core.ghostFor(-1)?.getContents()[0]?.index ?? null,
+                ghostIndex: core.ghostFor(-1)?.getContents()[0]?.index ?? null,
               };
               setTimeout(open, ms);
             },
@@ -871,7 +1078,8 @@ test("a horizontal plate in a vertical book slides like every other page, laid o
   await touchDown(cdp, at(80));
   await touchMove(cdp, at(80), at(200), 10);
   const mid = await layersWhen(page, "live", 120);
-  expect(mid.ghost).toMatchObject({ left: 0, index: 1 });
+  expect(mid.ghost!.index).toBe(1);
+  expectLeft(mid.ghost, -PARALLAX * (mid.live.width - 120));
   await touchMove(cdp, at(200), at(340), 6);
   await touchUp(cdp);
   await expect.poll(async () => (await layers(page)).live.index).toBe(1);
@@ -1393,7 +1601,9 @@ test("after a slide the live page is the only one that answers; a highlight ride
   // Back to the first page: the highlighted page is now the one lying
   // under it, mark and all.
   await page.keyboard.press("PageUp");
-  await expect.poll(async () => (await layers(page)).live.page).toBe(first.page);
+  await expect
+    .poll(async () => (await layers(page)).live.page)
+    .toBe(first.page);
   await expect.poll(() => settled(page)).toBe(true);
   await ghostReady(page, 1);
   await expect.poll(() => marksOn(page, "ghost")).toHaveLength(1);
@@ -2032,7 +2242,10 @@ test("just after a slide, a tap on a link of the page shown turns nothing", asyn
   expect(at.x).toBeLessThan(90);
   const from = (await slideLog(page)).length;
   await page.keyboard.press("PageDown");
-  await expect.poll(async () => (await whereabouts(page)).index).toBe(1);
+  // (Looked for closely: the cover is up for a moment only.)
+  await expect
+    .poll(async () => (await whereabouts(page)).index, { intervals: [40] })
+    .toBe(1);
   expect((await whereabouts(page)).covered).toBe(true);
   await touchTap(cdp, at, 40);
   // Nothing turned; the live page was brought up for the next tap.
@@ -2059,10 +2272,14 @@ test("the fade mode builds no second rendering, and switching modes builds and r
         window.__beepubReaderNG.core.ghosts.length,
       lock: window.__beepubReaderNG.paginator.hasAttribute("no-turn-lock"),
     }));
-  expect(
-    await page.evaluate(() => window.__beepubReaderNG.core.pageTurn),
-  ).toBe("fade");
-  expect(await renderings()).toEqual({ ghost: false, elements: 1, lock: false });
+  expect(await page.evaluate(() => window.__beepubReaderNG.core.pageTurn)).toBe(
+    "fade",
+  );
+  expect(await renderings()).toEqual({
+    ghost: false,
+    elements: 1,
+    lock: false,
+  });
   const paginators = () =>
     page.evaluate(() => document.querySelectorAll("foliate-paginator").length);
   expect(await paginators()).toBe(1);

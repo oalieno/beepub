@@ -1,12 +1,17 @@
 /**
  * CoverSlide — the "slide" page turn: one page is a sheet that moves over
- * another page that stays still, the way a stack of sheets is leafed
- * through. The lower page number is always the upper sheet:
+ * another page, the way a stack of sheets is leafed through. The lower
+ * page number is always the upper sheet:
  *
  *   next      the page on screen follows the finger and slides away; the
- *             next page is already lying still underneath;
+ *             next page is already lying underneath;
  *   previous  the previous page slides in from the side and covers the
- *             page on screen, which stays still.
+ *             page on screen.
+ *
+ * The page underneath is not quite still: it travels the same way as
+ * the sheet over it, a quarter as far (PARALLAX) — pushed aside as it is
+ * covered, coming to rest as it is bared — the way a view under another
+ * does on the phone this is read on.
  *
  * Two renderings of the book have to be visible at once, so the reader
  * keeps further paginators — the ghosts — on the pages one turn away.
@@ -28,7 +33,7 @@
  * for the turn back. The far ghost is given up again once the reader is
  * well inside a chapter.
  *
- * Only a layer's horizontal transform animates. How the paginator stacks
+ * Only the layers' horizontal transforms animate. How the paginator stacks
  * a section's pages internally (side by side, or top to bottom for
  * vertical text) does not matter, which is what lets vertical books
  * slide.
@@ -156,11 +161,23 @@ export type SlideEvent =
   | { at: number; dir: Dir; how: "failed" | "abandoned" }
   | { at: number; load: number; ms: number };
 
-/** A turn made without the finger, start to end. */
-const TURN_MS = 280;
+/** A turn made without the finger, start to end. Most of that is the
+ *  curve's tail: the sheet is nine tenths of the way after two fifths
+ *  of it, and a turn asked for meanwhile ends it there and then (see turn),
+ *  so quick paging never waits for it. */
+const TURN_MS = 400;
 /** A released drag settles in proportion to what is left of the way. */
 const SETTLE_MIN_MS = 120;
-const EASE_OUT = "cubic-bezier(0.25, 0.46, 0.45, 0.94)";
+/** How every sheet moves without the finger, a tap's turn and a released
+ *  drag alike: off at once and a long, soft coming to rest — the usual
+ *  stand-in for the spring a view is pushed with on iOS. */
+const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
+/** How fast that curve sets off, against the even pace over the same
+ *  time (its first control point: 0.72 / 0.32). */
+const EASE_LAUNCH = 2.25;
+/** The page under the moving sheet travels this much of the page's width
+ *  while the sheet travels all of it. */
+const PARALLAX = 0.25;
 /** Released faster than this (px/ms) the turn follows the flick. */
 const FLICK = 0.3;
 /** A finger that rested this long before lifting has no velocity. */
@@ -168,7 +185,7 @@ const VELOCITY_STALE_MS = 100;
 /** A swipe no sheet followed turns the page past this distance (the
  *  gesture layer's own threshold). */
 const SWIPE_PX = 50;
-/** The still page under the sheet is dimmed at most this much. */
+/** The page under the sheet is dimmed at most this much. */
 const DIM = 0.1;
 const SHADOW = "0 0 24px rgba(0, 0, 0, 0.3)";
 /** How long the cover stays over a newly loaded section while that gets
@@ -982,9 +999,28 @@ export class CoverSlide {
     return `translate3d(${x}px, 0, 0)`;
   }
 
-  /** The still page darkens as it is covered, clears as it is bared. */
+  /** How much of the page underneath is covered at progress `p`: all of
+   *  it before a turn forward and after a turn back. */
+  #covered(dir: Dir, p: number): number {
+    return dir > 0 ? 1 - p : p;
+  }
+
+  /** Where the page under the sheet is at progress `p`: pushed aside,
+   *  away from the edge the sheet goes off at, by as much as it is
+   *  covered — so it travels the way the sheet does and is at rest when
+   *  it lies bare. The strip it leaves empty is at that edge and never
+   *  wider than what the sheet still covers there (PARALLAX < 1); its
+   *  far side runs out of the container, which clips. */
+  #under(dir: Dir, p: number): string {
+    const side = this.#host.leftward() ? 1 : -1;
+    const x = -side * PARALLAX * this.#covered(dir, p) * this.#width();
+    return `translate3d(${x}px, 0, 0)`;
+  }
+
+  /** The page underneath darkens as it is covered, clears as it is
+   *  bared. */
   #dimOpacity(dir: Dir, p: number): string {
-    return String(DIM * (dir > 0 ? 1 - p : p));
+    return String(DIM * this.#covered(dir, p));
   }
 
   /** The sheet the reader's page is on. */
@@ -992,8 +1028,8 @@ export class CoverSlide {
     return this.#cover?.el ?? this.#host.live;
   }
 
-  /** The two sheets of a turn `dir` onto `ghost`'s page, `p` of the way:
-   *  the lower page number above, and moving. */
+  /** The two sheets of a turn `dir` onto `sheet`'s page, `p` of the way:
+   *  the lower page number above, the other drifting beneath it. */
   #arrange(dir: Dir, p: number, sheet: HTMLElement) {
     const live = this.#host.live;
     const dim = this.#dim;
@@ -1006,7 +1042,9 @@ export class CoverSlide {
       other.el.style.zIndex = Z_IDLE;
     }
     sheet.style.visibility = "";
-    flatten(lower);
+    lower.style.boxShadow = "";
+    lower.style.transform = this.#under(dir, p);
+    lower.style.willChange = "transform";
     if (upper === live) {
       lower.style.zIndex = Z_UNDER;
       dim.style.zIndex = Z_DIM_UNDER;
@@ -1056,14 +1094,23 @@ export class CoverSlide {
     ms: number,
     sheet: HTMLElement,
   ) {
-    const mover = dir > 0 ? this.#top() : sheet;
+    const top = this.#top();
+    const mover = dir > 0 ? top : sheet;
+    const lower = dir > 0 ? sheet : top;
     if (typeof mover.animate !== "function") return;
-    const options = { duration: ms, easing: EASE_OUT };
+    const options = { duration: ms, easing: EASE };
     const animations = [
       mover.animate(
         [
           { transform: this.#transform(dir, from) },
           { transform: this.#transform(dir, to) },
+        ],
+        options,
+      ),
+      lower.animate(
+        [
+          { transform: this.#under(dir, from) },
+          { transform: this.#under(dir, to) },
         ],
         options,
       ),
@@ -1686,7 +1733,13 @@ export class CoverSlide {
     // is still catching up.
     const from = this.#progress;
     const left = complete ? 1 - from : from;
-    const ms = Math.max(SETTLE_MIN_MS, Math.round(TURN_MS * left));
+    let ms = TURN_MS * left;
+    // A flick is not slowed down by being let go: if the curve would set
+    // off slower than the finger was going, the way is made in less.
+    const speed = complete ? this.#toward(dir, vx) : 0;
+    if (speed > 0)
+      ms = Math.min(ms, (EASE_LAUNCH * left * this.#width()) / speed);
+    ms = Math.max(SETTLE_MIN_MS, Math.round(ms));
     void this.#run(dir, from, complete ? 1 : 0, ms, ghost);
     return true;
   }
