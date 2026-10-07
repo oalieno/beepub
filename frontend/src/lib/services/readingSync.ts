@@ -30,6 +30,7 @@ import {
   type LocalInteractionRecord,
   type LocalProgressRecord,
 } from "$lib/reading/local";
+import { densePageCounts } from "$lib/reading/progress";
 import {
   clearLocalBookLink,
   getLocalBook,
@@ -246,7 +247,8 @@ function toSyncProgress(record: LocalProgressRecord): SyncProgressIn {
     font_size: record.font_size,
     section_index: record.section_index,
     section_page: record.section_page,
-    section_page_counts: record.section_page_counts,
+    // Whatever the record holds: a null here has the whole body refused.
+    section_page_counts: densePageCounts(record.section_page_counts),
     total_pages: record.total_pages,
     xpointer: record.xpointer,
     last_read_at: record.last_read_at,
@@ -453,8 +455,9 @@ async function applyProgress(
     font_size: dict.font_size ?? fresh?.font_size ?? 16,
     section_index: dict.section_index ?? fresh?.section_index ?? 0,
     section_page: dict.section_page ?? fresh?.section_page ?? 0,
-    section_page_counts:
-      dict.section_page_counts ?? fresh?.section_page_counts ?? [],
+    section_page_counts: densePageCounts(
+      dict.section_page_counts ?? fresh?.section_page_counts,
+    ),
     total_pages: dict.total_pages ?? fresh?.total_pages ?? 0,
     xpointer: dict.xpointer ?? null,
     last_read_at: dict.last_read_at,

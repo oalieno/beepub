@@ -17,6 +17,7 @@ import {
 import type { HighlightOut, ReadingStatus } from "$lib/types";
 
 import { cfiOf, locatorFromCfi } from "./locator";
+import { densePageCounts } from "./progress";
 import type { BookPayload, BookSource } from "./source";
 import type {
   HighlightDraft,
@@ -110,17 +111,43 @@ async function writeJson(key: string, value: unknown): Promise<void> {
 
 // Storage accessors for the sync engine (services/readingSync.ts) — it
 // merges server state into the same records this backend reads.
+/** The record, with its page counts dense. One stored with nulls in them
+ *  (written before the counts were made dense at the source) is put right
+ *  on the device too, keeping its stamps: until then every sync sent the
+ *  nulls again, was refused, and so never got to the merge that would
+ *  have replaced it. */
 export async function readLocalProgress(
   bookId: string,
 ): Promise<LocalProgressRecord | null> {
-  return readJson<LocalProgressRecord>(localProgressKey(bookId));
+  const key = localProgressKey(bookId);
+  const record = await readJson<LocalProgressRecord>(key);
+  if (!record) return null;
+  const stored: unknown = record.section_page_counts;
+  const counts = densePageCounts(stored);
+  if (
+    Array.isArray(stored) &&
+    stored.length === counts.length &&
+    counts.every((n, i) => n === stored[i])
+  ) {
+    return record;
+  }
+  const healed = { ...record, section_page_counts: counts };
+  try {
+    await writeJson(key, healed);
+  } catch {
+    // The copy handed back is right either way.
+  }
+  return healed;
 }
 
 export async function writeLocalProgress(
   bookId: string,
   record: LocalProgressRecord,
 ): Promise<void> {
-  await writeJson(localProgressKey(bookId), record);
+  await writeJson(localProgressKey(bookId), {
+    ...record,
+    section_page_counts: densePageCounts(record.section_page_counts),
+  });
 }
 
 export async function readLocalInteraction(
@@ -190,7 +217,7 @@ class LocalSyncBackend implements SyncBackend {
   readonly kind = "local" as const;
 
   async getProgress(bookId: string): Promise<ProgressState | null> {
-    const p = await readJson<LocalProgressRecord>(localProgressKey(bookId));
+    const p = await readLocalProgress(bookId);
     if (!p) return null;
     return {
       locator: p.cfi
@@ -218,8 +245,9 @@ class LocalSyncBackend implements SyncBackend {
   }
 
   async saveProgress(bookId: string, state: ProgressSave): Promise<void> {
-    const key = localProgressKey(bookId);
-    const existing = await readJson<LocalProgressRecord>(key);
+    const existing = await readJson<LocalProgressRecord>(
+      localProgressKey(bookId),
+    );
     const totalProgression = state.locator.locations.totalProgression;
     const now = new Date().toISOString();
     const record: LocalProgressRecord = {
@@ -241,7 +269,7 @@ class LocalSyncBackend implements SyncBackend {
       last_read_at: now,
       updated_at: now,
     };
-    await writeJson(key, record);
+    await writeLocalProgress(bookId, record);
   }
 
   saveProgressBeacon(bookId: string, state: ProgressSave): void {

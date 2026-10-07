@@ -4,6 +4,7 @@
   import { toastStore } from "$lib/stores/toast";
   import { cfiOf, locatorFromCfi } from "$lib/reading/locator";
   import {
+    densePageCounts,
     percentFromPosition,
     positionFromPercent,
     usableWeights,
@@ -384,16 +385,6 @@
     sectionPageCounts = next;
   }
 
-  function normalizeSectionPageCounts(value: unknown): number[] {
-    if (!Array.isArray(value)) return [];
-    return Array.from({ length: value.length }, (_, index) => {
-      const count = value[index];
-      return typeof count === "number" && Number.isFinite(count) && count > 0
-        ? Math.round(count)
-        : 0;
-    });
-  }
-
   function calculatePageProgress(location: any): {
     percentage: number;
     currentPage: number;
@@ -761,7 +752,7 @@
             totalPages,
             sectionIndex: currentSectionIndex,
             sectionPage: currentSectionPage,
-            sectionPageCounts: normalizeSectionPageCounts(sectionPageCounts),
+            sectionPageCounts: densePageCounts(sectionPageCounts),
             fontSize,
           }),
         );
@@ -1280,9 +1271,7 @@
             total_pages: p.totalPages,
             section_page: p.sectionPage,
             section_index: p.sectionIndex,
-            section_page_counts: normalizeSectionPageCounts(
-              p.sectionPageCounts,
-            ),
+            section_page_counts: densePageCounts(p.sectionPageCounts),
             font_size: p.fontSize,
           };
         }
@@ -1330,7 +1319,7 @@
         if (savedProgress.total_pages != null)
           totalPages = savedProgress.total_pages;
         if (Array.isArray(savedProgress.section_page_counts))
-          sectionPageCounts = normalizeSectionPageCounts(
+          sectionPageCounts = densePageCounts(
             savedProgress.section_page_counts,
           );
         // Show the stored percentage immediately; the first relocated
@@ -1588,7 +1577,7 @@
       fontSize,
       sectionIndex: currentSectionIndex,
       sectionPage: currentSectionPage,
-      sectionPageCounts: normalizeSectionPageCounts(sectionPageCounts),
+      sectionPageCounts: densePageCounts(sectionPageCounts),
       totalPages,
       // Only ship the xpointer computed for exactly this CFI — a stale one
       // would point e-readers at the previous page's paragraph. Absent →

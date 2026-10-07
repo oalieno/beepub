@@ -36,6 +36,7 @@
   } from "$lib/reader/toc";
   import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
   import {
+    densePageCounts,
     percentFromPosition,
     positionFromPercent,
     sectionTickPercents,
@@ -800,7 +801,7 @@ ${darkOverrides}
           totalPages,
           sectionIndex: currentIndex,
           sectionPage: currentSectionPage,
-          sectionPageCounts,
+          sectionPageCounts: densePageCounts(sectionPageCounts),
           fontSize,
         }),
       );
@@ -828,7 +829,7 @@ ${darkOverrides}
       sectionPage: currentSectionPage,
       // Dense: a jump leaves holes for the sections it skipped, which
       // map() would keep and JSON turn into nulls the server refuses.
-      sectionPageCounts: Array.from(sectionPageCounts, (n) => (n > 0 ? n : 0)),
+      sectionPageCounts: densePageCounts(sectionPageCounts),
       totalPages,
       // Only the xpointer computed for exactly this CFI; absent → the
       // server degrades to chapter-start synthesis.
@@ -889,9 +890,7 @@ ${darkOverrides}
           return {
             cfi: typeof p.cfi === "string" ? p.cfi : null,
             percentage: typeof p.percentage === "number" ? p.percentage : null,
-            sectionPageCounts: Array.isArray(p.sectionPageCounts)
-              ? p.sectionPageCounts
-              : [],
+            sectionPageCounts: densePageCounts(p.sectionPageCounts),
             devicePosition: null,
           };
         }
@@ -1041,9 +1040,7 @@ ${darkOverrides}
    *  load ends the attempt — opening somewhere else instead would put the
    *  reader, and soon their saved place, where they never were. */
   async function restorePosition(c: ReaderCore, saved: SavedProgress | null) {
-    sectionPageCounts = (saved?.sectionPageCounts ?? []).map((n) =>
-      typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : 0,
-    );
+    sectionPageCounts = densePageCounts(saved?.sectionPageCounts);
     if (saved?.percentage != null) {
       currentPercentage = clampPercentage(saved.percentage);
     }

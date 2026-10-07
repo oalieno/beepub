@@ -5,6 +5,7 @@ import {
   marks,
   openBook,
   pointOnWord,
+  resetProgress,
   seedBook,
   simulateApp,
   touchTap,
@@ -131,4 +132,79 @@ test("reconnecting pushes an offline highlight without reopening the book", asyn
       { timeout: 30_000 },
     )
     .toContain("librarian");
+});
+
+test("a device record holding page counts with nulls in them is sent without them, and put right on the device", async ({
+  page,
+}) => {
+  const bookId = await seedBook(page.request);
+  await page.goto(`/books/${bookId}`);
+  await page
+    .getByRole("button", { name: "Download to this device" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Downloaded to this device/ }).first(),
+  ).toBeVisible({ timeout: 30_000 });
+
+  // A page turn puts the position on the device.
+  await openBook(page, bookId);
+  await page.evaluate(() => window.__beepubReaderNG.core.next());
+  const progressKey = () =>
+    page.evaluate(
+      () =>
+        Object.keys(localStorage).find((k) =>
+          k.startsWith("CapacitorStorage.local-progress:"),
+        ) ?? null,
+    );
+  await expect.poll(progressKey, { timeout: 10_000 }).not.toBeNull();
+  const key = (await progressKey())!;
+  // Away from the reader, so that its parting save is behind us.
+  await page.goto(`/books/${bookId}`);
+  await page.waitForLoadState("networkidle");
+
+  // The record as a build before 2026-10-05 left it after a jump over
+  // chapters never opened: holes, which JSON wrote as nulls. Newer than
+  // anything the server has, so it is what a sync sends — every time,
+  // for as long as the book is not read again.
+  const stamp = new Date(Date.now() + 60_000).toISOString();
+  const pushed = page.waitForRequest(
+    (r) =>
+      r.method() === "POST" &&
+      new URL(r.url()).pathname === `/api/books/${bookId}/sync` &&
+      r.postDataJSON()?.progress?.last_read_at === stamp,
+    { timeout: 30_000 },
+  );
+  await page.evaluate(
+    ([key, stamp]) => {
+      const record = JSON.parse(localStorage.getItem(key)!);
+      record.section_page_counts = [4, null, null, 2, null];
+      record.last_read_at = record.updated_at = stamp;
+      localStorage.setItem(key, JSON.stringify(record));
+    },
+    [key, stamp],
+  );
+
+  // Opening the book pushes the device record first.
+  await page.evaluate(() => delete window.__beepubReaderNG);
+  await openBook(page, bookId, { restore: "1" });
+  const body = (await pushed).postDataJSON();
+  expect(body.progress.section_page_counts).toEqual([4, 0, 0, 2, 0]);
+  const counts = await page.evaluate(
+    (key) =>
+      JSON.parse(localStorage.getItem(key)!).section_page_counts as unknown[],
+    key,
+  );
+  expect(counts.length).toBeGreaterThan(0);
+  expect(counts.every((n) => typeof n === "number")).toBe(true);
+  // The server took it: the position on record is the device's.
+  await expect
+    .poll(async () =>
+      Date.parse(
+        (await (await page.request.get(`/api/books/${bookId}/progress`)).json())
+          .last_read_at,
+      ),
+    )
+    .toBe(Date.parse(stamp));
+  await resetProgress(page.request, bookId);
 });

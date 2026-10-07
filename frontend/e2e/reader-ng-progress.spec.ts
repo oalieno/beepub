@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { densePageCounts } from "../src/lib/reading/progress";
 import { ADMIN_STATE } from "./helpers";
 import {
   CHAPTERS_BOOK,
@@ -157,6 +158,23 @@ test("a jump over sections never opened still saves", async ({ page }) => {
   } finally {
     await resetProgress(page.request, bookId);
   }
+});
+
+test("page counts are stored and sent dense, whatever they were handed", () => {
+  // A jump leaves holes for the sections it skipped…
+  const sparse: number[] = [5, 3];
+  sparse[4] = 7;
+  expect(densePageCounts(sparse)).toEqual([5, 3, 0, 0, 7]);
+  expect(JSON.stringify(densePageCounts(sparse))).toBe("[5,3,0,0,7]");
+  // …which a record written without this holds as nulls from then on.
+  expect(densePageCounts(JSON.parse(JSON.stringify(sparse)))).toEqual([
+    5, 3, 0, 0, 7,
+  ]);
+  expect(
+    densePageCounts([NaN, Infinity, -2, 0, 2.4, "3", null, undefined, {}]),
+  ).toEqual([0, 0, 0, 0, 2, 0, 0, 0, 0]);
+  for (const junk of [null, undefined, "", 3, {}])
+    expect(densePageCounts(junk)).toEqual([]);
 });
 
 test("a stored CFI that no longer resolves degrades to the stored percentage", async ({

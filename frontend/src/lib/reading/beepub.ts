@@ -8,6 +8,7 @@ import { booksApi } from "$lib/api/books";
 import { apiBase, getAuthHeader } from "$lib/api/client";
 
 import { cfiOf, locatorFromCfi } from "./locator";
+import { densePageCounts } from "./progress";
 import type { BookPayload, BookSource } from "./source";
 import type {
   HighlightDraft,
@@ -49,7 +50,7 @@ function toWireProgress(state: ProgressSave) {
     font_size: state.fontSize,
     section_index: state.sectionIndex,
     section_page: state.sectionPage,
-    section_page_counts: state.sectionPageCounts,
+    section_page_counts: densePageCounts(state.sectionPageCounts),
     total_pages: state.totalPages,
     xpointer: state.xpointer ?? undefined,
     track_activity: state.trackActivity,
@@ -72,7 +73,10 @@ class BeepubSyncBackend implements SyncBackend {
       fontSize: p.font_size,
       sectionIndex: p.section_index,
       sectionPage: p.section_page,
-      sectionPageCounts: p.section_page_counts,
+      sectionPageCounts:
+        p.section_page_counts == null
+          ? null
+          : densePageCounts(p.section_page_counts),
       totalPages: p.total_pages,
       lastReadAt: p.last_read_at,
       devicePosition: p.kosync

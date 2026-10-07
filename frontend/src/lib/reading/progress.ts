@@ -117,3 +117,19 @@ export function sectionTickPercents(weights: readonly number[]): number[] {
   }
   return out.length > MAX_SCRUBBER_TICKS ? [] : out;
 }
+
+/** A section's page count as it is stored and sent: a whole number, 0 for
+ *  a section that has not been laid out. Dense — a sparse array (a jump
+ *  leaves holes for the sections it skipped) and a NaN both become null
+ *  in JSON, which a server refuses, and a record once written that way is
+ *  sent again unchanged by every sync. Every writer and every reader of a
+ *  progress record passes its counts through here. */
+export function densePageCounts(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from({ length: value.length }, (_, index) => {
+    const count: unknown = value[index];
+    return typeof count === "number" && Number.isFinite(count) && count > 0
+      ? Math.round(count)
+      : 0;
+  });
+}
