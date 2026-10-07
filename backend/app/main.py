@@ -3,6 +3,8 @@ import uuid
 
 import structlog
 from fastapi import FastAPI, Request, Response
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
@@ -45,6 +47,23 @@ app = FastAPI(title="BeePub API", version="1.0.0")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def log_validation_error(request: Request, exc: RequestValidationError):
+    """A rejected body is otherwise invisible server-side: a client that
+    keeps sending one (a device resyncing a bad record) fails forever with
+    nothing in the log to say which field. Where and why only — never the
+    values, which are the user's."""
+    structlog.get_logger().warning(
+        "request_validation_failed",
+        errors=[
+            {"loc": ".".join(str(p) for p in e["loc"]), "type": e["type"]}
+            for e in exc.errors()[:20]
+        ],
+    )
+    return await request_validation_exception_handler(request, exc)
+
 
 # Resolve the real client IP from X-Forwarded-For. Without this,
 # request.client.host is always the nginx container IP, so the login/register
