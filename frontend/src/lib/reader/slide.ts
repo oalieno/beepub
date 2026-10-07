@@ -161,20 +161,30 @@ export type SlideEvent =
   | { at: number; dir: Dir; how: "failed" | "abandoned" }
   | { at: number; load: number; ms: number };
 
-/** A turn made without the finger, start to end. Most of that is the
- *  curve's tail: the sheet is nine tenths of the way after two fifths
- *  of it, and a turn asked for meanwhile ends it there and then (see turn),
- *  so quick paging never waits for it. */
-const TURN_MS = 400;
-/** A released drag settles in proportion to what is left of the way. */
+// How a sheet moves without the finger. Guesses to be tuned on the
+// device — each is one number (or one curve) to change.
+
+/** A turn started from rest (a tap, a key, a button, a swipe no sheet
+ *  followed), start to end. A turn asked for meanwhile ends it there and
+ *  then (see turn), so quick paging never waits for it. */
+const TURN_MS = 520;
+/** The curve of a turn started from rest: it is seen to set off, to
+ *  travel and to settle — a sixth of the way after a quarter of the
+ *  time, two thirds at half, nine tenths at 0.69 (360ms). */
+const EASE_FROM_REST = "cubic-bezier(0.42, 0, 0.35, 1)";
+/** The curve of a sheet the finger let go of (a drag released, a
+ *  flick, a spring back): it is already moving, so it only comes to
+ *  rest — never sets off a second time. */
+const EASE_RELEASED = "cubic-bezier(0.2, 0.5, 0.3, 1)";
+/** How fast EASE_RELEASED sets off, against the even pace over the
+ *  same time (its first control point: 0.5 / 0.2). The time of a
+ *  released turn is chosen so that this is the finger's speed. */
+const RELEASED_LAUNCH = 2.5;
+/** The longest a released sheet takes for the whole way; what is left
+ *  of the way takes that share of it. */
+const RELEASED_MS = 400;
+/** …and the shortest any released sheet takes. */
 const SETTLE_MIN_MS = 120;
-/** How every sheet moves without the finger, a tap's turn and a released
- *  drag alike: off at once and a long, soft coming to rest — the usual
- *  stand-in for the spring a view is pushed with on iOS. */
-const EASE = "cubic-bezier(0.32, 0.72, 0, 1)";
-/** How fast that curve sets off, against the even pace over the same
- *  time (its first control point: 0.72 / 0.32). */
-const EASE_LAUNCH = 2.25;
 /** The page under the moving sheet travels this much of the page's width
  *  while the sheet travels all of it. */
 const PARALLAX = 0.25;
@@ -1093,12 +1103,13 @@ export class CoverSlide {
     to: number,
     ms: number,
     sheet: HTMLElement,
+    easing: string = EASE_FROM_REST,
   ) {
     const top = this.#top();
     const mover = dir > 0 ? top : sheet;
     const lower = dir > 0 ? sheet : top;
     if (typeof mover.animate !== "function") return;
-    const options = { duration: ms, easing: EASE };
+    const options = { duration: ms, easing };
     const animations = [
       mover.animate(
         [
@@ -1144,7 +1155,14 @@ export class CoverSlide {
   /** Slide from `from` to `to` (1 = the turn is made, 0 = back where it
    *  started). A turn made leaves `ghost` as the cover and the live
    *  paginator owing it. */
-  async #run(dir: Dir, from: number, to: 0 | 1, ms: number, ghost: Ghost) {
+  async #run(
+    dir: Dir,
+    from: number,
+    to: 0 | 1,
+    ms: number,
+    ghost: Ghost,
+    easing: string = EASE_FROM_REST,
+  ) {
     const generation = this.#generation;
     this.#state = "settle";
     this.#partner = ghost;
@@ -1155,7 +1173,7 @@ export class CoverSlide {
     this.#note({ at: this.#now(), dir, how: to ? "slide" : "spring" });
     // The end state stands in the styles; the animation plays over it.
     this.#arrange(dir, to, ghost.el);
-    if (from !== to) await this.#animate(dir, from, to, ms, ghost.el);
+    if (from !== to) await this.#animate(dir, from, to, ms, ghost.el, easing);
     if (generation !== this.#generation) return;
     this.#state = "idle";
     this.#letGo();
@@ -1733,14 +1751,15 @@ export class CoverSlide {
     // is still catching up.
     const from = this.#progress;
     const left = complete ? 1 - from : from;
-    let ms = TURN_MS * left;
-    // A flick is not slowed down by being let go: if the curve would set
-    // off slower than the finger was going, the way is made in less.
+    let ms = RELEASED_MS * left;
+    // The sheet goes on at the finger's speed and comes to rest: the
+    // time is the one in which the curve sets off that fast — never
+    // longer than a sheet let go at rest takes for the same way.
     const speed = complete ? this.#toward(dir, vx) : 0;
     if (speed > 0)
-      ms = Math.min(ms, (EASE_LAUNCH * left * this.#width()) / speed);
+      ms = Math.min(ms, (RELEASED_LAUNCH * left * this.#width()) / speed);
     ms = Math.max(SETTLE_MIN_MS, Math.round(ms));
-    void this.#run(dir, from, complete ? 1 : 0, ms, ghost);
+    void this.#run(dir, from, complete ? 1 : 0, ms, ghost, EASE_RELEASED);
     return true;
   }
 
@@ -1757,6 +1776,6 @@ export class CoverSlide {
       this.#settled();
       return;
     }
-    void this.#run(dir, this.#progress, 0, SETTLE_MIN_MS, ghost);
+    void this.#run(dir, this.#progress, 0, SETTLE_MIN_MS, ghost, EASE_RELEASED);
   }
 }

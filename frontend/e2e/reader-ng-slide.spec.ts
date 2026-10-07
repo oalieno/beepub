@@ -329,6 +329,118 @@ test("a horizontal book: the page on screen follows the finger off the next page
   expect((await layers(page)).live.text).toBe(rest.live.text);
 });
 
+/** The two curves and the times (slide.ts). */
+const TURN_MS = 520;
+const EASE_FROM_REST = "cubic-bezier(0.42, 0, 0.35, 1)";
+const EASE_RELEASED = "cubic-bezier(0.2, 0.5, 0.3, 1)";
+const RELEASED_MS = 400;
+const SETTLE_MIN_MS = 120;
+
+test("a turn from rest sets off, travels and settles over its time; a sheet the finger lets go of only comes to rest, in what is left of a shorter one", async ({
+  page,
+  context,
+}) => {
+  const bookId = await seedFixture(page.request, ANCHOR_BOOK);
+  await openBook(page, bookId, { turn: "slide", size: "24" }, ANCHOR_BOOK);
+  const cdp = await context.newCDPSession(page);
+  await ghostReady(page);
+  // Every animation the reader starts, as it was asked for (not sampled
+  // while it runs: nothing here depends on when the test looks).
+  await page.evaluate(() => {
+    const asked: { easing: string; duration: number }[] = ((
+      window as any
+    ).__asked = []);
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes: any, options: any) {
+      if (keyframes?.[0] && "transform" in keyframes[0])
+        asked.push({ easing: options.easing, duration: options.duration });
+      return animate.call(this, keyframes, options);
+    };
+  });
+  const asked = async () => {
+    const list = await page.evaluate(() => (window as any).__asked.splice(0));
+    return list as { easing: string; duration: number }[];
+  };
+  const livePage = async () => (await layers(page)).live.page;
+  const start = await livePage();
+
+  // By key: from rest, the whole time, both sheets on the one curve.
+  await page.keyboard.press("PageDown");
+  await expect.poll(livePage).toBe(start + 1);
+  await expect.poll(() => settled(page)).toBe(true);
+  let list = await asked();
+  expect(list).toEqual([
+    { easing: EASE_FROM_REST, duration: TURN_MS },
+    { easing: EASE_FROM_REST, duration: TURN_MS },
+  ]);
+
+  // A turn asked for while one slides ends that one there and then
+  // (seen on the animations themselves, not on a clock): the longer
+  // turn holds nobody up.
+  await ghostReady(page);
+  const cut = await page.evaluate(
+    () =>
+      new Promise<string[]>((resolve) => {
+        const { core, paginator } = window.__beepubReaderNG;
+        const sheets = [paginator, ...core.ghosts] as HTMLElement[];
+        core.next();
+        setTimeout(() => {
+          const running = sheets.flatMap((el) => el.getAnimations());
+          core.next();
+          setTimeout(() => resolve(running.map((a) => a.playState)), 0);
+        }, 100);
+      }),
+  );
+  expect(cut.length).toBeGreaterThan(0);
+  expect(new Set(cut)).toEqual(new Set(["finished"]));
+  await expect.poll(livePage).toBe(start + 3);
+  await expect.poll(() => settled(page)).toBe(true);
+  await asked();
+
+  // Dragged slowly past half the page and let go at rest: it comes to
+  // rest on the released curve, in the share of its time that is left.
+  await ghostReady(page);
+  await touchDown(cdp, at(330));
+  await touchMove(cdp, at(330), at(100), 10);
+  await layersWhen(page, "live", -230);
+  await page.waitForTimeout(250);
+  await touchUp(cdp);
+  await expect.poll(livePage).toBe(start + 4);
+  await expect.poll(() => settled(page)).toBe(true);
+  list = await asked();
+  expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
+  const width = page.viewportSize()!.width;
+  const rest = Math.round(RELEASED_MS * (1 - 230 / width));
+  expect(Math.abs(list[0].duration - rest)).toBeLessThanOrEqual(8);
+
+  // Flicked: the same curve, within the released sheet's times. (How
+  // long exactly is the finger's speed and where the sheet stood, which
+  // a test's touches do not have to the millisecond: only the bounds
+  // are held to.)
+  await ghostReady(page);
+  await touchDown(cdp, at(330));
+  await touchMove(cdp, at(330), at(230), 2);
+  await touchUp(cdp);
+  await expect.poll(livePage).toBe(start + 5);
+  await expect.poll(() => settled(page)).toBe(true);
+  list = await asked();
+  expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
+  expect(list[0].duration).toBeGreaterThanOrEqual(SETTLE_MIN_MS);
+  expect(list[0].duration).toBeLessThan(RELEASED_MS);
+
+  // A short drag let go: it springs back, coming to rest the same way.
+  await touchDown(cdp, at(320));
+  await touchMove(cdp, at(320), at(250), 10);
+  await layersWhen(page, "live", -70);
+  await page.waitForTimeout(250);
+  await touchUp(cdp);
+  await expect.poll(() => settled(page)).toBe(true);
+  expect(await livePage()).toBe(start + 5);
+  list = await asked();
+  expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
+  expect(list[0].duration).toBe(SETTLE_MIN_MS);
+});
+
 test("a vertical book slides too, the other way round, and the sheet offers the choice", async ({
   page,
   context,
@@ -1177,7 +1289,8 @@ test("taps and keys play the slide on their own, quick paging lands every turn, 
     core.next();
   });
   await expect.poll(livePage).toBe(first.page + 8);
-  await page.waitForTimeout(700);
+  await expect.poll(() => settled(page)).toBe(true);
+  await page.waitForTimeout(300);
   expect(await livePage()).toBe(first.page + 8);
   expect(await settled(page)).toBe(true);
   // None of that fell back to a fade.
@@ -1431,8 +1544,7 @@ test("at either end of the book nothing slides, and a swipe past the last page s
   expect(pulled.ghost!.left).toBe(0);
   expect(pulled.ghost!.z).toBeLessThan(pulled.live.z);
   await touchUp(cdp);
-  await page.waitForTimeout(400);
-  expect(await settled(page)).toBe(true);
+  await expect.poll(() => settled(page)).toBe(true);
   expect((await layers(page)).live).toMatchObject({
     index: first.index,
     page: first.page,
