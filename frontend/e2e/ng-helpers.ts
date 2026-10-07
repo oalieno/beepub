@@ -276,6 +276,23 @@ export function seedBook(request: APIRequestContext) {
   return seedFixture(request, TOUCH_BOOK);
 }
 
+/** What the browser says of its connection (`navigator.connection`),
+ *  from the first script on. `{ saveData: true }` is how a spec keeps the
+ *  reader from bringing in the rest of a streamed book's text behind the
+ *  page: the specs about chapters that are not in memory need them to
+ *  stay out. */
+export function connection(
+  page: Page,
+  value: { saveData?: boolean; type?: string },
+) {
+  return page.addInitScript((value) => {
+    Object.defineProperty(Navigator.prototype, "connection", {
+      configurable: true,
+      get: () => value,
+    });
+  }, value);
+}
+
 /** Put a book's saved position back on its first page (progress rows
  *  persist across runs; the reader restores them). */
 export async function resetProgress(

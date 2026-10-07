@@ -10,6 +10,7 @@ import { percentFromPosition } from "../src/lib/reading/progress";
 import { ADMIN_STATE } from "./helpers";
 import {
   NINE_CHAPTERS_BOOK,
+  connection,
   iphone,
   marks,
   openBook,
@@ -52,7 +53,9 @@ import {
  *
  * Every test routes the book's content requests (`gate`), which also
  * keeps the browser's HTTP cache out of it: what is "not fetched" here
- * really has to come over the network.
+ * really has to come over the network. And every test has the browser
+ * ask for data to be saved, which keeps the reader from fetching the
+ * rest of the book's text behind the page.
  */
 
 test.use({ storageState: ADMIN_STATE, ...iphone });
@@ -244,6 +247,10 @@ async function open(page: Page, turn: string) {
   const g = await gate(page);
   const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
   await resetProgress(page.request, bookId);
+  // Only what the reader reaches for is fetched: the rest of the book's
+  // text is not brought in behind the page (reader-ng-text-ahead.spec.ts
+  // is about that).
+  await connection(page, { saveData: true });
   await openBook(page, bookId, { turn }, NINE_CHAPTERS_BOOK);
   // The prefetch has what it reaches for from the first page.
   await expect.poll(() => available(page, 3)).toBe(true);
@@ -1113,6 +1120,7 @@ test.describe("on a desktop", () => {
     const g = await gate(page);
     const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
     await resetProgress(page.request, bookId);
+    await connection(page, { saveData: true });
     await openBook(page, bookId, { turn: "fade" }, NINE_CHAPTERS_BOOK);
     await expect.poll(() => available(page, 3)).toBe(true);
     await expect(readingBar(page)).toBeHidden();
