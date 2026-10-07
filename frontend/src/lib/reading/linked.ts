@@ -8,7 +8,10 @@
  * reaches the merge authority before the restore consults it, which is
  * what kills the reconnect race (open-from-server-entry used to restore
  * the stale server position and immediately re-save it with a fresh
- * timestamp, LWW-stomping a whole trip's reading).
+ * timestamp, LWW-stomping a whole trip's reading). The merge is not
+ * trusted to have landed, though: the restore opens at whichever of the
+ * device's and the server's position was read last (`newerProgress`), so
+ * a push the server refuses costs nothing either.
  *
  * Highlights are local-first too: they live in the device records the
  * background sync already merges both ways (per-id LWW with tombstones,
@@ -46,6 +49,34 @@ function withBudget<T>(
       setTimeout(() => resolve(timedOut), ms),
     ),
   ]);
+}
+
+const readAt = (p: ProgressState): number =>
+  p.lastReadAt ? Date.parse(p.lastReadAt) || 0 : 0;
+
+/** The position read last. The server's is taken only when it is
+ *  strictly newer: on a tie the device record wins — after a merge that
+ *  landed the two are the same position, and after one that did not, it
+ *  is the one still waiting to be uploaded. Nothing is written here; the
+ *  device record stays as it is for the next sync to push. */
+export function newerProgress(
+  device: ProgressState | null,
+  remote: ProgressState | null,
+): ProgressState | null {
+  if (!device?.locator) return remote?.locator ? remote : (device ?? remote);
+  if (!remote?.locator) return withMarker(device, remote);
+  return readAt(remote) > readAt(device) ? remote : withMarker(device, remote);
+}
+
+/** The e-reader marker lives on the server (a device save rewrites the
+ *  record without it): the device's position keeps the offer to jump. */
+function withMarker(
+  device: ProgressState,
+  remote: ProgressState | null,
+): ProgressState {
+  return remote?.devicePosition
+    ? { ...device, devicePosition: remote.devicePosition }
+    : device;
 }
 
 export function makeLinkedSync(localBookId: string): SyncBackend {
@@ -88,17 +119,23 @@ export function makeLinkedSync(localBookId: string): SyncBackend {
 
     async getProgress(serverBookId: string): Promise<ProgressState | null> {
       await mergeFirst();
+      // The device record is read whatever the merge did. A push the
+      // server refused (422, 500), or one that ran out of its budget,
+      // leaves the server holding an older position than the device: to
+      // open there would have the reader save it with a fresh timestamp,
+      // over the reading that never got uploaded.
+      const device = await localSync.getProgress(localBookId).catch(() => null);
+      let remote: ProgressState | null = null;
       try {
-        const remote = await withBudget(
+        const read = await withBudget(
           beepubSync.getProgress(serverBookId),
           READ_BUDGET_MS,
         );
-        if (remote !== timedOut) return remote;
+        if (read !== timedOut) remote = read;
       } catch {
         // Server unreachable (network died mid-session).
       }
-      // The device record is the freshest thing we have.
-      return localSync.getProgress(localBookId);
+      return newerProgress(device, remote);
     },
 
     async saveProgress(
