@@ -105,9 +105,16 @@ test("in the slide mode the name changes as the slide lands, and back with the t
         liveIndex: paginator.getContents()[0]?.index as number,
       };
     });
+  // One turn at a time, each seen to have landed (the position changes
+  // as the slide ends — not a fixed while after the tap).
+  const fraction = () =>
+    page.evaluate(
+      () => window.__beepubReaderNG.core.lastLocation.fraction as number,
+    );
   for (let i = 0; i < 40 && !(await where()).last; i++) {
+    const before = await fraction();
     await next.click();
-    await page.waitForTimeout(500);
+    await expect.poll(fraction).not.toBe(before);
   }
   expect(await where()).toMatchObject({ index: 1, last: true });
   // Both neighbouring pages rendered, as after a moment on the page.
@@ -123,11 +130,10 @@ test("in the slide mode the name changes as the slide lands, and back with the t
     .toEqual([2, 1]);
   await page.waitForTimeout(300);
 
-  // Into the third chapter: named the moment the slide (280ms) has
-  // landed, while the live paginator is still in the second.
+  // Into the third chapter: named the moment the slide has landed,
+  // while the live paginator is still in the second.
   await recordLabels(page);
   await next.click();
-  await page.waitForTimeout(330);
   await expect(label(page)).toHaveText("第三話「霧笛」");
   expect(await where()).toMatchObject({ index: 2, first: true, liveIndex: 1 });
   // The live paginator follows, and nothing changes for it.
@@ -137,7 +143,6 @@ test("in the slide mode the name changes as the slide lands, and back with the t
 
   // And back: the second chapter again, as its last page lands.
   await page.getByRole("button", { name: "Previous page" }).click();
-  await page.waitForTimeout(330);
   await expect(label(page)).toHaveText("第二話「燈芯」");
   expect(await where()).toMatchObject({ index: 1, last: true });
   await expect.poll(async () => (await where()).liveIndex).toBe(1);
