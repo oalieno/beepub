@@ -31,7 +31,6 @@
     onselect,
     ondelete,
     onshare,
-    initialTab = "highlights",
     stalledIllustrationIds,
     onillustrationselect,
     onillustrationdelete,
@@ -39,8 +38,6 @@
     onillustrationcheck,
     onclose,
   }: {
-    /** The tab it opens on. */
-    initialTab?: "highlights" | "illustrations";
     highlights?: HighlightOut[];
     illustrations?: IllustrationOut[];
     bookId?: string;
@@ -61,8 +58,7 @@
     onclose?: () => void;
   } = $props();
 
-  // svelte-ignore state_referenced_locally
-  let activeTab = $state<"highlights" | "illustrations">(initialTab);
+  let activeTab = $state<"highlights" | "illustrations">("highlights");
 
   function truncate(text: string, max = 100): string {
     if (text.length <= max) return text;

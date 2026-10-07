@@ -28,9 +28,6 @@ export interface AnnotationStyle {
   color: string;
   /** `illustration` only: still generating — breathe. */
   pulse?: boolean;
-  /** `illustration` only: the generation failed — a dashed red outline
-   *  on a faint wash in place of the gradient. */
-  failed?: boolean;
 }
 
 export interface Annotation {
@@ -135,27 +132,14 @@ function ensureIllustrationGradient(svg: SVGElement): string {
   return id;
 }
 
-const ILLUSTRATION_FAILED = "#dc2626";
-
 function paintIllustration(
   rects: DOMRect[],
   gradientId: string,
   pulse: boolean,
-  failed = false,
 ): SVGElement {
   const g = document.createElementNS(SVG_NS, "g");
+  g.setAttribute("fill", `url(#${gradientId})`);
   g.setAttribute("data-kind", "illustration");
-  if (failed) {
-    g.setAttribute("data-failed", "");
-    g.setAttribute("fill", ILLUSTRATION_FAILED);
-    g.setAttribute("fill-opacity", "0.1");
-    g.setAttribute("stroke", ILLUSTRATION_FAILED);
-    g.setAttribute("stroke-opacity", "0.7");
-    g.setAttribute("stroke-width", "1");
-    g.setAttribute("stroke-dasharray", "3 2");
-  } else {
-    g.setAttribute("fill", `url(#${gradientId})`);
-  }
   g.style.mixBlendMode = "multiply";
   for (const { left, top, width, height } of rects) {
     const rect = document.createElementNS(SVG_NS, "rect");
@@ -370,7 +354,7 @@ export class AnnotationLayer {
         overlayer.element as SVGElement,
       );
       overlayer.add(item.key, source, (rects: DOMRect[]) =>
-        paintIllustration(rects, gradientId, !!style.pulse, !!style.failed),
+        paintIllustration(rects, gradientId, !!style.pulse),
       );
       return;
     }

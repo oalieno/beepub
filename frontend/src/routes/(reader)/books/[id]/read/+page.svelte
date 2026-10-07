@@ -380,7 +380,6 @@
 
   function toggleSidebar(name: Sidebar) {
     activeSidebar = activeSidebar === name ? null : name;
-    highlightSidebarTab = "highlights";
     if (activeSidebar) showMobileBottomBar = false;
   }
 
@@ -1021,7 +1020,7 @@
   }
 
   // How a generation ends is shown where the illustration is — its row
-  // in the list, its mark on the passage — and stays there: a failure
+  // in the list — and stays there: a failure
   // has the server's reason and a Retry; one this page stopped waiting
   // for (two minutes, or a poll that did not get through) is "taking
   // longer than usual" with a way to look again. Neither is a toast,
@@ -1081,22 +1080,6 @@
       toastStore.error((e as Error).message);
     }
   }
-
-  /** A mark on the passage was tapped: the picture when there is one,
-   *  the list — where what went wrong is said — when there is not. One
-   *  that is simply still being made is left to be made. */
-  function handleIllustrationMark(ill: IllustrationOut) {
-    if (ill.status === "completed") {
-      viewingIllustration = ill;
-      return;
-    }
-    if (ill.status !== "failed" && !stalledIllustrationIds.has(ill.id)) return;
-    highlightSidebarTab = "illustrations";
-    activeSidebar = "highlights";
-  }
-  let highlightSidebarTab = $state<"highlights" | "illustrations">(
-    "highlights",
-  );
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
     try {
@@ -1409,7 +1392,7 @@
             oncompanion={openCompanion}
             onillustrate={handleIllustrate}
             onillustrationschange={(list) => (illustrations = list)}
-            onillustrationclick={handleIllustrationMark}
+            onillustrationclick={(ill) => (viewingIllustration = ill)}
             onprogress={(p) => (percentage = p.percentage)}
             onactivity={() => {
               // beepub-kind saves carry track_activity — the server credits
@@ -1619,7 +1602,6 @@
         }}
         ondelete={deleteHighlight}
         onshare={(hl) => (shareHighlight = hl)}
-        initialTab={highlightSidebarTab}
         {stalledIllustrationIds}
         onillustrationselect={handleSelectIllustration}
         onillustrationdelete={handleDeleteIllustration}
