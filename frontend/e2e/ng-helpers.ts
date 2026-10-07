@@ -36,6 +36,7 @@ declare global {
     __turns?: string[];
     __lift?: { ghostIndex: number | null } | null;
     __restoreLoad?: () => void;
+    __releaseLoad?: () => void;
     __armLift?: () => void;
     __liveLoads?: number;
     __stuckGhost?: unknown;

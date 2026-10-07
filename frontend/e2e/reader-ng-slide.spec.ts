@@ -796,8 +796,9 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
   const end = (await layers(page)).live;
 
   /** Hold every load of the first chapter back: until `ms` after the
-   *  finger lifts (touch), or `ms` after it is asked for. */
-  const slowFirstChapter = (ms: number, from: "lift" | "ask") =>
+   *  finger lifts (touch), `ms` after it is asked for, or — "held" —
+   *  until the test lets it go (`__releaseLoad`). */
+  const slowFirstChapter = (ms: number, from: "lift" | "ask" | "held") =>
     page.evaluate(
       ({ ms, from }) => {
         const { core } = window.__beepubReaderNG;
@@ -817,8 +818,12 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
             },
             { capture: true, once: true },
           );
+        let release: () => void = () => {};
+        const released = new Promise<void>((resolve) => (release = resolve));
+        window.__releaseLoad = release;
         section.load = async () => {
           if (from === "lift") await lifted;
+          else if (from === "held") await released;
           else await new Promise((resolve) => setTimeout(resolve, ms));
           return load();
         };
@@ -828,7 +833,7 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
     );
   /** A jump onto the second chapter's first page with the first chapter
    *  slow to load: the ghost sent for it does not have it yet. */
-  const arrive = async (ms: number, from: "lift" | "ask") => {
+  const arrive = async (ms: number, from: "lift" | "ask" | "held") => {
     await goTo(page, { index: 2, fraction: 1 });
     await expect.poll(async () => (await layers(page)).live.index).toBe(2);
     await expect
@@ -895,9 +900,12 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
   // Too slow (well past the wait): the turn does not hang on the ghost
   // and does not change its kind either — it slides, a sheet of bare
   // paper standing in for the page, which comes up on it when it is
-  // there.
+  // there. (The chapter is held until the paper has been seen lying
+  // there, not for a time: a load that came "900ms after it was asked
+  // for" was asked for before the swipe, and left the paper at rest for
+  // a moment a slow machine's polling stepped over.)
   await page.evaluate(() => window.__restoreLoad!());
-  await arrive(900, "ask");
+  await arrive(0, "held");
   await touchDown(cdp, at(330));
   await touchMove(cdp, at(330), at(210), 4);
   await touchUp(cdp);
@@ -917,6 +925,10 @@ test("a page no ghost has yet: a finger lifted before it is there still gets its
       return [last.how, last.blank];
     }),
   ).toEqual(["slide", true]);
+  // Still the page it was turned from underneath, for as long as the
+  // chapter does not come.
+  expect((await layers(page)).live.index).toBe(1);
+  await page.evaluate(() => window.__releaseLoad!());
   await expect
     .poll(async () => {
       const { live } = await layers(page);
