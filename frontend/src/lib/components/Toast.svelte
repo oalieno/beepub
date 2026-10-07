@@ -30,6 +30,30 @@
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+  // A message that comes again while its toast is showing (the same
+  // failure, once more) is felt: a small shake — a dip in opacity for
+  // reduced motion.
+  function nudge(node: HTMLElement, repeats: number) {
+    let felt = repeats;
+    return {
+      update(now: number) {
+        if (now === felt) return;
+        felt = now;
+        const reduced = window.matchMedia(
+          "(prefers-reduced-motion: reduce)",
+        ).matches;
+        node.animate(
+          reduced
+            ? [{ opacity: 1 }, { opacity: 0.5 }, { opacity: 1 }]
+            : [0, -5, 5, -3, 3, 0].map((x) => ({
+                transform: `translateX(${x}px)`,
+              })),
+          { duration: reduced ? 400 : 320, easing: "ease-out" },
+        );
+      },
+    };
+  }
+
   const iconColors: Record<ToastType, string> = {
     success: "text-primary",
     error: "",
@@ -48,6 +72,9 @@
         toast.type
       ]}"
       role="status"
+      data-testid={toast.testId}
+      data-repeats={toast.repeats ?? 0}
+      use:nudge={toast.repeats ?? 0}
       in:fly={{ y: 24, duration: reducedMotion ? 0 : 220 }}
       out:fly={{ y: 8, duration: reducedMotion ? 0 : 160 }}
       onpointerenter={() => toastStore.pause(toast.id)}
@@ -57,7 +84,10 @@
         size={18}
         class="flex-shrink-0 mt-0.5 {iconColors[toast.type]}"
       />
-      <span class="text-sm flex-1 min-w-0 break-words">{toast.message}</span>
+      <!-- (A new node each time it is said again: read again.) -->
+      {#key toast.repeats}
+        <span class="text-sm flex-1 min-w-0 break-words">{toast.message}</span>
+      {/key}
       {#if toast.action}
         <button
           class="flex-shrink-0 text-sm font-semibold underline underline-offset-2 hover:opacity-80"
@@ -83,32 +113,23 @@
 <style>
   /* Mobile: above tab bar (56px) + safe area */
   /* --transfer-offset: the transfer panel's height while it shows. */
-  /* In the reader, a chapter notice at the bottom (ReaderLoadNotice:
-     --reader-notice-height while it shows, above the bottom bar's
-     --reader-chrome-offset) keeps its place and the toasts sit above
-     it. Without one the second term is far below the screen. */
+  /* --reader-chrome-offset: the reader's bottom bar while it shows — it
+     is taller than the tab bar, and the toasts clear it. */
   .toast-position {
-    --above-reader-notice: calc(
-      max(env(safe-area-inset-bottom, 0px), var(--reader-chrome-offset, 0px)) +
-        1.25rem + var(--reader-notice-height, -100vh)
-    );
     bottom: max(
       calc(
         1rem + 56px + env(safe-area-inset-bottom, 0px) +
           var(--transfer-offset, 0px)
       ),
-      var(--above-reader-notice)
+      calc(var(--reader-chrome-offset, 0px) + 0.75rem)
     );
   }
 
   /* Desktop: no tab bar, just safe area */
   @media (min-width: 768px) {
     .toast-position {
-      bottom: max(
-        calc(
-          1rem + env(safe-area-inset-bottom, 0px) + var(--transfer-offset, 0px)
-        ),
-        var(--above-reader-notice)
+      bottom: calc(
+        1rem + env(safe-area-inset-bottom, 0px) + var(--transfer-offset, 0px)
       );
     }
   }

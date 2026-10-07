@@ -41,10 +41,14 @@ import {
  * spinner where its mark was; the list closes when the chapter comes
  * and stays when it does not.
  *
- * The notice sits at the bottom of the screen, above the phone's bottom
- * bar while that shows and below any toast. Trying again is seen to be
- * tried: the button waits while the request is out, the notice stays if
- * it fails (and says so once more), and goes when the chapter is there.
+ * The notice is a toast like any other: in the toasts' column (clear
+ * of the phone's bottom bar while that shows), beside whatever else is
+ * being said, and gone by itself after a while — and the failure goes
+ * with it: the connection returning opens the chapter only while the
+ * toast is still showing, never after. Its Retry takes it down and asks
+ * again (the reader's own spinner covers a long wait); an attempt that
+ * fails brings it back, and one that fails while it is showing starts
+ * its time over and shakes it (`data-repeats`).
  *
  * Every test routes the book's content requests (`gate`), which also
  * keeps the browser's HTTP cache out of it: what is "not fetched" here
@@ -129,7 +133,14 @@ function goTo(page: Page, target: unknown) {
   );
 }
 
-const notice = (page: Page) => page.getByTestId("reader-load-notice");
+const notice = (page: Page) =>
+  page.locator(".toast-position").getByTestId("reader-load-notice");
+/** One notice, and no other on its way out: after a Retry the toast
+ *  that was clicked leaves as the next one comes. */
+async function oneNotice(page: Page) {
+  await page.waitForTimeout(400);
+  await expect(notice(page)).toHaveCount(1);
+}
 const spinner = (page: Page) => page.getByTestId("reader-pending");
 const tocDialog = (page: Page) =>
   page.getByRole("dialog", { name: "Table of Contents" });
@@ -612,7 +623,8 @@ for (const turn of ["fade", "slide"] as const) {
       expect(await where(page)).toEqual(before);
       // Again, still failing: the same notice, the same page.
       await notice(page).getByRole("button", { name: "Retry" }).click();
-      await expect(notice(page)).toBeVisible();
+      await oneNotice(page);
+      await expect(notice(page)).toContainText("couldn't be loaded");
       expect(await where(page)).toEqual(before);
       mend();
       await notice(page).getByRole("button", { name: "Retry" }).click();
@@ -737,37 +749,36 @@ async function rect(locator: ReturnType<Page["locator"]>) {
   return { top: box!.y, bottom: box!.y + box!.height, ...box! };
 }
 
-test("the notice sits at the bottom, above the bar and below a toast; Retry waits, stays when it fails and goes when the chapter is there", async ({
+test("the notice is a toast: clear of the bottom bar, beside a save that fails, taken down by Retry and back when that fails; the connection returning while it shows opens the chapter", async ({
   page,
   context,
 }) => {
-  const { seen, gate, bookId } = await open(page, "fade");
-  const existing: { id: string }[] = await (
-    await page.request.get(`/api/books/${bookId}/highlights`)
-  ).json();
+  const { seen, gate } = await open(page, "fade");
   const before = await where(page);
   const viewport = page.viewportSize()!;
   const cdp = await context.newCDPSession(page);
-  const asked: string[] = [];
-  page.on("request", (r) => {
-    if (decodeURIComponent(r.url()).includes("c-009")) asked.push(r.url());
-  });
+  const asked = requests(page, "c-009");
 
   let mend = gate.fail("c-009");
   await openToc(page, context);
   await tocDialog(page).getByRole("button", { name: "版權頁" }).click();
   await expect(notice(page)).toContainText("couldn't be loaded");
   await expect(tocDialog(page)).toBeHidden();
+  // One toast among the toasts, with what a toast has.
+  await expect(toasts(page)).toHaveCount(1);
+  await expect(notice(page)).toHaveAttribute("role", "status");
+  await expect(notice(page).getByRole("button", { name: "Retry" })).toBeVisible();
+  await expect(notice(page).getByRole("button", { name: "Close" })).toBeVisible();
 
-  // No bar: at the foot of the screen.
+  // No bar: clear of the foot of the screen (and the home indicator).
   await expect(readingBar(page)).toBeHidden();
+  await page.waitForTimeout(300);
   let box = await rect(notice(page));
-  expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(8);
-  expect(viewport.height - box.bottom).toBeLessThanOrEqual(16);
+  expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(16);
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
 
-  // The bar comes up: the notice is above it, not under it.
+  // The bar comes up: the toast is above it, not over its buttons.
   await touchTap(cdp, { x: 195, y: 420 }, 60);
   await expect(readingBar(page)).toBeVisible();
   await expect
@@ -776,108 +787,116 @@ test("the notice sits at the bottom, above the bar and below a toast; Retry wait
       return bar.top - (await rect(notice(page))).bottom;
     })
     .toBeGreaterThanOrEqual(8);
-  box = await rect(notice(page));
-  expect((await rect(readingBar(page))).top - box.bottom).toBeLessThanOrEqual(
-    16,
+
+  // A save that does not get through says so itself, beside it.
+  await page.route("**/api/books/*/highlights", (route) =>
+    route.request().method() === "POST" ? route.abort() : route.continue(),
   );
-
-  try {
-    // While it is up, "cannot reach the server" would say the same thing
-    // again: a save that does not get through raises no toast.
-    await page.route("**/api/books/*/highlights", (route) =>
-      route.request().method() === "POST" ? route.abort() : route.continue(),
-    );
-    const refused = page.waitForEvent("requestfailed", (r) =>
-      r.url().endsWith("/highlights"),
-    );
-    const pt = await pointOnWord(page, "啟航之章第1段", 0);
-    await touchTap(cdp, pt!, 900);
-    const menu = page.getByTestId("highlight-menu");
-    await menu.getByTitle("Highlight", { exact: true }).click();
-    await refused;
-    await page.waitForTimeout(400);
-    await expect(toasts(page)).toHaveCount(0);
-    await expect(notice(page)).toBeVisible();
-    await page.unroute("**/api/books/*/highlights");
-
-    // A toast that does show stands above the notice, clear of it.
-    await touchTap(cdp, pt!, 900);
-    await menu.getByTitle("Highlight", { exact: true }).click();
-    const toast = toasts(page).filter({ hasText: "Highlight saved" });
-    await expect(toast).toBeVisible();
-    await expect.poll(() => marks(page)).not.toHaveLength(0);
-    // (The toast flies in: read its place once it has settled.)
-    await expect
-      .poll(async () => {
-        const t = await rect(toast);
-        return (await rect(notice(page))).top - t.bottom;
-      })
-      .toBeGreaterThanOrEqual(4);
-    await toast.getByRole("button", { name: "Close" }).click();
-    await expect(toasts(page)).toHaveCount(0);
-  } finally {
-    const now: { id: string }[] = await (
-      await page.request.get(`/api/books/${bookId}/highlights`)
-    ).json();
-    for (const h of now)
-      if (!existing.some((e) => e.id === h.id))
-        await page.request.delete(`/api/books/${bookId}/highlights/${h.id}`);
-  }
+  const refused = page.waitForEvent("requestfailed", (r) =>
+    r.url().endsWith("/highlights"),
+  );
+  const pt = await pointOnWord(page, "啟航之章第1段", 0);
+  await touchTap(cdp, pt!, 900);
+  await page
+    .getByTestId("highlight-menu")
+    .getByTitle("Highlight", { exact: true })
+    .click();
+  await refused;
+  await expect(
+    toasts(page).filter({ hasText: "Cannot reach the server" }),
+  ).toBeVisible();
   await expect(notice(page)).toBeVisible();
+  await expect(toasts(page)).toHaveCount(2);
+  await page.unroute("**/api/books/*/highlights");
+  expect(await marks(page)).toHaveLength(0);
   expect(await where(page)).toEqual(before);
 
-  // Retry, with the request out: the button waits, the notice stays, and
-  // the list the reader has open stays open.
+  // Retry, with the request out: the toast is gone, the reader's
+  // spinner says something is on its way, nobody has moved.
   mend();
   const release = gate.hold("c-009");
-  await openToc(page, context);
-  const retry = notice(page).getByRole("button", { name: "Retry" });
-  await expect(retry).toBeEnabled();
-  await expect(retry).toHaveAttribute("aria-busy", "false");
-  await retry.click();
-  await expect(retry).toBeDisabled();
-  await expect(retry).toHaveAttribute("aria-busy", "true");
-  await expect(retry.locator("svg")).toBeVisible();
-  await page.waitForTimeout(800);
-  await expect(retry).toBeDisabled();
-  await expect(notice(page)).toBeVisible();
-  await expect(tocDialog(page)).toBeVisible();
+  const tries = asked.length;
+  await notice(page).getByRole("button", { name: "Retry" }).click();
+  await expect(notice(page)).toHaveCount(0);
+  await expect(spinner(page)).toBeVisible();
+  await expect.poll(() => asked.length).toBe(tries + 1);
   expect(await where(page)).toEqual(before);
 
-  // It fails: the button is a button again, the notice is still there
-  // and has said so.
-  await expect(notice(page)).toHaveAttribute("data-failures", "0");
+  // It fails: the toast is back.
   mend = gate.fail("c-009");
   release();
-  await expect(retry).toBeEnabled();
-  await expect(retry).toHaveAttribute("aria-busy", "false");
-  await expect(notice(page)).toHaveAttribute("data-failures", "1");
   await expect(notice(page)).toContainText("couldn't be loaded");
-  await expect(tocDialog(page)).toBeVisible();
+  await expect(spinner(page)).toHaveCount(0);
   expect(await where(page)).toEqual(before);
 
-  // Offline it is still tried — and seen to be, though the answer comes
-  // at once.
+  // Offline it is still tried, and the toast that comes back says why.
   await context.setOffline(true);
+  await notice(page).getByRole("button", { name: "Retry" }).click();
+  await expect.poll(() => asked.length).toBe(tries + 2);
+  await oneNotice(page);
   await expect(notice(page)).toContainText("offline");
-  const tries = asked.length;
-  await retry.click();
-  await expect(retry).toBeDisabled();
-  await expect(retry).toBeEnabled();
-  await expect(notice(page)).toHaveAttribute("data-failures", "2");
-  expect(asked.length).toBeGreaterThan(tries);
   expect(await where(page)).toEqual(before);
 
-  // The connection returns: tried unprompted, the chapter opens, and the
-  // notice and the list are gone.
+  // The connection returns while it shows: tried unprompted, the
+  // chapter opens and the toast goes.
   mend();
   await context.setOffline(false);
   await expect
     .poll(async () => (await where(page)).index, { timeout: 15_000 })
     .toBe(8);
-  await expect(notice(page)).toBeHidden();
-  await expect(tocDialog(page)).toBeHidden();
+  await expect(notice(page)).toHaveCount(0);
   expect((await where(page)).label).toBe("版權頁");
+  expectSound(seen);
+});
+
+test("the notice leaves by itself, or is closed, and the failure with it: the connection returning afterwards moves nobody", async ({
+  page,
+  context,
+}) => {
+  const { seen } = await open(page, "fade");
+  const before = await where(page);
+  const asked = requests(page, "c-009");
+  await context.setOffline(true);
+  await openToc(page, context);
+  await entry(page, "版權頁").click();
+  await expect(notice(page)).toContainText("offline");
+  const shown = Date.now();
+  await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
+  await tocDialog(page).getByRole("button", { name: "Close" }).click();
+  // Nobody touches it (the pointer is parked away from it): there well
+  // into its time, gone soon after.
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(Math.max(0, 12_000 - (Date.now() - shown)));
+  await expect(notice(page)).toBeVisible();
+  await expect(notice(page)).toHaveCount(0, { timeout: 6_000 });
+  expect(Date.now() - shown).toBeGreaterThan(14_000);
+  expect(asked.length).toBe(1);
+
+  await context.setOffline(false);
+  await page.waitForTimeout(2500);
+  expect(await where(page)).toEqual(before);
+  expect(asked.length).toBe(1);
+  expect(await toasts(page).count()).toBe(0);
+
+  // Closed by hand: the same.
+  await context.setOffline(true);
+  await openToc(page, context);
+  await entry(page, "版權頁").click();
+  await expect(notice(page)).toContainText("offline");
+  await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
+  await tocDialog(page).getByRole("button", { name: "Close" }).click();
+  await notice(page).getByRole("button", { name: "Close" }).click();
+  await expect(notice(page)).toHaveCount(0);
+  expect(asked.length).toBe(2);
+  await context.setOffline(false);
+  await page.waitForTimeout(2500);
+  expect(await where(page)).toEqual(before);
+  expect(asked.length).toBe(2);
+
+  // Asked for by the reader, it opens.
+  await openToc(page, context);
+  await entry(page, "版權頁").click();
+  await expect.poll(async () => (await where(page)).index).toBe(8);
   expectSound(seen);
 });
 
@@ -923,34 +942,36 @@ test("offline, a marked entry being asked for waits and takes no second tap; whe
   await expect(row.locator("svg")).not.toHaveClass(/animate-spin/);
   expect(await rect(row)).toEqual(marked);
   await expect(notice(page)).toContainText("offline");
-  await expect(notice(page)).toHaveAttribute("data-failures", "0");
+  await expect(notice(page)).toHaveAttribute("data-repeats", "0");
   await expect(tocDialog(page)).toBeVisible();
   expect(await where(page)).toEqual(before);
   expect(last.length).toBe(1);
 
   // Another marked entry, the notice already up: asked for, and the
-  // notice says once more that it did not come. While it is out the
-  // notice's own button waits too.
+  // same toast says once more that it did not come.
   const other = entry(page, "歸港");
   const retry = notice(page).getByRole("button", { name: "Retry" });
   const releaseOther = gate.hold("c-008");
   await other.click();
   await expect(other).toHaveAttribute("data-toc-trying");
   await expect(row).not.toHaveAttribute("data-toc-trying");
-  await expect(retry).toBeDisabled();
   await expect.poll(() => eighth.length).toBe(1);
+  await expect(notice(page)).toHaveAttribute("data-repeats", "0");
   releaseOther();
   await expect(other).not.toHaveAttribute("data-toc-trying");
-  await expect(notice(page)).toHaveAttribute("data-failures", "1");
-  await expect(retry).toBeEnabled();
+  await expect(notice(page)).toHaveAttribute("data-repeats", "1");
+  await expect(toasts(page)).toHaveCount(1);
   await expect(tocDialog(page)).toBeVisible();
   expect(await where(page)).toEqual(before);
 
   // Retry is for the chapter asked for last — that one, not the first.
+  // It takes the toast down; the attempt failing brings one back.
   await retry.click();
-  await expect(notice(page)).toHaveAttribute("data-failures", "2");
-  expect(eighth.length).toBe(2);
+  await expect.poll(() => eighth.length).toBe(2);
+  await oneNotice(page);
+  await expect(notice(page)).toHaveAttribute("data-repeats", "0");
   expect(last.length).toBe(1);
+  await expect(tocDialog(page)).toBeVisible();
   expect(await where(page)).toEqual(before);
 
   // And when it is there to be had (still offline), Retry opens it.
@@ -958,7 +979,7 @@ test("offline, a marked entry being asked for waits and takes no second tap; whe
   await retry.click();
   await expect.poll(async () => (await where(page)).index).toBe(7);
   expect(await page.evaluate(() => navigator.onLine)).toBe(false);
-  await expect(notice(page)).toBeHidden();
+  await expect(notice(page)).toHaveCount(0);
   await expect(tocDialog(page)).toBeHidden();
   expect((await where(page)).label).toBe("歸港");
   expect(eighth.length).toBe(3);
@@ -1021,13 +1042,13 @@ test("a retry made just before the connection returns is made again with it", as
     await heldBack;
     await route.abort();
   });
-  const retry = notice(page).getByRole("button", { name: "Retry" });
-  await retry.click();
-  await expect(retry).toBeDisabled();
+  await notice(page).getByRole("button", { name: "Retry" }).click();
+  await expect(notice(page)).toHaveCount(0);
   await expect.poll(() => first).toBe(false);
   await context.setOffline(false);
   await page.waitForTimeout(300);
-  await expect(retry).toBeDisabled();
+  await expect(notice(page)).toHaveCount(0);
+  expect((await where(page)).index).toBe(0);
   letGo();
   await expect
     .poll(async () => (await where(page)).index, { timeout: 15_000 })
@@ -1066,16 +1087,22 @@ test.describe("on a desktop", () => {
     await page.keyboard.press("PageDown");
     await expect(notice(page)).toContainText("couldn't be loaded");
 
+    // (The toast flies in: read its place once it has settled.)
+    await expect
+      .poll(
+        async () => viewport.height - (await rect(notice(page))).bottom,
+      )
+      .toBeGreaterThanOrEqual(8);
     const box = await rect(notice(page));
-    expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(8);
     expect(viewport.height - box.bottom).toBeLessThanOrEqual(16);
     const centre = box.x + box.width / 2;
     expect(Math.abs(centre - viewport.width / 2)).toBeLessThan(2);
 
+    const asked = requests(page, "c-005");
     const retry = notice(page).getByRole("button", { name: "Retry" });
     await retry.click();
-    await expect(notice(page)).toHaveAttribute("data-failures", "1");
-    await expect(retry).toBeEnabled();
+    await expect.poll(() => asked.length).toBe(1);
+    await oneNotice(page);
     mend();
     await retry.click();
     await expect

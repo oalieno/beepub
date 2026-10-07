@@ -72,8 +72,7 @@
       : "text-muted-foreground hover:text-foreground",
   );
 
-  // What sits at the bottom of the reader (the chapter notice, toasts)
-  // rises above the bar while it shows.
+  // The toasts rise above the bar while it shows.
   let height = $state(0);
   $effect(() => {
     const root = document.documentElement;

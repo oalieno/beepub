@@ -76,7 +76,6 @@
   import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
   import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
   import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
-  import ReaderLoadNotice from "$lib/components/reader/ReaderLoadNotice.svelte";
   import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
   import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
   import ReaderTopBar from "$lib/components/reader/ReaderTopBar.svelte";
@@ -160,10 +159,11 @@
     return () => clearTimeout(timer);
   });
   function retryLoad() {
-    loadFailed = false;
+    handleLoadFailure(false);
     unavailableToc = new Set();
     attempt += 1;
     retrying = false;
+    retryAgain = false;
     tryingToc = null;
     loadError = false;
     rendered = false;
@@ -177,19 +177,55 @@
   // too.
   let browserOnline = $state(browser ? navigator.onLine : true);
   const readerOffline = $derived(!$isOnline || !browserOnline);
-  // A chapter the reader asked for could not be loaded: they are still
-  // where they were, and the notice offers to try again.
-  let loadFailed = $state(false);
   // TOC entries whose chapter is not in memory while offline.
   let unavailableToc = $state<Set<string>>(new Set());
-  // An attempt at a chapter made by hand — the notice's "try again", or
+
+  // A chapter the reader asked for could not be loaded: they are still
+  // where they were, and a toast says so and offers to try again. It is
+  // a toast like any other — it leaves by itself — and the failure goes
+  // with it: once it has left, nothing is asked for again unless the
+  // reader asks. (Every attempt that fails says so again: the toast on
+  // screen starts its time over and shakes.)
+  let loadToast: string | null = null;
+  function handleLoadFailure(failed: boolean) {
+    const was = loadToast;
+    if (!failed) {
+      loadToast = null;
+      if (was) toastStore.remove(was);
+      return;
+    }
+    const opts = {
+      testId: "reader-load-notice",
+      action: { label: m.common_retry(), onclick: () => void retryChapter() },
+    };
+    loadToast = readerOffline
+      ? toastStore.warning(m.reader_chapter_offline(), opts)
+      : toastStore.error(m.reader_chapter_load_failed(), opts);
+    // (The wording changed with the connection: one toast, not two.)
+    if (was && was !== loadToast) toastStore.remove(was);
+  }
+  $effect(() => {
+    const unsubscribe = toastStore.subscribe((toasts) => {
+      if (!loadToast || toasts.some((t) => t.id === loadToast)) return;
+      // It timed out or was closed (its own Retry takes it down too,
+      // but then the attempt is out).
+      loadToast = null;
+      if (!retrying) untrack(() => reader)?.dismissLoadFailure();
+    });
+    return () => {
+      unsubscribe();
+      const was = loadToast;
+      loadToast = null;
+      if (was) toastStore.remove(was);
+    };
+  });
+
+  // An attempt at a chapter made by hand — the toast's "try again", or
   // a tap on an entry the table of contents marks as not loaded — while
-  // it is in flight (the notice's button waits; the tapped entry shows
-  // it), and how often one has come back empty-handed with the notice
-  // already up (the notice says so each time).
-  let retrying = $state(false);
+  // it is in flight (the tapped entry shows it; the reader's own spinner
+  // comes up when the wait gets long).
+  let retrying = false;
   let tryingToc = $state<string | null>(null);
-  let retryFailures = $state(0);
   // An answer that comes at once — offline there is nothing to wait
   // for — still has to be seen to have been asked for.
   const RETRY_MIN_MS = 500;
@@ -202,14 +238,12 @@
     tocHref: string | null,
   ): Promise<void> {
     const id = ++attempt;
-    // Up already: a failure will not show as the notice appearing.
-    const noticed = loadFailed;
     retrying = true;
     tryingToc = tocHref;
     const since = performance.now();
     const ok = await load().catch(() => false);
     if (id !== attempt) return;
-    if (!ok) {
+    if (!ok && tocHref != null) {
       const left = RETRY_MIN_MS - (performance.now() - since);
       if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
       if (id !== attempt) return;
@@ -223,12 +257,18 @@
       if (activeSidebar === "toc") activeSidebar = null;
       return;
     }
-    if (retryAgain && loadFailed) {
+    if (!loadToast) {
+      // Nothing says a chapter failed (the attempt was given up for
+      // another destination, or the toast was closed meanwhile): then
+      // nothing is left to ask for again.
+      retryAgain = false;
+      reader?.dismissLoadFailure();
+      return;
+    }
+    if (retryAgain) {
       retryAgain = false;
       return retryChapter();
     }
-    retryAgain = false;
-    if (noticed && loadFailed) retryFailures += 1;
   }
   async function retryChapter(): Promise<void> {
     const r = reader;
@@ -252,22 +292,16 @@
       href,
     );
   }
-  // The connection is back while the notice still stands: ask once more,
-  // unprompted. Nothing happens by itself otherwise.
+  // The connection is back while the toast is still showing (or an
+  // attempt made without it is still out): ask once more, unprompted.
+  // Once the toast has left nothing happens by itself — the reader may
+  // be reading elsewhere, and is not carried off.
   let wasOffline = false;
   $effect(() => {
     const off = readerOffline;
-    if (wasOffline && !off && untrack(() => loadFailed))
+    if (wasOffline && !off && (loadToast || retrying))
       untrack(() => void retryChapter());
     wasOffline = off;
-  });
-  // The notice already says the chapter cannot be fetched; "cannot reach
-  // the server" beside it says the same thing twice.
-  $effect(() => {
-    if (!loadFailed || loadError) return;
-    return toastStore.mute(
-      (message) => message === m.error_server_unreachable(),
-    );
   });
 
   // Auto reading status. Beepub books track it on the server interaction;
@@ -1309,7 +1343,7 @@
             showAi={aiEnabled}
             aiBookId={aiEnabled ? aiBookId : null}
             offline={readerOffline}
-            onloadfailure={(failed) => (loadFailed = failed)}
+            onloadfailure={handleLoadFailure}
             onunavailable={(hrefs) => (unavailableToc = new Set(hrefs))}
             onbook={(b) => {
               // The file's own title unless the record supplied one.
@@ -1485,17 +1519,6 @@
       >
         <Spinner size="lg" class={darkMode ? "border-ink-400" : ""} />
       </div>
-    {/if}
-
-    {#if loadFailed && !loadError}
-      <ReaderLoadNotice
-        offline={readerOffline}
-        {darkMode}
-        {retrying}
-        failures={retryFailures}
-        onretry={retryChapter}
-        ondismiss={() => reader?.dismissLoadFailure()}
-      />
     {/if}
 
     {#if showGestureHint}

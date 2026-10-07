@@ -212,9 +212,10 @@
     onillustrationschange?: (illustrations: IllustrationOut[]) => void;
     /** A completed illustration's marker was tapped. */
     onillustrationclick?: (illustration: IllustrationOut) => void;
-    /** A chapter the reader asked for could not be loaded (true) — they
-     *  are still where they were, and `retryLoad()` asks again — or that
-     *  is over (false: they moved on, retried, or dismissed it). */
+    /** A chapter the reader asked for could not be loaded (true; said
+     *  again for every attempt that fails) — they are still where they
+     *  were, and `retryLoad()` asks again — or that is over (false: they
+     *  moved on, retried, or it was dismissed). */
     onloadfailure?: (failed: boolean) => void;
     /** The TOC hrefs whose chapter cannot be shown right now: the book
      *  is streamed, the connection is gone and the chapter's document is
@@ -929,7 +930,7 @@ ${darkOverrides}
   let streamed = false;
   // The destination that could not be loaded, as a way to ask again.
   let failure: { retry: () => unknown } | null = null;
-  // The notice's "try again", while it is in flight.
+  // The page's "try again", while it is in flight.
   let retrying: Promise<boolean> | null = null;
 
   function setFailure(retry: () => unknown) {
@@ -944,11 +945,10 @@ ${darkOverrides}
   }
 
   /**
-   * The page shows the notice; this is its "try again". Resolves to
-   * whether the notice is answered: the chapter is on screen (or the
-   * reader has moved on). The failure stands while the attempt is in
-   * flight — the notice stays up, saying it is being tried — and still
-   * stands if it fails.
+   * The page says so (a toast); this is its "try again". Resolves to
+   * whether that is answered: the chapter is on screen (or the reader
+   * has moved on). The failure stands while the attempt is in flight,
+   * and still stands if it fails — said again (`onloadfailure(true)`).
    *
    * (Offline too the chapter is asked for, as for any jump — see
    * reach().)
@@ -980,7 +980,7 @@ ${darkOverrides}
    * place in its section) — the caller may know a coarser one. "failed":
    * its chapter could not be loaded, or the reader went elsewhere first;
    * they are where they were, nothing about their place has changed, and
-   * (for a failed load) the notice offers `again`.
+   * (for a failed load) the page offers `again`.
    *
    * Offline, a chapter that is not in memory is asked for all the same,
    * once: the browser's HTTP cache may hold it, the connection may be

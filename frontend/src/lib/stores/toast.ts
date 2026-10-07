@@ -12,6 +12,17 @@ export interface Toast {
   message: string;
   type: ToastType;
   action?: ToastAction;
+  /** How often the message has come again while it was showing: the
+   *  toast on screen answers each time (a small shake, read again). */
+  repeats?: number;
+  /** For tests to find it by. */
+  testId?: string;
+}
+
+export interface ToastOptions {
+  action?: ToastAction;
+  duration?: number;
+  testId?: string;
 }
 
 // Long enough to be read after the eye comes back from where the user
@@ -50,20 +61,13 @@ function createToastStore() {
   let current: Toast[] = [];
   subscribe((toasts) => (current = toasts));
 
-  // Messages that are not to be shown for now (see mute).
-  const muted = new Set<(message: string) => boolean>();
-
   /**
    * Show a toast. `duration` (ms) overrides the default; 0 keeps the
    * toast until it is dismissed. A message that is already showing is
-   * not shown twice: the one on screen starts its time over.
+   * not shown twice: the one on screen starts its time over, and shows
+   * that it was said again.
    */
-  function add(
-    message: string,
-    type: ToastType = "info",
-    opts?: { action?: ToastAction; duration?: number },
-  ) {
-    for (const test of muted) if (test(message)) return "";
+  function add(message: string, type: ToastType = "info", opts?: ToastOptions) {
     const duration =
       opts?.duration ?? defaultDuration(message, type, opts?.action);
     const showing = current.find(
@@ -71,11 +75,12 @@ function createToastStore() {
     );
     if (showing) {
       const id = showing.id;
-      const action = opts?.action;
-      if (action)
-        update((toasts) =>
-          toasts.map((t) => (t.id === id ? { ...t, action } : t)),
-        );
+      const action = opts?.action ?? showing.action;
+      update((toasts) =>
+        toasts.map((t) =>
+          t.id === id ? { ...t, action, repeats: (t.repeats ?? 0) + 1 } : t,
+        ),
+      );
       const timer = timers.get(id);
       const paused = !!timer && !timer.handle;
       if (timer?.handle) clearTimeout(timer.handle);
@@ -90,24 +95,13 @@ function createToastStore() {
     const id = Math.random().toString(36).slice(2);
     update((toasts) => [
       ...toasts,
-      { id, message, type, action: opts?.action },
+      { id, message, type, action: opts?.action, testId: opts?.testId },
     ]);
     if (duration) {
       timers.set(id, { remaining: duration, started: Date.now() });
       schedule(id);
     }
     return id;
-  }
-
-  /**
-   * Keep messages `test` accepts off the screen — those showing are
-   * removed, new ones are dropped — until the returned function is
-   * called. For a surface that is already saying the same thing.
-   */
-  function mute(test: (message: string) => boolean): () => void {
-    muted.add(test);
-    for (const t of current.filter((t) => test(t.message))) remove(t.id);
-    return () => void muted.delete(test);
   }
 
   // Auto-dismiss timers, paused while the pointer rests on a toast.
@@ -152,24 +146,14 @@ function createToastStore() {
 
   return {
     subscribe,
-    success: (
-      message: string,
-      opts?: { action?: ToastAction; duration?: number },
-    ) => add(message, "success", opts),
-    error: (
-      message: string,
-      opts?: { action?: ToastAction; duration?: number },
-    ) => add(message, "error", opts),
-    info: (
-      message: string,
-      opts?: { action?: ToastAction; duration?: number },
-    ) => add(message, "info", opts),
-    warning: (
-      message: string,
-      opts?: { action?: ToastAction; duration?: number },
-    ) => add(message, "warning", opts),
+    success: (message: string, opts?: ToastOptions) =>
+      add(message, "success", opts),
+    error: (message: string, opts?: ToastOptions) =>
+      add(message, "error", opts),
+    info: (message: string, opts?: ToastOptions) => add(message, "info", opts),
+    warning: (message: string, opts?: ToastOptions) =>
+      add(message, "warning", opts),
     remove,
-    mute,
     pause,
     resume,
   };

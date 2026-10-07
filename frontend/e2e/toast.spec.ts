@@ -8,7 +8,7 @@ import { seedBook } from "./ng-helpers";
  * Toasts leave by themselves — errors and warnings too (they used to
  * stay until tapped: "Cannot reach the server" sat on the screen long
  * after the server was back) — and a message that is already showing is
- * not stacked a second time; it starts its time over.
+ * not stacked a second time; it starts its time over (and shakes).
  */
 
 /** Run `body` on a clock the test moves by hand. */
@@ -150,17 +150,25 @@ test("a repeat while the pointer rests on the toast does not start the clock", (
   });
 });
 
-test("a muted message is taken down and kept down until it is unmuted", () => {
+test("a message that comes again is counted on the toast showing, and keeps what it offered", () => {
   onFakeClock(() => {
-    toastStore.error("Cannot reach the server");
-    toastStore.error("The file is damaged");
-    const unmute = toastStore.mute((m) => m === "Cannot reach the server");
-    expect(showing()).toEqual(["error: The file is damaged"]);
-    toastStore.error("Cannot reach the server");
-    expect(showing()).toEqual(["error: The file is damaged"]);
-    unmute();
-    toastStore.error("Cannot reach the server");
-    expect(showing()).toHaveLength(2);
+    let tried = 0;
+    const id = toastStore.error("Upload failed", {
+      action: { label: "Retry", onclick: () => tried++ },
+      testId: "upload-failed",
+    });
+    expect(get(toastStore)[0].repeats ?? 0).toBe(0);
+    expect(toastStore.error("Upload failed")).toBe(id);
+    expect(toastStore.error("Upload failed")).toBe(id);
+    const [toast] = get(toastStore);
+    expect(toast.repeats).toBe(2);
+    expect(toast.testId).toBe("upload-failed");
+    toast.action!.onclick();
+    expect(tried).toBe(1);
+    // Gone and said afresh, it is a new toast.
+    toastStore.remove(id);
+    toastStore.error("Upload failed");
+    expect(get(toastStore)[0].repeats ?? 0).toBe(0);
   });
 });
 
@@ -186,6 +194,7 @@ test.describe("on the page", () => {
       await page.getByRole("menuitem", { name: /favorites/ }).click();
       await refused;
       await expect(toasts).toHaveText(["Cannot reach the server"]);
+      await expect(toasts).toHaveAttribute("data-repeats", String(i));
     }
     await page.waitForTimeout(500);
     await expect(toasts).toHaveCount(1);
