@@ -14,12 +14,22 @@ async function openSearch(page: Page) {
   return input;
 }
 
-const SEARCH = "**/api/books/search*";
+/** The modal's own request: the library list's endpoint, asked for a
+ *  query's first twenty. (The list pages ask the same endpoint for
+ *  sixty, and the home page for none with a search.) */
+function isModalSearch(url: string | URL) {
+  const u = new URL(url);
+  return (
+    u.pathname === "/api/books/all" &&
+    u.searchParams.has("search") &&
+    u.searchParams.get("limit") === "20"
+  );
+}
 const bookPage = /\/books\/[0-9a-f-]{36}/;
 
 /**
  * Regression for the global-search empty-state flash: debounced typing
- * keeps several /api/books/search requests in flight, and an older
+ * keeps several book-search requests in flight, and an older
  * response finishing while a newer request still ran used to clear
  * `loading` — the modal read "not loading + no results" and flashed
  * "No books found" before the real results arrived. Stale responses may
@@ -36,7 +46,7 @@ test("a stale search response cannot flash the empty state", async ({
   // after the fast one started, clears loading, and the empty state
   // flashes until the fast response arrives.
   let call = 0;
-  await page.route("**/api/books/search*", async (route) => {
+  await page.route(isModalSearch, async (route) => {
     call += 1;
     if (call === 1) {
       await new Promise((r) => setTimeout(r, 1500));
@@ -78,9 +88,7 @@ test("a stale search response cannot flash the empty state", async ({
   // second keystroke — a fixed debounce sleep loses under load (both
   // keystrokes coalesce into one request, which meets the slow stub and
   // the results never arrive; flaked right after e2e image rebuilds).
-  const firstRequest = page.waitForRequest((r) =>
-    r.url().includes("/api/books/search"),
-  );
+  const firstRequest = page.waitForRequest((r) => isModalSearch(r.url()));
   await input.fill("E2");
   await firstRequest;
   // … then type on so request 2 (fast, with results) races past it.
@@ -143,13 +151,13 @@ test("Enter before a slow search answers does not open a book when the answer la
   page.on("framenavigated", (f) => {
     if (f === page.mainFrame()) visited.push(f.url());
   });
-  await page.route(SEARCH, async (route) => {
+  await page.route(isModalSearch, async (route) => {
     await new Promise((r) => setTimeout(r, 1500));
     await route.continue().catch(() => {});
   });
   await page.goto("/");
   const input = await openSearch(page);
-  const asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  const asked = page.waitForRequest((r) => isModalSearch(r.url()));
   await input.fill("E2E Test");
   await asked;
   await input.press("Enter");
@@ -174,6 +182,8 @@ test("from the library itself, Enter searches that list; Back returns to it as i
   const listed = page.waitForRequest(
     (r) =>
       /\/api\/books\/(all|feed)\?/.test(r.url()) &&
+      // (The list's request, not the modal's for the same words.)
+      !isModalSearch(r.url()) &&
       new URL(r.url()).searchParams.get("search") === "E2E Test",
   );
   await input.press("Enter");
@@ -204,23 +214,23 @@ test("a result picked with the arrow keys is opened by Enter", async ({
 test("typing on aborts the search it has made pointless", async ({ page }) => {
   // Every search is slow: the first is still out when the second key
   // comes.
-  await page.route(SEARCH, async (route) => {
+  await page.route(isModalSearch, async (route) => {
     await new Promise((r) => setTimeout(r, 1500));
     await route.continue().catch(() => {});
   });
   const aborted: string[] = [];
   page.on("requestfailed", (r) => {
-    if (r.url().includes("/books/search"))
+    if (isModalSearch(r.url()))
       aborted.push(
-        `${new URL(r.url()).searchParams.get("q")}: ${r.failure()?.errorText}`,
+        `${new URL(r.url()).searchParams.get("search")}: ${r.failure()?.errorText}`,
       );
   });
   await page.goto("/");
   const input = await openSearch(page);
-  let asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  let asked = page.waitForRequest((r) => isModalSearch(r.url()));
   await input.fill("E2");
   await asked;
-  asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  asked = page.waitForRequest((r) => isModalSearch(r.url()));
   await input.fill("E2E Test");
   await expect.poll(() => aborted).toEqual(["E2: net::ERR_ABORTED"]);
   await asked;
@@ -229,7 +239,7 @@ test("typing on aborts the search it has made pointless", async ({ page }) => {
     page.getByRole("dialog").getByText("E2E Test Book").first(),
   ).toBeVisible({ timeout: 10_000 });
   // … and closing the modal gives up what it is still waiting for.
-  asked = page.waitForRequest((r) => r.url().includes("/books/search"));
+  asked = page.waitForRequest((r) => isModalSearch(r.url()));
   await input.fill("E2E Te");
   await asked;
   await page.keyboard.press("Escape");
@@ -285,4 +295,54 @@ test("on the passage tabs Enter runs the search and leaves the results up", asyn
   await expect(hit).toBeVisible();
   expect(calls).toBe(1);
   expect(page.url()).toBe(start);
+});
+
+/**
+ * The modal and the library list ask one endpoint, so what the modal
+ * shows is the head of the list Enter leads to: the same books, in the
+ * same order.
+ */
+test("the modal lists the first books of the library search, in its order", async ({
+  page,
+}) => {
+  await page.goto("/");
+  for (const q of ["E2E", "E2E Test", "test", "書"]) {
+    const input = await openSearch(page);
+    const answered = page.waitForResponse(
+      (r) =>
+        isModalSearch(r.url()) &&
+        new URL(r.url()).searchParams.get("search") === q,
+    );
+    await input.fill(q);
+    const answer = await (await answered).json();
+    expect(answer.items.length, q).toBeGreaterThan(0);
+    const rows = page.getByRole("dialog").locator("[role=tabpanel] > button");
+    await expect(rows, q).toHaveCount(answer.items.length);
+    const modalTitles = await rows.evaluateAll((els) =>
+      els.map((el) => el.querySelector("p")?.textContent?.trim()),
+    );
+
+    const listed = page.waitForResponse(
+      (r) =>
+        new URL(r.url()).pathname === "/api/books/all" &&
+        !isModalSearch(r.url()) &&
+        new URL(r.url()).searchParams.get("search") === q,
+    );
+    await input.press("Enter");
+    const list = await (await listed).json();
+    await expect(page).toHaveURL(/\/libraries\/all\?search=/);
+    const cards = page.locator(".book-grid > [role=button]");
+    await expect(cards, q).toHaveCount(list.items.length);
+    const listTitles = await cards.evaluateAll((els) =>
+      els.map((el) => el.querySelector("h3")?.textContent?.trim()),
+    );
+    // On screen: the same titles, in the same order …
+    expect(listTitles.slice(0, modalTitles.length), q).toEqual(modalTitles);
+    // … and they are the same books, not namesakes.
+    expect(
+      list.items.slice(0, answer.items.length).map((b: { id: string }) => b.id),
+      q,
+    ).toEqual(answer.items.map((b: { id: string }) => b.id));
+    expect(list.total, q).toBe(answer.total);
+  }
 });

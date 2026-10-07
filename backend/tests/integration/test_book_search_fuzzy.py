@@ -39,7 +39,9 @@ async def _seed(admin_client: AsyncClient) -> str:
 
 
 async def _search(client: AsyncClient, q: str) -> list[str]:
-    response = await client.get("/api/books/search", params={"q": q, "limit": 50})
+    response = await client.get(
+        "/api/books/all", params={"search": q, "sort": "relevance", "limit": 50}
+    )
     assert response.status_code == 200, response.text
     return [item["display_title"] for item in response.json()["items"]]
 
@@ -105,7 +107,7 @@ async def test_multi_keyword_narrows_then_broadens(admin_client: AsyncClient):
 async def test_keywords_match_tags(admin_client: AsyncClient):
     await _seed(admin_client)
     response = await admin_client.get(
-        "/api/books/search", params={"q": "三體", "limit": 1}
+        "/api/books/all", params={"search": "三體", "sort": "relevance", "limit": 1}
     )
     book_id = response.json()["items"][0]["id"]
     response = await admin_client.put(
@@ -253,7 +255,6 @@ async def test_search_never_folds_a_column(admin_client: AsyncClient):
     with _recorded_sql() as statements:
         for q in queries:
             for url, params in [
-                ("/api/books/search", {"q": q}),
                 (
                     f"/api/libraries/{library_id}/books",
                     {"search": q, "sort": "relevance"},
@@ -276,7 +277,9 @@ async def test_search_never_folds_a_column(admin_client: AsyncClient):
 
 async def test_stored_fold_follows_the_book(admin_client: AsyncClient):
     await _seed(admin_client)
-    response = await admin_client.get("/api/books/search", params={"q": "Clean Code"})
+    response = await admin_client.get(
+        "/api/books/all", params={"search": "Clean Code", "sort": "relevance"}
+    )
     book_id = response.json()["items"][0]["id"]
     response = await admin_client.put(
         f"/api/books/{book_id}/metadata",
@@ -317,3 +320,30 @@ async def test_percent_sign_is_not_a_wildcard(admin_client: AsyncClient):
     await _seed(admin_client)
     # As a LIKE wildcard this would be "C…e" and match Clean Code.
     assert await _search(admin_client, "C%e") == []
+
+
+async def test_all_books_counts_and_ranks_ids_then_reads_the_page(
+    admin_client: AsyncClient,
+):
+    """A search matching much of a library must not carry every full
+    book row through the count and the sort: both read ids, and only the
+    page's books are read whole. The total is still every match, and the
+    page keeps its ranked order."""
+    await _seed_relevance(admin_client)
+    with _recorded_sql() as statements:
+        response = await admin_client.get(
+            "/api/books/all",
+            params={"search": "食堂", "sort": "relevance", "limit": 2, "offset": 1},
+        )
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["total"] == 4
+    assert [item["display_title"] for item in payload["items"]] == RELEVANCE_ORDER[1:3]
+
+    counts = [s for s in statements if s.startswith("SELECT count(*)")]
+    assert len(counts) == 1
+    assert "books.description" not in counts[0]
+    ranked = [s for s in statements if "ORDER BY" in s and "LIMIT" in s]
+    assert len(ranked) == 1
+    assert ranked[0].lstrip().startswith("SELECT hits.")
+    assert "books.description" not in ranked[0]

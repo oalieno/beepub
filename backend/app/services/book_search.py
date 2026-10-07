@@ -313,3 +313,26 @@ def relevance_order(search: TieredSearch, q: str) -> list:
     order for the common 「…1」「…2」 naming."""
     title_col = func.coalesce(Book.title, Book.epub_title)
     return [relevance_score(search, q), func.length(title_col), title_col]
+
+
+def relevance_ranked_ids(matches: Select, search: TieredSearch, q: str) -> Select:
+    """The ids of ``matches`` (the caller's query, search conditions
+    attached), most relevant first — to page with OFFSET/LIMIT, the
+    page's books fetched afterwards.
+
+    A one-character query matches a third of a library, and no index
+    gives this order: every match has to be ranked to keep one page.
+    Two things keep that cheap. Only the id and the sort keys go through
+    the sort, not whole books. And the matches are settled first, behind
+    OFFSET 0 — a subquery PostgreSQL will not flatten — so the sort sits
+    directly under the LIMIT and keeps a page-sized heap. Flattened, the
+    planner sorted every match in full before checking which the user
+    may see (measured on 64k books, 21k matches: 350 ms against 105).
+    """
+    keys = [*relevance_order(search, q), Book.id]
+    hits = (
+        matches.with_only_columns(*[key.label(f"k{i}") for i, key in enumerate(keys)])
+        .offset(0)
+        .subquery("hits")
+    )
+    return select(hits.c[len(keys) - 1]).order_by(*hits.c)

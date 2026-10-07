@@ -304,12 +304,25 @@ export const booksApi = {
   getEpubImages: (bookId: string) =>
     get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
 
+  /** The first `limit` books for a query, most relevant first — the
+   *  library list's own search (`/books/all`), so a result list shown
+   *  elsewhere starts with the same books in the same order. */
   search: (query: string, limit: number = 20, signal?: AbortSignal) => {
-    const params = new URLSearchParams({ q: query, limit: String(limit) });
-    return get(`/books/search?${params}`, { signal }) as Promise<{
-      items: (BookOut & { library_name: string | null })[];
-      total: number;
-    }>;
+    // (Without a search the endpoint lists the whole library.)
+    const q = query.trim();
+    if (!q)
+      return Promise.resolve<PaginatedBooksWithInteraction>({
+        items: [],
+        total: 0,
+      });
+    const params = new URLSearchParams({
+      search: q,
+      sort: "relevance",
+      limit: String(limit),
+    });
+    return get(`/books/all?${params}`, {
+      signal,
+    }) as Promise<PaginatedBooksWithInteraction>;
   },
 
   getMyBooks: (options?: {

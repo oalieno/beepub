@@ -43,7 +43,6 @@ from app.schemas.book import (
     BookLibraryUpdate,
     BookMetadataUpdate,
     BookOut,
-    BookSearchResult,
     BookWithInteractionOut,
     ExternalMetadataOut,
     ExternalMetadataUrlUpdate,
@@ -52,7 +51,6 @@ from app.schemas.book import (
     IsbnSourceResult,
     MetadataSearchCandidate,
     MetadataSearchOut,
-    PaginatedBookSearchResults,
     PaginatedBooksWithInteraction,
     PhysicalBookCreate,
     SeriesBookBrief,
@@ -66,7 +64,7 @@ from app.schemas.reading import (
     ReadingStatsOut,
 )
 from app.schemas.series import PaginatedFeed
-from app.services.book_search import relevance_order, tiered_book_search
+from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_pages import read_page_manifest
 from app.services.epub_parser import extract_cover, parse_epub_metadata
@@ -897,72 +895,6 @@ async def get_random_books(
     return result.scalars().all()
 
 
-@router.get("/search", response_model=PaginatedBookSearchResults)
-async def search_books(
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    q: str = Query("", min_length=1),
-    limit: int = Query(20, ge=1, le=100),
-):
-    from app.routers.libraries import accessible_libraries_condition
-
-    # Subquery: accessible library IDs
-    accessible_libs = select(Library.id)
-    cond = accessible_libraries_condition(current_user)
-    if cond is not True:
-        accessible_libs = accessible_libs.where(cond)
-    accessible_lib_ids = accessible_libs.subquery()
-
-    # Main query: search books in accessible libraries. A book can live in
-    # several libraries, so collapse to one row per book (min library name).
-    scope = (
-        select(Book, func.min(Library.name).label("library_name"))
-        .join(LibraryBook, LibraryBook.book_id == Book.id)
-        .join(Library, Library.id == LibraryBook.library_id)
-        .where(LibraryBook.library_id.in_(select(accessible_lib_ids.c.id)))
-        .group_by(Book.id)
-    )
-    search = await tiered_book_search(db, q, scope)
-    base_query = scope.where(or_(*search.conditions))
-
-    # Count (one row per distinct book)
-    count_sub = base_query.with_only_columns(Book.id).subquery()
-    total = (
-        await db.execute(select(func.count()).select_from(count_sub))
-    ).scalar() or 0
-
-    # Rank by relevance so a short query like "小王子" surfaces the closest
-    # titles first instead of an arbitrary UUID-ordered slice.
-    # Ranked over ids alone, the page's books fetched afterwards: a
-    # one-character query matches a third of a library, and sorting that
-    # many full rows to keep twenty is most of the request.
-    ranked_query = base_query.with_only_columns(
-        Book.id, func.min(Library.name).label("library_name")
-    ).order_by(*relevance_order(search, q), Book.id)
-    ranked = (await db.execute(ranked_query.limit(limit))).all()
-    books_by_id = {
-        book.id: book
-        for book in await db.scalars(
-            select(Book).where(Book.id.in_([row.id for row in ranked]))
-        )
-    }
-    rows = [(books_by_id[row.id], row.library_name) for row in ranked]
-
-    # Enrich with edition_count
-    from app.services.work_propagation import get_edition_count_map
-
-    book_ids_list = [row[0].id for row in rows]
-    edition_counts = await get_edition_count_map(db, book_ids_list)
-    items = []
-    for book, library_name in rows:
-        item = BookSearchResult.model_validate(book)
-        item.library_name = library_name
-        item.edition_count = edition_counts.get(book.id)
-        items.append(item)
-
-    return PaginatedBookSearchResults(items=items, total=total)
-
-
 @router.get("/discover/recommendations", response_model=list[BookWithInteractionOut])
 async def get_discover_recommendations(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1188,8 +1120,10 @@ async def list_all_books(
         tiered = await tiered_book_search(db, search, base_query)
         base_query = base_query.where(or_(*tiered.conditions))
 
-    # Count total
-    count_query = select(func.count()).select_from(base_query.subquery())
+    # Count over ids — the total needs nothing else from a book.
+    count_query = select(func.count()).select_from(
+        base_query.with_only_columns(Book.id).subquery()
+    )
     total = (await db.execute(count_query)).scalar() or 0
 
     # Apply sorting and pagination
@@ -1207,26 +1141,39 @@ async def list_all_books(
         sort, order = "created_at", "desc"
     sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
     if sort == "relevance":
-        base_query = base_query.order_by(*relevance_order(tiered, search), Book.id)
-    elif sort == "series_index":
-        series_col = coalesce(Book.series, Book.epub_series)
-        if order == "desc":
-            base_query = base_query.order_by(
-                series_col.desc().nullslast(), sort_col.desc().nullslast(), Book.id
+        # Ranked over ids, the page's books fetched afterwards (see
+        # relevance_ranked_ids).
+        page_ids = list(
+            await db.scalars(
+                relevance_ranked_ids(base_query, tiered, search)
+                .offset(offset)
+                .limit(limit)
             )
-        else:
-            base_query = base_query.order_by(
-                series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
-            )
-    elif order == "desc":
-        base_query = base_query.order_by(sort_col.desc(), Book.id)
+        )
+        books_by_id = {
+            book.id: book
+            for book in await db.scalars(select(Book).where(Book.id.in_(page_ids)))
+        }
+        books = [books_by_id[book_id] for book_id in page_ids]
     else:
-        base_query = base_query.order_by(sort_col.asc(), Book.id)
-
-    base_query = base_query.offset(offset).limit(limit)
-
-    result = await db.execute(base_query)
-    books = result.scalars().all()
+        if sort == "series_index":
+            series_col = coalesce(Book.series, Book.epub_series)
+            if order == "desc":
+                base_query = base_query.order_by(
+                    series_col.desc().nullslast(),
+                    sort_col.desc().nullslast(),
+                    Book.id,
+                )
+            else:
+                base_query = base_query.order_by(
+                    series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
+                )
+        elif order == "desc":
+            base_query = base_query.order_by(sort_col.desc(), Book.id)
+        else:
+            base_query = base_query.order_by(sort_col.asc(), Book.id)
+        result = await db.execute(base_query.offset(offset).limit(limit))
+        books = result.scalars().all()
 
     # Enrich with edition_count + work-propagated reading status. The page is
     # bounded by `limit` (<=200), so propagation runs only over the current page.

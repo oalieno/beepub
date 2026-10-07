@@ -23,7 +23,6 @@
   }
 
   type Tab = "books" | "content" | "keyword";
-  type BookSearchResult = BookOut & { library_name: string | null };
 
   let activeTab = $state<Tab>("books");
   let query = $state("");
@@ -44,7 +43,7 @@
     return { results: [], total: 0, loading: false, error: "", forQuery: "" };
   }
 
-  let books = $state<SearchState<BookSearchResult>>(createSearchState());
+  let books = $state<SearchState<BookOut>>(createSearchState());
   let content = $state<SearchState<SemanticSearchResult>>(createSearchState());
   let keyword = $state<SearchState<KeywordSearchResult>>(createSearchState());
 
@@ -212,7 +211,7 @@
     // Content tab: search on Enter only (embedding is expensive)
   }
 
-  function selectBookResult(result: BookSearchResult) {
+  function selectBookResult(result: BookOut) {
     open = false;
     goto(`/books/${result.id}`);
   }
@@ -449,13 +448,6 @@
                       {(result.display_authors ?? []).join(", ") || "\u00A0"}
                     </p>
                   </div>
-                  {#if result.library_name}
-                    <span
-                      class="shrink-0 text-xs text-muted-foreground bg-secondary px-2 py-0.5 rounded-full"
-                    >
-                      {result.library_name}
-                    </span>
-                  {/if}
                 </button>
               {/each}
               {#if books.total > books.results.length}
