@@ -4,6 +4,25 @@ from datetime import date, datetime
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 
+def _dense_page_counts(value):
+    """section_page_counts is the reader's cache of how many pages each
+    chapter measured; a chapter it has not laid out has no count, and
+    clients have sent that as null. An unknown count is 0 — never a reason
+    to refuse the position that travels with it."""
+    if not isinstance(value, list):
+        return value
+    return [
+        int(n)
+        if isinstance(n, (int, float))
+        and not isinstance(n, bool)
+        and n > 0
+        and n == n
+        and n != float("inf")
+        else 0
+        for n in value
+    ]
+
+
 class RatingUpdate(BaseModel):
     rating: float | None = None  # 0.5-5 in 0.5 steps, or null
 
@@ -27,6 +46,11 @@ class ProgressUpdate(BaseModel):
     # kosync GET serves it to e-readers for a paragraph-level landing.
     xpointer: str | None = Field(default=None, max_length=1000)
     track_activity: bool = True
+
+    @field_validator("section_page_counts", mode="before")
+    @classmethod
+    def _page_counts(cls, value):
+        return _dense_page_counts(value)
 
 
 class KosyncMarkerOut(BaseModel):
@@ -189,6 +213,11 @@ class SyncProgressIn(BaseModel):
     total_pages: int | None = None
     xpointer: str | None = Field(default=None, max_length=1000)
     last_read_at: AwareDatetime
+
+    @field_validator("section_page_counts", mode="before")
+    @classmethod
+    def _page_counts(cls, value):
+        return _dense_page_counts(value)
 
 
 class SyncInteractionIn(BaseModel):
