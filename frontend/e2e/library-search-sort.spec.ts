@@ -44,3 +44,19 @@ test("search sorts by relevance, clearing restores the browse order", async ({
     0,
   );
 });
+
+test("arriving with a search already typed opens most relevant first", async ({
+  page,
+}) => {
+  const sent = nextListSort(page);
+  await page.goto("/libraries/all?search=E2E");
+  expect(await sent).toBe("relevance");
+  const sort = page.locator("[data-select-trigger]").first();
+  await expect(sort).toHaveText(/Most relevant/);
+
+  // Clearing the search goes back to the default browse order.
+  const cleared = nextListSort(page);
+  await page.getByRole("button", { name: "Clear" }).click();
+  expect(await cleared).toBe("added_at");
+  await expect(sort).toHaveText(/Newest added/);
+});

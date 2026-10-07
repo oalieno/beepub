@@ -131,10 +131,16 @@
     filterTag: initialTag,
     filterSeries: initialSeries,
     filterFormat: initialFormat,
+    // Arriving with a search already typed (the search window's Enter)
+    // is starting a search: most relevant first, as when it is typed here.
     sortValue:
-      initialSeries && initialSort === "added_at:desc"
-        ? "series_index:asc"
-        : initialSort,
+      initialSort !== "added_at:desc"
+        ? initialSort
+        : initialSeries
+          ? "series_index:asc"
+          : initialSearch.trim()
+            ? RELEVANCE
+            : initialSort,
     // The table is flat — series live in their own column.
     // svelte-ignore state_referenced_locally
     collapse: collapsible && initialCollapse && viewMode !== "table",
