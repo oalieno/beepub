@@ -950,18 +950,14 @@ ${darkOverrides}
    * flight — the notice stays up, saying it is being tried — and still
    * stands if it fails.
    *
-   * Asked for by hand, the chapter is asked for even offline (reach()
-   * otherwise answers for the network): the browser's HTTP cache may
-   * hold it, and a request that cannot go out fails at once.
+   * (Offline too the chapter is asked for, as for any jump — see
+   * reach().)
    */
   export function retryLoad(): Promise<boolean> {
     if (retrying) return retrying;
     const f = failure;
     if (!f) return Promise.resolve(true);
     retrying = (async () => {
-      // (Not before the next tick: `retrying` is set by then, which is
-      // what lets the request out while offline.)
-      await Promise.resolve();
       try {
         await f.retry();
       } catch (e) {
@@ -986,9 +982,10 @@ ${darkOverrides}
    * they are where they were, nothing about their place has changed, and
    * (for a failed load) the notice offers `again`.
    *
-   * Offline, a chapter known not to be in memory is not even asked for:
-   * the answer is already known, and comes at once. (Except for the
-   * notice's "try again" — see retryLoad.)
+   * Offline, a chapter that is not in memory is asked for all the same,
+   * once: the browser's HTTP cache may hold it, the connection may be
+   * back before the app has heard, and a request that cannot go out
+   * fails at once. Nothing here asks twice.
    */
   async function reach(
     target: NavInput,
@@ -996,13 +993,6 @@ ${darkOverrides}
   ): Promise<Outcome> {
     const c = core;
     if (!c) return "failed";
-    if (offline && streamed && !retrying) {
-      const index = c.resolve(target)?.index;
-      if (index != null && !c.sectionAvailable(index)) {
-        setFailure(again);
-        return "failed";
-      }
-    }
     try {
       if ((await c.goTo(target)) == null) return "unresolved";
       clearFailure();

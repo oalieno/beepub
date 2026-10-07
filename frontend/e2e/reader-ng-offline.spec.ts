@@ -31,7 +31,15 @@ import {
  * the page as it is, and a small spinner comes up when the wait gets
  * long. A chapter that fails to load leaves the reader where they were,
  * with a notice that offers to try again — and, offline, the table of
- * contents marks the chapters that cannot be opened.
+ * contents marks the chapters that are not in memory.
+ *
+ * Offline nothing is refused unasked. The mark says the chapter is not
+ * at hand; a tap on it, a seek, a page turn each ask for the chapter
+ * once (the browser's HTTP cache may hold it, the connection may be
+ * back before the app has heard), and a request that cannot go out
+ * fails at once. While a marked entry is being asked for it shows a
+ * spinner where its mark was; the list closes when the chapter comes
+ * and stays when it does not.
  *
  * The notice sits at the bottom of the screen, above the phone's bottom
  * bar while that shows and below any toast. Trying again is seen to be
@@ -136,6 +144,33 @@ async function openToc(page: Page, context: BrowserContext) {
   await expect(tocDialog(page)).toBeVisible();
 }
 
+const entry = (page: Page, name: string) =>
+  tocDialog(page).getByRole("button", { name, exact: true });
+
+/** The content requests made for the file whose path contains `part`. */
+function requests(page: Page, part: string): string[] {
+  const asked: string[] = [];
+  page.on("request", (r) => {
+    const url = decodeURIComponent(r.url());
+    if (url.includes("/content/") && url.includes(part)) asked.push(url);
+  });
+  return asked;
+}
+
+/** Answer requests for `part` from outside the browser — what the HTTP
+ *  cache does for a chapter it holds: the page is still offline. The
+ *  returned function stops it. */
+async function serveOffline(page: Page, part: string) {
+  const handler = async (route: Route) => {
+    const url = decodeURIComponent(route.request().url());
+    if (!url.includes(part)) return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({ response });
+  };
+  await page.route(CONTENT, handler);
+  return () => page.unroute(CONTENT, handler);
+}
+
 /** The bare paper a pending turn shows: the slide's sheet, or the page
  *  faded out. */
 function onPaper(page: Page): Promise<boolean> {
@@ -225,7 +260,7 @@ test("the percentage is a number whatever position it is given", () => {
 
 for (const turn of ["fade", "slide"] as const) {
   test.describe(`page turns: ${turn}`, () => {
-    test("offline, a chapter picked from the table of contents that is not loaded: marked, refused with a notice, and the reader stays put; back online it opens", async ({
+    test("offline, a chapter picked from the table of contents that is not loaded: marked, asked for, and when it does not come the reader stays put with a notice; back online it opens", async ({
       page,
       context,
     }) => {
@@ -235,27 +270,42 @@ for (const turn of ["fade", "slide"] as const) {
       expect(before).toMatchObject({ index: 0, label: "啟航", percent: "0%" });
 
       await context.setOffline(true);
+      const asked = requests(page, "c-009");
       await openToc(page, context);
       const dialog = tocDialog(page);
-      // What is in memory is not marked; what is not, is.
-      for (const name of ["啟航", "霧號", "潮表", "燈語"])
-        await expect(
-          dialog.getByRole("button", { name, exact: true }),
-        ).not.toHaveAttribute("aria-disabled", "true");
+      // What is in memory is not marked; what is not, is — and a marked
+      // entry is still an entry: described, not disabled.
+      for (const name of ["啟航", "霧號", "潮表", "燈語"]) {
+        await expect(entry(page, name)).not.toHaveAttribute(
+          "data-toc-unavailable",
+        );
+        await expect(entry(page, name).locator("svg")).toHaveCount(0);
+      }
       for (const name of ["渡客", "夜泊", "修纜", "歸港", "版權頁"]) {
-        const entry = dialog.getByRole("button", { name });
-        await expect(entry).toHaveAttribute("aria-disabled", "true");
-        await expect(entry).toHaveAttribute("title", /offline/i);
-        await expect(entry.locator("svg")).toBeVisible();
+        await expect(entry(page, name)).toHaveAttribute(
+          "data-toc-unavailable",
+        );
+        await expect(entry(page, name)).not.toHaveAttribute("aria-disabled");
+        await expect(entry(page, name)).toBeEnabled();
+        await expect(entry(page, name)).toHaveAttribute("title", /offline/i);
+        await expect(entry(page, name)).toHaveAccessibleDescription(
+          /offline/i,
+        );
+        await expect(entry(page, name).locator("svg")).toBeVisible();
       }
 
-      // (Marked aria-disabled, and still answering a tap.)
-      await dialog.getByRole("button", { name: "版權頁" }).click({ force: true });
+      // A tap asks for the chapter. It does not come.
+      await entry(page, "版權頁").click();
       await expect(notice(page)).toContainText("offline");
       await expect(notice(page).getByRole("button", { name: "Retry" })).toBeVisible();
-      // The list stays; the page behind it has not moved.
+      expect(asked.length).toBe(1);
+      // The list stays, the entry is marked as it was; the page behind
+      // it has not moved.
       await expect(dialog).toBeVisible();
+      await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
+      await expect(entry(page, "版權頁")).toHaveAttribute("data-toc-unavailable");
       expect(await where(page)).toEqual(before);
+      expect(asked.length).toBe(1);
       await dialog.getByRole("button", { name: "Close" }).click();
 
       // Still a reader: forward, back, and a chapter that is in memory.
@@ -273,8 +323,9 @@ for (const turn of ["fade", "slide"] as const) {
 
       // Asked for again, then the connection returns: it opens by itself.
       await openToc(page, context);
-      await dialog.getByRole("button", { name: "版權頁" }).click({ force: true });
+      await entry(page, "版權頁").click();
       await expect(notice(page)).toBeVisible();
+      await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
       await context.setOffline(false);
       await expect
         .poll(async () => (await where(page)).index, { timeout: 15_000 })
@@ -310,10 +361,13 @@ for (const turn of ["fade", "slide"] as const) {
       expect(before.label).toBe("燈語");
       expect(await available(page, 4)).toBe(false);
 
+      // (The turn asks for the chapter too.)
+      const asked = requests(page, "c-005");
       await page.keyboard.press("PageDown");
       await expect(notice(page)).toContainText("offline");
       await expect.poll(() => atRest(page)).toBe(true);
       expect(await where(page)).toEqual(before);
+      expect(asked.length).toBeGreaterThan(0);
 
       // Once more: the same answer, nothing piles up.
       await page.keyboard.press("PageDown");
@@ -638,7 +692,7 @@ for (const turn of ["fade", "slide"] as const) {
   });
 }
 
-test("offline, a seek into a chapter that is not loaded is answered at once, without a request", async ({
+test("offline, a seek into a chapter that is not loaded asks for it, once, and is answered at once", async ({
   page,
   context,
 }) => {
@@ -646,10 +700,7 @@ test("offline, a seek into a chapter that is not loaded is answered at once, wit
   const before = await where(page);
   expect(await available(page, 7)).toBe(false);
   await context.setOffline(true);
-  const asked: string[] = [];
-  page.on("request", (r) => {
-    if (r.url().includes("/content/")) asked.push(r.url());
-  });
+  const asked = requests(page, "c-008");
 
   const scrubber = page
     .getByRole("toolbar", { name: "Reading controls" })
@@ -664,7 +715,8 @@ test("offline, a seek into a chapter that is not loaded is answered at once, wit
   });
   await expect(notice(page)).toContainText("offline");
   expect(await where(page)).toEqual(before);
-  expect(asked).toEqual([]);
+  await page.waitForTimeout(600);
+  expect(asked.length).toBe(1);
 
   // The connection returns: the seek is made.
   await context.setOffline(false);
@@ -829,6 +881,124 @@ test("the notice sits at the bottom, above the bar and below a toast; Retry wait
   expectSound(seen);
 });
 
+test("offline, a marked entry being asked for waits and takes no second tap; when the chapter does not come the list stays, the notice says so, and Retry asks for that chapter", async ({
+  page,
+  context,
+}) => {
+  const { seen, gate } = await open(page, "fade");
+  const before = await where(page);
+  await context.setOffline(true);
+  const last = requests(page, "c-009");
+  const eighth = requests(page, "c-008");
+  await openToc(page, context);
+  const row = entry(page, "版權頁");
+  await expect(row).toHaveAttribute("data-toc-unavailable");
+  const marked = await rect(row);
+
+  // The request is out: the entry says it is being tried, where its mark
+  // was and without moving, and a second tap asks nothing more.
+  const release = gate.hold("c-009");
+  await row.click();
+  await expect(row).toHaveAttribute("data-toc-trying");
+  await expect(row).toHaveAttribute("aria-busy", "true");
+  await expect(row.locator("svg")).toHaveCount(1);
+  await expect(row.locator("svg")).toHaveClass(/animate-spin/);
+  expect(await rect(row)).toEqual(marked);
+  await expect.poll(() => last.length).toBe(1);
+  await row.click();
+  await page.waitForTimeout(700);
+  expect(last.length).toBe(1);
+  await expect(row).toHaveAttribute("data-toc-trying");
+  // Still marked, the list still open, nothing said yet, nobody moved.
+  await expect(row).toHaveAttribute("data-toc-unavailable");
+  await expect(tocDialog(page)).toBeVisible();
+  expect(await notice(page).count()).toBe(0);
+  expect(await where(page)).toEqual(before);
+
+  // It does not come: marked as before, the list open, the notice up.
+  release();
+  await expect(row).not.toHaveAttribute("data-toc-trying");
+  await expect(row).not.toHaveAttribute("aria-busy");
+  await expect(row).toHaveAttribute("data-toc-unavailable");
+  await expect(row.locator("svg")).not.toHaveClass(/animate-spin/);
+  expect(await rect(row)).toEqual(marked);
+  await expect(notice(page)).toContainText("offline");
+  await expect(notice(page)).toHaveAttribute("data-failures", "0");
+  await expect(tocDialog(page)).toBeVisible();
+  expect(await where(page)).toEqual(before);
+  expect(last.length).toBe(1);
+
+  // Another marked entry, the notice already up: asked for, and the
+  // notice says once more that it did not come. While it is out the
+  // notice's own button waits too.
+  const other = entry(page, "歸港");
+  const retry = notice(page).getByRole("button", { name: "Retry" });
+  const releaseOther = gate.hold("c-008");
+  await other.click();
+  await expect(other).toHaveAttribute("data-toc-trying");
+  await expect(row).not.toHaveAttribute("data-toc-trying");
+  await expect(retry).toBeDisabled();
+  await expect.poll(() => eighth.length).toBe(1);
+  releaseOther();
+  await expect(other).not.toHaveAttribute("data-toc-trying");
+  await expect(notice(page)).toHaveAttribute("data-failures", "1");
+  await expect(retry).toBeEnabled();
+  await expect(tocDialog(page)).toBeVisible();
+  expect(await where(page)).toEqual(before);
+
+  // Retry is for the chapter asked for last — that one, not the first.
+  await retry.click();
+  await expect(notice(page)).toHaveAttribute("data-failures", "2");
+  expect(eighth.length).toBe(2);
+  expect(last.length).toBe(1);
+  expect(await where(page)).toEqual(before);
+
+  // And when it is there to be had (still offline), Retry opens it.
+  const stop = await serveOffline(page, "c-008");
+  await retry.click();
+  await expect.poll(async () => (await where(page)).index).toBe(7);
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+  await expect(notice(page)).toBeHidden();
+  await expect(tocDialog(page)).toBeHidden();
+  expect((await where(page)).label).toBe("歸港");
+  expect(eighth.length).toBe(3);
+  await stop();
+  expectSound(seen);
+});
+
+test("offline, a marked entry whose chapter is there to be had opens: the reader goes there, the list closes, nothing is said, and the entry is no longer marked", async ({
+  page,
+  context,
+}) => {
+  const { seen } = await open(page, "fade");
+  expect(await available(page, 8)).toBe(false);
+  await context.setOffline(true);
+  const asked = requests(page, "c-009");
+  const stop = await serveOffline(page, "c-009");
+  await openToc(page, context);
+  await expect(entry(page, "版權頁")).toHaveAttribute("data-toc-unavailable");
+
+  await entry(page, "版權頁").click();
+  await expect.poll(async () => (await where(page)).index).toBe(8);
+  await expect(tocDialog(page)).toBeHidden();
+  expect(await notice(page).count()).toBe(0);
+  expect(await page.evaluate(() => navigator.onLine)).toBe(false);
+  expect(await where(page)).toMatchObject({ label: "版權頁", live: 8 });
+  expect(asked.length).toBe(1);
+  await stop();
+
+  // Still offline: that chapter is in memory now, the others are not.
+  await openToc(page, context);
+  await expect(entry(page, "版權頁")).not.toHaveAttribute(
+    "data-toc-unavailable",
+  );
+  await expect(entry(page, "版權頁").locator("svg")).toHaveCount(0);
+  await expect(entry(page, "夜泊")).toHaveAttribute("data-toc-unavailable");
+  await page.waitForTimeout(600);
+  expect(await notice(page).count()).toBe(0);
+  expectSound(seen);
+});
+
 test("a retry made just before the connection returns is made again with it", async ({
   page,
   context,
@@ -836,8 +1006,9 @@ test("a retry made just before the connection returns is made again with it", as
   const { seen } = await open(page, "fade");
   await context.setOffline(true);
   await openToc(page, context);
-  await tocDialog(page).getByRole("button", { name: "版權頁" }).click({ force: true });
+  await entry(page, "版權頁").click();
   await expect(notice(page)).toContainText("offline");
+  await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
   // The attempt made offline is still out when the connection comes
   // back, and then fails: the chapter is asked for once more.
   let first = true;

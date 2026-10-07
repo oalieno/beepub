@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { CloudOff, X } from "@lucide/svelte";
+  import { CloudOff, LoaderCircle, X } from "@lucide/svelte";
   import { tick } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { RecapOut } from "$lib/types";
@@ -18,7 +18,8 @@
     currentHref = "",
     loadRecap = null,
     unavailable = null,
-    onunavailable,
+    trying = null,
+    ontry,
     onchapter,
     onspine,
     onclose,
@@ -28,16 +29,22 @@
     currentHref?: string;
     // Server books only — null hides the recap tab entirely.
     loadRecap?: (() => Promise<RecapOut>) | null;
-    /** Hrefs of the entries whose chapter cannot be shown right now (a
+    /** Hrefs of the entries whose chapter is not at hand right now (a
      *  streamed book, offline, the chapter not in memory). They are
-     *  marked, and a tap on one goes to `onunavailable` instead of
-     *  navigating; the sidebar stays open. */
+     *  marked — which says so, and locks nothing: a tap on one goes to
+     *  `ontry`, which asks for the chapter. The sidebar stays open; the
+     *  page closes it if the chapter comes. */
     unavailable?: Set<string> | null;
-    onunavailable?: (href: string) => void;
+    /** The marked entry being asked for: it shows a spinner where its
+     *  mark was, and does not answer another tap. */
+    trying?: string | null;
+    ontry?: (href: string) => void;
     onchapter?: (href: string) => void;
     onspine?: (spineIndex: number) => void;
     onclose?: () => void;
   } = $props();
+
+  const uid = $props.id();
 
   let scrollContainer: HTMLDivElement | undefined = $state(undefined);
   let activeTab = $state<"toc" | "recap">("toc");
@@ -97,6 +104,7 @@
   {#each items as item}
     {@const active = isActive(item.href)}
     {@const missing = !!unavailable?.has(item.href)}
+    {@const busy = missing && trying === item.href}
     <button
       class="flex w-full items-center gap-2 text-left pr-3 rounded-lg transition-colors {depth ===
       0
@@ -115,11 +123,13 @@
       style="padding-left: {12 + depth * 16}px"
       data-toc-active={active ? "" : undefined}
       data-toc-unavailable={missing ? "" : undefined}
-      aria-disabled={missing ? "true" : undefined}
+      data-toc-trying={busy ? "" : undefined}
+      aria-busy={busy ? "true" : undefined}
+      aria-describedby={missing ? `${uid}-unavailable` : undefined}
       title={missing ? m.reader_toc_unavailable() : undefined}
       onclick={() => {
         if (missing) {
-          onunavailable?.(item.href);
+          if (!busy) ontry?.(item.href);
           return;
         }
         onchapter?.(item.href);
@@ -129,12 +139,15 @@
       <span class="min-w-0 flex-1 {missing ? 'opacity-45' : ''}"
         >{item.label}</span
       >
-      {#if missing}
-        <CloudOff
+      <!-- (Both marks are the same size: the row does not move.) -->
+      {#if busy}
+        <LoaderCircle
           size={14}
-          class="shrink-0 opacity-60"
-          aria-label={m.reader_toc_unavailable()}
+          class="shrink-0 animate-spin opacity-60"
+          aria-hidden="true"
         />
+      {:else if missing}
+        <CloudOff size={14} class="shrink-0 opacity-60" aria-hidden="true" />
       {/if}
     </button>
     {#if item.subitems?.length}
@@ -163,6 +176,11 @@
   aria-modal="true"
   aria-label={m.reader_toc()}
 >
+  <!-- What a marked entry is described by (it still acts, so it is not
+       aria-disabled). -->
+  <span id="{uid}-unavailable" class="sr-only"
+    >{m.reader_toc_unavailable()}</span
+  >
   <div
     class="flex items-center justify-between px-4 py-3 border-b {darkMode
       ? 'border-ink-800'

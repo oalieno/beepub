@@ -303,7 +303,7 @@
   "reader_load_error_desc": "文件可能已损坏，或网络连接中断。",
   "reader_chapter_offline": "这一章还没加载，目前处于离线状态",
   "reader_chapter_load_failed": "这一章加载失败",
-  "reader_toc_unavailable": "尚未加载，离线时无法打开",
+  "reader_toc_unavailable": "尚未加载，目前处于离线状态",
   "reader_toc": "目录",
   "reader_toc_short": "目录",
   "reader_recap": "前情提要",

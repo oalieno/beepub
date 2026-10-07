@@ -162,6 +162,9 @@
   function retryLoad() {
     loadFailed = false;
     unavailableToc = new Set();
+    attempt += 1;
+    retrying = false;
+    tryingToc = null;
     loadError = false;
     rendered = false;
     claimed = null;
@@ -177,17 +180,57 @@
   // A chapter the reader asked for could not be loaded: they are still
   // where they were, and the notice offers to try again.
   let loadFailed = $state(false);
-  // TOC entries whose chapter cannot be shown while offline.
+  // TOC entries whose chapter is not in memory while offline.
   let unavailableToc = $state<Set<string>>(new Set());
-  // The notice's "try again": in flight (its button waits), and how
-  // often it has come back empty-handed (the notice says so each time).
+  // An attempt at a chapter made by hand — the notice's "try again", or
+  // a tap on an entry the table of contents marks as not loaded — while
+  // it is in flight (the notice's button waits; the tapped entry shows
+  // it), and how often one has come back empty-handed with the notice
+  // already up (the notice says so each time).
   let retrying = $state(false);
+  let tryingToc = $state<string | null>(null);
   let retryFailures = $state(0);
   // An answer that comes at once — offline there is nothing to wait
   // for — still has to be seen to have been asked for.
   const RETRY_MIN_MS = 500;
   let retryAgain = false;
-  async function retryChapter() {
+  // (The latest attempt is the one that answers: the reader gives an
+  // earlier one up when another chapter is asked for.)
+  let attempt = 0;
+  async function attemptChapter(
+    load: () => Promise<boolean>,
+    tocHref: string | null,
+  ): Promise<void> {
+    const id = ++attempt;
+    // Up already: a failure will not show as the notice appearing.
+    const noticed = loadFailed;
+    retrying = true;
+    tryingToc = tocHref;
+    const since = performance.now();
+    const ok = await load().catch(() => false);
+    if (id !== attempt) return;
+    if (!ok) {
+      const left = RETRY_MIN_MS - (performance.now() - since);
+      if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+      if (id !== attempt) return;
+    }
+    retrying = false;
+    tryingToc = null;
+    if (ok) {
+      retryAgain = false;
+      // The chapter is on the page: the list it was picked from is
+      // done with, as after any jump from it.
+      if (activeSidebar === "toc") activeSidebar = null;
+      return;
+    }
+    if (retryAgain && loadFailed) {
+      retryAgain = false;
+      return retryChapter();
+    }
+    retryAgain = false;
+    if (noticed && loadFailed) retryFailures += 1;
+  }
+  async function retryChapter(): Promise<void> {
     const r = reader;
     if (!r) return;
     if (retrying) {
@@ -196,26 +239,18 @@
       retryAgain = true;
       return;
     }
-    retrying = true;
-    const since = performance.now();
-    const ok = await r.retryLoad().catch(() => false);
-    if (ok) {
-      retrying = false;
-      retryAgain = false;
-      // The chapter is on the page: the list it was picked from is
-      // done with, as after any jump from it.
-      if (activeSidebar === "toc") activeSidebar = null;
-      return;
-    }
-    const left = RETRY_MIN_MS - (performance.now() - since);
-    if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
-    retrying = false;
-    if (retryAgain && loadFailed) {
-      retryAgain = false;
-      return retryChapter();
-    }
-    retryAgain = false;
-    retryFailures += 1;
+    return attemptChapter(() => r.retryLoad(), null);
+  }
+  // A tap on an entry marked as not loaded: the marking is information,
+  // not a lock. The chapter is asked for, once; the list stays open
+  // until it is there.
+  function tryTocChapter(href: string) {
+    const r = activeReader();
+    if (!r || tryingToc === href) return;
+    void attemptChapter(
+      async () => (await r.displayChapter(href)) === true,
+      href,
+    );
   }
   // The connection is back while the notice still stands: ask once more,
   // unprompted. Nothing happens by itself otherwise.
@@ -1473,7 +1508,8 @@
         {darkMode}
         {currentHref}
         unavailable={unavailableToc}
-        onunavailable={(href) => void activeReader()?.displayChapter(href)}
+        trying={tryingToc}
+        ontry={tryTocChapter}
         loadRecap={aiBookId && !isImageBook
           ? () => booksApi.getRecap(aiBookId!, reader?.getCurrentCfi() ?? "")
           : null}

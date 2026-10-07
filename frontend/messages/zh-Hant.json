@@ -303,7 +303,7 @@
   "reader_load_error_desc": "檔案可能已損壞，或網路連線中斷。",
   "reader_chapter_offline": "這一章還沒載入，目前離線中",
   "reader_chapter_load_failed": "這一章載入失敗",
-  "reader_toc_unavailable": "尚未載入，離線中無法開啟",
+  "reader_toc_unavailable": "尚未載入，目前離線中",
   "reader_toc": "目錄",
   "reader_toc_short": "目錄",
   "reader_recap": "前情提要",
