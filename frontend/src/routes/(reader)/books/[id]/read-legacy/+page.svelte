@@ -5,6 +5,7 @@
    * retired; /read is the reader.
    */
   import { onDestroy, onMount } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
   import { page } from "$app/state";
   import { authStore } from "$lib/stores/auth";
@@ -770,9 +771,15 @@
     }
   }
 
-  async function pollIllustration(illustrationId: string) {
+  // How a generation ends is shown on the illustration's row in the
+  // list and stays there (as in /read): a failure with its reason and a
+  // Retry, one this page stopped waiting for with a way to look again.
+  const stalledIllustrationIds = new SvelteSet<string>();
+
+  async function pollIllustration(illustrationId: string, now = false) {
+    stalledIllustrationIds.delete(illustrationId);
     for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
+      if (!(now && i === 0)) await new Promise((r) => setTimeout(r, 3000));
       if (destroyed) return;
 
       try {
@@ -780,6 +787,7 @@
           aiBookId ?? bookId,
           illustrationId,
         );
+        if (destroyed) return;
         if (ill.status === "completed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
           reader?.addIllustrationAnnotation(ill);
@@ -788,23 +796,35 @@
         }
         if (ill.status === "failed") {
           illustrations = illustrations.map((x) => (x.id === ill.id ? ill : x));
-          const msg = ill.error_message ?? "";
-          const friendly =
-            msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
-              ? "Content was blocked by safety filters. Try a different text selection."
-              : msg.includes("ReadTimeout")
-                ? "API request timed out. Please try again later."
-                : msg.includes("500")
-                  ? "API server error. Please try again later."
-                  : msg || "Unknown error";
-          toastStore.error(`Generation failed: ${friendly}`);
           return;
         }
       } catch {
-        return;
+        break;
       }
     }
-    toastStore.error(m.illustration_timeout());
+    if (!destroyed) stalledIllustrationIds.add(illustrationId);
+  }
+
+  async function handleRetryIllustration(failed: IllustrationOut) {
+    try {
+      const ill = await booksApi.createIllustration(aiBookId ?? bookId, {
+        cfi_range: failed.cfi_range,
+        text: failed.text,
+        ...(failed.style_prompt ? { style_prompt: failed.style_prompt } : {}),
+        ...(failed.custom_prompt
+          ? { custom_prompt: failed.custom_prompt }
+          : {}),
+      });
+      await booksApi
+        .deleteIllustration(aiBookId ?? bookId, failed.id)
+        .catch(() => {});
+      illustrations = [...illustrations.filter((x) => x.id !== failed.id), ill];
+      reader?.removeIllustrationAnnotation(failed.cfi_range);
+      reader?.addIllustrationAnnotation(ill);
+      void pollIllustration(ill.id);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
   }
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
@@ -1148,8 +1168,11 @@
           }
         }}
         onshare={handleShareHighlight}
+        {stalledIllustrationIds}
         onillustrationselect={handleSelectIllustration}
         onillustrationdelete={handleDeleteIllustration}
+        onillustrationretry={handleRetryIllustration}
+        onillustrationcheck={(ill) => void pollIllustration(ill.id, true)}
         onclose={() => (activeSidebar = null)}
       />
     {/if}

@@ -211,7 +211,7 @@
     /** "Illustrate" on a selection or a saved highlight. */
     onillustrate?: (detail: { cfiRange: string; text: string }) => void;
     onillustrationschange?: (illustrations: IllustrationOut[]) => void;
-    /** A completed illustration's marker was tapped. */
+    /** An illustration's marker was tapped (whatever its status). */
     onillustrationclick?: (illustration: IllustrationOut) => void;
     /** A chapter the reader asked for could not be loaded (true; said
      *  again for every attempt that fails) — they are still where they
@@ -1830,14 +1830,17 @@ ${darkOverrides}
         kind: "illustration",
         color: "",
         pulse: ill.status === "generating",
+        failed: ill.status === "failed",
       },
     };
   }
 
-  /** Markers for the completed and the generating ones; failed and
-   *  pending rows stay in the list (the sidebar shows them) unmarked. */
+  /** Markers for the completed, the generating and the failed ones (a
+   *  failure is said on the passage it was asked for, and its mark
+   *  opens the list, where the reason and a Retry are); pending rows
+   *  stay in the list unmarked. */
   function markable(ill: IllustrationOut) {
-    return ill.status === "completed" || ill.status === "generating";
+    return ill.status !== "pending";
   }
 
   function applyIllustrations(list: IllustrationOut[]) {
@@ -2002,9 +2005,10 @@ ${darkOverrides}
       if (hasLiveSelection(win)) return;
       const ill = illustrationAt(e.clientX, e.clientY);
       if (ill) {
-        // A generating one is a wait cursor, not a target.
+        // The page decides what a tap on it opens: the picture, the
+        // list for one that failed — nothing for one still being made.
         dismissMenu();
-        if (ill.status === "completed") onillustrationclick?.(ill);
+        onillustrationclick?.(ill);
         return;
       }
       const hit = highlightAt(e.clientX, e.clientY);
@@ -2052,7 +2056,7 @@ ${darkOverrides}
         const over = ill || !!layer?.hitTest(e.clientX, e.clientY);
         doc.body.style.cursor = !over
           ? ""
-          : ill && ill.status !== "completed"
+          : ill && ill.status === "generating"
             ? "wait"
             : "pointer";
       });

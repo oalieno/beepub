@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { X, Trash2, LoaderCircle, CircleAlert } from "@lucide/svelte";
+  import {
+    X,
+    Trash2,
+    LoaderCircle,
+    CircleAlert,
+    Hourglass,
+  } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
   import HighlightList from "$lib/components/HighlightList.svelte";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
@@ -24,10 +31,16 @@
     onselect,
     ondelete,
     onshare,
+    initialTab = "highlights",
+    stalledIllustrationIds,
     onillustrationselect,
     onillustrationdelete,
+    onillustrationretry,
+    onillustrationcheck,
     onclose,
   }: {
+    /** The tab it opens on. */
+    initialTab?: "highlights" | "illustrations";
     highlights?: HighlightOut[];
     illustrations?: IllustrationOut[];
     bookId?: string;
@@ -38,10 +51,18 @@
     onshare?: (highlight: HighlightOut) => void;
     onillustrationselect?: (illustration: IllustrationOut) => void;
     onillustrationdelete?: (illustration: IllustrationOut) => void;
+    /** Illustrations still "generating" that the page stopped waiting
+     *  for: said on their row, with a way to look again. */
+    stalledIllustrationIds?: ReadonlySet<string>;
+    /** Ask for a failed one again. */
+    onillustrationretry?: (illustration: IllustrationOut) => void;
+    /** Look again at one that is taking long. */
+    onillustrationcheck?: (illustration: IllustrationOut) => void;
     onclose?: () => void;
   } = $props();
 
-  let activeTab = $state<"highlights" | "illustrations">("highlights");
+  // svelte-ignore state_referenced_locally
+  let activeTab = $state<"highlights" | "illustrations">(initialTab);
 
   function truncate(text: string, max = 100): string {
     if (text.length <= max) return text;
@@ -175,7 +196,13 @@
     {:else}
       <div class="flex flex-col gap-1">
         {#each illustrations as ill (ill.id)}
+          {@const stalled =
+            ill.status !== "completed" &&
+            ill.status !== "failed" &&
+            !!stalledIllustrationIds?.has(ill.id)}
           <div
+            data-testid="illustration-row"
+            data-status={stalled ? "stalled" : ill.status}
             class="w-full text-left px-3 py-2.5 rounded-lg transition-colors group {ill.status ===
             'completed'
               ? 'cursor-pointer'
@@ -204,6 +231,11 @@
                     )}
                     alt="Illustration"
                     class="w-full h-full object-cover"
+                  />
+                {:else if stalled}
+                  <Hourglass
+                    size={16}
+                    class={darkMode ? "text-ink-400" : "text-muted-foreground"}
                   />
                 {:else if ill.status === "generating"}
                   <LoaderCircle
@@ -244,7 +276,14 @@
                   >
                     {getStyleLabel(ill)}
                   </span>
-                  {#if ill.status === "generating"}
+                  {#if stalled}
+                    <span
+                      class="text-[10px] {darkMode
+                        ? 'text-ink-400'
+                        : 'text-muted-foreground'}"
+                      >{m.illustration_stalled()}</span
+                    >
+                  {:else if ill.status === "generating"}
                     <span
                       class="text-[10px] {darkMode
                         ? 'text-purple-400'
@@ -267,6 +306,33 @@
                   <p class="text-[10px] mt-0.5 text-red-400/80 leading-snug">
                     {friendlyError(ill.error_message)}
                   </p>
+                {/if}
+                {#if ill.status === "failed" && onillustrationretry}
+                  <Button
+                    variant="link"
+                    size="sm"
+                    class="h-auto p-0 mt-1 text-xs"
+                    data-testid="illustration-retry"
+                    onclick={(e: MouseEvent) => {
+                      e.stopPropagation();
+                      onillustrationretry?.(ill);
+                    }}
+                  >
+                    {m.common_retry()}
+                  </Button>
+                {:else if stalled && onillustrationcheck}
+                  <Button
+                    variant="link"
+                    size="sm"
+                    class="h-auto p-0 mt-1 text-xs"
+                    data-testid="illustration-check"
+                    onclick={(e: MouseEvent) => {
+                      e.stopPropagation();
+                      onillustrationcheck?.(ill);
+                    }}
+                  >
+                    {m.illustration_check_again()}
+                  </Button>
                 {/if}
                 <p
                   class="text-[10px] mt-1 {darkMode

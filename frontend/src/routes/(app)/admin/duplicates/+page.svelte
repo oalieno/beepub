@@ -11,6 +11,7 @@
     Ban,
     CircleCheck,
     LoaderCircle,
+    TriangleAlert,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -41,9 +42,16 @@
     totalGroups > 0 ? Math.round((reviewedCount / totalGroups) * 100) : 0,
   );
 
+  // What the scan came to is said on the page and stays there: it runs
+  // by itself on arrival and takes a while, so a toast about it would be
+  // gone before anyone looked.
+  let scanFailed = $state<string | null>(null);
+
   async function scan() {
     scanning = true;
     scanned = false;
+    scanFailed = null;
+    truncated = false;
     allGroups = [];
     reviewIndex = 0;
     reviewedCount = 0;
@@ -53,11 +61,8 @@
       totalScanned = result.total_books_scanned;
       truncated = result.truncated;
       scanned = true;
-      if (truncated) {
-        toastStore.warning(m.duplicates_scan_timeout());
-      }
     } catch (e) {
-      toastStore.error((e as Error).message);
+      scanFailed = (e as Error).message || m.duplicates_scan_failed();
     } finally {
       scanning = false;
     }
@@ -176,6 +181,41 @@
     </div>
   {:else if !scanning}
     <div class="mb-8"></div>
+  {/if}
+
+  <!-- The scan did not finish, or not all of it: said here, with a way
+       to run it again (the page's own notice pattern, as on a book). -->
+  {#if scanFailed && !scanning}
+    <div
+      class="flex items-center gap-3 px-4 py-3 bg-destructive/10 border border-destructive/20 rounded-xl mb-6"
+      role="alert"
+      data-testid="duplicates-scan-failed"
+    >
+      <TriangleAlert size={18} class="text-destructive shrink-0" />
+      <div class="flex-1 min-w-0 text-sm text-destructive">
+        <p>{m.duplicates_scan_failed()}</p>
+        {#if scanFailed !== m.duplicates_scan_failed()}
+          <p class="opacity-80 break-words">{scanFailed}</p>
+        {/if}
+      </div>
+      <Button variant="outline" size="sm" onclick={scan}>
+        {m.duplicates_scan_again()}
+      </Button>
+    </div>
+  {:else if truncated && scanned && !scanning}
+    <div
+      class="flex items-center gap-3 px-4 py-3 bg-primary/10 border border-primary/25 rounded-xl mb-6"
+      role="status"
+      data-testid="duplicates-scan-partial"
+    >
+      <TriangleAlert size={18} class="text-primary shrink-0" />
+      <p class="flex-1 min-w-0 text-sm text-foreground">
+        {m.duplicates_scan_partial()}
+      </p>
+      <Button variant="outline" size="sm" onclick={scan}>
+        {m.duplicates_scan_again()}
+      </Button>
+    </div>
   {/if}
 
   <!-- Loading -->

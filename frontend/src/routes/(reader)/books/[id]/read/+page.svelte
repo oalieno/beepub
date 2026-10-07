@@ -23,6 +23,7 @@
    * &turn=fade|slide|instant (instant — a bare jump — exists only here).
    */
   import { onDestroy, onMount, untrack } from "svelte";
+  import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
@@ -379,6 +380,7 @@
 
   function toggleSidebar(name: Sidebar) {
     activeSidebar = activeSidebar === name ? null : name;
+    highlightSidebarTab = "highlights";
     if (activeSidebar) showMobileBottomBar = false;
   }
 
@@ -1018,15 +1020,28 @@
     }
   }
 
-  async function pollIllustration(illustrationId: string) {
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
+  // How a generation ends is shown where the illustration is — its row
+  // in the list, its mark on the passage — and stays there: a failure
+  // has the server's reason and a Retry; one this page stopped waiting
+  // for (two minutes, or a poll that did not get through) is "taking
+  // longer than usual" with a way to look again. Neither is a toast,
+  // which would be gone by the time the reader looks up from the page.
+  const stalledIllustrationIds = new SvelteSet<string>();
+  const POLL_EVERY_MS = 3000;
+  const POLL_TRIES = 40;
+
+  async function pollIllustration(illustrationId: string, now = false) {
+    stalledIllustrationIds.delete(illustrationId);
+    for (let i = 0; i < POLL_TRIES; i++) {
+      if (!(now && i === 0))
+        await new Promise((r) => setTimeout(r, POLL_EVERY_MS));
       if (destroyed) return;
       try {
         const ill = await booksApi.getIllustration(
           aiBookId ?? bookId,
           illustrationId,
         );
+        if (destroyed) return;
         if (ill.status === "completed") {
           reader?.addIllustrationAnnotation(ill);
           toastStore.success(m.illustration_ready());
@@ -1034,24 +1049,54 @@
         }
         if (ill.status === "failed") {
           reader?.addIllustrationAnnotation(ill);
-          const msg = ill.error_message ?? "";
-          const friendly =
-            msg.includes("IMAGE_SAFETY") || msg.includes("SAFETY")
-              ? "Content was blocked by safety filters. Try a different text selection."
-              : msg.includes("ReadTimeout")
-                ? "API request timed out. Please try again later."
-                : msg.includes("500")
-                  ? "API server error. Please try again later."
-                  : msg || "Unknown error";
-          toastStore.error(`Generation failed: ${friendly}`);
           return;
         }
       } catch {
-        return;
+        break;
       }
     }
-    toastStore.error(m.illustration_timeout());
+    if (!destroyed) stalledIllustrationIds.add(illustrationId);
   }
+
+  /** Once more, as it was asked for (the style, the prompt; reference
+   *  images are not kept with a row and do not come along). The failed
+   *  row gives way to the new one. */
+  async function handleRetryIllustration(failed: IllustrationOut) {
+    try {
+      const ill = await booksApi.createIllustration(aiBookId ?? bookId, {
+        cfi_range: failed.cfi_range,
+        text: failed.text,
+        ...(failed.style_prompt ? { style_prompt: failed.style_prompt } : {}),
+        ...(failed.custom_prompt
+          ? { custom_prompt: failed.custom_prompt }
+          : {}),
+      });
+      await booksApi
+        .deleteIllustration(aiBookId ?? bookId, failed.id)
+        .catch(() => {});
+      reader?.removeIllustrationAnnotation(failed.cfi_range);
+      reader?.addIllustrationAnnotation(ill);
+      void pollIllustration(ill.id);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  /** A mark on the passage was tapped: the picture when there is one,
+   *  the list — where what went wrong is said — when there is not. One
+   *  that is simply still being made is left to be made. */
+  function handleIllustrationMark(ill: IllustrationOut) {
+    if (ill.status === "completed") {
+      viewingIllustration = ill;
+      return;
+    }
+    if (ill.status !== "failed" && !stalledIllustrationIds.has(ill.id)) return;
+    highlightSidebarTab = "illustrations";
+    activeSidebar = "highlights";
+  }
+  let highlightSidebarTab = $state<"highlights" | "illustrations">(
+    "highlights",
+  );
 
   async function handleDeleteIllustration(ill: IllustrationOut) {
     try {
@@ -1364,7 +1409,7 @@
             oncompanion={openCompanion}
             onillustrate={handleIllustrate}
             onillustrationschange={(list) => (illustrations = list)}
-            onillustrationclick={(ill) => (viewingIllustration = ill)}
+            onillustrationclick={handleIllustrationMark}
             onprogress={(p) => (percentage = p.percentage)}
             onactivity={() => {
               // beepub-kind saves carry track_activity — the server credits
@@ -1574,8 +1619,12 @@
         }}
         ondelete={deleteHighlight}
         onshare={(hl) => (shareHighlight = hl)}
+        initialTab={highlightSidebarTab}
+        {stalledIllustrationIds}
         onillustrationselect={handleSelectIllustration}
         onillustrationdelete={handleDeleteIllustration}
+        onillustrationretry={handleRetryIllustration}
+        onillustrationcheck={(ill) => void pollIllustration(ill.id, true)}
         onclose={() => (activeSidebar = null)}
       />
     {/if}
