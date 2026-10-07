@@ -2,7 +2,16 @@ import { test, expect } from "@playwright/test";
 import { get } from "svelte/store";
 import { toastStore } from "../src/lib/stores/toast";
 import { ADMIN_STATE } from "./helpers";
-import { seedBook } from "./ng-helpers";
+import { iphone, seedBook, swipe } from "./ng-helpers";
+import type { Locator, Page } from "@playwright/test";
+
+declare global {
+  interface Window {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    __beepubToasts?: any;
+    __toastActed?: number;
+  }
+}
 
 /**
  * Toasts leave by themselves — errors and warnings too (they used to
@@ -100,15 +109,16 @@ test("an error that offers an action stays longer, and still leaves", () => {
   });
 });
 
-test("a duration that is given is kept, and 0 means until dismissed", () => {
+test("a duration that is given is kept, and none of them means until dismissed: 0 gets the usual time", () => {
   onFakeClock((advance) => {
     toastStore.error("Short", { duration: 1000 });
-    const kept = toastStore.error("Kept", { duration: 0 });
+    toastStore.error("Not kept", { duration: 0 });
+    toastStore.info("Nor this", { duration: -1 });
     advance(1000);
-    expect(showing()).toEqual(["error: Kept"]);
-    advance(600_000);
-    expect(showing()).toEqual(["error: Kept"]);
-    toastStore.remove(kept);
+    expect(showing()).toEqual(["error: Not kept", "info: Nor this"]);
+    advance(3000);
+    expect(showing()).toEqual(["error: Not kept"]);
+    advance(2000);
     expect(showing()).toEqual([]);
   });
 });
@@ -205,5 +215,254 @@ test.describe("on the page", () => {
     await page.waitForTimeout(3500);
     await expect(toasts).toHaveCount(1);
     await expect(toasts).toHaveCount(0, { timeout: 5_000 });
+  });
+});
+
+/**
+ * Where the toasts are. On a phone: at the top, under the status bar,
+ * dropping in from above the screen's edge (newest nearest the edge) and
+ * pushed back up by a finger. From the `md` breakpoint: at the bottom,
+ * centred, rising into place. In both: above whatever is open.
+ */
+const column = (page: Page) => page.getByTestId("toasts");
+const toastsOn = (page: Page) => column(page).locator("[role=status]");
+
+/** Raise a toast from the page (`window.__beepubToasts` is the store). */
+function raise(
+  page: Page,
+  message: string,
+  type: "success" | "error" | "info" | "warning" = "error",
+  action?: string,
+) {
+  return page.evaluate(
+    ([message, type, action]) =>
+      window.__beepubToasts[type!](
+        message,
+        action
+          ? {
+              action: {
+                label: action,
+                onclick: () =>
+                  (window.__toastActed = (window.__toastActed ?? 0) + 1),
+              },
+            }
+          : undefined,
+      ) as string,
+    [message, type, action] as const,
+  );
+}
+
+/** Its top edge on every frame from the moment it is raised until it has
+ *  been still for a while: where it came from, and where it came to. */
+function travel(page: Page, message: string) {
+  return page.evaluate(
+    (message) =>
+      new Promise<number[]>((resolve) => {
+        window.__beepubToasts.error(message);
+        const tops: number[] = [];
+        let still = 0;
+        const frame = () => {
+          const el = [
+            ...document.querySelectorAll("[data-testid=toasts] [role=status]"),
+          ].find((n) => n.textContent?.includes(message));
+          if (el) {
+            const top = el.getBoundingClientRect().top;
+            still =
+              tops.length && tops[tops.length - 1] === top ? still + 1 : 0;
+            tops.push(top);
+          }
+          if (still >= 20 || tops.length > 600) resolve(tops);
+          else requestAnimationFrame(frame);
+        };
+        requestAnimationFrame(frame);
+      }),
+    message,
+  );
+}
+
+async function box(locator: Locator) {
+  const b = await locator.boundingBox();
+  expect(b).not.toBeNull();
+  return { ...b!, top: b!.y, bottom: b!.y + b!.height };
+}
+
+/** The toast is what a finger at its middle would land on — and at the
+ *  middle of its action, the action. */
+async function topmost(page: Page, toast: Locator) {
+  for (const target of [toast, toast.getByRole("button").first()]) {
+    const b = await box(target);
+    expect(
+      await page.evaluate(
+        ([x, y]) =>
+          !!document
+            .elementFromPoint(x, y)
+            ?.closest("[data-testid=toasts] [role=status]"),
+        [b.x + b.width / 2, b.y + b.height / 2],
+      ),
+    ).toBe(true);
+  }
+}
+
+test.describe("from the md breakpoint up", () => {
+  test.use({ storageState: ADMIN_STATE });
+
+  test("a toast rises into place at the bottom, centred, the newest lowest", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__beepubToasts);
+    const viewport = page.viewportSize()!;
+    expect(viewport.width).toBeGreaterThanOrEqual(768);
+
+    const tops = await travel(page, "A first thing went wrong");
+    const settled = tops[tops.length - 1];
+    // From below, upwards.
+    expect(tops[0]).toBeGreaterThan(settled);
+    expect(Math.min(...tops)).toBeGreaterThanOrEqual(settled - 0.5);
+
+    const first = toastsOn(page).filter({ hasText: "A first thing" });
+    const b = await box(first);
+    expect(viewport.height - b.bottom).toBeGreaterThanOrEqual(15);
+    expect(viewport.height - b.bottom).toBeLessThanOrEqual(17);
+    expect(Math.abs(b.x + b.width / 2 - viewport.width / 2)).toBeLessThan(2);
+
+    await raise(page, "A second thing went wrong");
+    const second = toastsOn(page).filter({ hasText: "A second thing" });
+    await expect(second).toBeVisible();
+    await page.waitForTimeout(400);
+    expect((await box(second)).top).toBeGreaterThan((await box(first)).bottom);
+    expect(viewport.height - (await box(second)).bottom).toBeLessThanOrEqual(
+      17,
+    );
+  });
+});
+
+test.describe("on a phone", () => {
+  test.use({ storageState: ADMIN_STATE, ...iphone });
+
+  test("a toast drops in at the top from above the screen's edge, the newest nearest the edge", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__beepubToasts);
+    const viewport = page.viewportSize()!;
+    expect(viewport.width).toBeLessThan(768);
+
+    const tops = await travel(page, "A first thing went wrong");
+    const settled = tops[tops.length - 1];
+    // Under the status bar (no inset in a browser: the small gap alone).
+    expect(settled).toBeGreaterThanOrEqual(7);
+    expect(settled).toBeLessThanOrEqual(9);
+    // From above the edge, downwards — and a little past its place
+    // before it settles (the spring).
+    expect(tops[0]).toBeLessThan(0);
+    expect(Math.max(...tops)).toBeGreaterThan(settled);
+    expect(Math.max(...tops)).toBeLessThan(settled + 20);
+
+    const first = toastsOn(page).filter({ hasText: "A first thing" });
+    const b = await box(first);
+    expect(b.x).toBeGreaterThanOrEqual(0);
+    expect(b.x + b.width).toBeLessThanOrEqual(viewport.width);
+    expect(Math.abs(b.x + b.width / 2 - viewport.width / 2)).toBeLessThan(2);
+
+    // The next one takes the top; the older moves down under it.
+    await raise(page, "A second thing went wrong");
+    const second = toastsOn(page).filter({ hasText: "A second thing" });
+    await expect(second).toBeVisible();
+    await page.waitForTimeout(600);
+    expect((await box(second)).top).toBeLessThanOrEqual(9);
+    expect((await box(first)).top).toBeGreaterThan((await box(second)).bottom);
+  });
+
+  test("with reduced motion it is simply there", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__beepubToasts);
+    const tops = await travel(page, "A thing went wrong");
+    expect(new Set(tops).size).toBe(1);
+    expect(tops[0]).toBeGreaterThanOrEqual(7);
+  });
+
+  test("a finger pushes it back up and it is gone; a short push lets it settle back; a tap on its action is still a tap", async ({
+    page,
+    context,
+  }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__beepubToasts);
+    const cdp = await context.newCDPSession(page);
+
+    await raise(page, "Push me away", "error", "Retry");
+    const toast = toastsOn(page).filter({ hasText: "Push me away" });
+    await expect(toast).toBeVisible();
+    await page.waitForTimeout(600);
+    const at = await box(toast);
+    const from = { x: at.x + 60, y: at.y + at.height / 2 };
+
+    // Not far enough, and slowly: it comes back to its place.
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [from],
+    });
+    for (const dy of [-4, -8, -12, -14]) {
+      await page.waitForTimeout(120);
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: from.x, y: from.y + dy }],
+      });
+    }
+    expect((await box(toast)).top).toBeLessThan(at.top - 8);
+    await page.waitForTimeout(200);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await expect.poll(async () => (await box(toast)).top).toBe(at.top);
+    await expect(toast).toBeVisible();
+    expect(await page.evaluate(() => window.__toastActed ?? 0)).toBe(0);
+
+    // A tap on the action is the action (and takes the toast down).
+    await raise(page, "Tap my action", "error", "Retry");
+    const tapped = toastsOn(page).filter({ hasText: "Tap my action" });
+    await page.waitForTimeout(600);
+    await tapped.getByRole("button", { name: "Retry" }).tap();
+    await expect(tapped).toHaveCount(0);
+    expect(await page.evaluate(() => window.__toastActed)).toBe(1);
+
+    // Pushed up: gone, long before its fifteen seconds.
+    await expect(toast).toBeVisible();
+    const now = await box(toast);
+    const onAction = await box(toast.getByRole("button", { name: "Retry" }));
+    const grip = {
+      x: onAction.x + onAction.width / 2,
+      y: onAction.y + onAction.height / 2,
+    };
+    expect(grip.y).toBeGreaterThan(now.top);
+    await swipe(cdp, grip, { x: grip.x, y: grip.y - 70 });
+    await expect(toast).toHaveCount(0, { timeout: 2_000 });
+    // (Started on the toast's own action, a swipe is not a press of it.)
+    expect(await page.evaluate(() => window.__toastActed)).toBe(1);
+  });
+
+  test("raised while a dialog is open, it is on top of it and its action can be tapped", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.waitForFunction(() => !!window.__beepubToasts);
+    const dialog = page.getByRole("dialog");
+    await expect(async () => {
+      await page.keyboard.press("ControlOrMeta+k");
+      await expect(dialog).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+
+    await raise(page, "Said over the dialog", "error", "Retry");
+    const toast = toastsOn(page).filter({ hasText: "Said over the dialog" });
+    await expect(toast).toBeVisible();
+    await page.waitForTimeout(600);
+    await topmost(page, toast);
+    await toast.getByRole("button", { name: "Retry" }).tap();
+    expect(await page.evaluate(() => window.__toastActed)).toBe(1);
+    await expect(toast).toHaveCount(0);
+    // (And the dialog it was said over is still open.)
+    await expect(dialog).toBeVisible();
   });
 });

@@ -71,18 +71,9 @@
       ? "text-ink-400 hover:text-ink-200"
       : "text-muted-foreground hover:text-foreground",
   );
-
-  // The toasts rise above the bar while it shows.
-  let height = $state(0);
-  $effect(() => {
-    const root = document.documentElement;
-    root.style.setProperty("--reader-chrome-offset", `${height}px`);
-    return () => root.style.removeProperty("--reader-chrome-offset");
-  });
 </script>
 
 <div
-  bind:offsetHeight={height}
   class="md:hidden fixed bottom-0 left-0 right-0 z-30 {darkMode
     ? 'bg-ink-900 border-t border-ink-800'
     : 'bg-background border-t border-border/50'}"

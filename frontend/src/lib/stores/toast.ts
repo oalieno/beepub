@@ -21,6 +21,9 @@ export interface Toast {
 
 export interface ToastOptions {
   action?: ToastAction;
+  /** How long it shows, in ms, instead of the default for its kind.
+   *  There is no "until dismissed": what has to stay is shown where it
+   *  belongs, not in a toast. */
   duration?: number;
   testId?: string;
 }
@@ -62,14 +65,18 @@ function createToastStore() {
   subscribe((toasts) => (current = toasts));
 
   /**
-   * Show a toast. `duration` (ms) overrides the default; 0 keeps the
-   * toast until it is dismissed. A message that is already showing is
-   * not shown twice: the one on screen starts its time over, and shows
-   * that it was said again.
+   * Show a toast. `duration` (ms) overrides the default; every toast
+   * leaves by itself (a duration that is not a positive number gets the
+   * default). A message that is already showing is not shown twice: the
+   * one on screen starts its time over, and shows that it was said
+   * again.
    */
   function add(message: string, type: ToastType = "info", opts?: ToastOptions) {
+    const given = opts?.duration;
     const duration =
-      opts?.duration ?? defaultDuration(message, type, opts?.action);
+      typeof given === "number" && given > 0
+        ? given
+        : defaultDuration(message, type, opts?.action);
     const showing = current.find(
       (t) => t.message === message && t.type === type,
     );
@@ -85,11 +92,9 @@ function createToastStore() {
       const paused = !!timer && !timer.handle;
       if (timer?.handle) clearTimeout(timer.handle);
       timers.delete(id);
-      if (duration) {
-        timers.set(id, { remaining: duration, started: Date.now() });
-        // (Under the pointer it stays paused; leaving resumes it.)
-        if (!paused) schedule(id);
-      }
+      timers.set(id, { remaining: duration, started: Date.now() });
+      // (Under the pointer it stays paused; leaving resumes it.)
+      if (!paused) schedule(id);
       return id;
     }
     const id = Math.random().toString(36).slice(2);
@@ -97,10 +102,8 @@ function createToastStore() {
       ...toasts,
       { id, message, type, action: opts?.action, testId: opts?.testId },
     ]);
-    if (duration) {
-      timers.set(id, { remaining: duration, started: Date.now() });
-      schedule(id);
-    }
+    timers.set(id, { remaining: duration, started: Date.now() });
+    schedule(id);
     return id;
   }
 
@@ -160,3 +163,10 @@ function createToastStore() {
 }
 
 export const toastStore = createToastStore();
+
+// Debug handle (same convention as __beepubReaderNG): how an e2e spec
+// raises a toast of its own, anywhere in the app.
+if (typeof window !== "undefined") {
+  (window as unknown as { __beepubToasts?: unknown }).__beepubToasts =
+    toastStore;
+}

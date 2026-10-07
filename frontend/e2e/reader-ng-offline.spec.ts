@@ -41,9 +41,9 @@ import {
  * spinner where its mark was; the list closes when the chapter comes
  * and stays when it does not.
  *
- * The notice is a toast like any other: in the toasts' column (clear
- * of the phone's bottom bar while that shows), beside whatever else is
- * being said, and gone by itself after a while — and the failure goes
+ * The notice is a toast like any other: in the toasts' column (at the
+ * top of the phone's screen, on top of whatever is open), beside
+ * whatever else is said, and gone by itself after a while — and the failure goes
  * with it: the connection returning opens the chapter only while the
  * toast is still showing, never after. Its Retry takes it down and asks
  * again (the reader's own spinner covers a long wait); an attempt that
@@ -153,6 +153,15 @@ async function openToc(page: Page, context: BrowserContext) {
   }
   await bar.getByRole("button", { name: "Table of Contents" }).click();
   await expect(tocDialog(page)).toBeVisible();
+}
+
+/** Close the list by a tap beside it. (Its own close button is at the
+ *  top, where on the phone a toast lies over it for as long as it
+ *  shows.) */
+async function closeToc(page: Page) {
+  const viewport = page.viewportSize()!;
+  await page.mouse.click(viewport.width - 12, viewport.height / 2);
+  await expect(tocDialog(page)).toBeHidden();
 }
 
 const entry = (page: Page, name: string) =>
@@ -749,7 +758,25 @@ async function rect(locator: ReturnType<Page["locator"]>) {
   return { top: box!.y, bottom: box!.y + box!.height, ...box! };
 }
 
-test("the notice is a toast: clear of the bottom bar, beside a save that fails, taken down by Retry and back when that fails; the connection returning while it shows opens the chapter", async ({
+/** The toast, and each of its buttons, is what a finger there lands on. */
+async function onTop(page: Page, toast: ReturnType<Page["locator"]>) {
+  const targets = [toast, ...(await toast.getByRole("button").all())];
+  expect(targets.length).toBeGreaterThan(2);
+  for (const target of targets) {
+    const b = await rect(target);
+    expect(
+      await page.evaluate(
+        ([x, y]) =>
+          !!document
+            .elementFromPoint(x, y)
+            ?.closest("[data-testid=reader-load-notice]"),
+        [b.x + b.width / 2, b.y + b.height / 2],
+      ),
+    ).toBe(true);
+  }
+}
+
+test("the notice is a toast: at the top of the phone's screen, over the bars and the list of chapters, beside a save that fails, taken down by Retry and back when that fails; the connection returning while it shows opens the chapter", async ({
   page,
   context,
 }) => {
@@ -770,23 +797,39 @@ test("the notice is a toast: clear of the bottom bar, beside a save that fails, 
   await expect(notice(page).getByRole("button", { name: "Retry" })).toBeVisible();
   await expect(notice(page).getByRole("button", { name: "Close" })).toBeVisible();
 
-  // No bar: clear of the foot of the screen (and the home indicator).
+  // On the phone the toasts are at the top, under the status bar — the
+  // same place whether the reader's bars show or not.
   await expect(readingBar(page)).toBeHidden();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(600);
   let box = await rect(notice(page));
-  expect(viewport.height - box.bottom).toBeGreaterThanOrEqual(16);
+  expect(box.top).toBeGreaterThanOrEqual(7);
+  expect(box.top).toBeLessThanOrEqual(9);
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  await onTop(page, notice(page));
 
-  // The bar comes up: the toast is above it, not over its buttons.
+  // The bars come up: it stays where it is, over the top bar (as a
+  // banner is over a title for the seconds it shows) and nowhere near
+  // the bottom one — seen, and its buttons the ones a finger gets.
   await touchTap(cdp, { x: 195, y: 420 }, 60);
   await expect(readingBar(page)).toBeVisible();
-  await expect
-    .poll(async () => {
-      const bar = await rect(readingBar(page));
-      return bar.top - (await rect(notice(page))).bottom;
-    })
-    .toBeGreaterThanOrEqual(8);
+  await expect(page.getByRole("banner").first()).toBeVisible();
+  await page.waitForTimeout(300);
+  const withBars = await rect(notice(page));
+  expect(withBars.top).toBe(box.top);
+  expect((await rect(readingBar(page))).top).toBeGreaterThan(
+    withBars.bottom + 200,
+  );
+  await onTop(page, notice(page));
+
+  // The list of chapters opened under it: still on top, still tappable.
+  await openToc(page, context);
+  box = await rect(notice(page));
+  expect(box.top).toBe(withBars.top);
+  await onTop(page, notice(page));
+  await closeToc(page);
+  await expect(tocDialog(page)).toBeHidden();
+  await expect(notice(page)).toBeVisible();
 
   // A save that does not get through says so itself, beside it.
   await page.route("**/api/books/*/highlights", (route) =>
@@ -862,7 +905,7 @@ test("the notice leaves by itself, or is closed, and the failure with it: the co
   await expect(notice(page)).toContainText("offline");
   const shown = Date.now();
   await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
-  await tocDialog(page).getByRole("button", { name: "Close" }).click();
+  await closeToc(page);
   // Nobody touches it (the pointer is parked away from it): there well
   // into its time, gone soon after.
   await page.mouse.move(5, 5);
@@ -884,7 +927,7 @@ test("the notice leaves by itself, or is closed, and the failure with it: the co
   await entry(page, "版權頁").click();
   await expect(notice(page)).toContainText("offline");
   await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
-  await tocDialog(page).getByRole("button", { name: "Close" }).click();
+  await closeToc(page);
   await notice(page).getByRole("button", { name: "Close" }).click();
   await expect(notice(page)).toHaveCount(0);
   expect(asked.length).toBe(2);
