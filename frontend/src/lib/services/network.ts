@@ -68,6 +68,33 @@ export function getIsOnline(): boolean {
 }
 
 /**
+ * Whether the connection is one to fetch over unasked — what the reader
+ * brings in ahead of the page so a book can be read on without it. The
+ * one place the rule is written: in the app only on Wi-Fi; on the web
+ * unless the browser says the connection is cellular or that the user
+ * wants data saved, and a browser that says nothing (Safari, Firefox, a
+ * desktop) is taken to be on a connection that can bear it.
+ */
+export async function backgroundFetchAllowed(): Promise<boolean> {
+  if (isNative()) {
+    try {
+      const { Network } = await import("@capacitor/network");
+      return (await Network.getStatus()).connectionType === "wifi";
+    } catch {
+      // plugin unavailable — nothing says this is Wi-Fi
+      return false;
+    }
+  }
+  const connection = (
+    navigator as Navigator & {
+      connection?: { saveData?: boolean; type?: string };
+    }
+  ).connection;
+  if (!connection) return true;
+  return !connection.saveData && connection.type !== "cellular";
+}
+
+/**
  * User-triggered connectivity check (the retry button on offline
  * screens). Re-reads the device network state, probes the server once,
  * and returns whether the app is online afterwards.

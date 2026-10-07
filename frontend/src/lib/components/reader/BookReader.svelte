@@ -2162,7 +2162,8 @@ ${darkOverrides}
       void c.setWritingMode(writingMode);
       c.setStyles(styles());
       const [book, saved] = await Promise.all([
-        c.load(loader),
+        // (A book that is on the device whole has no text left to bring.)
+        c.load(loader, { crawl: streamed }),
         loadSavedProgress(),
       ]);
       if (destroyed) return;

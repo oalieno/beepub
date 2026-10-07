@@ -622,14 +622,17 @@ export class ReaderCore {
 
   /** Parse the book through `loader` and hand it to the paginator.
    *  Nothing is displayed until goTo(). */
-  async load(loader: BookLoader): Promise<Book> {
+  async load(
+    loader: BookLoader,
+    { crawl = true }: { crawl?: boolean } = {},
+  ): Promise<Book> {
     // The parser reads through the prefetcher: bytes it warmed for the
     // sections ahead are answered from memory when the paginator turns
     // into them.
     this.#prefetch?.destroy();
     // The ghost belongs to the book it was made for.
     this.#dropSlide();
-    const prefetch = new ImagePrefetcher(loader);
+    const prefetch = new ImagePrefetcher(loader, { crawl });
     this.#prefetch = prefetch;
     prefetch.onavailable = () => this.#handlers.onavailable?.();
     this.#abandonWait();
@@ -803,6 +806,12 @@ export class ReaderCore {
   sectionAvailable(index: number): boolean {
     const section = this.book?.sections[index];
     return !!section && !!this.#prefetch?.available(section.id);
+  }
+
+  /** Where the slow fetch of the rest of the book's text stands (a debug
+   *  handle; see prefetch.ts). */
+  get crawl(): ImagePrefetcher["crawl"] | null {
+    return this.#prefetch?.crawl ?? null;
   }
 
   /**
