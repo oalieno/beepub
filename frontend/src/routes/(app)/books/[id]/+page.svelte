@@ -660,7 +660,9 @@
       <!-- Info -->
       <div class="flex-1 min-w-0 flex flex-col pt-6">
         <div>
-          <h1 class="text-4xl font-bold leading-tight text-foreground">
+          <h1
+            class="text-4xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]"
+          >
             {book.display_title ?? "Untitled"}
           </h1>
           {#if isPhysical}

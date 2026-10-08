@@ -99,6 +99,7 @@ export async function downloadEpubToLibrary(options: {
   known?: {
     isImageBook?: boolean | null;
     sectionWeights?: number[] | null;
+    title?: string | null;
   };
   onProgress?: (pct: number | null) => void;
 }): Promise<LocalBookEntry> {

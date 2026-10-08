@@ -245,7 +245,9 @@
       </div>
 
       <div class="flex-1 min-w-0 flex flex-col md:pt-6">
-        <h1 class="text-4xl font-bold leading-tight text-foreground">
+        <h1
+          class="text-4xl font-bold leading-tight text-foreground [overflow-wrap:anywhere]"
+        >
           {entry.title}
         </h1>
         {#if entry.authors.length > 0}

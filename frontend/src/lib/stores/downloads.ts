@@ -152,7 +152,8 @@ async function fetchToLibrary(job: Job): Promise<"done" | "duplicate"> {
       url: fileUrl(job.bookId),
       headers: getAuthHeader(),
       title: job.title,
-      known: job.known,
+      // The server's name for the book, not the one inside the file.
+      known: { ...job.known, title: job.title },
       onProgress: (pct) => {
         setState(job.bookId, { state: "downloading", progress: pct });
         updateTransfer(job.transferId, { progress: pct });

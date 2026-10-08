@@ -326,6 +326,10 @@ export async function importLocalBook(
   known?: {
     isImageBook?: boolean | null;
     sectionWeights?: number[] | null;
+    /** The book's name where it came from: the server's may have been
+     *  corrected there, while the file still carries what it was made
+     *  with (a converter's dump name, a bare file name). */
+    title?: string | null;
   },
 ): Promise<LocalBookEntry> {
   // Digest first — it reads at most 12 KiB, so duplicates are rejected
@@ -375,7 +379,9 @@ export async function importLocalBook(
 
   const entry: LocalBookEntry = {
     id,
-    title: parsed.title ?? file.name.replace(/\.epub$/i, ""),
+    title:
+      known?.title?.trim() ||
+      (parsed.title ?? file.name.replace(/\.epub$/i, "")),
     authors: parsed.authors,
     language: parsed.language,
     identifier: parsed.identifier,
