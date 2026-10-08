@@ -333,10 +333,15 @@ test("a horizontal book: the page on screen follows the finger off the next page
 const TURN_MS = 520;
 const EASE_FROM_REST = "cubic-bezier(0.42, 0, 0.35, 1)";
 const EASE_RELEASED = "cubic-bezier(0.2, 0.5, 0.3, 1)";
-const RELEASED_MS = 400;
+const RELEASED_MS = 700;
+const RELEASED_FLOOR = 0.6;
+const FLICKED_MS = 400;
+/** What a sheet let go of at rest takes for `left` of the way. */
+const releasedMs = (left: number) =>
+  Math.round(RELEASED_MS * (RELEASED_FLOOR + (1 - RELEASED_FLOOR) * left));
 const SETTLE_MIN_MS = 120;
 
-test("a turn from rest sets off, travels and settles over its time; a sheet the finger lets go of only comes to rest, in what is left of a shorter one", async ({
+test("a turn from rest sets off, travels and settles over its time; a sheet the finger lets go of only comes to rest, taking its time when let go at rest and little when flicked", async ({
   page,
   context,
 }) => {
@@ -410,7 +415,7 @@ test("a turn from rest sets off, travels and settles over its time; a sheet the 
   list = await asked();
   expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
   const width = page.viewportSize()!.width;
-  const rest = Math.round(RELEASED_MS * (1 - 230 / width));
+  const rest = releasedMs(1 - 230 / width);
   expect(Math.abs(list[0].duration - rest)).toBeLessThanOrEqual(8);
 
   // Flicked: the same curve, within the released sheet's times. (How
@@ -426,7 +431,7 @@ test("a turn from rest sets off, travels and settles over its time; a sheet the 
   list = await asked();
   expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
   expect(list[0].duration).toBeGreaterThanOrEqual(SETTLE_MIN_MS);
-  expect(list[0].duration).toBeLessThan(RELEASED_MS);
+  expect(list[0].duration).toBeLessThan(FLICKED_MS);
 
   // A short drag let go: it springs back, coming to rest the same way.
   await touchDown(cdp, at(320));
@@ -438,7 +443,9 @@ test("a turn from rest sets off, travels and settles over its time; a sheet the 
   expect(await livePage()).toBe(start + 5);
   list = await asked();
   expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
-  expect(list[0].duration).toBe(SETTLE_MIN_MS);
+  expect(Math.abs(list[0].duration - releasedMs(70 / width))).toBeLessThanOrEqual(
+    8,
+  );
 });
 
 test("a vertical book slides too, the other way round, and the sheet offers the choice", async ({

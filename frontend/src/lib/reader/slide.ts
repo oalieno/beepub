@@ -180,9 +180,17 @@ const EASE_RELEASED = "cubic-bezier(0.2, 0.5, 0.3, 1)";
  *  same time (its first control point: 0.5 / 0.2). The time of a
  *  released turn is chosen so that this is the finger's speed. */
 const RELEASED_LAUNCH = 2.5;
-/** The longest a released sheet takes for the whole way; what is left
- *  of the way takes that share of it. */
-const RELEASED_MS = 400;
+/** What a sheet let go of at rest (dragged, held, released) takes for
+ *  the whole way — longer than a tap's turn: the reader was moving it by
+ *  hand and watches it finish. */
+const RELEASED_MS = 700;
+/** The share of RELEASED_MS any such sheet takes however little of the
+ *  way is left; the rest of the time goes with the way left. A sheet
+ *  let go half way must not be gone in a blink. */
+const RELEASED_FLOOR = 0.6;
+/** The longest a flicked sheet takes for the whole way; what is left of
+ *  the way takes that share of it. */
+const FLICKED_MS = 400;
 /** …and the shortest any released sheet takes. */
 const SETTLE_MIN_MS = 120;
 /** The page under the moving sheet travels this much of the page's width
@@ -1751,13 +1759,16 @@ export class CoverSlide {
     // is still catching up.
     const from = this.#progress;
     const left = complete ? 1 - from : from;
-    let ms = RELEASED_MS * left;
-    // The sheet goes on at the finger's speed and comes to rest: the
-    // time is the one in which the curve sets off that fast — never
-    // longer than a sheet let go at rest takes for the same way.
     const speed = complete ? this.#toward(dir, vx) : 0;
-    if (speed > 0)
-      ms = Math.min(ms, (RELEASED_LAUNCH * left * this.#width()) / speed);
+    // Let go at rest (or nearly), the sheet takes its time; flicked, it
+    // goes on at the finger's speed and comes to rest — the time is the
+    // one in which the curve sets off that fast, and never long.
+    let ms = RELEASED_MS * (RELEASED_FLOOR + (1 - RELEASED_FLOOR) * left);
+    if (speed > FLICK)
+      ms = Math.min(
+        FLICKED_MS * left,
+        (RELEASED_LAUNCH * left * this.#width()) / speed,
+      );
     ms = Math.max(SETTLE_MIN_MS, Math.round(ms));
     void this.#run(dir, from, complete ? 1 : 0, ms, ghost, EASE_RELEASED);
     return true;
