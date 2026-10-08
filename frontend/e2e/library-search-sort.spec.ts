@@ -10,7 +10,9 @@ test.use({ storageState: ADMIN_STATE });
 
 function nextListSort(page: Page) {
   return page
-    .waitForRequest((r) => /\/api\/books\/(all|feed)\?/.test(r.url()))
+    .waitForRequest(
+      (r) => r.method() === "GET" && /\/api\/books(\/grouped)?\?/.test(r.url()),
+    )
     .then((r) => new URL(r.url()).searchParams.get("sort"));
 }
 

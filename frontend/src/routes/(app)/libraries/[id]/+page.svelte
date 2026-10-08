@@ -139,6 +139,9 @@
     loading = false;
   });
 
+  // The library both lists are asked for — none for the "all" pseudo-library.
+  let scope = $derived(id === ALL ? undefined : id);
+
   function fetchBooks(params: {
     search?: string;
     author?: string;
@@ -150,12 +153,10 @@
     limit?: number;
     offset?: number;
   }) {
-    return id === ALL
-      ? booksApi.getAll(params)
-      : librariesApi.getBooks(id, params);
+    return booksApi.getAll({ ...params, library: scope });
   }
 
-  function fetchFeed(params: {
+  function fetchGrouped(params: {
     search?: string;
     author?: string;
     tag?: string;
@@ -164,9 +165,7 @@
     limit?: number;
     offset?: number;
   }) {
-    return id === ALL
-      ? booksApi.getFeed(params)
-      : librariesApi.getFeed(id, params);
+    return booksApi.getGrouped({ ...params, library: scope });
   }
 
   function handleStateChange(state: BookBrowserState) {
@@ -340,7 +339,7 @@
         <BookBrowser
           bind:this={bookBrowser}
           {fetchBooks}
-          {fetchFeed}
+          {fetchGrouped}
           collapsible
           {restoreData}
           initialSearch={(page.url.searchParams.get("search") ?? "").trim()}

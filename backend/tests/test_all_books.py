@@ -1,4 +1,4 @@
-"""Tests for the GET /api/books/all endpoint — schema and query parameter validation."""
+"""Tests for the GET /api/books list endpoint — schema and query parameter validation."""
 
 import uuid
 from unittest.mock import AsyncMock, MagicMock
@@ -111,7 +111,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all")
+                resp = await client.get("/api/books")
             assert resp.status_code == 200
             data = resp.json()
             assert "items" in data
@@ -130,7 +130,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all")
+                resp = await client.get("/api/books")
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -146,7 +146,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?search=test")
+                resp = await client.get("/api/books?search=test")
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -163,7 +163,7 @@ class TestListAllBooksEndpoint:
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 resp = await client.get(
-                    "/api/books/all?tag=sci-fi&author=Asimov&series=Foundation"
+                    "/api/books?tag=sci-fi&author=Asimov&series=Foundation"
                 )
             assert resp.status_code == 200
         finally:
@@ -192,7 +192,7 @@ class TestListAllBooksEndpoint:
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
                 resp = await client.get(
-                    "/api/books/all", params=[("ids", str(i)) for i in wanted]
+                    "/api/books", params=[("ids", str(i)) for i in wanted]
                 )
             assert resp.status_code == 200
             assert any(all(i.hex in q.replace("-", "") for i in wanted) for q in seen)
@@ -209,7 +209,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?ids=not-a-uuid")
+                resp = await client.get("/api/books?ids=not-a-uuid")
             assert resp.status_code == 422
         finally:
             app.dependency_overrides.clear()
@@ -225,7 +225,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?has_rating=true")
+                resp = await client.get("/api/books?has_rating=true")
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -241,7 +241,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?sort=display_title&order=asc")
+                resp = await client.get("/api/books?sort=display_title&order=asc")
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -257,7 +257,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?limit=20&offset=40")
+                resp = await client.get("/api/books?limit=20&offset=40")
             assert resp.status_code == 200
         finally:
             app.dependency_overrides.clear()
@@ -273,7 +273,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?limit=0")
+                resp = await client.get("/api/books?limit=0")
             assert resp.status_code == 422
         finally:
             app.dependency_overrides.clear()
@@ -289,7 +289,7 @@ class TestListAllBooksEndpoint:
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
-                resp = await client.get("/api/books/all?offset=-1")
+                resp = await client.get("/api/books?offset=-1")
             assert resp.status_code == 422
         finally:
             app.dependency_overrides.clear()
@@ -302,6 +302,51 @@ class TestListAllBooksEndpoint:
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
         ) as client:
-            resp = await client.get("/api/books/all")
+            resp = await client.get("/api/books")
         # Should return 401 or redirect — not 200
         assert resp.status_code in (401, 403, 307)
+
+
+class TestLibraryScopeAccess:
+    """``?library=`` is settled before either list reads a book: an unknown
+    library is a 404, one the user is excluded from a 403."""
+
+    @staticmethod
+    def _db(*, library_exists: bool, excluded: bool) -> AsyncMock:
+        session = AsyncMock()
+        calls = {"n": 0}
+
+        async def fake_execute(stmt, params=None):
+            calls["n"] += 1
+            result = MagicMock()
+            if calls["n"] == 1:  # the library lookup
+                found = object() if library_exists else None
+            elif calls["n"] == 2:  # the exclusion lookup
+                found = object() if excluded else None
+            else:
+                raise AssertionError("a book was read before access was settled")
+            result.scalar_one_or_none.return_value = found
+            return result
+
+        session.execute = fake_execute
+        return session
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("url", ["/api/books", "/api/books/grouped"])
+    @pytest.mark.parametrize(
+        ("library_exists", "excluded", "status"),
+        [(False, False, 404), (True, True, 403)],
+    )
+    async def test_scoped_list_refuses(self, url, library_exists, excluded, status):
+        app.dependency_overrides[get_current_user] = lambda: _make_user()
+        app.dependency_overrides[get_db] = lambda: self._db(
+            library_exists=library_exists, excluded=excluded
+        )
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(url, params={"library": str(uuid.uuid4())})
+            assert resp.status_code == status
+        finally:
+            app.dependency_overrides.clear()

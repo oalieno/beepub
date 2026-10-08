@@ -21,7 +21,7 @@ test("back from a book returns to the same spot in a reading list", async ({
   const listBooks = async () =>
     (
       await (
-        await page.request.get(`/api/libraries/${library.id}/books?limit=100`)
+        await page.request.get(`/api/books?library=${library.id}&limit=100`)
       ).json()
     ).items as Record<string, unknown>[];
   let books = await listBooks();

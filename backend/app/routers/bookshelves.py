@@ -12,7 +12,7 @@ from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
 from app.routers.books import _get_book_with_access
-from app.routers.libraries import _get_accessible_library
+from app.routers.libraries import get_accessible_library
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
     BookshelfCreate,
@@ -22,9 +22,9 @@ from app.schemas.bookshelf import (
     BookshelfSeriesAdd,
     BookshelfUpdate,
 )
-from app.schemas.series import LibraryFeedItem
+from app.schemas.series import GroupedItem
 from app.services.series import (
-    _hydrate_feed_books,
+    _hydrate_grouped_books,
     build_series_out,
     list_series,
     normalize_series_name,
@@ -194,14 +194,14 @@ async def delete_bookshelf(
     await db.commit()
 
 
-@router.get("/{shelf_id}/items", response_model=list[LibraryFeedItem])
+@router.get("/{shelf_id}/items", response_model=list[GroupedItem])
 async def list_shelf_items(
     shelf_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Shelf contents in sort order: each row is a book or a whole series,
-    hydrated with the same rating/interaction data the feed endpoints use."""
+    hydrated with the same rating/interaction data the grouped list uses."""
     await _get_owned_shelf(shelf_id, current_user, db)
     result = await db.execute(
         select(BookshelfBook)
@@ -215,23 +215,23 @@ async def list_shelf_items(
         (r.library_id, r.series_key) for r in rows if r.series_key is not None
     ]
 
-    book_by_id = await _hydrate_feed_books(db, current_user, book_ids)
+    book_by_id = await _hydrate_grouped_books(db, current_user, book_ids)
     series_by_key: dict = {}
     if series_pairs:
         srows, _ = await list_series(db, current_user, pairs=series_pairs)
         for s in await build_series_out(db, srows):
             series_by_key[(s.library_id, s.series_key)] = s
 
-    items: list[LibraryFeedItem] = []
+    items: list[GroupedItem] = []
     for r in rows:
         if r.book_id is not None:
             book = book_by_id.get(r.book_id)
             if book is not None:
-                items.append(LibraryFeedItem(type="book", book=book))
+                items.append(GroupedItem(type="book", book=book))
         else:
             series = series_by_key.get((r.library_id, r.series_key))
             if series is not None:
-                items.append(LibraryFeedItem(type="series", series=series))
+                items.append(GroupedItem(type="series", series=series))
     return items
 
 
@@ -308,7 +308,7 @@ async def add_series_to_shelf(
     key = normalize_series_name(body.series_name)
     if not key:
         raise HTTPException(status_code=422, detail="Invalid series name")
-    await _get_accessible_library(body.library_id, current_user, db)
+    await get_accessible_library(body.library_id, current_user, db)
     existing = await db.execute(
         select(BookshelfBook).where(
             BookshelfBook.bookshelf_id == shelf_id,

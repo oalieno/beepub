@@ -117,7 +117,7 @@ async def test_unsupported_and_empty_uploads_are_rejected(admin_client, library_
     assert response.status_code == 400
     assert response.json()["detail"] == "The TXT file has no text"
 
-    response = await admin_client.get("/api/books/all")
+    response = await admin_client.get("/api/books")
     assert response.json()["total"] == 0
 
 

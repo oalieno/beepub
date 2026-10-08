@@ -35,7 +35,7 @@ export async function adminApi() {
 
 /** Find a book by (partial) title, or upload the given epub. Returns its id. */
 export async function seedBook(api, title, epubPath) {
-  const books = await (await api.get("/api/books/all?limit=500")).json();
+  const books = await (await api.get("/api/books?limit=500")).json();
   const existing = books.items?.find((b) =>
     (b.display_title ?? b.epub_title ?? "").includes(title),
   );

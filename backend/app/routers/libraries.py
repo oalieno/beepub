@@ -1,30 +1,21 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import exists, func, or_, select
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.functions import coalesce
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
-from app.models.tag import BookTag
 from app.models.user import User, UserRole
-from app.schemas.book import (
-    BookWithInteractionOut,
-    PaginatedBooksWithInteraction,
-)
 from app.schemas.library import (
     LibraryCreate,
     LibraryListOut,
     LibraryOut,
     LibraryUpdate,
 )
-from app.schemas.series import PaginatedFeed, PaginatedSeries
-from app.services.book_search import relevance_order, tiered_book_search
-from app.services.series import build_series_out, list_library_feed, list_series
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
 
@@ -134,7 +125,7 @@ async def get_library(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    library = await _get_accessible_library(library_id, current_user, db)
+    library = await get_accessible_library(library_id, current_user, db)
     return library
 
 
@@ -200,188 +191,7 @@ async def delete_library(
         delete_file(path)
 
 
-@router.get("/{library_id}/books", response_model=PaginatedBooksWithInteraction)
-async def list_library_books(
-    library_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    search: str | None = Query(None),
-    author: str | None = Query(None),
-    tag: str | None = Query(None),
-    series: str | None = Query(None),
-    format: str | None = Query(None),
-    sort: str = Query("created_at"),
-    order: str = Query("desc"),
-    limit: int = Query(60, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    await _get_accessible_library(library_id, current_user, db)
-    base_query = (
-        select(Book)
-        .join(LibraryBook, LibraryBook.book_id == Book.id)
-        .where(LibraryBook.library_id == library_id)
-    )
-    if author:
-        base_query = base_query.where(
-            or_(
-                Book.authors.any(author),
-                Book.epub_authors.any(author),
-            )
-        )
-    if tag:
-        base_query = base_query.where(
-            or_(
-                Book.tags.any(tag),
-                Book.epub_tags.any(tag),
-                Book.id.in_(select(BookTag.book_id).where(BookTag.tag == tag)),
-            )
-        )
-    if series:
-        base_query = base_query.where(
-            or_(
-                Book.series == series,
-                Book.epub_series == series,
-            )
-        )
-    if format:
-        base_query = base_query.where(Book.format == format)
-    tiered = None
-    if search:
-        # Applied last — the tier probe must see the fully-filtered scope.
-        tiered = await tiered_book_search(db, search, base_query)
-        base_query = base_query.where(or_(*tiered.conditions))
-
-    # Count total
-    count_query = select(func.count()).select_from(base_query.subquery())
-    total = (await db.execute(count_query)).scalar() or 0
-
-    # Apply sorting and pagination (secondary sort on id for deterministic offset/limit)
-    sort_map = {
-        "display_title": coalesce(Book.title, Book.epub_title),
-        "added_at": coalesce(Book.calibre_added_at, Book.created_at),
-        "series_index": coalesce(Book.series_index, Book.epub_series_index),
-    }
-    # Default to series_index sort when filtering by series
-    if series and sort == "created_at":
-        sort = "series_index"
-        order = "asc"
-    if sort == "relevance" and tiered is None:
-        # Nothing to be relevant to (a stale URL) — the default order.
-        sort, order = "created_at", "desc"
-    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
-    if sort == "relevance":
-        base_query = base_query.order_by(*relevance_order(tiered, search), Book.id)
-    elif sort == "series_index":
-        # Sort by series name first, then index within each series; NULLS LAST
-        series_col = coalesce(Book.series, Book.epub_series)
-        if order == "desc":
-            base_query = base_query.order_by(
-                series_col.desc().nullslast(), sort_col.desc().nullslast(), Book.id
-            )
-        else:
-            base_query = base_query.order_by(
-                series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
-            )
-    elif order == "desc":
-        base_query = base_query.order_by(sort_col.desc(), Book.id)
-    else:
-        base_query = base_query.order_by(sort_col.asc(), Book.id)
-    base_query = base_query.offset(offset).limit(limit)
-
-    result = await db.execute(base_query)
-    books = result.scalars().all()
-
-    # Enrich with edition_count + work-propagated reading status. The page is
-    # bounded by `limit` (<=200), so propagation runs only over the current page.
-    from app.models.reading import UserBookInteraction
-    from app.services.work_propagation import (
-        get_edition_count_map,
-        get_work_propagated_interactions,
-    )
-
-    book_ids_list = [b.id for b in books]
-    edition_counts = await get_edition_count_map(db, book_ids_list)
-    propagated = await get_work_propagated_interactions(
-        db, book_ids_list, current_user.id
-    )
-    # Progress stays per-edition (pagination differs across editions), so it
-    # comes from the user's own interaction rather than work propagation.
-    progress_rows = await db.execute(
-        select(UserBookInteraction.book_id, UserBookInteraction.reading_progress).where(
-            UserBookInteraction.user_id == current_user.id,
-            UserBookInteraction.book_id.in_(book_ids_list),
-        )
-    )
-    progress_map = {row[0]: row[1] or {} for row in progress_rows.all()}
-    items = []
-    for b in books:
-        item = BookWithInteractionOut.model_validate(b)
-        item.edition_count = edition_counts.get(b.id)
-        prop = propagated.get(b.id)
-        if prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        own_progress = progress_map.get(b.id, {})
-        item.reading_percentage = own_progress.get("percentage")
-        item.last_read_at = own_progress.get("last_read_at")
-        items.append(item)
-
-    return PaginatedBooksWithInteraction(items=items, total=total)
-
-
-@router.get("/{library_id}/series", response_model=PaginatedSeries)
-async def list_library_series(
-    library_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    search: str | None = Query(None),
-    limit: int = Query(60, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    await _get_accessible_library(library_id, current_user, db)
-    rows, total = await list_series(
-        db,
-        current_user,
-        library_id=library_id,
-        search=search,
-        limit=limit,
-        offset=offset,
-    )
-    items = await build_series_out(db, rows)
-    return PaginatedSeries(items=items, total=total)
-
-
-@router.get("/{library_id}/feed", response_model=PaginatedFeed)
-async def list_library_feed_view(
-    library_id: uuid.UUID,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-    search: str | None = Query(None),
-    author: str | None = Query(None),
-    tag: str | None = Query(None),
-    sort: str = Query("added_at"),
-    order: str = Query("desc"),
-    limit: int = Query(60, ge=1, le=200),
-    offset: int = Query(0, ge=0),
-):
-    """Collapsed view of one library: series grouped, lone books individual."""
-    await _get_accessible_library(library_id, current_user, db)
-    items, total = await list_library_feed(
-        db,
-        current_user,
-        library_id=library_id,
-        search=search,
-        author=author,
-        tag=tag,
-        sort=sort,
-        order=order,
-        limit=limit,
-        offset=offset,
-    )
-    return PaginatedFeed(items=items, total=total)
-
-
-async def _get_accessible_library(
+async def get_accessible_library(
     library_id: uuid.UUID, user: User, db: AsyncSession
 ) -> Library:
     result = await db.execute(select(Library).where(Library.id == library_id))

@@ -117,5 +117,5 @@ async def test_bad_cbz_uploads_are_rejected(admin_client, library_id):
     assert response.status_code == 400
     assert "CBZ" in response.json()["detail"]
 
-    response = await admin_client.get("/api/books/all")
+    response = await admin_client.get("/api/books")
     assert response.json()["total"] == 0

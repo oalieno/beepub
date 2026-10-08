@@ -44,7 +44,7 @@ async def list_series(
     - library_id: restrict to one library (access must be checked by caller);
       combine with ``key`` to fetch a single series (the detail page).
     - key: a single series_key — pair it with ``library_id`` for the detail page.
-    - pairs: a set of ``(library_id, series_key)`` tuples (the collapsed feed and
+    - pairs: a set of ``(library_id, series_key)`` tuples (the grouped list and
       bookshelves hydrate their page this way).
     - search: case-insensitive series-name filter.
     - rated_only: only series the user rated explicitly — used by the tier
@@ -209,15 +209,15 @@ async def build_series_out(db: AsyncSession, rows: list[dict]) -> list:
     ]
 
 
-# Sort param -> the unit column it maps to in the feed ordering query.
-_FEED_ORD_COLUMNS = {
+# Sort param -> the unit column it maps to in the grouped ordering query.
+_GROUPED_ORD_COLUMNS = {
     "display_title": "ord_title",
     "added_at": "ord_added",
     "popularity_score": "ord_pop",
 }
 
 
-async def list_library_feed(
+async def list_grouped_books(
     db: AsyncSession,
     user: User,
     *,
@@ -230,7 +230,7 @@ async def list_library_feed(
     limit: int = 60,
     offset: int = 0,
 ) -> tuple[list[dict], int]:
-    """The collapsed library view: a single ordered, paginated feed where each
+    """The grouped book list: a single ordered, paginated list where each
     series collapses to one unit, series-less books that share a work (different
     editions/versions of the same book) collapse to one unit represented by the
     work's primary edition, and everything else stays individual.
@@ -273,7 +273,7 @@ async def list_library_feed(
         if not matches:
             return [], 0
         # The shared tiered search decides membership (and each book's
-        # relevance) exactly as the flat list does; the feed only groups.
+        # relevance) exactly as the flat list does; this list only groups.
         params["match_ids"] = [m[0] for m in matches]
         params["match_scores"] = [int(m[1]) for m in matches]
         relevance_join = (
@@ -298,7 +298,7 @@ async def list_library_feed(
         # A series ranks by its best-matching volume.
         order_by = "ord_rel ASC, length(ord_title), ord_title ASC"
     else:
-        ord_col = _FEED_ORD_COLUMNS.get(sort, "ord_added")
+        ord_col = _GROUPED_ORD_COLUMNS.get(sort, "ord_added")
         direction = "DESC" if order == "desc" else "ASC"
         order_by = f"{ord_col} {direction} NULLS LAST, ord_title ASC"
 
@@ -387,7 +387,7 @@ async def list_library_feed(
         series_by_key = {(s.library_id, s.series_key): s for s in out}
 
     book_ids = [r["book_id"] for r in page if r["kind"] == "book"]
-    book_by_id = await _hydrate_feed_books(db, user, book_ids)
+    book_by_id = await _hydrate_grouped_books(db, user, book_ids)
 
     items: list[dict] = []
     for r in page:
@@ -411,7 +411,7 @@ async def _search_matches(
     author: str | None,
     tag: str | None,
 ) -> list[tuple[uuid.UUID, int]]:
-    """``(book_id, relevance)`` for every book the feed's search matches,
+    """``(book_id, relevance)`` for every book the grouped list's search matches,
     through the same tiered search as the flat list. The scope carries
     every other filter so the tier probe sees what the user sees."""
     from sqlalchemy import or_
@@ -450,8 +450,8 @@ async def _search_matches(
     return [(r[0], r[1]) for r in rows.all()]
 
 
-async def _hydrate_feed_books(db: AsyncSession, user: User, book_ids: list) -> dict:
-    """Load standalone feed books into BookWithInteractionOut keyed by id, with
+async def _hydrate_grouped_books(db: AsyncSession, user: User, book_ids: list) -> dict:
+    """Load standalone grouped-list books into BookWithInteractionOut keyed by id, with
     the same edition-count + work-propagated interaction enrichment the book
     listing endpoints apply."""
     from app.models.book import Book

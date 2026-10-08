@@ -1,11 +1,11 @@
 <script lang="ts" module>
-  import type { LibraryFeedItem } from "$lib/types";
+  import type { GroupedItem } from "$lib/types";
 
   // One placed unit: a book or a whole series, with the rating that decides
   // which tier it lands in (null = unrated).
   export interface TierEntry {
     rating: number | null;
-    item: LibraryFeedItem;
+    item: GroupedItem;
   }
 </script>
 

@@ -20,9 +20,9 @@
   import { localizedTagLabel } from "$lib/tags";
   import type {
     BookWithInteractionOut,
-    LibraryFeedItem,
+    GroupedItem,
     PaginatedBooksWithInteraction,
-    PaginatedFeed,
+    PaginatedGrouped,
   } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import { openSearchModal } from "$lib/stores/search";
@@ -47,11 +47,11 @@
   type FetchBooksFn = (
     params: FetchParams,
   ) => Promise<PaginatedBooksWithInteraction>;
-  type FetchFeedFn = (params: FetchParams) => Promise<PaginatedFeed>;
+  type FetchGroupedFn = (params: FetchParams) => Promise<PaginatedGrouped>;
 
   let {
     fetchBooks,
-    fetchFeed,
+    fetchGrouped,
     collapsible = false,
     initialSearch = "",
     initialTag = "",
@@ -66,7 +66,7 @@
     onStateChange,
   }: {
     fetchBooks: FetchBooksFn;
-    fetchFeed?: FetchFeedFn;
+    fetchGrouped?: FetchGroupedFn;
     collapsible?: boolean;
     initialSearch?: string;
     initialTag?: string;
@@ -83,7 +83,10 @@
 
   export interface BookBrowserState {
     books: BookWithInteractionOut[];
-    feedItems: LibraryFeedItem[];
+    // The grouped list's items. The key keeps its old name: this object is
+    // the page snapshot SvelteKit stores in sessionStorage, and a snapshot
+    // taken before the rename must still restore.
+    feedItems: GroupedItem[];
     totalBooks: number;
     searchQuery: string;
     filterAuthor: string;
@@ -147,15 +150,15 @@
   };
 
   let books = $state<BookWithInteractionOut[]>(init.books);
-  let feedItems = $state<LibraryFeedItem[]>(init.feedItems);
+  let groupedItems = $state<GroupedItem[]>(init.feedItems);
   let totalBooks = $state(init.totalBooks);
   let collapse = $state(init.collapse);
   let filterFormat = $state(init.filterFormat ?? "");
-  // The feed groups by series; a format filter needs the flat list, so it
+  // The grouped list groups by series; a format filter needs the flat list, so it
   // overrides collapse the same way the table view does.
   let flatForced = $derived(!!filterFormat);
   let shownCount = $derived(
-    collapse && !flatForced ? feedItems.length : books.length,
+    collapse && !flatForced ? groupedItems.length : books.length,
   );
   let hasMore = $derived(shownCount < totalBooks);
   let loading = $state(!isRestoring);
@@ -238,7 +241,7 @@
   function notifyStateChange() {
     onStateChange?.({
       books,
-      feedItems,
+      feedItems: groupedItems,
       totalBooks,
       searchQuery,
       filterAuthor,
@@ -274,10 +277,10 @@
     const gen = ++loadGen;
     loading = true;
     try {
-      if (collapse && !flatForced && fetchFeed) {
-        const result = await fetchFeed(queryParams(0));
+      if (collapse && !flatForced && fetchGrouped) {
+        const result = await fetchGrouped(queryParams(0));
         if (gen !== loadGen) return;
-        feedItems = result.items;
+        groupedItems = result.items;
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(0));
@@ -299,10 +302,10 @@
     const gen = loadGen;
     loadingMore = true;
     try {
-      if (collapse && !flatForced && fetchFeed) {
-        const result = await fetchFeed(queryParams(feedItems.length));
+      if (collapse && !flatForced && fetchGrouped) {
+        const result = await fetchGrouped(queryParams(groupedItems.length));
         if (gen !== loadGen) return;
-        feedItems = [...feedItems, ...result.items];
+        groupedItems = [...groupedItems, ...result.items];
         totalBooks = result.total;
       } else {
         const result = await fetchBooks(queryParams(books.length));
@@ -382,7 +385,7 @@
   export function getState(): BookBrowserState {
     return {
       books,
-      feedItems,
+      feedItems: groupedItems,
       totalBooks,
       searchQuery,
       filterAuthor,
@@ -676,7 +679,7 @@
       class="grid gap-4 items-start book-grid"
       style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
     >
-      {#each feedItems as item (item.type === "series" ? `s:${item.series.series_key}` : `b:${item.book.id}`)}
+      {#each groupedItems as item (item.type === "series" ? `s:${item.series.series_key}` : `b:${item.book.id}`)}
         {#if item.type === "series"}
           <SeriesCard series={item.series} />
         {:else}

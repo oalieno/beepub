@@ -58,7 +58,8 @@
       await Promise.all(
         libraries.map(async (lib) => {
           try {
-            const result = await librariesApi.getBooks(lib.id, {
+            const result = await booksApi.getAll({
+              library: lib.id,
               sort: "added_at",
               limit: 12,
             });

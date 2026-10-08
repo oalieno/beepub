@@ -142,7 +142,7 @@ test("admin moves a book to another library", async ({ page }) => {
   await expect(page.getByText("Book moved")).toBeVisible();
 
   const listing = await (
-    await page.request.get(`/api/libraries/${target!.id}/books`)
+    await page.request.get(`/api/books?library=${target!.id}`)
   ).json();
   expect(listing.items.map((b: { id: string }) => b.id)).toContain(book.id);
 });

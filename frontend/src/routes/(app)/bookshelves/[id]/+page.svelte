@@ -23,12 +23,12 @@
   } from "$lib/tiers";
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
-  import type { BookshelfOut, LibraryFeedItem } from "$lib/types";
+  import type { BookshelfOut, GroupedItem } from "$lib/types";
 
   let shelfId = $derived(page.params.id as string);
 
   let shelf = $state<BookshelfOut | null>(null);
-  let items = $state<LibraryFeedItem[]>([]);
+  let items = $state<GroupedItem[]>([]);
   let loading = $state(true);
 
   let viewMode = $state<"grid" | "tier">("grid");
@@ -52,7 +52,7 @@
     TIER_PRESETS.filter((p) => !p.chineseOnly || getLocale().startsWith("zh")),
   );
 
-  function itemKey(it: LibraryFeedItem) {
+  function itemKey(it: GroupedItem) {
     return it.type === "series"
       ? `s:${it.series.library_id}:${it.series.series_key}`
       : `b:${it.book.id}`;
@@ -99,7 +99,7 @@
     saveShelfThemeKey(shelfId, key);
   }
 
-  async function removeItem(target: LibraryFeedItem) {
+  async function removeItem(target: GroupedItem) {
     if (
       !(await confirmDialog({
         title: m.bookshelf_remove_confirm(),

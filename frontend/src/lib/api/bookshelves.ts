@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { BookshelfOut, LibraryFeedItem } from "$lib/types";
+import type { BookshelfOut, GroupedItem } from "$lib/types";
 
 export const bookshelvesApi = {
   list: () => get("/bookshelves") as Promise<BookshelfOut[]>,
@@ -16,7 +16,7 @@ export const bookshelvesApi = {
 
   // Shelf contents in sort order — books and whole series, mixed.
   getItems: (id: string) =>
-    get(`/bookshelves/${id}/items`) as Promise<LibraryFeedItem[]>,
+    get(`/bookshelves/${id}/items`) as Promise<GroupedItem[]>,
 
   addBook: (id: string, bookId: string) =>
     post(`/bookshelves/${id}/books`, { book_id: bookId }),

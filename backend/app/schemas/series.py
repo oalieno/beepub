@@ -18,12 +18,7 @@ class SeriesOut(BaseModel):
     cover_book: BookOut | None = None
 
 
-class PaginatedSeries(BaseModel):
-    items: list[SeriesOut]
-    total: int
-
-
-class LibraryFeedItem(BaseModel):
+class GroupedItem(BaseModel):
     """One unit in the collapsed library view: a whole series or a lone book."""
 
     type: Literal["series", "book"]
@@ -31,8 +26,8 @@ class LibraryFeedItem(BaseModel):
     book: BookWithInteractionOut | None = None
 
 
-class PaginatedFeed(BaseModel):
-    items: list[LibraryFeedItem]
+class PaginatedGrouped(BaseModel):
+    items: list[GroupedItem]
     total: int
 
 

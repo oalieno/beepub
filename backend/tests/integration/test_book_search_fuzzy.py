@@ -40,7 +40,7 @@ async def _seed(admin_client: AsyncClient) -> str:
 
 async def _search(client: AsyncClient, q: str) -> list[str]:
     response = await client.get(
-        "/api/books/all", params={"search": q, "sort": "relevance", "limit": 50}
+        "/api/books", params={"search": q, "sort": "relevance", "limit": 50}
     )
     assert response.status_code == 200, response.text
     return [item["display_title"] for item in response.json()["items"]]
@@ -107,7 +107,7 @@ async def test_multi_keyword_narrows_then_broadens(admin_client: AsyncClient):
 async def test_keywords_match_tags(admin_client: AsyncClient):
     await _seed(admin_client)
     response = await admin_client.get(
-        "/api/books/all", params={"search": "三體", "sort": "relevance", "limit": 1}
+        "/api/books", params={"search": "三體", "sort": "relevance", "limit": 1}
     )
     book_id = response.json()["items"][0]["id"]
     response = await admin_client.put(
@@ -124,8 +124,8 @@ async def test_keywords_match_tags(admin_client: AsyncClient):
 async def test_library_search_uses_the_same_tiers(admin_client: AsyncClient):
     library_id = await _seed(admin_client)
     response = await admin_client.get(
-        f"/api/libraries/{library_id}/books",
-        params={"search": "街角VR食堂"},
+        "/api/books",
+        params={"library": library_id, "search": "街角VR食堂"},
     )
     assert response.status_code == 200, response.text
     payload = response.json()
@@ -162,23 +162,21 @@ RELEVANCE_ORDER = ["食堂", "晚餐之書", "食堂番外", "我的食堂"]
 
 async def test_library_list_sorts_by_relevance(admin_client: AsyncClient):
     library_id = await _seed_relevance(admin_client)
-    for url, params in [
-        (f"/api/libraries/{library_id}/books", {}),
-        ("/api/books/all", {"library": library_id}),
-    ]:
+    # Scoped to the library and across all of them (it is the only one).
+    for scope in ({"library": library_id}, {}):
         response = await admin_client.get(
-            url, params={**params, "search": "食堂", "sort": "relevance"}
+            "/api/books", params={**scope, "search": "食堂", "sort": "relevance"}
         )
         assert response.status_code == 200, response.text
         titles = [item["display_title"] for item in response.json()["items"]]
-        assert titles == RELEVANCE_ORDER, url
+        assert titles == RELEVANCE_ORDER, scope
 
 
-async def test_grouped_feed_sorts_by_relevance(admin_client: AsyncClient):
+async def test_grouped_list_sorts_by_relevance(admin_client: AsyncClient):
     library_id = await _seed_relevance(admin_client)
     response = await admin_client.get(
-        f"/api/libraries/{library_id}/feed",
-        params={"search": "食堂", "sort": "relevance"},
+        "/api/books/grouped",
+        params={"library": library_id, "search": "食堂", "sort": "relevance"},
     )
     assert response.status_code == 200, response.text
     units = [
@@ -190,12 +188,13 @@ async def test_grouped_feed_sorts_by_relevance(admin_client: AsyncClient):
     assert units == ["食堂", "series:食堂", "食堂番外", "我的食堂"]
 
 
-async def test_grouped_feed_uses_the_same_tiers(admin_client: AsyncClient):
+async def test_grouped_list_uses_the_same_tiers(admin_client: AsyncClient):
     library_id = await _seed(admin_client)
     # Only the normalized tier matches the spaced volume — the grouped
     # view must find both, like the flat list does.
     response = await admin_client.get(
-        f"/api/libraries/{library_id}/feed", params={"search": "街角VR食堂"}
+        "/api/books/grouped",
+        params={"library": library_id, "search": "街角VR食堂"},
     )
     assert response.status_code == 200, response.text
     assert {item["book"]["display_title"] for item in response.json()["items"]} == {
@@ -203,18 +202,18 @@ async def test_grouped_feed_uses_the_same_tiers(admin_client: AsyncClient):
         TITLES["unspaced"],
     }
     response = await admin_client.get(
-        f"/api/libraries/{library_id}/feed", params={"search": "zzzz查無此書zzzz"}
+        "/api/books/grouped",
+        params={"library": library_id, "search": "zzzz查無此書zzzz"},
     )
     assert response.json() == {"items": [], "total": 0}
 
 
 async def test_relevance_without_a_query_falls_back(admin_client: AsyncClient):
     library_id = await _seed_relevance(admin_client)
-    for url in [
-        f"/api/libraries/{library_id}/books",
-        f"/api/libraries/{library_id}/feed",
-    ]:
-        response = await admin_client.get(url, params={"sort": "relevance"})
+    for url in ["/api/books", "/api/books/grouped"]:
+        response = await admin_client.get(
+            url, params={"library": library_id, "sort": "relevance"}
+        )
         assert response.status_code == 200, response.text
         assert response.json()["total"] == 4, url
 
@@ -254,18 +253,15 @@ async def test_search_never_folds_a_column(admin_client: AsyncClient):
     ]
     with _recorded_sql() as statements:
         for q in queries:
-            for url, params in [
-                (
-                    f"/api/libraries/{library_id}/books",
-                    {"search": q, "sort": "relevance"},
-                ),
-                (
-                    f"/api/libraries/{library_id}/feed",
-                    {"search": q, "sort": "relevance"},
-                ),
-                ("/api/books/all", {"search": q, "sort": "relevance"}),
+            for url, scope in [
+                ("/api/books", {"library": library_id}),
+                ("/api/books/grouped", {"library": library_id}),
+                ("/api/books", {}),
+                ("/api/books/grouped", {}),
             ]:
-                response = await admin_client.get(url, params=params)
+                response = await admin_client.get(
+                    url, params={**scope, "search": q, "sort": "relevance"}
+                )
                 assert response.status_code == 200, response.text
 
     folding = [s for s in statements if "beepub_norm" in s]
@@ -278,7 +274,7 @@ async def test_search_never_folds_a_column(admin_client: AsyncClient):
 async def test_stored_fold_follows_the_book(admin_client: AsyncClient):
     await _seed(admin_client)
     response = await admin_client.get(
-        "/api/books/all", params={"search": "Clean Code", "sort": "relevance"}
+        "/api/books", params={"search": "Clean Code", "sort": "relevance"}
     )
     book_id = response.json()["items"][0]["id"]
     response = await admin_client.put(
@@ -332,7 +328,7 @@ async def test_all_books_counts_and_ranks_ids_then_reads_the_page(
     await _seed_relevance(admin_client)
     with _recorded_sql() as statements:
         response = await admin_client.get(
-            "/api/books/all",
+            "/api/books",
             params={"search": "食堂", "sort": "relevance", "limit": 2, "offset": 1},
         )
     assert response.status_code == 200, response.text

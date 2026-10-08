@@ -246,14 +246,13 @@ export async function seedFixture(
   // page size. Oldest first — the digest lookup that links a downloaded
   // copy picks the earliest book with that file, so seed that one.
   const params = new URLSearchParams({
+    library: library.id,
     search: fixture.title,
     sort: "created_at",
     order: "asc",
     limit: "200",
   });
-  const books = await (
-    await request.get(`/api/libraries/${library.id}/books?${params}`)
-  ).json();
+  const books = await (await request.get(`/api/books?${params}`)).json();
   const existing = books.items?.find((b: Record<string, string>) =>
     (b.display_title ?? b.epub_title ?? "").includes(fixture.title),
   );

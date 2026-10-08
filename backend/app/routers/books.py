@@ -63,7 +63,7 @@ from app.schemas.reading import (
     ReadingGoalUpdate,
     ReadingStatsOut,
 )
-from app.schemas.series import PaginatedFeed
+from app.schemas.series import PaginatedGrouped
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_pages import read_page_manifest
@@ -151,9 +151,9 @@ async def _validate_upload_library(
     library_id: str | None, user: User, db: AsyncSession
 ) -> uuid.UUID:
     """Parse and authorize the target library BEFORE any file hits disk."""
-    from app.routers.libraries import _get_accessible_library
+    from app.routers.libraries import get_accessible_library
 
-    # Every book must belong to a library: every listing (all/feed/search/
+    # Every book must belong to a library: every listing (flat/grouped/search/
     # random) reaches books through library membership, so a library-less
     # book would be invisible to everyone — including its uploader.
     if not library_id:
@@ -162,7 +162,7 @@ async def _validate_upload_library(
         lib_id = uuid.UUID(library_id)
     except ValueError:
         raise HTTPException(status_code=422, detail="Invalid library id")
-    library = await _get_accessible_library(lib_id, user, db)
+    library = await get_accessible_library(lib_id, user, db)
     if library.calibre_path:
         raise HTTPException(
             status_code=403, detail="Cannot upload to a Calibre library"
@@ -1037,7 +1037,7 @@ async def get_discover_browse(
     return sections
 
 
-@router.get("/all", response_model=PaginatedBooksWithInteraction)
+@router.get("", response_model=PaginatedBooksWithInteraction)
 async def list_all_books(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -1054,18 +1054,25 @@ async def list_all_books(
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    """List all books across accessible libraries.
+    """The flat book list: one row per book, across every accessible library.
 
-    ``library`` scopes the result to one library — used with ``series`` so the
-    series-detail page only shows that library's volumes (series identity is
-    ``(library_id, series_key)``).
+    ``library`` scopes the result to one library (404 when it does not exist,
+    403 when the user is excluded from it) — a library's own page, and with
+    ``series`` the series-detail page, which only shows that library's volumes
+    (series identity is ``(library_id, series_key)``).
 
     ``ids`` narrows to the given books — the app's "downloaded" shelf, whose
     membership lives on the device; it pages the ids itself.
     """
     from sqlalchemy.sql.functions import coalesce
 
-    from app.routers.libraries import accessible_book_ids_select
+    from app.routers.libraries import (
+        accessible_book_ids_select,
+        get_accessible_library,
+    )
+
+    if library is not None:
+        await get_accessible_library(library, current_user, db)
 
     # Accessible book IDs (avoids DISTINCT on the main query)
     accessible_ids = accessible_book_ids_select(current_user)
@@ -1220,26 +1227,38 @@ async def list_all_books(
     return PaginatedBooksWithInteraction(items=items, total=total)
 
 
-@router.get("/feed", response_model=PaginatedFeed)
-async def list_all_books_feed(
+@router.get("/grouped", response_model=PaginatedGrouped)
+async def list_books_grouped(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     search: str | None = Query(None),
     author: str | None = Query(None),
     tag: str | None = Query(None),
+    library: uuid.UUID | None = Query(None),
     sort: str = Query("added_at"),
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ):
-    """Collapsed view across all accessible libraries: series grouped, lone
-    books individual. The "All books" tab in the merged library page."""
-    from app.services.series import list_library_feed
+    """The grouped book list: a series is one item, editions of the same work
+    are one item, every other book is its own.
 
-    items, total = await list_library_feed(
+    ``library`` scopes the result to one library (404 when it does not exist,
+    403 when the user is excluded from it); without it the list spans every
+    accessible library.
+    """
+    from app.routers.libraries import get_accessible_library
+    from app.services.series import list_grouped_books
+
+    # The service does not apply the exclusion filter when scoped to one
+    # library, so access to that library is settled here.
+    if library is not None:
+        await get_accessible_library(library, current_user, db)
+
+    items, total = await list_grouped_books(
         db,
         current_user,
-        library_id=None,
+        library_id=library,
         search=search,
         author=author,
         tag=tag,
@@ -1248,7 +1267,7 @@ async def list_all_books_feed(
         limit=limit,
         offset=offset,
     )
-    return PaginatedFeed(items=items, total=total)
+    return PaginatedGrouped(items=items, total=total)
 
 
 def _source_page_url(plugin_cls: type | None, ref: str | None) -> str | None:

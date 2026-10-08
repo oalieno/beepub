@@ -1,5 +1,4 @@
 import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
-import { feedQuery, type FeedParams } from "./libraries";
 import { noteBookEdited } from "$lib/stores/editedBooks";
 import type {
   ZhConversion,
@@ -18,7 +17,7 @@ import type {
   IsbnLookupOut,
   MetadataSearchOut,
   PaginatedBooksWithInteraction,
-  PaginatedFeed,
+  PaginatedGrouped,
   ProgressOut,
   ReadingStats,
   RecapOut,
@@ -28,6 +27,31 @@ import type {
   StylePromptOut,
   TagBrowseSection,
 } from "$lib/types";
+
+export interface GroupedParams {
+  search?: string;
+  author?: string;
+  tag?: string;
+  library?: string;
+  sort?: string;
+  order?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export function groupedQuery(options?: GroupedParams): string {
+  const params = new URLSearchParams();
+  if (options?.search) params.set("search", options.search);
+  if (options?.author) params.set("author", options.author);
+  if (options?.tag) params.set("tag", options.tag);
+  if (options?.library) params.set("library", options.library);
+  if (options?.sort) params.set("sort", options.sort);
+  if (options?.order) params.set("order", options.order);
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  if (options?.offset != null) params.set("offset", String(options.offset));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
 
 export const booksApi = {
   /** Rebuild a TXT book's EPUB from its source as Traditional Chinese. */
@@ -305,7 +329,7 @@ export const booksApi = {
     get(`/books/${bookId}/images`) as Promise<EpubImageInfo[]>,
 
   /** The first `limit` books for a query, most relevant first — the
-   *  library list's own search (`/books/all`), so a result list shown
+   *  library list's own search (`GET /books`), so a result list shown
    *  elsewhere starts with the same books in the same order. */
   search: (query: string, limit: number = 20, signal?: AbortSignal) => {
     // (Without a search the endpoint lists the whole library.)
@@ -320,7 +344,7 @@ export const booksApi = {
       sort: "relevance",
       limit: String(limit),
     });
-    return get(`/books/all?${params}`, {
+    return get(`/books?${params}`, {
       signal,
     }) as Promise<PaginatedBooksWithInteraction>;
   },
@@ -399,13 +423,14 @@ export const booksApi = {
     if (options?.offset != null) params.set("offset", String(options.offset));
     const qs = params.toString();
     return get(
-      `/books/all${qs ? `?${qs}` : ""}`,
+      `/books${qs ? `?${qs}` : ""}`,
     ) as Promise<PaginatedBooksWithInteraction>;
   },
 
-  // Collapsed feed across all accessible libraries (the All books tab).
-  getFeed: (options?: FeedParams) =>
-    get(`/books/feed${feedQuery(options)}`) as Promise<PaginatedFeed>,
+  // Series and same-work editions collapsed to one item each — one
+  // library's when `library` is given, every accessible library's otherwise.
+  getGrouped: (options?: GroupedParams) =>
+    get(`/books/grouped${groupedQuery(options)}`) as Promise<PaginatedGrouped>,
 
   // Chapter summaries up to the reading position (stored summaries,
   // no AI call at read time).

@@ -192,7 +192,7 @@ test("the series downloads in one go, skipping what is already here", async ({
       },
     }),
   );
-  await page.route(/\/api\/books\/all\?.*series=/, (route) =>
+  await page.route(/\/api\/books\?.*series=/, (route) =>
     route.fulfill({ json: { items: books, total: 3 } }),
   );
   const release = await holdFiles(page, ids);

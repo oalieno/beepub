@@ -1,6 +1,6 @@
 """Every book must belong to at least one library.
 
-Outside of a library a book is unreachable by every listing (all/feed/
+Outside of a library a book is unreachable by every listing (flat/grouped/
 search/random), even for admins — so uploads require a library and the
 last library membership cannot be removed. Also covers the empty-gacha
 case: /books/random returns an empty list, not an error.

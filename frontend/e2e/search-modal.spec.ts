@@ -16,11 +16,13 @@ async function openSearch(page: Page) {
 
 /** The modal's own request: the library list's endpoint, asked for a
  *  query's first twenty. (The list pages ask the same endpoint for
- *  sixty, and the home page for none with a search.) */
+ *  sixty, and the home page for none with a search.) The upload is a
+ *  POST to the same path; it carries no query, so asking for `search`
+ *  and `limit` keeps this to the list's GET where only a URL is given. */
 function isModalSearch(url: string | URL) {
   const u = new URL(url);
   return (
-    u.pathname === "/api/books/all" &&
+    u.pathname === "/api/books" &&
     u.searchParams.has("search") &&
     u.searchParams.get("limit") === "20"
   );
@@ -181,7 +183,8 @@ test("from the library itself, Enter searches that list; Back returns to it as i
   await input.fill("E2E Test");
   const listed = page.waitForRequest(
     (r) =>
-      /\/api\/books\/(all|feed)\?/.test(r.url()) &&
+      r.method() === "GET" &&
+      /\/api\/books(\/grouped)?\?/.test(r.url()) &&
       // (The list's request, not the modal's for the same words.)
       !isModalSearch(r.url()) &&
       new URL(r.url()).searchParams.get("search") === "E2E Test",
@@ -324,7 +327,8 @@ test("the modal lists the first books of the library search, in its order", asyn
 
     const listed = page.waitForResponse(
       (r) =>
-        new URL(r.url()).pathname === "/api/books/all" &&
+        r.request().method() === "GET" &&
+        new URL(r.url()).pathname === "/api/books" &&
         !isModalSearch(r.url()) &&
         new URL(r.url()).searchParams.get("search") === q,
     );

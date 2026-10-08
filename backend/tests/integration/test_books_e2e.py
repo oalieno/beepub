@@ -38,7 +38,7 @@ async def test_uploaded_book_is_listed_and_downloadable(admin_client, library_id
     epub = build_epub(title="Listed Book")
     book = await upload(admin_client, library_id, epub)
 
-    response = await admin_client.get("/api/books/all")
+    response = await admin_client.get("/api/books")
     assert response.status_code == 200
     listing = response.json()
     assert listing["total"] == 1
@@ -69,7 +69,7 @@ async def test_corrupt_epub_is_rejected_without_leftovers(admin_client, library_
     )
     assert response.status_code == 400
 
-    response = await admin_client.get("/api/books/all")
+    response = await admin_client.get("/api/books")
     assert response.json()["total"] == 0
 
 
@@ -79,7 +79,7 @@ async def test_delete_removes_book_everywhere(admin_client, library_id):
     response = await admin_client.delete(f"/api/books/{book['id']}")
     assert response.status_code == 204
 
-    response = await admin_client.get("/api/books/all")
+    response = await admin_client.get("/api/books")
     assert response.json()["total"] == 0
     response = await admin_client.get(f"/api/books/{book['id']}/file")
     assert response.status_code == 404

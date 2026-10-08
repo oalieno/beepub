@@ -9,7 +9,7 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.reading import UserSeriesInteraction
 from app.models.user import User
-from app.routers.libraries import _get_accessible_library
+from app.routers.libraries import get_accessible_library
 from app.schemas.series import SeriesNotesUpdate, SeriesOut, SeriesRatingUpdate
 from app.services.series import (
     build_series_out,
@@ -86,7 +86,7 @@ async def get_series_detail(
     """
     key = _resolve_key(name)
     if library is not None:
-        await _get_accessible_library(library, current_user, db)
+        await get_accessible_library(library, current_user, db)
         rows, _ = await list_series(db, current_user, library_id=library, key=key)
     else:
         rows, _ = await list_series(db, current_user, key=key)
@@ -107,7 +107,7 @@ async def update_series_rating(
     ):
         raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
     key = _resolve_key(body.series_name)
-    await _get_accessible_library(body.library_id, current_user, db)
+    await get_accessible_library(body.library_id, current_user, db)
     row = await _get_or_create_series(
         current_user.id, body.library_id, key, body.series_name.strip(), db
     )
@@ -123,7 +123,7 @@ async def update_series_notes(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     key = _resolve_key(body.series_name)
-    await _get_accessible_library(body.library_id, current_user, db)
+    await get_accessible_library(body.library_id, current_user, db)
     row = await _get_or_create_series(
         current_user.id, body.library_id, key, body.series_name.strip(), db
     )

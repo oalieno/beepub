@@ -114,18 +114,13 @@ export interface SeriesOut {
   cover_book: BookOut | null;
 }
 
-export interface PaginatedSeries {
-  items: SeriesOut[];
-  total: number;
-}
-
 // One unit in the collapsed library view: a whole series or a lone book.
-export type LibraryFeedItem =
+export type GroupedItem =
   | { type: "series"; series: SeriesOut; book?: null }
   | { type: "book"; book: BookWithInteractionOut; series?: null };
 
-export interface PaginatedFeed {
-  items: LibraryFeedItem[];
+export interface PaginatedGrouped {
+  items: GroupedItem[];
   total: number;
 }
 

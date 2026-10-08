@@ -38,7 +38,7 @@ async def test_create_physical_book(admin_client):
     assert detail.status_code == 200
     assert detail.json()["format"] == "physical"
 
-    listing = await admin_client.get("/api/books/all")
+    listing = await admin_client.get("/api/books")
     assert book["id"] in [b["id"] for b in listing.json()["items"]]
 
 
@@ -99,12 +99,12 @@ async def test_format_filter_on_book_lists(admin_client):
     physical = await create_physical(admin_client, library_id)
 
     scoped = await admin_client.get(
-        f"/api/libraries/{library_id}/books?format=physical"
+        "/api/books", params={"library": library_id, "format": "physical"}
     )
     assert [b["id"] for b in scoped.json()["items"]] == [physical["id"]]
     assert scoped.json()["total"] == 1
 
-    global_list = await admin_client.get("/api/books/all?format=physical")
+    global_list = await admin_client.get("/api/books?format=physical")
     ids = [b["id"] for b in global_list.json()["items"]]
     assert physical["id"] in ids
     assert epub["id"] not in ids

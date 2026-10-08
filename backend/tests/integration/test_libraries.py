@@ -27,9 +27,9 @@ async def test_move_book_between_libraries(admin_client):
     assert moved.status_code == 200, moved.text
     assert moved.json()["status"] == "moved"
 
-    source = (await admin_client.get(f"/api/libraries/{lib_a}/books")).json()
+    source = (await admin_client.get("/api/books", params={"library": lib_a})).json()
     assert source["items"] == []
-    target = (await admin_client.get(f"/api/libraries/{lib_b}/books")).json()
+    target = (await admin_client.get("/api/books", params={"library": lib_b})).json()
     assert [b["id"] for b in target["items"]] == [book["id"]]
     assert (await admin_client.get(f"/api/books/{book['id']}")).status_code == 200
 
@@ -76,13 +76,13 @@ async def test_delete_library_deletes_its_books(admin_client):
     assert response.status_code == 204
 
     assert (await admin_client.get(f"/api/books/{book['id']}")).status_code == 404
-    listing = (await admin_client.get("/api/books/all")).json()
+    listing = (await admin_client.get("/api/books")).json()
     assert listing["total"] == 0
 
 
 async def test_library_listing_carries_own_progress(admin_client):
-    """The browse grid shows "n% read" — both the flat book listing and the
-    collapsed feed must carry the user's own reading_percentage inline."""
+    """The browse grid shows "n% read" — both the flat book list and the
+    grouped one must carry the user's own reading_percentage inline."""
     library_id = await create_library(admin_client, "Progress")
     book = await upload_epub(admin_client, library_id)
 
@@ -96,23 +96,19 @@ async def test_library_listing_carries_own_progress(admin_client):
     )
     assert response.status_code == 200, response.text
 
-    listing = (await admin_client.get(f"/api/libraries/{library_id}/books")).json()
-    item = next(i for i in listing["items"] if i["id"] == book["id"])
-    assert item["reading_status"] == "currently_reading"
-    assert item["reading_percentage"] == 37.5
+    # One library's page and the merged all-libraries browse (the default
+    # 書庫 view) are the same two lists, with and without ``library``.
+    for scope in ({"library": library_id}, {}):
+        listing = (await admin_client.get("/api/books", params=scope)).json()
+        item = next(i for i in listing["items"] if i["id"] == book["id"])
+        assert item["reading_status"] == "currently_reading", scope
+        assert item["reading_percentage"] == 37.5, scope
 
-    # The merged all-libraries browse — the default 書庫 view — hits
-    # /books/all, a separate code path from the per-library listing.
-    all_books = (await admin_client.get("/api/books/all")).json()
-    item = next(i for i in all_books["items"] if i["id"] == book["id"])
-    assert item["reading_status"] == "currently_reading"
-    assert item["reading_percentage"] == 37.5
-
-    feed = (await admin_client.get(f"/api/libraries/{library_id}/feed")).json()
-    entry = next(
-        i
-        for i in feed["items"]
-        if i["type"] == "book" and i["book"]["id"] == book["id"]
-    )
-    assert entry["book"]["reading_status"] == "currently_reading"
-    assert entry["book"]["reading_percentage"] == 37.5
+        grouped = (await admin_client.get("/api/books/grouped", params=scope)).json()
+        entry = next(
+            i
+            for i in grouped["items"]
+            if i["type"] == "book" and i["book"]["id"] == book["id"]
+        )
+        assert entry["book"]["reading_status"] == "currently_reading", scope
+        assert entry["book"]["reading_percentage"] == 37.5, scope

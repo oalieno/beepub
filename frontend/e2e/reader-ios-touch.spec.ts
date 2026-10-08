@@ -47,7 +47,7 @@ async function seedBook(request: APIRequestContext): Promise<string> {
   );
   expect(library).toBeTruthy();
   const books = await (
-    await request.get(`/api/libraries/${library.id}/books?limit=100`)
+    await request.get(`/api/books?library=${library.id}&limit=100`)
   ).json();
   const existing = books.items?.find((b: Record<string, string>) =>
     (b.display_title ?? b.epub_title ?? "").includes(BOOK_TITLE),
