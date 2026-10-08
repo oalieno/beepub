@@ -799,6 +799,7 @@
   "notes_tab_preview": "預覽",
   "notes_status_saved_just_now": "剛剛已儲存",
   "notes_status_unsaved": "尚未儲存",
+  "notes_save_failed": "儲存失敗",
   "notes_done": "完成",
   "notes_preview_empty": "目前沒有可預覽的內容。",
   "notes_toolbar_bold": "粗體",

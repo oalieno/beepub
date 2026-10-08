@@ -63,9 +63,11 @@
     textareaEl?.focus();
   }
 
-  function exitEdit() {
-    flushSave();
-    editing = false;
+  /** Done: the editor closes on a note that is saved. One that could
+   *  not be stays open, with that said beside the button — pressing it
+   *  again tries again. */
+  async function exitEdit() {
+    if (await flushSave()) editing = false;
   }
 
   function scheduleSave() {
@@ -82,10 +84,26 @@
       clearTimeout(debounceTimer);
       debounceTimer = null;
     }
-    if (notes !== lastSaved) await doSave();
+    // (Leaving the field saves too, and Done is pressed by leaving it:
+    // the one save is waited for, not made twice.)
+    if (pending) await pending;
+    return notes === lastSaved || (await doSave());
   }
 
-  async function doSave() {
+  let pending: Promise<boolean> | null = null;
+
+  function doSave(leaving = false): Promise<boolean> {
+    const p = save(leaving).finally(() => {
+      if (pending === p) pending = null;
+    });
+    pending = p;
+    return p;
+  }
+
+  /** Whether the note was saved. A failure is said beside the Done
+   *  button (`saveState`); only a save made as the editor goes away, with
+   *  nowhere left to say it, is given a toast (`leaving`). */
+  async function save(leaving: boolean): Promise<boolean> {
     const snapshot = notes;
     saveState = "saving";
     try {
@@ -98,9 +116,11 @@
       lastSaved = snapshot;
       saveState = "saved";
       onchange?.(value);
+      return true;
     } catch (e) {
       saveState = "error";
-      toastStore.error((e as Error).message);
+      if (leaving) toastStore.error((e as Error).message);
+      return false;
     }
   }
 
@@ -157,7 +177,7 @@
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       // best-effort fire-and-forget; the page is going away
-      if (notes !== lastSaved) void doSave();
+      if (notes !== lastSaved) void doSave(true);
     }
   });
 
@@ -169,7 +189,7 @@
     if (s === "saving") return m.notes_saving();
     if (s === "saved") return m.notes_status_saved_just_now();
     if (s === "unsaved") return m.notes_status_unsaved();
-    if (s === "error") return "Save failed";
+    if (s === "error") return m.notes_save_failed();
     return "";
   }
 </script>
@@ -189,6 +209,7 @@
               ? 'text-muted-foreground'
               : 'text-muted-foreground'}"
           aria-live="polite"
+          data-testid="notes-save-state"
         >
           {statusLabel(saveState)}
         </span>

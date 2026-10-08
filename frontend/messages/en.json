@@ -799,6 +799,7 @@
   "notes_tab_preview": "Preview",
   "notes_status_saved_just_now": "Saved just now",
   "notes_status_unsaved": "Unsaved changes",
+  "notes_save_failed": "Couldn’t save",
   "notes_done": "Done",
   "notes_preview_empty": "Nothing to preview yet.",
   "notes_toolbar_bold": "Bold",
