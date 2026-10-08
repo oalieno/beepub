@@ -188,9 +188,6 @@ const RELEASED_MS = 700;
  *  way is left; the rest of the time goes with the way left. A sheet
  *  let go half way must not be gone in a blink. */
 const RELEASED_FLOOR = 0.6;
-/** The longest a flicked sheet takes for the whole way; what is left of
- *  the way takes that share of it. */
-const FLICKED_MS = 400;
 /** …and the shortest any released sheet takes. */
 const SETTLE_MIN_MS = 120;
 /** The page under the moving sheet travels this much of the page's width
@@ -1760,15 +1757,14 @@ export class CoverSlide {
     const from = this.#progress;
     const left = complete ? 1 - from : from;
     const speed = complete ? this.#toward(dir, vx) : 0;
-    // Let go at rest (or nearly), the sheet takes its time; flicked, it
-    // goes on at the finger's speed and comes to rest — the time is the
-    // one in which the curve sets off that fast, and never long.
+    // Let go at rest, the sheet takes its time. Let go moving, it goes on
+    // at the finger's speed and comes to rest: the time is the one in
+    // which the curve sets off exactly that fast — less only for a finger
+    // that was faster, so the sheet is never thrown down harder than it
+    // was let go.
     let ms = RELEASED_MS * (RELEASED_FLOOR + (1 - RELEASED_FLOOR) * left);
-    if (speed > FLICK)
-      ms = Math.min(
-        FLICKED_MS * left,
-        (RELEASED_LAUNCH * left * this.#width()) / speed,
-      );
+    if (speed > 0)
+      ms = Math.min(ms, (RELEASED_LAUNCH * left * this.#width()) / speed);
     ms = Math.max(SETTLE_MIN_MS, Math.round(ms));
     void this.#run(dir, from, complete ? 1 : 0, ms, ghost, EASE_RELEASED);
     return true;

@@ -335,13 +335,12 @@ const EASE_FROM_REST = "cubic-bezier(0.42, 0, 0.35, 1)";
 const EASE_RELEASED = "cubic-bezier(0.2, 0.5, 0.3, 1)";
 const RELEASED_MS = 700;
 const RELEASED_FLOOR = 0.6;
-const FLICKED_MS = 400;
 /** What a sheet let go of at rest takes for `left` of the way. */
 const releasedMs = (left: number) =>
   Math.round(RELEASED_MS * (RELEASED_FLOOR + (1 - RELEASED_FLOOR) * left));
 const SETTLE_MIN_MS = 120;
 
-test("a turn from rest sets off, travels and settles over its time; a sheet the finger lets go of only comes to rest, taking its time when let go at rest and little when flicked", async ({
+test("a turn from rest sets off, travels and settles over its time; a sheet the finger lets go of only comes to rest, taking its time when let go at rest, and going on no faster than the finger when let go moving", async ({
   page,
   context,
 }) => {
@@ -431,7 +430,7 @@ test("a turn from rest sets off, travels and settles over its time; a sheet the 
   list = await asked();
   expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
   expect(list[0].duration).toBeGreaterThanOrEqual(SETTLE_MIN_MS);
-  expect(list[0].duration).toBeLessThan(FLICKED_MS);
+  expect(list[0].duration).toBeLessThanOrEqual(releasedMs(1));
 
   // A short drag let go: it springs back, coming to rest the same way.
   await touchDown(cdp, at(320));
