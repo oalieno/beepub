@@ -10,9 +10,13 @@
   let {
     series,
     showRating = true,
+    showLibrary = false,
   }: {
     series: SeriesOut;
     showRating?: boolean;
+    // Names the library beside the count — for a list where the same
+    // series stands twice, once for each library that keeps it.
+    showLibrary?: boolean;
   } = $props();
 
   let cover = $derived(series.cover_book);
@@ -66,8 +70,11 @@
     >
       {series.series_name}
     </h3>
-    <p class="text-muted-foreground text-xs mt-0.5">
+    <p class="text-muted-foreground text-xs mt-0.5 truncate">
       {m.series_book_count({ count: String(series.book_count) })}
+      {#if showLibrary && series.library_name}
+        <span data-testid="series-library"> · {series.library_name}</span>
+      {/if}
     </p>
     {#if showRating && series.rating != null}
       <div class="mt-1">

@@ -164,6 +164,20 @@
     collapse && !flatForced ? groupedItems.length : books.length,
   );
   let hasMore = $derived(shownCount < totalBooks);
+
+  // Series the grouped list holds more than once — the same name kept in
+  // two libraries. Those cards say which library each is.
+  let sharedSeriesKeys = $derived.by(() => {
+    const seen = new Set<string>();
+    const shared = new Set<string>();
+    for (const item of groupedItems) {
+      if (item.type !== "series") continue;
+      const key = item.series.series_key;
+      if (seen.has(key)) shared.add(key);
+      seen.add(key);
+    }
+    return shared;
+  });
   let loading = $state(!isRestoring);
   let loadingMore = $state(false);
   let searchQuery = $state(init.searchQuery);
@@ -685,7 +699,10 @@
     >
       {#each groupedItems as item (item.type === "series" ? `s:${item.series.library_id}:${item.series.series_key}` : `b:${item.book.id}`)}
         {#if item.type === "series"}
-          <SeriesCard series={item.series} />
+          <SeriesCard
+            series={item.series}
+            showLibrary={sharedSeriesKeys.has(item.series.series_key)}
+          />
         {:else}
           <BookCard book={item.book} />
         {/if}

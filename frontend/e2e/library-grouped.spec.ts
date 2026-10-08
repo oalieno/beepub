@@ -45,6 +45,11 @@ test("a series kept in two libraries is two cards in the grouped list", async ({
   await expect(
     page.locator(".book-grid [role=button]", { hasText: "E2E Lantern Series" }),
   ).toHaveCount(2);
+  // ...and each says which library it is.
+  await expect(page.getByTestId("series-library")).toHaveText([
+    /Lantern Room/,
+    /Sealed Annex/,
+  ]);
   expect(errors).toEqual([]);
 });
 
