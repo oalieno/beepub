@@ -354,6 +354,9 @@
             ? m.browser_search_in_library({ name: library.name })
             : m.browser_search_all()}
           onStateChange={handleStateChange}
+          searchEverywhereHref={scope
+            ? (q) => `/libraries/all?search=${encodeURIComponent(q)}`
+            : undefined}
         />
       {/key}
     </div>

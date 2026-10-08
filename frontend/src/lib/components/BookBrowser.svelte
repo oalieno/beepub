@@ -25,7 +25,6 @@
     PaginatedGrouped,
   } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
-  import { openSearchModal } from "$lib/stores/search";
 
   // "Most relevant" exists only while there is a query to be relevant to.
   const RELEVANCE = "relevance:asc";
@@ -64,6 +63,7 @@
     searchPlaceholder = "",
     restoreData,
     onStateChange,
+    searchEverywhereHref,
   }: {
     fetchBooks: FetchBooksFn;
     fetchGrouped?: FetchGroupedFn;
@@ -79,6 +79,9 @@
     searchPlaceholder?: string;
     restoreData?: BookBrowserState | null;
     onStateChange?: (state: BookBrowserState) => void;
+    // Where the same search runs over every library — given by a list that
+    // is only one of them; an empty result then offers it.
+    searchEverywhereHref?: (query: string) => string;
   } = $props();
 
   export interface BookBrowserState {
@@ -654,13 +657,14 @@
         ? m.browser_no_matches()
         : emptyMessage || m.browser_no_books()}
     </p>
-    {#if searchQuery.trim()}
-      <button
+    {#if searchEverywhereHref && searchQuery.trim()}
+      <a
         class="mt-3 text-sm text-primary underline underline-offset-4 hover:opacity-80 transition-opacity"
-        onclick={() => openSearchModal(searchQuery.trim())}
+        href={searchEverywhereHref(searchQuery.trim())}
+        data-testid="search-everywhere"
       >
         {m.browser_search_everywhere()}
-      </button>
+      </a>
     {/if}
   </div>
 {:else}
@@ -679,7 +683,7 @@
       class="grid gap-4 items-start book-grid"
       style="grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));"
     >
-      {#each groupedItems as item (item.type === "series" ? `s:${item.series.series_key}` : `b:${item.book.id}`)}
+      {#each groupedItems as item (item.type === "series" ? `s:${item.series.library_id}:${item.series.series_key}` : `b:${item.book.id}`)}
         {#if item.type === "series"}
           <SeriesCard series={item.series} />
         {:else}
