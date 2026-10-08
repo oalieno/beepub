@@ -133,9 +133,31 @@ test("in the slide mode the name changes as the slide lands, and back with the t
   // Into the third chapter: named the moment the slide has landed,
   // while the live paginator is still in the second.
   await recordLabels(page);
+  // (Where the live paginator is, taken in the page as the name changes:
+  // asked from here it may have followed by the time the answer is back.)
+  await label(page).evaluate((el) => {
+    const w = window as unknown as { __liveAtRename?: number };
+    delete w.__liveAtRename;
+    const observer = new MutationObserver(() => {
+      if (!el.textContent?.includes("霧笛")) return;
+      w.__liveAtRename = window.__beepubReaderNG.paginator.getContents()[0]
+        ?.index as number;
+      observer.disconnect();
+    });
+    observer.observe(el, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  });
   await next.click();
   await expect(label(page)).toHaveText("第三話「霧笛」");
-  expect(await where()).toMatchObject({ index: 2, first: true, liveIndex: 1 });
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { __liveAtRename?: number }).__liveAtRename,
+    ),
+  ).toBe(1);
+  expect(await where()).toMatchObject({ index: 2, first: true });
   // The live paginator follows, and nothing changes for it.
   await expect.poll(async () => (await where()).liveIndex).toBe(2);
   await page.waitForTimeout(600);
