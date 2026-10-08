@@ -1,4 +1,6 @@
-FROM node:22-alpine AS builder
+# The build runs on the machine doing the building, whatever the image is
+# for: its output is plain JavaScript, and an emulated install hangs.
+FROM --platform=$BUILDPLATFORM node:22-alpine AS builder
 RUN corepack enable
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
