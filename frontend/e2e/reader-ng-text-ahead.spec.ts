@@ -28,9 +28,9 @@ import {
  * that is slow holds up nothing the reader asks for, and is not made
  * again when the reader moves; it rests on some three megabytes of text
  * ahead of the reader and sets off again when reading has used most of
- * that up; a browser that asks for data to be saved, or says it is on a
- * cellular connection, gets none of it; a request that fails is the last
- * until the connection is back; a hidden document fetches nothing; and
+ * that up; a browser that asks for data to be saved gets none of it (a
+ * cellular connection that does not ask is fetched over all the same); a
+ * request that fails is the last until the connection is back; a hidden document fetches nothing; and
  * nothing is left running when the reader is closed.
  *
  * Every test routes the book's content requests, which keeps the
@@ -286,15 +286,12 @@ test("a resting crawl sets off again when reading has used up most of what was a
   for (const c of ["c-007", "c-008", "c-009"]) expect(starts(w, c)).toBe(1);
 });
 
-for (const [name, value] of [
-  ["asks for data to be saved", { saveData: true }],
-  ["says the connection is cellular", { saveData: false, type: "cellular" }],
-] as const) {
-  test(`a browser that ${name} gets only what the reader reaches for`, async ({
+{
+  test("a browser that asks for data to be saved gets only what the reader reaches for", async ({
     page,
   }) => {
     const w = await wire(page);
-    await connection(page, value);
+    await connection(page, { saveData: true });
     await open(page);
     await expect.poll(() => available(page, 3)).toBe(true);
     await expect.poll(() => crawlState(page)).toBe("withheld");
@@ -309,6 +306,16 @@ for (const [name, value] of [
     expect(starts(w, "c-006")).toBe(0);
   });
 }
+
+test("a cellular connection that does not ask for data to be saved is fetched over like any other", async ({
+  page,
+}) => {
+  await wire(page);
+  await connection(page, { saveData: false, type: "cellular" });
+  await open(page);
+  await expect.poll(() => crawlState(page)).toBe("done");
+  expect(await available(page, 8)).toBe(true);
+});
 
 test("a request that fails is the crawl's last until the connection is back", async ({
   page,

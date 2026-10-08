@@ -342,9 +342,7 @@ export class ImagePrefetcher {
         });
         this.#wake = null;
         if (this.#dead || this.#held()) return;
-        const allowed = await backgroundFetchAllowed();
-        if (this.#dead || this.#held()) return;
-        if (!allowed) {
+        if (!backgroundFetchAllowed()) {
           this.#state = "withheld";
           return;
         }

@@ -70,28 +70,17 @@ export function getIsOnline(): boolean {
 /**
  * Whether the connection is one to fetch over unasked — what the reader
  * brings in ahead of the page so a book can be read on without it. The
- * one place the rule is written: in the app only on Wi-Fi; on the web
- * unless the browser says the connection is cellular or that the user
- * wants data saved, and a browser that says nothing (Safari, Firefox, a
- * desktop) is taken to be on a connection that can bear it.
+ * one place the rule is written: always, unless the browser says the
+ * user wants data saved. What is brought in is text, a few megabytes at
+ * most, and a reader on a cellular connection is the one most likely to
+ * lose it. (The app has no word on the system's Low Data Mode: the
+ * network plugin does not pass it on.)
  */
-export async function backgroundFetchAllowed(): Promise<boolean> {
-  if (isNative()) {
-    try {
-      const { Network } = await import("@capacitor/network");
-      return (await Network.getStatus()).connectionType === "wifi";
-    } catch {
-      // plugin unavailable — nothing says this is Wi-Fi
-      return false;
-    }
-  }
+export function backgroundFetchAllowed(): boolean {
   const connection = (
-    navigator as Navigator & {
-      connection?: { saveData?: boolean; type?: string };
-    }
+    navigator as Navigator & { connection?: { saveData?: boolean } }
   ).connection;
-  if (!connection) return true;
-  return !connection.saveData && connection.type !== "cellular";
+  return !connection?.saveData;
 }
 
 /**
