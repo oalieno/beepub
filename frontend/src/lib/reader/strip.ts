@@ -68,7 +68,7 @@ const RETRY_MS = 5000;
  *  comes and goes at once is worse than the bare paper. */
 const SPINNER_AFTER_MS = 400;
 /** How quickly the wheel's spring closes on its target, 1/s. */
-const WHEEL_STIFFNESS = 14;
+const WHEEL_STIFFNESS = 8;
 
 interface Chapter {
   index: number;
