@@ -2204,9 +2204,12 @@ ${darkOverrides}
           book,
           styles: () => c.stripStyles(),
           prepare: (doc) => c.prepareStripSection(doc),
-          gutter: marginX,
-          spacing: marginY,
+          marginX,
+          marginY,
           measure: fullPage ? UNBOUNDED : MAX_INLINE_SIZE,
+          verticalMeasure: fullPage
+            ? UNBOUNDED
+            : Math.round(VERTICAL_LINE_CHARS * (fontSize + letterSpacing)),
           background: darkMode ? PAGE_DARK : PAGE_LIGHT,
           ontap: () => ontap?.(),
         });

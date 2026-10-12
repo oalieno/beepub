@@ -16,8 +16,13 @@
  * (#rebase) — the book's first chapter has to sit at the canvas's top
  * for the browser to stop there.
  *
- * Not here yet: vertical text (everything is set horizontally), saved
- * progress, highlights, selection menu, links, keys.
+ * A horizontal book's strip runs downward, a vertical book's leftward
+ * (an rtl scroller: the position along it is -scrollLeft). The chapter
+ * the strip is opened on decides, and every chapter is set that way. A
+ * chapter's `top` and `height` below are its start and its extent ALONG
+ * the strip, whichever way that runs.
+ *
+ * Not here yet: saved progress, highlights, selection menu, links, keys.
  */
 import type { Book, NavTarget } from "./core";
 
@@ -27,11 +32,12 @@ export interface StripOptions {
   styles: () => string | [string, string];
   /** Per-section DOM preparation shared with the paginator's sections. */
   prepare: (doc: Document) => void;
-  /** Left/right gutter and the space above and below a chapter, px. */
-  gutter: number;
-  spacing: number;
-  /** Longest line, px. */
+  /** The reader's left/right and top/bottom margins, px. */
+  marginX: number;
+  marginY: number;
+  /** Longest line, px: of horizontal text, and of vertical text. */
   measure: number;
+  verticalMeasure: number;
   background: string;
   ontap?: () => void;
 }
@@ -77,6 +83,9 @@ export class ScrollStrip {
   /** The mounted chapters, in reading order, with no gap between them. */
   #chapters: Chapter[] = [];
   #pinned: Chapter | null = null;
+  #vertical = false;
+  /** Whether the opened chapter has said which way the strip runs. */
+  #decided = false;
   #loading: Record<1 | -1, boolean> = { 1: false, [-1]: false };
   #retryAt: Record<1 | -1, number> = { 1: 0, [-1]: 0 };
   #generation = 0;
@@ -93,15 +102,13 @@ export class ScrollStrip {
     Object.assign(scroller.style, {
       position: "absolute",
       inset: "0",
-      overflowX: "hidden",
-      overflowY: "auto",
       // The layout keeps the read chapter in place itself; a browser
       // that also anchors would move it twice.
       overflowAnchor: "none",
       background: options.background,
     });
     const canvas = document.createElement("div");
-    Object.assign(canvas.style, { position: "relative", width: "100%" });
+    canvas.style.position = "relative";
     scroller.append(canvas);
     const readout = document.createElement("div");
     readout.dataset.testid = "scroll-strip-readout";
@@ -126,6 +133,49 @@ export class ScrollStrip {
       passive: true,
     });
     this.#watchTouches(scroller);
+    this.#watchWheel(scroller);
+    this.#setAxis(false);
+  }
+
+  #setAxis(vertical: boolean) {
+    this.#vertical = vertical;
+    Object.assign(
+      this.#scroller.style,
+      vertical
+        ? { overflowX: "auto", overflowY: "hidden", direction: "rtl" }
+        : { overflowX: "hidden", overflowY: "auto", direction: "ltr" },
+    );
+    Object.assign(
+      this.#canvas.style,
+      vertical ? { height: "100%", width: "" } : { width: "100%", height: "" },
+    );
+  }
+
+  /** The screen's extent along the strip. */
+  get #screen(): number {
+    return this.#vertical
+      ? this.#scroller.clientWidth
+      : this.#scroller.clientHeight;
+  }
+
+  /** How far along the strip the screen's leading edge is. */
+  get #at(): number {
+    return this.#vertical
+      ? Math.abs(this.#scroller.scrollLeft)
+      : this.#scroller.scrollTop;
+  }
+
+  set #at(value: number) {
+    if (this.#vertical) this.#scroller.scrollLeft = -value;
+    else this.#scroller.scrollTop = value;
+  }
+
+  get vertical(): boolean {
+    return this.#vertical;
+  }
+
+  get position(): number {
+    return this.#at;
   }
 
   get scroller(): HTMLElement {
@@ -152,6 +202,7 @@ export class ScrollStrip {
     this.#chapters = [];
     this.#pinned = null;
     this.#loading = { 1: false, [-1]: false };
+    this.#decided = false;
     const chapter = await this.#build(target.index, generation);
     if (!chapter) return;
     chapter.top = this.#adjacent(target.index, -1) == null ? 0 : ORIGIN;
@@ -159,8 +210,7 @@ export class ScrollStrip {
     this.#pinned = chapter;
     this.#layout();
     chapter.frame.style.visibility = "";
-    this.#scroller.scrollTop =
-      chapter.top + this.#offsetOf(chapter, target.anchor);
+    this.#at = chapter.top + this.#offsetOf(chapter, target.anchor);
     this.#fill();
     this.#report();
   }
@@ -188,9 +238,9 @@ export class ScrollStrip {
     )?.getClientRects?.();
     if (!rects?.length) return 0;
     const rect = Array.from(rects).find((r) => r.height > 0) ?? rects[0];
-    // The iframe is as tall as its document and never scrolls: a rect's
-    // top in it is the distance from the chapter's top.
-    return Math.max(0, rect.top);
+    // The iframe is as large as its document and never scrolls: a rect
+    // in it is measured from the chapter's own edges.
+    return Math.max(0, this.#vertical ? chapter.height - rect.right : rect.top);
   }
 
   #adjacent(index: number, dir: 1 | -1): number | null {
@@ -201,29 +251,32 @@ export class ScrollStrip {
   }
 
   #layoutCss(): string {
-    const { gutter, spacing, measure } = this.#o;
-    const screen = this.#scroller.clientHeight;
+    const { marginX, marginY, measure, verticalMeasure } = this.#o;
+    const vertical = this.#vertical;
+    const mode = vertical ? "vertical-rl" : "horizontal-tb";
+    // Across the lines the chapter is as long as its text; along them it
+    // has the screen, less the margins, up to the longest line allowed.
     return `html {
   box-sizing: border-box !important;
-  writing-mode: horizontal-tb !important;
-  width: auto !important;
-  height: auto !important;
+  writing-mode: ${mode} !important;
+  ${vertical ? "height: 100% !important; width: auto !important;" : "width: auto !important; height: auto !important;"}
+  min-width: 0 !important;
   min-height: 0 !important;
   column-width: auto !important;
   margin: 0 !important;
-  padding: ${spacing}px ${gutter}px !important;
+  padding: ${marginY}px ${marginX}px !important;
   overflow: hidden !important;
 }
 body {
-  writing-mode: horizontal-tb !important;
-  max-width: ${measure}px !important;
-  height: auto !important;
+  writing-mode: ${mode} !important;
+  ${vertical ? `max-height: ${verticalMeasure}px !important; width: auto !important;` : `max-width: ${measure}px !important; height: auto !important;`}
+  min-width: 0 !important;
   min-height: 0 !important;
-  margin: 0 auto !important;
+  margin: auto !important;
 }
 img, svg, video {
-  max-width: 100% !important;
-  max-height: ${Math.round(screen * 0.9)}px !important;
+  max-width: ${vertical ? `${Math.round(this.#scroller.clientWidth * 0.9)}px` : "100%"} !important;
+  max-height: ${vertical ? "100%" : `${Math.round(this.#scroller.clientHeight * 0.9)}px`} !important;
   object-fit: contain;
   box-sizing: border-box;
 }`;
@@ -241,23 +294,14 @@ img, svg, video {
       return null;
     }
     const frame = document.createElement("div");
-    Object.assign(frame.style, {
-      position: "absolute",
-      left: "0",
-      top: "0",
-      width: "100%",
-      visibility: "hidden",
-    });
+    frame.style.position = "absolute";
+    frame.style.visibility = "hidden";
     frame.dataset.index = String(index);
     const iframe = document.createElement("iframe");
     iframe.setAttribute("sandbox", "allow-same-origin");
     iframe.setAttribute("scrolling", "no");
-    Object.assign(iframe.style, {
-      display: "block",
-      width: "100%",
-      height: "0",
-      border: "0",
-    });
+    iframe.style.display = "block";
+    iframe.style.border = "0";
     frame.append(iframe);
     this.#canvas.append(frame);
     await new Promise<void>((resolve) => {
@@ -277,10 +321,31 @@ img, svg, video {
     first.textContent = before;
     doc.head.prepend(first);
     const last = doc.createElement("style");
-    last.textContent = after + this.#layoutCss();
+    last.textContent = after;
     doc.head.append(last);
+    if (!this.#decided) {
+      // The chapter the strip is opened on says which way it runs.
+      this.#decided = true;
+      const mode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
+      this.#setAxis(!!mode && mode.startsWith("vertical"));
+    }
+    const vertical = this.#vertical;
+    Object.assign(
+      frame.style,
+      vertical
+        ? { top: "0", right: "0", height: "100%" }
+        : { top: "0", left: "0", width: "100%" },
+    );
+    Object.assign(
+      iframe.style,
+      vertical
+        ? { height: "100%", width: "0" }
+        : { width: "100%", height: "0" },
+    );
+    last.textContent += this.#layoutCss();
     this.#o.prepare(doc);
     this.#watchTouches(doc);
+    this.#watchWheel(doc);
     doc.addEventListener("click", (e) => {
       if ((e.target as Element | null)?.closest?.("a[href]")) {
         e.preventDefault();
@@ -314,12 +379,11 @@ img, svg, video {
       unload: () => section.unload(),
     };
     const measure = () => {
-      const height = Math.ceil(
-        doc.documentElement.getBoundingClientRect().height,
-      );
+      const rect = doc.documentElement.getBoundingClientRect();
+      const height = Math.ceil(vertical ? rect.width : rect.height);
       if (height === chapter.height) return false;
       chapter.height = height;
-      iframe.style.height = `${height}px`;
+      iframe.style[vertical ? "width" : "height"] = `${height}px`;
       return true;
     };
     measure();
@@ -353,14 +417,15 @@ img, svg, video {
       chapters[i].top = chapters[i - 1].top + chapters[i - 1].height;
     for (let i = at - 1; i >= 0; i--)
       chapters[i].top = chapters[i + 1].top - chapters[i].height;
+    const side = this.#vertical ? "right" : "top";
     for (const chapter of chapters)
-      chapter.frame.style.top = `${chapter.top}px`;
+      chapter.frame.style[side] = `${chapter.top}px`;
     const last = chapters[chapters.length - 1];
     // One blank screen after the last chapter mounted while more are to
     // come: the bare paper a chapter not yet here is waited for on.
     const more = this.#adjacent(last.index, 1) != null;
-    this.#canvas.style.height = `${
-      last.top + last.height + (more ? this.#scroller.clientHeight : 0)
+    this.#canvas.style[this.#vertical ? "width" : "height"] = `${
+      last.top + last.height + (more ? this.#screen : 0)
     }px`;
   }
 
@@ -380,7 +445,7 @@ img, svg, video {
 
   /** The chapter under the reading line becomes the one that stays. */
   #pin() {
-    const line = this.#scroller.scrollTop + 1;
+    const line = this.#at + 1;
     const chapters = this.#chapters;
     if (!chapters.length) return;
     let pinned = chapters[0];
@@ -392,8 +457,8 @@ img, svg, video {
   #fill() {
     const chapters = this.#chapters;
     if (!chapters.length) return;
-    const screen = this.#scroller.clientHeight;
-    const top = this.#scroller.scrollTop;
+    const screen = this.#screen;
+    const top = this.#at;
     const bottom = top + screen;
     const first = chapters[0];
     const last = chapters[chapters.length - 1];
@@ -471,6 +536,20 @@ img, svg, video {
     target.addEventListener("touchcancel", up, { passive: true });
   }
 
+  /** A mouse wheel turns downward; a leftward strip follows it. */
+  #watchWheel(target: Document | HTMLElement) {
+    target.addEventListener(
+      "wheel",
+      (e) => {
+        const { deltaX, deltaY } = e as WheelEvent;
+        if (!this.#vertical || Math.abs(deltaY) <= Math.abs(deltaX)) return;
+        e.preventDefault();
+        this.#at += deltaY;
+      },
+      { passive: false },
+    );
+  }
+
   #rested() {
     if (this.#destroyed || this.#touches) return;
     const first = this.#chapters[0];
@@ -483,10 +562,10 @@ img, svg, video {
   /** Shift the whole canvas, and the scroll position with it, in one
    *  frame: nothing moves on screen. */
   #rebase(delta: number) {
-    const top = this.#scroller.scrollTop;
+    const top = this.#at;
     for (const chapter of this.#chapters) chapter.top += delta;
     this.#layout();
-    this.#scroller.scrollTop = top + delta;
+    this.#at = top + delta;
     this.#note(`rebased ${delta}`);
   }
 
@@ -499,7 +578,7 @@ img, svg, video {
     const chapters = this.#chapters;
     const pinned = this.#pinned;
     if (!pinned || !chapters.length) return;
-    const into = this.#scroller.scrollTop - pinned.top;
+    const into = this.#at - pinned.top;
     const percent = Math.max(
       0,
       Math.min(100, Math.round((into / Math.max(1, pinned.height)) * 100)),
