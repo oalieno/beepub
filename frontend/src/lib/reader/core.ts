@@ -22,6 +22,7 @@ import type { BookLoader } from "./loaders/types";
 import { SectionLoadError, isSectionLoadError } from "./load-error";
 import { ImagePrefetcher } from "./prefetch";
 import { CoverSlide, type SlideEvent } from "./slide";
+import { ScrollStrip, type StripLayout, type StripRelocation } from "./strip";
 import {
   OWN_LAYOUT_ATTR,
   TCY_CSS,
@@ -156,8 +157,11 @@ export interface LayoutParams {
  *  slides over the other, following the finger; taps and keys play the
  *  same slide on their own — see slide.ts). "instant" is a bare jump
  *  with no animation, reachable only through the `?turn=instant` session
- *  override — tests and probes read the page right after a turn. */
-export type PageTurnMode = "fade" | "slide" | "instant";
+ *  override — tests and probes read the page right after a turn.
+ *
+ *  "scroll" is no page turn at all: the book is one strip of chapters
+ *  scrolled by the browser (strip.ts), and the paginator stands aside. */
+export type PageTurnMode = "fade" | "slide" | "instant" | "scroll";
 
 /** The fade of a page turn: out, jump, in. Short enough to read as a
  *  blink of the page rather than a wait. */
@@ -586,6 +590,20 @@ export class ReaderCore {
   /** The slide mode's further renderings and their layers (slide.ts);
    *  only there while the mode is "slide" and a reflowable book is open. */
   #slide: CoverSlide | null = null;
+  /** The scroll mode's renderer (strip.ts): there while the mode is
+   *  "scroll" and a reflowable book is open, and then the one in force —
+   *  the paginator is hidden and what it says of itself is not heard.
+   *  Public for probes and tests. */
+  strip: ScrollStrip | null = null;
+  #stripLayout: StripLayout = {
+    marginX: 0,
+    marginY: 0,
+    measure: 720,
+    verticalMeasure: 720,
+  };
+  /** The styles and layout the strip's chapters were last built with. */
+  #stripLook = "";
+  #stripLookTimer: ReturnType<typeof setTimeout> | null = null;
   /** Which way each of its ghosts' sections is written. */
   #ghostVertical = new WeakMap<object, boolean>();
   /** A turn asked for while one the slide could not show was fading. */
@@ -630,8 +648,9 @@ export class ReaderCore {
     // sections ahead are answered from memory when the paginator turns
     // into them.
     this.#prefetch?.destroy();
-    // The ghost belongs to the book it was made for.
+    // The ghost belongs to the book it was made for; so does the strip.
     this.#dropSlide();
+    this.#dropStrip();
     const prefetch = new ImagePrefetcher(loader, { crawl });
     this.#prefetch = prefetch;
     prefetch.onavailable = () => this.#handlers.onavailable?.();
@@ -676,7 +695,8 @@ export class ReaderCore {
     if (book.dir !== "rtl" && book.dir !== "ltr")
       void this.#inferDirection(prefetch.loader);
     this.paginator.open(book);
-    this.#applyPageTurn();
+    // (Nothing of this book is on screen yet: no place to land on.)
+    this.#applyPageTurn(false);
     return book;
   }
 
@@ -731,7 +751,7 @@ export class ReaderCore {
     const resolved = target != null ? this.resolve(target) : null;
     this.#cancelTurn();
     const to = resolved ?? { index: this.firstLinearIndex() };
-    await this.#reach(to, 0, () => this.paginator.goTo(to));
+    await this.#reach(to, 0, () => this.#show(to));
     return book;
   }
 
@@ -796,8 +816,16 @@ export class ReaderCore {
     this.#failed = null;
     await this.#reach(target, 0, async () => {
       this.#cancelTurn();
-      await this.paginator.goTo(withTextStart(target));
+      await this.#show(withTextStart(target));
     });
+  }
+
+  /** Hand a destination whose section has loaded to the renderer in
+   *  force. */
+  #show(target: NavTarget, reason = "navigation"): Promise<void> {
+    return this.strip
+      ? this.strip.goTo(target, reason)
+      : this.paginator.goTo(target);
   }
 
   /** Whether section `index` can be shown without the network: its
@@ -951,6 +979,11 @@ export class ReaderCore {
       if (waited === dir) return Promise.resolve();
       this.#abandonWait();
       if (waited !== 0) return Promise.resolve();
+    }
+    // The strip has no pages: a turn is a screen's move along it.
+    if (this.strip) {
+      this.strip.page(dir);
+      return Promise.resolve();
     }
     const mode = this.effectivePageTurn();
     const slide =
@@ -1159,13 +1192,12 @@ export class ReaderCore {
 
   /** Build the slide's further renderings when the mode asks for them,
    *  and take them down when it does not: the other modes pay nothing. */
-  #applyPageTurn() {
+  #applyPageTurn(land = true) {
     const book = this.book;
-    const wanted =
-      this.pageTurn === "slide" &&
-      !!book &&
-      book.rendition?.layout !== "pre-paginated";
-    if (!wanted) {
+    const reflowable = !!book && book.rendition?.layout !== "pre-paginated";
+    this.#applyStrip(this.pageTurn === "scroll" && reflowable, land);
+    const wanted = this.pageTurn === "slide" && reflowable;
+    if (!wanted || !book) {
       this.#dropSlide();
       return;
     }
@@ -1203,6 +1235,110 @@ export class ReaderCore {
     this.#slide = slide;
     // Already reading: a ghost goes to the neighbour of this page.
     if (this.lastLocation) slide.sync();
+  }
+
+  /** Whether the book is shown as one scrolled strip of chapters. */
+  get scrolled(): boolean {
+    return !!this.strip;
+  }
+
+  /** The end of the book is on screen. */
+  atEnd(): boolean {
+    if (this.strip) return this.strip.atEnd;
+    try {
+      return this.paginator.atEnd;
+    } catch {
+      return false; // nothing rendered yet
+    }
+  }
+
+  /** Put the strip in the paginator's place, or the paginator back in
+   *  its own, at the place the reader is. */
+  #applyStrip(wanted: boolean, land: boolean) {
+    const book = this.book;
+    if (wanted === !!this.strip || (wanted && !book)) return;
+    const at = land ? this.lastLocation : null;
+    const target = at ? this.resolve(at.startCfi) : null;
+    this.#abandonWait();
+    this.#cancelTurn();
+    if (wanted && book) {
+      this.paginator.style.display = "none";
+      this.#stripLook = this.#lookOfStrip();
+      this.strip = new ScrollStrip({
+        container: this.#container,
+        book,
+        styles: () => this.#composedStyles(),
+        layout: () => this.#stripLayout,
+        background: this.#pageColor,
+        reducedMotion: prefersReducedMotion,
+        onload: (detail) => this.#onStripLoad(detail),
+        onrelocate: (detail) => this.#onStripRelocate(detail),
+      });
+      if (target) this.#land(target, (to) => this.#show(to, "anchor"));
+      return;
+    }
+    this.#dropStrip();
+    if (!target) return;
+    // The paginator may hold this very section from before the strip
+    // took over, laid out for a screen and styles that are no longer:
+    // it is loaded again rather than scrolled.
+    const held = this.paginator.getContents()[0]?.index;
+    const styles = this.#composedStyles();
+    this.paginator.setStyles(styles);
+    this.#land(target, (to) =>
+      held === to.index
+        ? this.paginator.reload(to.anchor ?? 0, styles)
+        : this.paginator.goTo(to),
+    );
+  }
+
+  /** A change of renderer lands on the place the reader was. */
+  #land(target: NavTarget, show: (to: NavTarget) => Promise<void>) {
+    this.#reach(target, 0, () => show(withTextStart(target))).catch((e) => {
+      if (!isSectionLoadError(e)) console.error(e);
+    });
+  }
+
+  #dropStrip() {
+    if (this.#stripLookTimer) clearTimeout(this.#stripLookTimer);
+    this.#stripLookTimer = null;
+    const strip = this.strip;
+    if (!strip) return;
+    this.strip = null;
+    strip.destroy();
+    this.paginator.style.display = "";
+  }
+
+  /** The strip's margins and longest lines (the paginator's own layout
+   *  is declared through setLayout). */
+  setStripLayout(layout: StripLayout) {
+    this.#stripLayout = layout;
+    this.#restyleStrip();
+  }
+
+  #lookOfStrip(): string {
+    return JSON.stringify([this.#composedStyles(), this.#stripLayout]);
+  }
+
+  /** A chapter is styled when it is built. When the styles or the layout
+   *  change under a strip that is being read, it is built anew at the
+   *  reader's place — once for however many settings changed together. */
+  #restyleStrip() {
+    if (!this.strip) return;
+    if (this.#stripLookTimer) clearTimeout(this.#stripLookTimer);
+    this.#stripLookTimer = setTimeout(() => {
+      this.#stripLookTimer = null;
+      const strip = this.strip;
+      const look = this.#lookOfStrip();
+      if (!strip || look === this.#stripLook) return;
+      this.#stripLook = look;
+      const at = this.lastLocation;
+      const target = at ? this.resolve(at.startCfi) : null;
+      if (!target || strip.pinnedIndex == null) return;
+      strip.open(withTextStart(target), "anchor").catch((e: unknown) => {
+        console.error(e);
+      });
+    }, 0);
   }
 
   #dropSlide() {
@@ -1265,6 +1401,7 @@ export class ReaderCore {
     // way: the bare paper, not the reader's backdrop.
     this.#container.style.background = color;
     this.#slide?.setBackground(color);
+    this.strip?.setBackground(color);
   }
 
   /** The slide following the finger: the gesture layer reports each
@@ -1297,6 +1434,7 @@ export class ReaderCore {
     const composed = this.#composedStyles();
     this.paginator.setStyles(composed);
     this.#slide?.setStyles(composed);
+    this.#restyleStrip();
   }
 
   #composedStyles(): string | [string, string] {
@@ -1353,6 +1491,18 @@ export class ReaderCore {
     const target = cfi ? this.resolve(cfi) : null;
     this.#abandonWait();
     this.#cancelTurn();
+    if (this.strip) {
+      // The strip runs the way the chapter it is opened on is written:
+      // it is built anew at the anchor.
+      this.#stripLook = this.#lookOfStrip();
+      await this.strip.open(
+        target
+          ? withTextStart(target)
+          : { index, anchor: this.lastLocation?.fraction ?? 0 },
+        "anchor",
+      );
+      return true;
+    }
     // The ghosts read their sections' writing mode at load too: fresh
     // ones follow the page the reload lands on.
     this.#slide?.reset();
@@ -1424,21 +1574,14 @@ export class ReaderCore {
 
   /** Index of the section on screen (null before the first render). */
   currentIndex(): number | null {
+    if (this.strip) return this.strip.pinnedIndex;
     return this.paginator.getContents()[0]?.index ?? null;
   }
 
-  getContents() {
-    return this.paginator.getContents();
-  }
-
-  /** For the scroll strip (prototype): the styles and the per-section
-   *  preparation the paginator's own sections get. */
-  stripStyles(): string | [string, string] {
-    return this.#composedStyles();
-  }
-
-  prepareStripSection(doc: Document) {
-    this.#prepareSection(doc);
+  /** The rendered sections, the one being read first: one of them in
+   *  the paged modes, every chapter mounted on the strip in "scroll". */
+  getContents(): ReturnType<PaginatorElement["getContents"]> {
+    return this.strip ? this.strip.getContents() : this.paginator.getContents();
   }
 
   /** A section's parsed, unrendered document — the DOM that kosync
@@ -1505,6 +1648,7 @@ export class ReaderCore {
     this.#waiting = null;
     this.#cancelFade();
     this.#dropSlide();
+    this.#dropStrip();
     try {
       this.paginator.destroy();
     } catch {
@@ -1558,6 +1702,34 @@ export class ReaderCore {
     }
     this.#handleLinks(doc, index);
     this.#handlers.onload?.({ doc, index });
+  }
+
+  /** A chapter for the scroll strip, set the strip's way and not yet
+   *  measured: what a section of the paginator's gets at load. The
+   *  book's own direction is learnt from how the chapter was written
+   *  (`ownVertical`), not from the way the strip has set it. */
+  #onStripLoad({
+    doc,
+    index,
+    ownVertical,
+  }: {
+    doc: Document;
+    index: number;
+    ownVertical: boolean;
+  }) {
+    const { vertical, rtl } = this.#prepareSection(doc);
+    this.vertical = vertical;
+    this.sectionRtl = rtl;
+    if (!this.forcedWritingMode()) {
+      if (ownVertical || rtl) this.#inferredLeftward = true;
+      if (ownVertical) this.#nativeVertical = true;
+    }
+    this.#handleLinks(doc, index);
+    this.#handlers.onload?.({ doc, index });
+  }
+
+  #onStripRelocate(detail: StripRelocation) {
+    this.#report(this.#locate(detail));
   }
 
   /** A section for one of the slide's ghosts: the same adjustments,
@@ -1677,8 +1849,9 @@ export class ReaderCore {
     range?: Range | null;
   }) {
     // (Never a place: what a paginator reports of a section it does not
-    // have.)
+    // have — or of itself while the strip is what the reader sees.)
     if (!Number.isInteger(detail.index) || detail.index < 0) return;
+    if (this.strip) return;
     const location = this.#locate(detail);
     this.#liveLocation = location;
     this.#showPage();

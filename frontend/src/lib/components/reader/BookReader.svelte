@@ -86,7 +86,6 @@
     marginY = 32,
     letterSpacing = 0,
     pageTurn = "fade",
-    strip = false,
     writingMode = "auto",
     fullPage = false,
     sectionWeights = null,
@@ -141,8 +140,6 @@
     /** Body letter-spacing, px (applies to vertical text too). */
     letterSpacing?: number;
     pageTurn?: PageTurnMode;
-    /** Prototype: the continuous scroll strip instead of pages. */
-    strip?: boolean;
     /** This book's writing direction: its own, or forced horizontal /
      *  vertical. A change lays the page out again at the same place. */
     writingMode?: WritingMode;
@@ -379,7 +376,6 @@ ${darkOverrides}
   // grid follows the writing mode — so the screen-space gutters swap
   // roles between horizontal and vertical sections.
   let vertical = $state(false);
-  let scrollStrip: import("$lib/reader/strip").ScrollStrip | null = null;
 
   // Larger than any window: no limit.
   const UNBOUNDED = 100000;
@@ -420,6 +416,16 @@ ${darkOverrides}
    *  attributes are written, so re-pushing the same layout is free. */
   function pushLayout(c: ReaderCore | null = core) {
     c?.setLayout(layoutFor(vertical));
+    // The scroll strip sets every chapter one way and lays it out
+    // itself: the margins as the reader names them, and both measures.
+    c?.setStripLayout({
+      marginX,
+      marginY,
+      measure: fullPage ? UNBOUNDED : MAX_INLINE_SIZE,
+      verticalMeasure: fullPage
+        ? UNBOUNDED
+        : Math.round(VERTICAL_LINE_CHARS * (fontSize + letterSpacing)),
+    });
     // The slide's ghosts (the renderings of the pages a turn away) each
     // get the layout for their own section's writing mode — a horizontal
     // plate in a vertical book sits beside pages written the other way.
@@ -507,6 +513,9 @@ ${darkOverrides}
     clientX: number,
     frame: Element | null,
   ): "left" | "right" | "middle" {
+    // A scrolled book has no pages to turn: a tap anywhere is the
+    // chrome tap.
+    if (core?.scrolled) return "middle";
     const wr = wrapper.getBoundingClientRect();
     const frameLeft = frame?.getBoundingClientRect().left ?? wr.left;
     const x = clientX + frameLeft - wr.left;
@@ -535,7 +544,9 @@ ${darkOverrides}
     if (onCoveredTarget(e)) return;
     const wr = wrapper.getBoundingClientRect();
     const x = e.clientX - wr.left;
-    if (x < wr.width * TAP_ZONE) turn("left");
+    // (A scrolled book has no pages to turn.)
+    if (core.scrolled) ontap?.();
+    else if (x < wr.width * TAP_ZONE) turn("left");
     else if (x > wr.width * (1 - TAP_ZONE)) turn("right");
     else ontap?.();
   }
@@ -760,12 +771,22 @@ ${darkOverrides}
     currentCfi = r.startCfi;
     currentIndex = r.index;
     // fraction = completed pages over the section's pages, size = one page.
-    const pages = r.size ? Math.max(1, Math.round(1 / r.size)) : 1;
-    const page = r.size
-      ? Math.min(pages, Math.round(r.fraction / r.size) + 1)
-      : 1;
+    // A scrolled book has no pages (no size): the counts paged reading
+    // left stand as they are, and the page named is the one that share
+    // of the section falls on in them.
+    const paged = r.size != null;
+    const pages = paged
+      ? r.size
+        ? Math.max(1, Math.round(1 / r.size))
+        : 1
+      : Math.max(1, sectionPageCounts[r.index] || 1);
+    const page = paged
+      ? r.size
+        ? Math.min(pages, Math.round(r.fraction / r.size) + 1)
+        : 1
+      : Math.min(pages, Math.floor(r.fraction * pages) + 1);
     currentSectionPage = page;
-    if (sectionPageCounts[r.index] !== pages) {
+    if (paged && sectionPageCounts[r.index] !== pages) {
       const next = sectionPageCounts.slice();
       next[r.index] = pages;
       sectionPageCounts = next;
@@ -783,7 +804,11 @@ ${darkOverrides}
       clearFailure();
     }
     const wasAtEnd = isAtEnd;
-    isAtEnd = r.index === c.lastLinearIndex() && page >= pages;
+    // (Scrolled: the end of the last chapter is on screen — entering
+    // that chapter is not the end of the book.)
+    isAtEnd = paged
+      ? r.index === c.lastLinearIndex() && page >= pages
+      : c.atEnd();
     currentPercentage = isAtEnd
       ? 100
       : clampPercentage(
@@ -1904,7 +1929,8 @@ ${darkOverrides}
   const WHEEL_DEBOUNCE_MS = 300;
   function handleWheel(e: WheelEvent) {
     const c = core;
-    if (!c) return;
+    // (A scrolled book is the browser's to scroll.)
+    if (!c || c.scrolled) return;
     e.preventDefault();
     const now = Date.now();
     if (now - wheelAt < WHEEL_DEBOUNCE_MS) return;
@@ -1945,9 +1971,14 @@ ${darkOverrides}
 
   function swipeCallbacks(c: ReaderCore) {
     return {
-      // Finger moving left pulls in the page on the right.
-      onswipeleft: () => turn("right"),
-      onswiperight: () => turn("left"),
+      // Finger moving left pulls in the page on the right. (Over a
+      // scrolled book a finger scrolls, sideways as any other way.)
+      onswipeleft: () => {
+        if (!c.scrolled) turn("right");
+      },
+      onswiperight: () => {
+        if (!c.scrolled) turn("left");
+      },
       // In the slide mode the page follows the finger (the core has the
       // sheets; in the other modes it declines and the release is a
       // threshold swipe). Where the slide has nothing to show — the first
@@ -2025,6 +2056,11 @@ ${darkOverrides}
       if (zone === "middle") ontap?.();
       else turn(zone);
     });
+
+    // A chapter of the scrolled strip is the browser's to scroll and, for
+    // now, to select in: the swipe, the long-press selection and their
+    // menu are the paged reader's.
+    if (c.scrolled) return;
 
     const swipe = swipeCallbacks(c);
 
@@ -2189,37 +2225,6 @@ ${darkOverrides}
         };
         kosyncAutoJump = !saved?.cfi;
       }
-      if (strip) {
-        // Prototype: the strip takes the container; the paginator stays
-        // empty and nothing is saved from here.
-        c.paginator.style.display = "none";
-        const { ScrollStrip } = await import("$lib/reader/strip");
-        if (destroyed) return;
-        const cfi = initialCfi ?? saved?.cfi;
-        const target = (cfi ? c.resolve(cfi) : null) ?? {
-          index: c.firstLinearIndex(),
-        };
-        const s = new ScrollStrip({
-          container,
-          book,
-          styles: () => c.stripStyles(),
-          prepare: (doc) => c.prepareStripSection(doc),
-          marginX,
-          marginY,
-          measure: fullPage ? UNBOUNDED : MAX_INLINE_SIZE,
-          verticalMeasure: fullPage
-            ? UNBOUNDED
-            : Math.round(VERTICAL_LINE_CHARS * (fontSize + letterSpacing)),
-          background: darkMode ? PAGE_DARK : PAGE_LIGHT,
-          ontap: () => ontap?.(),
-        });
-        scrollStrip = s;
-        (window as unknown as { __beepubStrip?: unknown }).__beepubStrip = s;
-        await s.open(target);
-        if (destroyed) return;
-        onready?.();
-        return;
-      }
       await restorePosition(c, saved);
       if (destroyed) return;
       onready?.();
@@ -2285,8 +2290,6 @@ ${darkOverrides}
     window.removeEventListener("beforeunload", handleBeforeUnload);
     void saveProgress(false);
     healAbort?.abort();
-    scrollStrip?.destroy();
-    scrollStrip = null;
     layer?.detach();
     layer = null;
     core?.destroy();

@@ -80,7 +80,7 @@
     marginX?: number;
     marginY?: number;
     /** "instant" is a session override with no button of its own. */
-    pageTurn?: "fade" | "slide" | "instant";
+    pageTurn?: "fade" | "slide" | "instant" | "scroll";
     /** This book's writing direction; row shown when
      *  `onwritingModeChange` is given (CJK text books). */
     writingMode?: WritingMode;

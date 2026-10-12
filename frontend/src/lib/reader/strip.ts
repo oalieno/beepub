@@ -1,20 +1,21 @@
 /**
- * The scroll strip — PROTOTYPE (reached with ?turn=scroll).
+ * The scroll strip — the renderer of the "scroll" page-turn mode.
  *
  * Chapters stand one after another on a long canvas which the browser
- * scrolls natively. Each chapter is one iframe as tall as its text.
+ * scrolls natively. Each chapter is one iframe as large as its text.
  *
  * The one rule of the layout: the chapter under the reading line (the
- * top of the screen) keeps its place on the canvas. The chapters before
- * it are stacked upward from its top, the chapters after it downward
- * from its bottom. So a chapter joining or leaving either end, or one
- * changing height elsewhere, never moves the text being read, and the
- * scroll position is not touched for it.
+ * leading edge of the screen) keeps its place on the canvas. The
+ * chapters before it are stacked backward from its start, the chapters
+ * after it forward from its end. So a chapter joining or leaving either
+ * end, or one changing size elsewhere, never moves the text being read,
+ * and the scroll position is not touched for it.
  *
- * The scroll position is written in two places only: when the strip is
- * opened on a destination, and when the whole canvas is shifted at rest
- * (#rebase) — the book's first chapter has to sit at the canvas's top
- * for the browser to stop there.
+ * The scroll position is written for these only: a destination (the
+ * strip opened on one, a jump within what is mounted, a screen's move by
+ * key), a wheel followed along a leftward strip, and the whole canvas
+ * shifted at rest (#rebase) — the book's first chapter has to sit at the
+ * canvas's start for the browser to stop there.
  *
  * A horizontal book's strip runs downward, a vertical book's leftward
  * (an rtl scroller: the position along it is -scrollLeft). The chapter
@@ -22,24 +23,53 @@
  * chapter's `top` and `height` below are its start and its extent ALONG
  * the strip, whichever way that runs.
  *
- * Not here yet: saved progress, highlights, selection menu, links, keys.
+ * Where the reader is, is told through `onrelocate` — not for every
+ * frame of a scroll: when the strip comes to rest, and when the reading
+ * line passes into another chapter. A report says the chapter, how far
+ * into it the line is, and the text on screen from the line on; one that
+ * would say what the last one said is not made.
+ *
+ * Not here yet: highlights, the selection menu, footnotes (slice ②); a
+ * chapter that fails to load says nothing (slice ③).
  */
 import type { Book, NavTarget } from "./core";
+import { getVisibleRange } from "./vendor/foliate/paginator.js";
 
-export interface StripOptions {
-  container: HTMLElement;
-  book: Book;
-  styles: () => string | [string, string];
-  /** Per-section DOM preparation shared with the paginator's sections. */
-  prepare: (doc: Document) => void;
+export interface StripLayout {
   /** The reader's left/right and top/bottom margins, px. */
   marginX: number;
   marginY: number;
   /** Longest line, px: of horizontal text, and of vertical text. */
   measure: number;
   verticalMeasure: number;
+}
+
+export interface StripRelocation {
+  /** "scroll" (the reader moved) · "navigation" | "anchor" (ours). */
+  reason: string;
+  index: number;
+  /** How far into the chapter the reading line is, 0..1. */
+  fraction: number;
+  /** The chapter's text on screen, from the reading line on. */
+  range: Range | null;
+}
+
+export interface StripOptions {
+  container: HTMLElement;
+  book: Book;
+  styles: () => string | [string, string];
+  layout: () => StripLayout;
   background: string;
-  ontap?: () => void;
+  reducedMotion: () => boolean;
+  /** A chapter's document, styled and set the strip's way, before it is
+   *  measured. `ownVertical`: the book itself (or a forced writing mode)
+   *  runs this chapter's text vertically. */
+  onload: (detail: {
+    doc: Document;
+    index: number;
+    ownVertical: boolean;
+  }) => void;
+  onrelocate: (detail: StripRelocation) => void;
 }
 
 export interface StripLogEntry {
@@ -49,11 +79,13 @@ export interface StripLogEntry {
   ms?: number;
 }
 
+type Anchor = NavTarget["anchor"];
+
 /** Where the opened chapter is put when chapters may yet come before
- *  it: far enough down that they have room to be stacked upward. */
+ *  it: far enough along that they have room to be stacked backward. */
 const ORIGIN = 2_000_000;
 /** The canvas is shifted back when the first chapter comes this near
- *  its top without being the book's first. */
+ *  its start without being the book's first. */
 const ORIGIN_LOW = 200_000;
 /** Text kept ready beyond the screen, in screens, each way. */
 const AHEAD = 2;
@@ -67,13 +99,22 @@ const RETRY_MS = 5000;
 /** A chapter on its way is not announced before this: a spinner that
  *  comes and goes at once is worse than the bare paper. */
 const SPINNER_AFTER_MS = 400;
-/** How quickly the wheel's spring closes on its target, 1/s. */
-const WHEEL_STIFFNESS = 8;
+/** How quickly the glide's spring closes on its target, 1/s. */
+const GLIDE_STIFFNESS = 8;
+/** A key moves the strip by this much of a screen: the last lines read
+ *  stay in sight as the first of the next. */
+const PAGE_STEP = 0.9;
+/** The reading line stands this far inside the screen's leading edge: a
+ *  line of which only a sliver is left there (the scroller keeps whole
+ *  pixels, text does not) is not the line being read. */
+const LINE_INSET = 2;
 
 interface Chapter {
   index: number;
   frame: HTMLDivElement;
   doc: Document;
+  /** Set the strip's way at build — the axis it was measured along. */
+  vertical: boolean;
   top: number;
   height: number;
   observer: ResizeObserver;
@@ -89,8 +130,6 @@ export class ScrollStrip {
   #chapters: Chapter[] = [];
   #pinned: Chapter | null = null;
   #vertical = false;
-  /** Whether the opened chapter has said which way the strip runs. */
-  #decided = false;
   #loading: Record<1 | -1, boolean> = { 1: false, [-1]: false };
   #retryAt: Record<1 | -1, number> = { 1: 0, [-1]: 0 };
   #generation = 0;
@@ -105,13 +144,15 @@ export class ScrollStrip {
     [-1]: null,
   };
   #extent = 0;
-  #wheelTarget: number | null = null;
-  #wheelFrame = 0;
+  #glideTarget: number | null = null;
+  #glideFrame = 0;
   /** The spring's own position (the scroller rounds what it is given),
    *  its speed in px/s and the time of its last step. */
-  #wheelAt = 0;
-  #wheelSpeed = 0;
-  #wheelTime = 0;
+  #glideAt = 0;
+  #glideSpeed = 0;
+  #glideTime = 0;
+  /** What the last report said: the chapter, and how far into it. */
+  #told: { index: number; offset: number } | null = null;
   log: StripLogEntry[] = [];
 
   constructor(options: StripOptions) {
@@ -234,23 +275,63 @@ export class ScrollStrip {
     }));
   }
 
+  /** The chapter under the reading line (null before the first open). */
   get pinnedIndex(): number | null {
     return this.#pinned?.index ?? null;
   }
 
-  /** Throw the strip away and build it around `target`. */
-  async open(target: Pick<NavTarget, "index" | "anchor">): Promise<void> {
+  /** The mounted chapters' documents, the one being read first. */
+  getContents(): { index: number; doc: Document }[] {
+    const pinned = this.#pinned;
+    const rest = this.#chapters.filter((chapter) => chapter !== pinned);
+    return (pinned ? [pinned, ...rest] : rest).map(({ index, doc }) => ({
+      index,
+      doc,
+    }));
+  }
+
+  /** The book's last chapter is mounted and its end is on screen. */
+  get atEnd(): boolean {
+    const last = this.#chapters[this.#chapters.length - 1];
+    if (!last || this.#adjacent(last.index, 1) != null) return false;
+    return this.#at + this.#screen >= last.top + last.height - 1;
+  }
+
+  setBackground(color: string) {
+    this.#scroller.style.background = color;
+  }
+
+  /** Show `target`: where its chapter is mounted the strip is moved to
+   *  it, otherwise it is built anew around it. The place is reported
+   *  (as `reason`) before this resolves. */
+  async goTo(
+    target: Pick<NavTarget, "index" | "anchor">,
+    reason = "navigation",
+  ): Promise<void> {
+    const chapter = this.#chapters.find((c) => c.index === target.index);
+    if (!chapter) return this.open(target, reason);
+    this.#stopGlide();
+    this.#at = chapter.top + this.#offsetOf(chapter, target.anchor);
+    this.#pin();
+    this.#fill();
+    this.#tell(reason, true);
+  }
+
+  /** Build the strip anew around `target`. What is on screen stays
+   *  until the chapter is ready to take its place. */
+  async open(
+    target: Pick<NavTarget, "index" | "anchor">,
+    reason = "navigation",
+  ): Promise<void> {
     const generation = ++this.#generation;
-    for (const chapter of this.#chapters) this.#discard(chapter);
-    this.#chapters = [];
-    this.#pinned = null;
     this.#loading = { 1: false, [-1]: false };
     this.#pending(1, false);
     this.#pending(-1, false);
-    this.#wheelTarget = null;
-    this.#decided = false;
-    const chapter = await this.#build(target.index, generation);
+    const chapter = await this.#build(target.index, generation, true);
     if (!chapter) return;
+    this.#stopGlide();
+    for (const old of this.#chapters) this.#discard(old);
+    this.#setAxis(chapter.vertical);
     chapter.top = this.#adjacent(target.index, -1) == null ? 0 : ORIGIN;
     this.#chapters = [chapter];
     this.#pinned = chapter;
@@ -258,7 +339,12 @@ export class ScrollStrip {
     chapter.frame.style.visibility = "";
     this.#at = chapter.top + this.#offsetOf(chapter, target.anchor);
     this.#fill();
-    this.#report();
+    this.#tell(reason, true);
+  }
+
+  /** One screen back or forward along the strip. */
+  page(dir: 1 | -1) {
+    this.#glide(dir * this.#screen * PAGE_STEP);
   }
 
   destroy() {
@@ -267,29 +353,33 @@ export class ScrollStrip {
     if (this.#restTimer) clearTimeout(this.#restTimer);
     this.#pending(1, false);
     this.#pending(-1, false);
-    cancelAnimationFrame(this.#wheelFrame);
+    this.#stopGlide();
     for (const chapter of this.#chapters) this.#discard(chapter);
     this.#chapters = [];
+    this.#pinned = null;
     this.#scroller.remove();
     this.#readout.remove();
   }
 
-  #offsetOf(chapter: Chapter, anchor: NavTarget["anchor"]): number {
+  /** How far into `chapter` an anchor (a fraction, an element, a range
+   *  — or what makes one from the document) stands. */
+  #offsetOf(chapter: Chapter, anchor: Anchor): number {
     let at: unknown = anchor;
     try {
       if (typeof anchor === "function") at = anchor(chapter.doc);
     } catch {
       return 0;
     }
-    if (typeof at === "number") return at * chapter.height;
-    const rects = (
-      at as { getClientRects?: () => DOMRectList } | null
-    )?.getClientRects?.();
-    if (!rects?.length) return 0;
-    const rect = Array.from(rects).find((r) => r.height > 0) ?? rects[0];
+    if (typeof at === "number") return Math.floor(at * chapter.height);
+    const rect = firstRect(at);
+    if (!rect) return 0;
     // The iframe is as large as its document and never scrolls: a rect
-    // in it is measured from the chapter's own edges.
-    return Math.max(0, this.#vertical ? chapter.height - rect.right : rect.top);
+    // in it is measured from the chapter's own edges. A line of text is
+    // given its leading back (a glyph's box is thinner than its line),
+    // so it does not stand hard against the screen's edge. Whole pixels,
+    // and never past the line's own edge (see LINE_INSET).
+    const edge = this.#vertical ? chapter.height - rect.right : rect.top;
+    return Math.max(0, Math.floor(edge - leadOf(at, rect, this.#vertical)));
   }
 
   #adjacent(index: number, dir: 1 | -1): number | null {
@@ -299,9 +389,8 @@ export class ScrollStrip {
     return null;
   }
 
-  #layoutCss(): string {
-    const { marginX, marginY, measure, verticalMeasure } = this.#o;
-    const vertical = this.#vertical;
+  #layoutCss(vertical: boolean): string {
+    const { marginX, marginY, measure, verticalMeasure } = this.#o.layout();
     const mode = vertical ? "vertical-rl" : "horizontal-tb";
     // Across the lines the chapter is as long as its text; along them it
     // has the screen, less the margins, up to the longest line allowed.
@@ -331,9 +420,15 @@ img, svg, video {
 }`;
   }
 
-  /** Load a chapter and wait until its height will not change under the
-   *  reader: pictures sized, fonts in. It is not on the strip yet. */
-  async #build(index: number, generation: number): Promise<Chapter | null> {
+  /** Load a chapter and wait until its size will not change under the
+   *  reader: pictures sized, fonts in. It is not on the strip yet.
+   *  `decide`: this is the chapter the strip is opened on, and its own
+   *  writing mode is the way the strip will run. */
+  async #build(
+    index: number,
+    generation: number,
+    decide = false,
+  ): Promise<Chapter | null> {
     const section = this.#o.book.sections[index];
     const started = performance.now();
     const src = await section.load();
@@ -372,13 +467,9 @@ img, svg, video {
     const last = doc.createElement("style");
     last.textContent = after;
     doc.head.append(last);
-    if (!this.#decided) {
-      // The chapter the strip is opened on says which way it runs.
-      this.#decided = true;
-      const mode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
-      this.#setAxis(!!mode && mode.startsWith("vertical"));
-    }
-    const vertical = this.#vertical;
+    const mode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
+    const ownVertical = !!mode && mode.startsWith("vertical");
+    const vertical = decide ? ownVertical : this.#vertical;
     Object.assign(
       frame.style,
       vertical
@@ -391,18 +482,10 @@ img, svg, video {
         ? { height: "100%", width: "0" }
         : { width: "100%", height: "0" },
     );
-    last.textContent += this.#layoutCss();
-    this.#o.prepare(doc);
+    last.textContent += this.#layoutCss(vertical);
+    this.#o.onload({ doc, index, ownVertical });
     this.#watchTouches(doc);
     this.#watchWheel(doc);
-    doc.addEventListener("click", (e) => {
-      if ((e.target as Element | null)?.closest?.("a[href]")) {
-        e.preventDefault();
-        return;
-      }
-      if (!doc.getSelection()?.isCollapsed) return;
-      this.#o.ontap?.();
-    });
     const work = performance.now() - laidOut;
     await Promise.race([
       Promise.all([
@@ -422,6 +505,7 @@ img, svg, video {
       index,
       frame,
       doc,
+      vertical,
       top: 0,
       height: 0,
       observer: null as unknown as ResizeObserver,
@@ -495,9 +579,13 @@ img, svg, video {
     requestAnimationFrame(() => {
       this.#frameAsked = false;
       if (this.#destroyed) return;
+      const before = this.#pinned;
       this.#pin();
       this.#fill();
-      this.#report();
+      // Into another chapter: its name and the progress follow at once,
+      // not at the end of a long scroll.
+      if (this.#pinned !== before) this.#tell("scroll");
+      this.#readOut();
     });
   }
 
@@ -560,10 +648,15 @@ img, svg, video {
         this.#loading[dir] = false;
         this.#pending(dir, false);
         if (!chapter) return;
-        // Still the neighbour of the end it was built for?
+        // Still the neighbour of the end it was built for, and set the
+        // way the strip (opened anew meanwhile, perhaps) now runs?
         const now = this.#chapters;
         const end = dir > 0 ? now[now.length - 1] : now[0];
-        if (!end || this.#adjacent(end.index, dir) !== index) {
+        if (
+          !end ||
+          this.#adjacent(end.index, dir) !== index ||
+          chapter.vertical !== this.#vertical
+        ) {
           this.#discard(chapter);
           return;
         }
@@ -573,7 +666,7 @@ img, svg, video {
         chapter.frame.style.visibility = "";
         this.#note("joined", index);
         this.#fill();
-        this.#report();
+        this.#readOut();
       })
       .catch((e: unknown) => {
         if (generation !== this.#generation) return;
@@ -582,7 +675,7 @@ img, svg, video {
         this.#pending(dir, false);
         this.#retryAt[dir] = performance.now() + RETRY_MS;
         this.#note("failed", index);
-        this.#report();
+        this.#readOut();
       });
   }
 
@@ -600,7 +693,11 @@ img, svg, video {
   }
 
   #watchTouches(target: Document | HTMLElement) {
-    const down = () => (this.#touches += 1);
+    const down = () => {
+      this.#touches += 1;
+      // The finger has the strip now.
+      this.#stopGlide();
+    };
     const up = () => {
       this.#touches = Math.max(0, this.#touches - 1);
       if (!this.#touches) this.#scrolled();
@@ -619,66 +716,88 @@ img, svg, video {
         if (!this.#vertical || Math.abs(deltaY) <= Math.abs(deltaX)) return;
         e.preventDefault();
         // Lines (a mouse in Firefox) or pixels.
-        this.#wheel((e as WheelEvent).deltaMode === 1 ? deltaY * 40 : deltaY);
+        this.#glide((e as WheelEvent).deltaMode === 1 ? deltaY * 40 : deltaY);
       },
       { passive: false },
     );
   }
 
-  /** A wheel turns downward and a leftward strip has no axis of the
-   *  browser's to follow it with, so the strip follows it itself: as a
-   *  critically damped spring towards where the wheel has asked for. Its
-   *  speed carries over from one notch to the next and dies away at the
-   *  end — no restart at each notch, no sudden stop. */
-  #wheel(delta: number) {
+  /** Move the strip by `delta` where the browser has no scroll of its
+   *  own to do it with — a wheel turning downward over a leftward strip,
+   *  a key asking for a screen — as a critically damped spring towards
+   *  where it has been asked to be. Its speed carries over from one
+   *  request to the next and dies away at the end: no restart at each
+   *  notch, no sudden stop. A reader who asked for reduced motion is
+   *  moved at once. */
+  #glide(delta: number) {
     const max = Math.max(0, this.#extent - this.#screen);
-    if (this.#wheelTarget == null) {
-      this.#wheelAt = this.#at;
-      this.#wheelSpeed = 0;
-      this.#wheelTime = performance.now();
-    }
-    this.#wheelTarget = Math.max(
+    const target = Math.max(
       0,
-      Math.min(max, (this.#wheelTarget ?? this.#at) + delta),
+      Math.min(max, (this.#glideTarget ?? this.#at) + delta),
     );
-    if (this.#wheelFrame) return;
+    if (this.#o.reducedMotion()) {
+      this.#stopGlide();
+      this.#at = target;
+      return;
+    }
+    if (this.#glideTarget == null) {
+      this.#glideAt = this.#at;
+      this.#glideSpeed = 0;
+      this.#glideTime = performance.now();
+    }
+    this.#glideTarget = target;
+    if (this.#glideFrame) return;
     const step = (now: number) => {
-      this.#wheelFrame = 0;
-      const target = this.#wheelTarget;
-      if (target == null || this.#destroyed) return;
-      const t = Math.min(0.05, Math.max(0, (now - this.#wheelTime) / 1000));
-      this.#wheelTime = now;
-      const off = this.#wheelAt - target;
-      const pull = this.#wheelSpeed + WHEEL_STIFFNESS * off;
-      const decay = Math.exp(-WHEEL_STIFFNESS * t);
-      this.#wheelAt = target + (off + pull * t) * decay;
-      this.#wheelSpeed =
-        (this.#wheelSpeed - WHEEL_STIFFNESS * pull * t) * decay;
+      this.#glideFrame = 0;
+      const to = this.#glideTarget;
+      if (to == null || this.#destroyed) return;
+      const t = Math.min(0.05, Math.max(0, (now - this.#glideTime) / 1000));
+      this.#glideTime = now;
+      const off = this.#glideAt - to;
+      const pull = this.#glideSpeed + GLIDE_STIFFNESS * off;
+      const decay = Math.exp(-GLIDE_STIFFNESS * t);
+      this.#glideAt = to + (off + pull * t) * decay;
+      this.#glideSpeed =
+        (this.#glideSpeed - GLIDE_STIFFNESS * pull * t) * decay;
       if (
-        Math.abs(this.#wheelAt - target) < 0.5 &&
-        Math.abs(this.#wheelSpeed) < 8
+        Math.abs(this.#glideAt - to) < 0.5 &&
+        Math.abs(this.#glideSpeed) < 8
       ) {
-        this.#at = target;
-        this.#wheelTarget = null;
+        this.#at = to;
+        this.#glideTarget = null;
         return;
       }
-      this.#at = this.#wheelAt;
-      this.#wheelFrame = requestAnimationFrame(step);
+      this.#at = this.#glideAt;
+      this.#glideFrame = requestAnimationFrame(step);
     };
-    this.#wheelFrame = requestAnimationFrame(step);
+    this.#glideFrame = requestAnimationFrame(step);
+  }
+
+  #stopGlide() {
+    cancelAnimationFrame(this.#glideFrame);
+    this.#glideFrame = 0;
+    this.#glideTarget = null;
   }
 
   #rested() {
     if (this.#destroyed || this.#touches) return;
     const first = this.#chapters[0];
     if (!first) return;
-    const start = this.#adjacent(first.index, -1) == null;
-    if (start && first.top !== 0) this.#rebase(-first.top);
-    else if (!start && first.top < ORIGIN_LOW) this.#rebase(ORIGIN);
+    // (A glide still on its way has the position: the canvas is shifted
+    // when it too has come to rest.)
+    if (this.#glideTarget == null) {
+      const start = this.#adjacent(first.index, -1) == null;
+      if (start && first.top !== 0) this.#rebase(-first.top);
+      else if (!start && first.top < ORIGIN_LOW) this.#rebase(ORIGIN);
+    }
+    this.#pin();
+    this.#tell("scroll");
+    this.#readOut();
   }
 
   /** Shift the whole canvas, and the scroll position with it, in one
-   *  frame: nothing moves on screen. */
+   *  frame: nothing moves on screen, and where the reader is in their
+   *  chapter is what it was — nothing to report. */
   #rebase(delta: number) {
     const top = this.#at;
     for (const chapter of this.#chapters) chapter.top += delta;
@@ -687,12 +806,74 @@ img, svg, video {
     this.#note(`rebased ${delta}`);
   }
 
+  /** Report where the reader is — unless it is where the last report
+   *  said (`force`: a destination reached is reported even then). */
+  #tell(reason: string, force = false) {
+    const pinned = this.#pinned;
+    if (!pinned || this.#destroyed) return;
+    const offset = this.#at - pinned.top;
+    const told = this.#told;
+    if (
+      !force &&
+      told &&
+      told.index === pinned.index &&
+      Math.abs(told.offset - offset) < 1
+    )
+      return;
+    this.#told = { index: pinned.index, offset };
+    this.#o.onrelocate({
+      reason,
+      index: pinned.index,
+      fraction: Math.max(0, Math.min(1, offset / Math.max(1, pinned.height))),
+      range: this.#visible(pinned, offset),
+    });
+  }
+
+  /** The text of `chapter` on screen when the screen's leading edge is
+   *  `offset` into it. Past the chapter's end (the bare paper after it)
+   *  that is its last lines. */
+  #visible(chapter: Chapter, offset: number): Range | null {
+    const { doc, height } = chapter;
+    if (!doc.body) return null;
+    // Rects as if the strip ran left to right: `left` is a box's start
+    // along it, `right` its end.
+    const along = chapter.vertical
+      ? ({ left, right }: DOMRect) => ({
+          left: height - right,
+          right: height - left,
+        })
+      : ({ top, bottom }: DOMRect) => ({ left: top, right: bottom });
+    const start = Math.max(
+      0,
+      Math.min(offset + LINE_INSET, height - LINE_INSET),
+    );
+    const end = Math.max(start, offset + this.#screen);
+    try {
+      let range = getVisibleRange(doc, start, end, along) as Range;
+      // Nothing whole in the window (a picture larger than the screen):
+      // the first thing after the line, however far.
+      if (
+        range.collapsed &&
+        range.startContainer === doc.body &&
+        range.startOffset === 0 &&
+        start > LINE_INSET
+      )
+        range = getVisibleRange(doc, start, height, along) as Range;
+      toLineStart(range, start, along);
+      return range;
+    } catch (e) {
+      console.warn(e);
+      return null;
+    }
+  }
+
   #note(what: string, index?: number, ms?: number) {
     this.log.push({ at: Math.round(performance.now()), what, index, ms });
     if (this.log.length > 200) this.log.shift();
   }
 
-  #report() {
+  /** The debug line in the corner (goes with the settings entry). */
+  #readOut() {
     const chapters = this.#chapters;
     const pinned = this.#pinned;
     if (!pinned || !chapters.length) return;
@@ -713,4 +894,88 @@ img, svg, video {
           )}ms)`
         : "");
   }
+}
+
+type Along = (rect: DOMRect) => { left: number; right: number };
+
+/**
+ * Move the start of `range` to the first character of its text node
+ * that is not wholly before `start` along the strip — the beginning of
+ * the line the reading line cuts, or of the first one after it.
+ *
+ * The paginator's walk finds the node; where in it the visible text
+ * begins it finds by bisection between "before" and "after", which a
+ * page's edge always separates. A scrolled screen's edge as a rule cuts
+ * through a line, and the walk then stops anywhere in that line: the
+ * same place read twice would be saved as two positions.
+ */
+function toLineStart(range: Range, start: number, along: Along) {
+  const node = range.startContainer;
+  if (node.nodeType !== 3) return;
+  const length = (node as Text).length;
+  const probe = node.ownerDocument!.createRange();
+  // Whether character `i` reaches past the line. (One with no box of
+  // its own — collapsed white space — is judged by the next that has.)
+  const past = (i: number): boolean => {
+    for (let j = i; j < length && j < i + 16; j++) {
+      probe.setStart(node, j);
+      probe.setEnd(node, j + 1);
+      for (const rect of Array.from(probe.getClientRects()))
+        if (rect.width > 0 || rect.height > 0) return along(rect).right > start;
+    }
+    return true;
+  };
+  let lo = 0;
+  let hi = range.endContainer === node ? range.endOffset : length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (past(mid)) hi = mid;
+    else lo = mid + 1;
+  }
+  // Never between the halves of one character.
+  const code = (node as Text).data.charCodeAt(lo);
+  if (lo > 0 && code >= 0xdc00 && code <= 0xdfff) lo -= 1;
+  range.setStart(node, lo);
+}
+
+/** Half the space a line of text has beyond its glyphs' own box. */
+function leadOf(anchor: unknown, rect: DOMRect, vertical: boolean): number {
+  const start = (anchor as Partial<Range> | null)?.startContainer;
+  if (!start) return 0;
+  const el = start.nodeType === 1 ? (start as Element) : start.parentElement;
+  const view = el?.ownerDocument.defaultView;
+  if (!el || !view) return 0;
+  const line = parseFloat(view.getComputedStyle(el).lineHeight);
+  if (!Number.isFinite(line)) return 0;
+  const glyph = vertical ? rect.width : rect.height;
+  return Math.max(0, Math.min(40, (line - glyph) / 2));
+}
+
+/** The first box of an anchor: an element's, or a range's — a collapsed
+ *  range has none in some engines and is given a character to stand on. */
+function firstRect(anchor: unknown): DOMRect | null {
+  if (!anchor || typeof anchor !== "object") return null;
+  let target = anchor as Range | Element;
+  if ("collapsed" in target && target.collapsed) {
+    const range = target.cloneRange();
+    const node = range.endContainer;
+    const offset = range.endOffset;
+    if (node.nodeType === 1) {
+      target =
+        (node.childNodes[offset] as Element | undefined) ?? (node as Element);
+      if (target.nodeType !== 1) {
+        range.selectNode(target);
+        target = range;
+      }
+    } else {
+      const length = (node as Text).length;
+      if (offset < length) range.setEnd(node, offset + 1);
+      else if (offset > 0) range.setStart(node, offset - 1);
+      else if (node.parentElement) target = node.parentElement;
+      if (target === anchor) target = range;
+    }
+  }
+  const rects = target.getClientRects?.();
+  if (!rects?.length) return null;
+  return Array.from(rects).find((r) => r.width > 0 && r.height > 0) ?? rects[0];
 }

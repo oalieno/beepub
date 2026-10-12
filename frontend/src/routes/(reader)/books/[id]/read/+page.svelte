@@ -20,7 +20,8 @@
    * margin seeds both gutters). Query params override for this session
    * only — probes and e2e open at a known geometry — and are not written
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
-   * &turn=fade|slide|instant (instant — a bare jump — exists only here).
+   * &turn=fade|slide|scroll|instant (instant — a bare jump — exists only
+   * here; scroll has no settings entry yet).
    */
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -501,7 +502,8 @@
   }
   /** What a stored or query value means today: before 2026-10 the modes
    *  were instant / animated (a slide without the finger) / follow. */
-  function parsePageTurn(raw: string | null): "fade" | "slide" {
+  function parsePageTurn(raw: string | null): "fade" | "slide" | "scroll" {
+    if (raw === "scroll") return "scroll";
     return raw === "slide" || raw === "animated" || raw === "follow"
       ? "slide"
       : "fade";
@@ -1365,7 +1367,6 @@
             {marginY}
             {darkMode}
             {pageTurn}
-            strip={page.url.searchParams.get("turn") === "scroll"}
             {writingMode}
             {fullPage}
             {sectionWeights}

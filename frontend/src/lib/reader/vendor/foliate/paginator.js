@@ -91,7 +91,9 @@ const getBoundingClientRect = target => {
     return new DOMRect(left, top, right - left, bottom - top)
 }
 
-const getVisibleRange = (doc, start, end, mapRect) => {
+// BeePub: exported — the scroll strip (../../strip.ts) reads the text on
+// screen the way the paginator does.
+export const getVisibleRange = (doc, start, end, mapRect) => {
     // first get all visible nodes
     const acceptNode = node => {
         const name = node.localName?.toLowerCase()
