@@ -108,6 +108,7 @@
     onactivity,
     onticks,
     ondirection,
+    onscrolled,
     onwritingmodeoffer,
     onkosyncposition,
     onrestorefallback,
@@ -187,6 +188,10 @@
      *  else the section on screen), and whether that section is vertical
      *  text. Fires on every section load. */
     ondirection?: (rtl: boolean, vertical: boolean) => void;
+    /** Whether the book is shown as one scrolled strip (the "scroll"
+     *  page-turn mode, for a book that can be) rather than in pages: the
+     *  chrome offers nothing that turns a page then. */
+    onscrolled?: (scrolled: boolean) => void;
     /** Whether a writing-direction choice makes sense for this book (a
      *  CJK text book). Fires on every section load. */
     onwritingmodeoffer?: (offered: boolean) => void;
@@ -2310,8 +2315,13 @@ ${darkOverrides}
         loadSavedProgress(),
       ]);
       if (destroyed) return;
+      onscrolled?.(c.scrolled);
       onbook?.(book);
-      if (claim && (await claim(book, loader))) return;
+      if (claim && (await claim(book, loader))) {
+        // (Another reader has the book: nothing here is scrolled.)
+        onscrolled?.(false);
+        return;
+      }
       if (destroyed) return;
       // Before the first relocation, so the restore already reports the
       // chapter it lands in.
@@ -2376,6 +2386,7 @@ ${darkOverrides}
   $effect(() => {
     const mode = pageTurn;
     core?.setPageTurn(mode);
+    onscrolled?.(!!core?.scrolled);
   });
   $effect(() => {
     const mode = writingMode;

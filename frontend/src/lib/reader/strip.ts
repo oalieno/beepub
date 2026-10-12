@@ -13,9 +13,10 @@
  *
  * The scroll position is written for these only: a destination (the
  * strip opened on one, a jump within what is mounted, a screen's move by
- * key), a wheel followed along a leftward strip, and the whole canvas
- * shifted at rest (#rebase) — the book's first chapter has to sit at the
- * canvas's start for the browser to stop there.
+ * key), a wheel followed along a leftward strip, the line put back
+ * after a restyle or a new screen size, and the whole canvas shifted
+ * (#rebase, at rest or with a restyle) — the book's first chapter has
+ * to sit at the canvas's start for the browser to stop there.
  *
  * A horizontal book's strip runs downward, a vertical book's leftward
  * (an rtl scroller: the position along it is -scrollLeft). The chapter
@@ -44,6 +45,10 @@
  * (restyle, and the scroller's own resize): every mounted chapter is
  * styled and measured again where it stands, and the strip is moved so
  * that the line that was at the reading line is there again.
+ *
+ * `log` keeps the last two hundred things the strip did (a chapter
+ * built, joined, let go, failed; the canvas shifted; a restyle) in
+ * memory, for probes and tests: nothing is drawn from it.
  */
 import type { Book, NavTarget } from "./core";
 import { getVisibleRange } from "./vendor/foliate/paginator.js";
@@ -181,7 +186,6 @@ export class ScrollStrip {
   #o: StripOptions;
   #scroller: HTMLDivElement;
   #canvas: HTMLDivElement;
-  #readout: HTMLDivElement;
   /** The mounted chapters, in reading order, with no gap between them. */
   #chapters: Chapter[] = [];
   #pinned: Chapter | null = null;
@@ -270,25 +274,9 @@ export class ScrollStrip {
       return el;
     };
     this.#spinners = { 1: spinner(), [-1]: spinner() };
-    const readout = document.createElement("div");
-    readout.dataset.testid = "scroll-strip-readout";
-    Object.assign(readout.style, {
-      position: "absolute",
-      left: "8px",
-      bottom: "calc(8px + env(safe-area-inset-bottom, 0px))",
-      zIndex: "5",
-      padding: "2px 6px",
-      borderRadius: "6px",
-      font: "11px/1.4 ui-monospace, monospace",
-      color: "#fff",
-      background: "rgba(0,0,0,.55)",
-      pointerEvents: "none",
-      whiteSpace: "pre",
-    });
-    options.container.append(scroller, readout);
+    options.container.append(scroller);
     this.#scroller = scroller;
     this.#canvas = canvas;
-    this.#readout = readout;
     scroller.addEventListener("scroll", () => this.#scrolled(), {
       passive: true,
     });
@@ -471,7 +459,6 @@ export class ScrollStrip {
     this.#chapters = [];
     this.#pinned = null;
     this.#scroller.remove();
-    this.#readout.remove();
   }
 
   /** How far into `chapter` an anchor (a fraction, an element, a range
@@ -573,7 +560,6 @@ img, svg, video {
       section.unload();
       return null;
     }
-    const laidOut = performance.now();
     const styles = this.#o.styles();
     const [before, after] = Array.isArray(styles) ? styles : ["", styles];
     const first = doc.createElement("style");
@@ -610,7 +596,6 @@ img, svg, video {
     this.#o.onload({ doc, index, ownVertical });
     this.#watchTouches(doc);
     this.#watchWheel(doc);
-    const work = performance.now() - laidOut;
     await Promise.race([
       Promise.all([
         ...Array.from(doc.images, (img) =>
@@ -685,7 +670,6 @@ img, svg, video {
       },
     });
     this.#note("built", index, performance.now() - started);
-    this.#note("styled", index, work);
     return chapter;
   }
 
@@ -741,7 +725,6 @@ img, svg, video {
       // Into another chapter: its name and the progress follow at once,
       // not at the end of a long scroll.
       if (this.#pinned !== before) this.#tell("scroll");
-      this.#readOut();
     });
   }
 
@@ -840,7 +823,6 @@ img, svg, video {
         // The reader was waiting for it at the seam: they are in it now.
         if (this.#pinned !== before) this.#tell("scroll");
         this.#fill();
-        this.#readOut();
         return true;
       })
       .catch((e: unknown) => {
@@ -850,7 +832,6 @@ img, svg, video {
         this.#pending(dir, false);
         this.#note("failed", index);
         this.#stick(dir, index);
-        this.#readOut();
         return false;
       });
     this.#attempt[dir] = attempt;
@@ -1030,7 +1011,6 @@ img, svg, video {
     // that brought the reader here has been told, not before).
     this.#say(1);
     this.#say(-1);
-    this.#readOut();
   }
 
   /** Put the canvas's start where it belongs: at the book's first
@@ -1263,29 +1243,6 @@ img, svg, video {
   #note(what: string, index?: number, ms?: number) {
     this.log.push({ at: Math.round(performance.now()), what, index, ms });
     if (this.log.length > 200) this.log.shift();
-  }
-
-  /** The debug line in the corner (goes with the settings entry). */
-  #readOut() {
-    const chapters = this.#chapters;
-    const pinned = this.#pinned;
-    if (!pinned || !chapters.length) return;
-    const into = this.#at - pinned.top;
-    const percent = Math.max(
-      0,
-      Math.min(100, Math.round((into / Math.max(1, pinned.height)) * 100)),
-    );
-    const built = [...this.log].reverse().find((l) => l.what === "built");
-    const styled = [...this.log].reverse().find((l) => l.what === "styled");
-    this.#readout.textContent =
-      `章 ${pinned.index} · ${percent}% · 掛著 ${chapters[0].index}–${
-        chapters[chapters.length - 1].index
-      }` +
-      (built
-        ? `\n上次掛章 ${built.index}: ${Math.round(built.ms ?? 0)}ms(其中排版 ${Math.round(
-            styled?.ms ?? 0,
-          )}ms)`
-        : "");
   }
 }
 

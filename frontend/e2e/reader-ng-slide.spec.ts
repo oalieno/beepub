@@ -442,9 +442,9 @@ test("a turn from rest sets off, travels and settles over its time; a sheet the 
   expect(await livePage()).toBe(start + 5);
   list = await asked();
   expect(list.map((a) => a.easing)).toEqual([EASE_RELEASED, EASE_RELEASED]);
-  expect(Math.abs(list[0].duration - releasedMs(70 / width))).toBeLessThanOrEqual(
-    8,
-  );
+  expect(
+    Math.abs(list[0].duration - releasedMs(70 / width)),
+  ).toBeLessThanOrEqual(8);
 });
 
 test("a vertical book slides too, the other way round, and the sheet offers the choice", async ({
@@ -524,7 +524,7 @@ test("a vertical book slides too, the other way round, and the sheet offers the 
   await openSettings(page, cdp);
   await expect(
     page.getByTestId("setting-page-turn").getByRole("button"),
-  ).toHaveText(["Fast fade", "Slide"]);
+  ).toHaveText(["Fast fade", "Slide", "Scroll"]);
 });
 
 /** Whether the two sheets of the turn under way leave any of the

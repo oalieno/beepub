@@ -96,13 +96,16 @@
 
   <!-- Progress row -->
   <div class="flex items-center gap-2 px-3 py-2">
-    <button
-      class="p-1 rounded-md transition-colors {btnClass}"
-      onclick={() => (isRtl ? onnext?.() : onprev?.())}
-      aria-label={m.reader_prev_page()}
-    >
-      <ChevronLeft size={20} />
-    </button>
+    <!-- (No page buttons where there are no pages: a scrolled book.) -->
+    {#if onprev && onnext}
+      <button
+        class="p-1 rounded-md transition-colors {btnClass}"
+        onclick={() => (isRtl ? onnext?.() : onprev?.())}
+        aria-label={m.reader_prev_page()}
+      >
+        <ChevronLeft size={20} />
+      </button>
+    {/if}
     {#if percentage != null && canSeek}
       <div class="flex-1">
         <ProgressScrubber
@@ -131,13 +134,15 @@
     {:else}
       <div class="flex-1"></div>
     {/if}
-    <button
-      class="p-1 rounded-md transition-colors {btnClass}"
-      onclick={() => (isRtl ? onprev?.() : onnext?.())}
-      aria-label={m.reader_next_page()}
-    >
-      <ChevronRight size={20} />
-    </button>
+    {#if onprev && onnext}
+      <button
+        class="p-1 rounded-md transition-colors {btnClass}"
+        onclick={() => (isRtl ? onprev?.() : onnext?.())}
+        aria-label={m.reader_next_page()}
+      >
+        <ChevronRight size={20} />
+      </button>
+    {/if}
   </div>
 
   <!-- Action row -->

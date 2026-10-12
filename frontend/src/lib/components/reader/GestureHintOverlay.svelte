@@ -14,10 +14,14 @@
   let {
     darkMode = false,
     isRtl = false,
+    scrolled = false,
     onclose,
   }: {
     darkMode?: boolean;
     isRtl?: boolean;
+    /** The book is read as one scrolled strip: no pages to turn, by a
+     *  tap on a side, a swipe or a key. */
+    scrolled?: boolean;
     onclose?: () => void;
   } = $props();
 
@@ -29,12 +33,16 @@
     typeof window !== "undefined" &&
     window.matchMedia("(pointer: coarse)").matches;
 
-  const tips = [
-    { icon: MoveHorizontal, label: m.reader_gesture_swipe },
-    ...(coarse ? [] : [{ icon: Keyboard, label: m.reader_gesture_keys }]),
+  let tips = $derived([
+    ...(scrolled
+      ? []
+      : [{ icon: MoveHorizontal, label: m.reader_gesture_swipe }]),
+    ...(coarse || scrolled
+      ? []
+      : [{ icon: Keyboard, label: m.reader_gesture_keys }]),
     { icon: ImageIcon, label: m.reader_gesture_longpress_image },
     { icon: Highlighter, label: m.reader_gesture_tap_highlight },
-  ];
+  ]);
 
   // The reader turns pages on document keyup — while the overlay is up a
   // key press must not page-turn invisibly underneath it. Swallow both
@@ -65,14 +73,16 @@
   onclick={() => onclose?.()}
 >
   <!-- Left tap zone -->
-  <div
-    class="flex w-1/5 min-w-16 flex-col items-center justify-center gap-2 border-r border-dashed border-white/25"
-  >
-    <ChevronLeft size={28} class="opacity-80 md:size-9" />
-    <span class="text-xs md:text-base font-medium opacity-80 text-center px-1"
-      >{prevLabel}</span
+  {#if !scrolled}
+    <div
+      class="flex w-1/5 min-w-16 flex-col items-center justify-center gap-2 border-r border-dashed border-white/25"
     >
-  </div>
+      <ChevronLeft size={28} class="opacity-80 md:size-9" />
+      <span class="text-xs md:text-base font-medium opacity-80 text-center px-1"
+        >{prevLabel}</span
+      >
+    </div>
+  {/if}
 
   <!-- Center -->
   <div class="flex flex-1 flex-col items-center justify-center gap-6 px-4">
@@ -105,12 +115,14 @@
   </div>
 
   <!-- Right tap zone -->
-  <div
-    class="flex w-1/5 min-w-16 flex-col items-center justify-center gap-2 border-l border-dashed border-white/25"
-  >
-    <ChevronRight size={28} class="opacity-80 md:size-9" />
-    <span class="text-xs md:text-base font-medium opacity-80 text-center px-1"
-      >{nextLabel}</span
+  {#if !scrolled}
+    <div
+      class="flex w-1/5 min-w-16 flex-col items-center justify-center gap-2 border-l border-dashed border-white/25"
     >
-  </div>
+      <ChevronRight size={28} class="opacity-80 md:size-9" />
+      <span class="text-xs md:text-base font-medium opacity-80 text-center px-1"
+        >{nextLabel}</span
+      >
+    </div>
+  {/if}
 </div>

@@ -218,23 +218,25 @@
     </button>
   </div>
 
-  <!-- Nav -->
-  <div class="flex items-center gap-1">
-    <button
-      class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
-      title={isRtl ? m.reader_next_page() : m.reader_prev_page()}
-      aria-label={isRtl ? m.reader_next_page() : m.reader_prev_page()}
-      onclick={() => (isRtl ? onnext?.() : onprev?.())}
-    >
-      <ChevronLeft size={20} />
-    </button>
-    <button
-      class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
-      title={isRtl ? m.reader_prev_page() : m.reader_next_page()}
-      aria-label={isRtl ? m.reader_prev_page() : m.reader_next_page()}
-      onclick={() => (isRtl ? onprev?.() : onnext?.())}
-    >
-      <ChevronRight size={20} />
-    </button>
-  </div>
+  <!-- Nav (none where there are no pages to turn: a scrolled book) -->
+  {#if onprev && onnext}
+    <div class="flex items-center gap-1">
+      <button
+        class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+        title={isRtl ? m.reader_next_page() : m.reader_prev_page()}
+        aria-label={isRtl ? m.reader_next_page() : m.reader_prev_page()}
+        onclick={() => (isRtl ? onnext?.() : onprev?.())}
+      >
+        <ChevronLeft size={20} />
+      </button>
+      <button
+        class="p-2 rounded-md transition-colors {btnClass(darkMode)}"
+        title={isRtl ? m.reader_prev_page() : m.reader_next_page()}
+        aria-label={isRtl ? m.reader_prev_page() : m.reader_next_page()}
+        onclick={() => (isRtl ? onprev?.() : onnext?.())}
+      >
+        <ChevronRight size={20} />
+      </button>
+    </div>
+  {/if}
 </div>

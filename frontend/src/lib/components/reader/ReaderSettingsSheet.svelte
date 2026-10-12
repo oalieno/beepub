@@ -98,7 +98,7 @@
     onmarginChange?: (value: number) => void;
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
-    onpageTurnChange?: (value: "fade" | "slide") => void;
+    onpageTurnChange?: (value: "fade" | "slide" | "scroll") => void;
     onwritingModeChange?: (value: WritingMode) => void;
     /** The largest font size the reader behind the sheet takes. */
     fontSizeMax?: number;
@@ -163,11 +163,12 @@
     { value: 56, label: m.reader_margin_wide },
   ];
   const pageTurnOptions: {
-    value: "fade" | "slide";
+    value: "fade" | "slide" | "scroll";
     label: () => string;
   }[] = [
     { value: "fade", label: m.reader_page_turn_fade },
     { value: "slide", label: m.reader_page_turn_slide },
+    { value: "scroll", label: m.reader_page_turn_scroll },
   ];
   const writingModeOptions: { value: WritingMode; label: () => string }[] = [
     { value: "auto", label: m.reader_writing_mode_auto },

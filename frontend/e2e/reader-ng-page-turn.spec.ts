@@ -204,7 +204,7 @@ test("modes stored before there were two are read as today's", async ({
   }
 });
 
-test("the settings sheet offers the two modes and stores the choice", async ({
+test("the settings sheet offers the modes and stores the choice", async ({
   page,
   context,
 }) => {
@@ -213,7 +213,11 @@ test("the settings sheet offers the two modes and stores the choice", async ({
   const cdp = await context.newCDPSession(page);
   await openSettings(page, cdp);
   const row = page.getByTestId("setting-page-turn");
-  await expect(row.getByRole("button")).toHaveText(["Fast fade", "Slide"]);
+  await expect(row.getByRole("button")).toHaveText([
+    "Fast fade",
+    "Slide",
+    "Scroll",
+  ]);
 
   await row.getByRole("button", { name: "Slide" }).click();
   await expect.poll(async () => (await turnMode(page)).effective).toBe("slide");

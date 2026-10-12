@@ -21,7 +21,7 @@
    * only — probes and e2e open at a known geometry — and are not written
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
    * &turn=fade|slide|scroll|instant (instant — a bare jump — exists only
-   * here; scroll has no settings entry yet).
+   * here).
    */
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
@@ -359,6 +359,9 @@
   // them (header, desktop scrubber) and the peek pill's way back.
   let percentage = $state<number | null>(null);
   let isRtl = $state(false);
+  // The book is one scrolled strip (see BookReader's onscrolled): no
+  // pages, so nothing in the chrome that turns one.
+  let scrolled = $state(false);
   let sectionTicks = $state<number[]>([]);
   let peekReturn = $state<{ percentage: number | null } | null>(null);
   const peekLabel = $derived(
@@ -1284,8 +1287,8 @@
         offline={!$isOnline}
         backHref={localEntry ? `/local/${bookId}` : null}
         showAi={aiEnabled}
-        onprev={() => activeReader()?.prev()}
-        onnext={() => activeReader()?.next()}
+        onprev={scrolled ? undefined : () => activeReader()?.prev()}
+        onnext={scrolled ? undefined : () => activeReader()?.next()}
         onthemeToggle={handleThemeToggle}
         onhighlights={() => toggleSidebar("highlights")}
         oncompanion={() => openCompanion()}
@@ -1407,6 +1410,7 @@
             }}
             onticks={(t) => (sectionTicks = t)}
             ondirection={(rtl) => (isRtl = rtl)}
+            onscrolled={(on) => (scrolled = on)}
             onwritingmodeoffer={(offered) => (writingModeOffered = offered)}
             onkosyncposition={handleKosyncPosition}
             onrestorefallback={(pct) =>
@@ -1552,7 +1556,12 @@
     {/if}
 
     {#if showGestureHint}
-      <GestureHintOverlay {darkMode} {isRtl} onclose={dismissGestureHint} />
+      <GestureHintOverlay
+        {darkMode}
+        {isRtl}
+        {scrolled}
+        onclose={dismissGestureHint}
+      />
     {/if}
 
     {#if activeSidebar === "toc"}
@@ -1643,8 +1652,8 @@
       highlightCount={highlights.length}
       offline={!$isOnline}
       showAi={aiEnabled}
-      onprev={() => activeReader()?.prev()}
-      onnext={() => activeReader()?.next()}
+      onprev={scrolled ? undefined : () => activeReader()?.prev()}
+      onnext={scrolled ? undefined : () => activeReader()?.next()}
       ontoc={() => toggleSidebar("toc")}
       onsearch={() => toggleSidebar("search")}
       onhighlights={() => toggleSidebar("highlights")}
