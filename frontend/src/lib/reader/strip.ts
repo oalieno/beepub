@@ -32,7 +32,18 @@
  * Each chapter carries an overlayer (the core's, for the highlight
  * layer) over its frame, redrawn when the chapter changes size.
  *
- * Not here yet: a chapter that fails to load says nothing (slice ③).
+ * A chapter that does not load leaves the strip ending where it did:
+ * bare paper, a spinner while an attempt is out. It is asked for again
+ * after a while by itself (while there is a connection), when the core
+ * says a text has arrived, when the connection is back, and when the
+ * reader asks (retry). The reader is told once — `onfail` — when they
+ * stand at that seam, not at every attempt and not for a chapter still
+ * far ahead of them; `onrecover` says it has joined after all.
+ *
+ * New styles, a new layout or a new screen size are taken in place
+ * (restyle, and the scroller's own resize): every mounted chapter is
+ * styled and measured again where it stands, and the strip is moved so
+ * that the line that was at the reading line is there again.
  */
 import type { Book, NavTarget } from "./core";
 import { getVisibleRange } from "./vendor/foliate/paginator.js";
@@ -81,6 +92,16 @@ export interface StripOptions {
   }) => void;
   /** A chapter's document is gone (let go, or the strip built anew). */
   ongone: (detail: { doc: Document; index: number }) => void;
+  /** The reader stands at an end of the strip whose next chapter
+   *  (`index`) could not be loaded. Once for a seam that stays stuck. */
+  onfail: (detail: { index: number; dir: 1 | -1 }) => void;
+  /** A chapter that had failed at that end has joined. */
+  onrecover: (detail: { dir: 1 | -1 }) => void;
+  /** Whether there is a connection to ask a missing chapter over. */
+  online: () => boolean;
+  /** The mounted chapters were laid out again where they stand (new
+   *  styles, a new screen size): what is drawn over them has moved. */
+  onreflow: () => void;
 }
 
 /** What the strip asks of an overlayer: an element to lay over the
@@ -122,10 +143,21 @@ const GLIDE_STIFFNESS = 8;
 /** A key moves the strip by this much of a screen: the last lines read
  *  stay in sight as the first of the next. */
 const PAGE_STEP = 0.9;
+/** How long after a restyle a late change of size is still its doing. */
+const KEEP_MS = 1500;
 /** The reading line stands this far inside the screen's leading edge: a
  *  line of which only a sliver is left there (the scroller keeps whole
  *  pixels, text does not) is not the line being read. */
 const LINE_INSET = 2;
+
+/** The line at the reading line, as a re-anchoring holds it. */
+interface Line {
+  chapter: Chapter;
+  point: Range | null;
+  delta: number;
+  thick: number;
+  fraction: number;
+}
 
 interface Chapter {
   index: number;
@@ -136,6 +168,11 @@ interface Chapter {
   top: number;
   height: number;
   overlayer: StripOverlayer | null;
+  /** The injected styles: ours before the book's, ours after, and the
+   *  strip's layout last. */
+  styles: [HTMLStyleElement, HTMLStyleElement, HTMLStyleElement];
+  /** Size the frame to the text; whether that changed it. */
+  measure: () => boolean;
   observer: ResizeObserver;
   unload: () => void;
 }
@@ -151,8 +188,26 @@ export class ScrollStrip {
   #vertical = false;
   /** A selection is being drawn out by a finger: the strip holds still. */
   #held = false;
-  #loading: Record<1 | -1, boolean> = { 1: false, [-1]: false };
+  /** The attempt out at each end: resolves to whether a chapter joined. */
+  #attempt: Record<1 | -1, Promise<boolean> | null> = { 1: null, [-1]: null };
   #retryAt: Record<1 | -1, number> = { 1: 0, [-1]: 0 };
+  #retryTimers: Record<1 | -1, ReturnType<typeof setTimeout> | null> = {
+    1: null,
+    [-1]: null,
+  };
+  /** The chapter that would not load at each end, and whether the
+   *  reader has been told. */
+  #stuck: Record<1 | -1, number | null> = { 1: null, [-1]: null };
+  #said: Record<1 | -1, boolean> = { 1: false, [-1]: false };
+  /** The line last reported at the reading line: what a new screen size
+   *  is re-anchored to (by then the text has already moved). */
+  #line: Line | null = null;
+  /** The line a restyle put back, for a moment after it: a font that
+   *  arrives late moves the text once more. */
+  #kept: { line: Line; at: number; until: number } | null = null;
+  #sizeObserver: ResizeObserver | null = null;
+  #size = "";
+  #onOnline = () => this.poke();
   #generation = 0;
   #touches = 0;
   #frameAsked = false;
@@ -240,6 +295,11 @@ export class ScrollStrip {
     this.#watchTouches(scroller);
     this.#watchWheel(scroller);
     this.#setAxis(false);
+    globalThis.addEventListener?.("online", this.#onOnline);
+    if (typeof ResizeObserver === "function") {
+      this.#sizeObserver = new ResizeObserver(() => this.#resized());
+      this.#sizeObserver.observe(scroller);
+    }
   }
 
   #setAxis(vertical: boolean) {
@@ -367,9 +427,13 @@ export class ScrollStrip {
     reason = "navigation",
   ): Promise<void> {
     const generation = ++this.#generation;
-    this.#loading = { 1: false, [-1]: false };
-    this.#pending(1, false);
-    this.#pending(-1, false);
+    for (const dir of [1, -1] as const) {
+      this.#attempt[dir] = null;
+      this.#pending(dir, false);
+      this.#unstick(dir);
+    }
+    this.#kept = null;
+    this.#line = null;
     const chapter = await this.#build(target.index, generation, true);
     if (!chapter) return;
     this.#stopGlide();
@@ -395,8 +459,13 @@ export class ScrollStrip {
     this.#destroyed = true;
     this.#generation++;
     if (this.#restTimer) clearTimeout(this.#restTimer);
-    this.#pending(1, false);
-    this.#pending(-1, false);
+    for (const dir of [1, -1] as const) {
+      this.#pending(dir, false);
+      const timer = this.#retryTimers[dir];
+      if (timer) clearTimeout(timer);
+    }
+    globalThis.removeEventListener?.("online", this.#onOnline);
+    this.#sizeObserver?.disconnect();
     this.#stopGlide();
     for (const chapter of this.#chapters) this.#discard(chapter);
     this.#chapters = [];
@@ -513,6 +582,8 @@ img, svg, video {
     const last = doc.createElement("style");
     last.textContent = after;
     doc.head.append(last);
+    const layout = doc.createElement("style");
+    doc.head.append(layout);
     const mode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
     const ownVertical = !!mode && mode.startsWith("vertical");
     const vertical = decide ? ownVertical : this.#vertical;
@@ -535,7 +606,7 @@ img, svg, video {
         ? { height: "100%", width: "0" }
         : { width: "100%", height: "0" },
     );
-    last.textContent += this.#layoutCss(vertical);
+    layout.textContent = this.#layoutCss(vertical);
     this.#o.onload({ doc, index, ownVertical });
     this.#watchTouches(doc);
     this.#watchWheel(doc);
@@ -562,6 +633,8 @@ img, svg, video {
       top: 0,
       height: 0,
       overlayer: null,
+      styles: [first, last, layout],
+      measure: () => false,
       observer: null as unknown as ResizeObserver,
       unload: () => section.unload(),
     };
@@ -573,6 +646,7 @@ img, svg, video {
       iframe.style[vertical ? "width" : "height"] = `${height}px`;
       return true;
     };
+    chapter.measure = measure;
     measure();
     // The document's own window makes the observer: its callback then
     // runs in the frame the text was laid out in, before it is painted.
@@ -584,6 +658,19 @@ img, svg, video {
       if (!this.#chapters.includes(chapter)) return;
       this.#note("resized", index);
       this.#layout();
+      // Just after a restyle: a font come late has moved the line that
+      // was put back, and the reader has not moved since — once more.
+      const kept = this.#kept;
+      if (
+        kept &&
+        performance.now() < kept.until &&
+        Math.abs(this.#at - kept.at) < 2 &&
+        this.#chapters.includes(kept.line.chapter)
+      ) {
+        this.#reanchor(kept.line);
+        this.#o.onreflow();
+        return;
+      }
       // Should that have moved the reader (a strip that became shorter
       // than where they stood), it was not they who moved.
       this.#tell("anchor");
@@ -677,8 +764,8 @@ img, svg, video {
     const bottom = top + screen;
     const first = chapters[0];
     const last = chapters[chapters.length - 1];
-    if (last.top + last.height - bottom < AHEAD * screen) this.#extend(1);
-    if (top - first.top < AHEAD * screen) this.#extend(-1);
+    if (last.top + last.height - bottom < AHEAD * screen) void this.#extend(1);
+    if (top - first.top < AHEAD * screen) void this.#extend(-1);
     if (chapters.length < 2) return;
     let changed = false;
     if (
@@ -699,38 +786,48 @@ img, svg, video {
     if (changed) this.#layout();
   }
 
-  #extend(dir: 1 | -1) {
-    if (this.#loading[dir] || performance.now() < this.#retryAt[dir]) return;
+  /** Bring the next chapter onto that end. Resolves to whether one
+   *  joined. An attempt already out is the attempt; one that failed is
+   *  not made again before its time unless `now` says so. */
+  #extend(dir: 1 | -1, now = false): Promise<boolean> {
+    const out = this.#attempt[dir];
+    if (out) return out;
     const chapters = this.#chapters;
     const edge = dir > 0 ? chapters[chapters.length - 1] : chapters[0];
-    const index = this.#adjacent(edge.index, dir);
-    if (index == null) return;
+    const index = edge ? this.#adjacent(edge.index, dir) : null;
+    if (index == null) return Promise.resolve(false);
+    if (!now) {
+      if (performance.now() < this.#retryAt[dir]) return Promise.resolve(false);
+      // Without a connection a chapter that failed is not asked for
+      // again unasked: nothing has changed that would bring it.
+      if (this.#stuck[dir] != null && !this.#o.online())
+        return Promise.resolve(false);
+    }
     const generation = this.#generation;
-    this.#loading[dir] = true;
     this.#pending(dir, true);
-    this.#build(index, generation)
+    const attempt: Promise<boolean> = this.#build(index, generation)
       .then((chapter) => {
         if (generation !== this.#generation) {
           if (chapter) this.#discard(chapter);
-          return;
+          return false;
         }
-        this.#loading[dir] = false;
+        this.#attempt[dir] = null;
         this.#pending(dir, false);
-        if (!chapter) return;
+        if (!chapter) return false;
         // Still the neighbour of the end it was built for, and set the
         // way the strip (opened anew meanwhile, perhaps) now runs?
-        const now = this.#chapters;
-        const end = dir > 0 ? now[now.length - 1] : now[0];
+        const mounted = this.#chapters;
+        const end = dir > 0 ? mounted[mounted.length - 1] : mounted[0];
         if (
           !end ||
           this.#adjacent(end.index, dir) !== index ||
           chapter.vertical !== this.#vertical
         ) {
           this.#discard(chapter);
-          return;
+          return false;
         }
-        if (dir > 0) now.push(chapter);
-        else now.unshift(chapter);
+        if (dir > 0) mounted.push(chapter);
+        else mounted.unshift(chapter);
         this.#layout();
         chapter.frame.style.visibility = "";
         // (It may be the one under the reading line: a strip opened at
@@ -739,20 +836,84 @@ img, svg, video {
         const before = this.#pinned;
         this.#pin();
         this.#note("joined", index);
+        this.#unstick(dir);
         // The reader was waiting for it at the seam: they are in it now.
         if (this.#pinned !== before) this.#tell("scroll");
         this.#fill();
         this.#readOut();
+        return true;
       })
       .catch((e: unknown) => {
-        if (generation !== this.#generation) return;
+        if (generation !== this.#generation) return false;
         console.warn(e);
-        this.#loading[dir] = false;
+        this.#attempt[dir] = null;
         this.#pending(dir, false);
-        this.#retryAt[dir] = performance.now() + RETRY_MS;
         this.#note("failed", index);
+        this.#stick(dir, index);
         this.#readOut();
+        return false;
       });
+    this.#attempt[dir] = attempt;
+    return attempt;
+  }
+
+  /** The chapter at that end would not load: it is asked for again in
+   *  a while, and the reader is told if they are standing there. */
+  #stick(dir: 1 | -1, index: number) {
+    if (this.#stuck[dir] !== index) this.#said[dir] = false;
+    this.#stuck[dir] = index;
+    this.#retryAt[dir] = performance.now() + RETRY_MS;
+    const timer = this.#retryTimers[dir];
+    if (timer) clearTimeout(timer);
+    this.#retryTimers[dir] = setTimeout(() => {
+      this.#retryTimers[dir] = null;
+      if (!this.#destroyed) this.#fill();
+    }, RETRY_MS + 50);
+    this.#say(dir);
+  }
+
+  #unstick(dir: 1 | -1) {
+    const timer = this.#retryTimers[dir];
+    if (timer) clearTimeout(timer);
+    this.#retryTimers[dir] = null;
+    this.#retryAt[dir] = 0;
+    const was = this.#stuck[dir] != null;
+    this.#stuck[dir] = null;
+    this.#said[dir] = false;
+    if (was) this.#o.onrecover({ dir });
+  }
+
+  /** Tell the reader of a chapter that would not load — once, and only
+   *  when the bare paper where it should be is on their screen. */
+  #say(dir: 1 | -1) {
+    const index = this.#stuck[dir];
+    const chapters = this.#chapters;
+    if (index == null || this.#said[dir] || !chapters.length) return;
+    // (Still moving: said when the strip has come to rest.)
+    if (this.#restTimer || this.#touches) return;
+    const at = this.#at;
+    const last = chapters[chapters.length - 1];
+    const reached =
+      dir > 0
+        ? last.top + last.height < at + this.#screen - 1
+        : chapters[0].top > at + 1;
+    if (!reached) return;
+    this.#said[dir] = true;
+    this.#o.onfail({ index, dir });
+  }
+
+  /** The reader asks for the chapter at that end again, now. Resolves
+   *  to whether it joined. */
+  retry(dir: 1 | -1): Promise<boolean> {
+    return this.#extend(dir, true);
+  }
+
+  /** Something may have changed for a chapter that would not load (a
+   *  text has arrived, the connection is back): ask again at once. */
+  poke() {
+    if (this.#destroyed) return;
+    for (const dir of [1, -1] as const)
+      if (this.#stuck[dir] != null) void this.#extend(dir, true);
   }
 
   /** A chapter is on its way at this end, or no longer. */
@@ -856,19 +1017,31 @@ img, svg, video {
   }
 
   #rested() {
+    this.#restTimer = null;
     if (this.#destroyed || this.#touches) return;
     const first = this.#chapters[0];
     if (!first) return;
     // (A glide still on its way has the position: the canvas is shifted
     // when it too has come to rest.)
-    if (this.#glideTarget == null) {
-      const start = this.#adjacent(first.index, -1) == null;
-      if (start && first.top !== 0) this.#rebase(-first.top);
-      else if (!start && first.top < ORIGIN_LOW) this.#rebase(ORIGIN);
-    }
+    if (this.#glideTarget == null) this.#settleOrigin();
     this.#pin();
     this.#tell("scroll");
+    // At an end whose chapter would not come: said now (after the move
+    // that brought the reader here has been told, not before).
+    this.#say(1);
+    this.#say(-1);
     this.#readOut();
+  }
+
+  /** Put the canvas's start where it belongs: at the book's first
+   *  chapter when that is mounted, far enough before the first mounted
+   *  one otherwise. */
+  #settleOrigin() {
+    const first = this.#chapters[0];
+    if (!first) return;
+    const start = this.#adjacent(first.index, -1) == null;
+    if (start && first.top !== 0) this.#rebase(-first.top);
+    else if (!start && first.top < ORIGIN_LOW) this.#rebase(ORIGIN);
   }
 
   /** Shift the whole canvas, and the scroll position with it, in one
@@ -879,6 +1052,7 @@ img, svg, video {
     for (const chapter of this.#chapters) chapter.top += delta;
     this.#layout();
     this.#at = top + delta;
+    if (this.#kept) this.#kept.at += delta;
     this.#note(`rebased ${delta}`);
   }
 
@@ -903,14 +1077,149 @@ img, svg, video {
     )
       return;
     this.#told = { index: chapter.index, offset };
+    const range = offset < 0 ? null : this.#visible(chapter, offset);
+    this.#line = this.#lineOf(chapter, offset, range);
     this.#o.onrelocate({
       reason,
       index: chapter.index,
       fraction: Math.max(0, Math.min(1, offset / Math.max(1, chapter.height))),
       // (A last chapter the line has not reached is reported by its
       // beginning — which is on screen — and no narrower.)
-      range: offset < 0 ? null : this.#visible(chapter, offset),
+      range,
     });
+  }
+
+  /** What a re-anchoring needs of the line at the reading line: where
+   *  its text begins (a point that lives through a new layout), how far
+   *  that is from the line, and how thick the line is. Without text
+   *  there (a picture, the bare paper) the share of the chapter passed. */
+  #lineOf(chapter: Chapter, offset: number, range: Range | null): Line {
+    const fraction = offset / Math.max(1, chapter.height);
+    const line: Line = { chapter, point: null, delta: 0, thick: 0, fraction };
+    if (!range) return line;
+    const point = range.cloneRange();
+    point.collapse(true);
+    const rect = firstRect(point.cloneRange());
+    if (!rect) return line;
+    const box = this.#along(chapter, rect);
+    return {
+      chapter,
+      point,
+      delta: box.left - offset,
+      thick: box.right - box.left,
+      fraction,
+    };
+  }
+
+  /** A rect of a chapter's document as if the strip ran left to right:
+   *  `left` is a box's start along it, `right` its end. */
+  #along(chapter: Chapter, rect: DOMRect): { left: number; right: number } {
+    return chapter.vertical
+      ? { left: chapter.height - rect.right, right: chapter.height - rect.left }
+      : { left: rect.top, right: rect.bottom };
+  }
+
+  /**
+   * Take new styles and a new layout in place: every mounted chapter is
+   * styled and measured again where it stands — its frame, its document
+   * and what is drawn over it stay — and the strip is moved so that the
+   * line at the reading line is there again. Styles that change no
+   * measure (a theme) move nothing.
+   */
+  restyle() {
+    const pinned = this.#pinned;
+    if (!pinned || this.#destroyed) return;
+    // A reader who has not moved since the last restyle is put back on
+    // the line that one began with: changing a setting and changing it
+    // back ends where it started, not a line earlier each time.
+    const kept = this.#kept;
+    if (
+      kept &&
+      Math.abs(this.#at - kept.at) < 2 &&
+      this.#chapters.includes(kept.line.chapter)
+    ) {
+      this.#pinned = kept.line.chapter;
+      this.#relay(kept.line);
+      return;
+    }
+    const offset = this.#at - pinned.top;
+    const line = this.#lineOf(
+      pinned,
+      offset,
+      offset < 0 ? null : this.#visible(pinned, offset),
+    );
+    this.#relay(line);
+  }
+
+  /** The screen changed size (a window resized, a phone turned): the
+   *  text has been laid out for it already, so the line to put back is
+   *  the one last reported. */
+  #resized() {
+    const size = `${this.#scroller.clientWidth}x${this.#scroller.clientHeight}`;
+    const was = this.#size;
+    this.#size = size;
+    if (!was || was === size || !this.#pinned || this.#destroyed) return;
+    const kept = this.#kept;
+    const held =
+      kept && Math.abs(this.#at - kept.at) < 2 ? kept.line : this.#line;
+    const line = held && this.#chapters.includes(held.chapter) ? held : null;
+    if (line) this.#pinned = line.chapter;
+    this.#relay(
+      line ?? this.#lineOf(this.#pinned, this.#at - this.#pinned.top, null),
+    );
+  }
+
+  /** Style and measure every chapter again, lay them out from the one
+   *  the line is in, and put the line back. */
+  #relay(line: Line) {
+    const styles = this.#o.styles();
+    const [before, after] = Array.isArray(styles) ? styles : ["", styles];
+    for (const chapter of this.#chapters) {
+      const [first, last, layout] = chapter.styles;
+      if (first.textContent !== before) first.textContent = before;
+      if (last.textContent !== after) last.textContent = after;
+      const css = this.#layoutCss(chapter.vertical);
+      if (layout.textContent !== css) layout.textContent = css;
+    }
+    for (const chapter of this.#chapters) {
+      chapter.measure();
+      chapter.overlayer?.redraw();
+    }
+    this.#layout();
+    // (A chapter before the line that grew has pushed the ones before it
+    // back, perhaps past the canvas's start: the canvas goes with them.)
+    this.#settleOrigin();
+    this.#reanchor(line);
+    this.#kept = {
+      line,
+      at: this.#at,
+      until: performance.now() + KEEP_MS,
+    };
+    this.#note("restyled");
+    this.#o.onreflow();
+  }
+
+  /** Stand where `line` is at the reading line again. A layout that
+   *  left it where it was is not answered with a write. */
+  #reanchor(line: Line) {
+    const { chapter } = line;
+    let offset = line.fraction * chapter.height;
+    const rect = line.point ? firstRect(line.point.cloneRange()) : null;
+    if (rect) {
+      const box = this.#along(chapter, rect);
+      const thick = box.right - box.left;
+      // As far inside the line as before, by the line's new measure. (A
+      // line that began after the reading line — the head of a chapter,
+      // under its margin — keeps that distance as it was.)
+      const scale = line.delta < 0 && line.thick > 0 ? thick / line.thick : 1;
+      offset = box.left - line.delta * scale;
+    }
+    const target = chapter.top + Math.floor(offset);
+    if (Math.abs(target - this.#at) >= 1) this.#moveTo(target);
+    if (this.#kept) this.#kept.at = this.#at;
+    this.#pin();
+    this.#fill();
+    this.#tell("anchor");
   }
 
   /** The text of `chapter` on screen when the screen's leading edge is

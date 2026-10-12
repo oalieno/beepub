@@ -2248,6 +2248,10 @@ ${darkOverrides}
       onlink: handleLink,
       onpending: handlePending,
       onloadfail: handleLoadFail,
+      // The chapter the strip was stuck on has joined by itself.
+      onloadrecover: clearFailure,
+      // The strip laid its chapters out again under an open menu.
+      onreflow: followMenu,
       onavailable: () => (availability += 1),
       onghostload: handleGhostLoad,
       // Saved highlights and illustration markers ride along on every

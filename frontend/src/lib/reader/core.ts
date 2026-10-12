@@ -215,6 +215,14 @@ export interface ReaderCoreHandlers {
    *  (the scroll strip let a chapter go, or was built anew): whatever
    *  was attached to its overlayer goes with it. */
   onsectiongone?: (detail: { doc: Document; index: number }) => void;
+  /** What `onloadfail` reported is over without the reader having
+   *  asked again: the chapter the scroll strip was waiting for at its
+   *  end has joined. */
+  onloadrecover?: () => void;
+  /** The rendered sections were laid out again where they stand (the
+   *  scroll strip took new styles or a new screen size in place): what
+   *  the integration layer has placed by their text has to follow. */
+  onreflow?: () => void;
   /** One more section's document is in memory (see sectionAvailable). */
   onavailable?: () => void;
   /** A section loaded into one of the slide's ghosts (the inert
@@ -623,6 +631,9 @@ export class ReaderCore {
   #waiting: { dir: 1 | -1 | 0 } | null = null;
   /** The last destination that could not be loaded (see retry). */
   #failed: NavTarget | null = null;
+  /** The end of the scroll strip whose next chapter could not be
+   *  loaded, when that is the failure last reported (see retry). */
+  #seam: { index: number; dir: 1 | -1 } | null = null;
 
   constructor(container: HTMLElement, handlers: ReaderCoreHandlers = {}) {
     this.#handlers = handlers;
@@ -657,7 +668,11 @@ export class ReaderCore {
     this.#dropStrip();
     const prefetch = new ImagePrefetcher(loader, { crawl });
     this.#prefetch = prefetch;
-    prefetch.onavailable = () => this.#handlers.onavailable?.();
+    prefetch.onavailable = () => {
+      // (A chapter the strip was waiting for may be the one.)
+      this.strip?.poke();
+      this.#handlers.onavailable?.();
+    };
     this.#abandonWait();
     this.#failed = null;
     this.#prefetchIndex = -1;
@@ -808,6 +823,17 @@ export class ReaderCore {
 
   /** Ask again for the destination that last failed to load. */
   async retry(): Promise<NavTarget | null> {
+    // On the scroll strip a chapter that failed at an end is not a place
+    // to go to: the reader is where they were, at the seam, and asking
+    // again is bringing that chapter onto the strip.
+    const seam = this.#seam;
+    if (seam && this.strip) {
+      if (await this.strip.retry(seam.dir)) return { index: seam.index };
+      // (Joined meanwhile, or the strip has gone elsewhere: no failure.)
+      if (this.#seam !== seam) return null;
+      this.#handlers.onloadfail?.({ index: seam.index });
+      throw new SectionLoadError(seam.index);
+    }
     const target = this.#failed;
     if (!target) return null;
     await this.#jump(target);
@@ -818,6 +844,7 @@ export class ReaderCore {
     // The latest destination is the one the reader wants.
     this.#abandonWait();
     this.#failed = null;
+    this.#seam = null;
     await this.#reach(target, 0, async () => {
       this.#cancelTurn();
       await this.#show(withTextStart(target));
@@ -1283,6 +1310,18 @@ export class ReaderCore {
           this.#handlers.onoverlayer?.({ doc, index, overlayer });
         },
         ongone: (detail) => this.#handlers.onsectiongone?.(detail),
+        onfail: (seam) => {
+          this.#failed = null;
+          this.#seam = seam;
+          this.#handlers.onloadfail?.({ index: seam.index });
+        },
+        onrecover: ({ dir }) => {
+          if (this.#seam?.dir !== dir) return;
+          this.#seam = null;
+          this.#handlers.onloadrecover?.();
+        },
+        online: () => globalThis.navigator?.onLine !== false,
+        onreflow: () => this.#handlers.onreflow?.(),
       });
       if (target) this.#land(target, (to) => this.#show(to, "anchor"));
       return;
@@ -1315,6 +1354,7 @@ export class ReaderCore {
     const strip = this.strip;
     if (!strip) return;
     this.strip = null;
+    this.#seam = null;
     strip.destroy();
     this.paginator.style.display = "";
   }
@@ -1330,9 +1370,10 @@ export class ReaderCore {
     return JSON.stringify([this.#composedStyles(), this.#stripLayout]);
   }
 
-  /** A chapter is styled when it is built. When the styles or the layout
-   *  change under a strip that is being read, it is built anew at the
-   *  reader's place — once for however many settings changed together. */
+  /** New styles or a new layout under a strip that is being read are
+   *  taken in place (strip.restyle) — once for however many settings
+   *  changed together. (A change of the writing direction is not one of
+   *  them: see setWritingMode.) */
   #restyleStrip() {
     if (!this.strip) return;
     if (this.#stripLookTimer) clearTimeout(this.#stripLookTimer);
@@ -1342,12 +1383,7 @@ export class ReaderCore {
       const look = this.#lookOfStrip();
       if (!strip || look === this.#stripLook) return;
       this.#stripLook = look;
-      const at = this.lastLocation;
-      const target = at ? this.resolve(at.startCfi) : null;
-      if (!target || strip.pinnedIndex == null) return;
-      strip.open(withTextStart(target), "anchor").catch((e: unknown) => {
-        console.error(e);
-      });
+      strip.restyle();
     }, 0);
   }
 
