@@ -495,7 +495,9 @@ ${darkOverrides}
   function turn(side: "left" | "right") {
     const c = core;
     if (!c) return;
-    const forward = (side === "right") !== c.advancesLeftward();
+    // A leftward strip advances leftward, whatever the book declares.
+    const leftward = c.strip?.vertical || c.advancesLeftward();
+    const forward = (side === "right") !== leftward;
     if (forward) goNext();
     else goPrev();
   }
@@ -534,11 +536,15 @@ ${darkOverrides}
     const now = Date.now();
     if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
     if (now - imageZoomAt < 700) return;
-    const doc = core.getContents()[0]?.doc;
-    const win = doc?.defaultView;
-    if (showMenu || selectedRange || (win && hasLiveSelection(win))) {
+    // (Every rendered section: the scroll strip has several, and the
+    // selection may be in any of them.)
+    const docs = core.getContents().map((content) => content.doc);
+    const selecting = docs.some(
+      (doc) => doc.defaultView && hasLiveSelection(doc.defaultView),
+    );
+    if (showMenu || selectedRange || selecting) {
       dismissMenu();
-      clearSelectionIn(doc);
+      for (const doc of docs) clearSelectionIn(doc);
       return;
     }
     if (onCoveredTarget(e)) return;
@@ -1576,7 +1582,7 @@ ${darkOverrides}
     const text = selectedText;
     const prefix = selectedPrefix;
     const suffix = selectedSuffix;
-    const index = core?.currentIndex() ?? null;
+    const index = selectedIndex ?? core?.currentIndex() ?? null;
     dismissMenu();
     if (!cfi || !text) return null;
     const colorRaw = raw ?? lastHighlightRaw;
@@ -1732,6 +1738,10 @@ ${darkOverrides}
   let selectedText = $state("");
   let selectedRange: Range | null = null;
   let selectedCfi = "";
+  /** The section the selection is in, and its document: on the scroll
+   *  strip that is the chapter touched, not always the one being read. */
+  let selectedIndex: number | null = null;
+  let selectedDoc: Document | null = null;
   let selectedPrefix = "";
   let selectedSuffix = "";
   /** The saved highlight the menu is on (restyle/remove), or null for a
@@ -1765,14 +1775,13 @@ ${darkOverrides}
     text: string,
     existing: HighlightOut | null = null,
   ) {
-    const frame = doc.defaultView?.frameElement;
-    const fr = frame?.getBoundingClientRect();
-    const wr = wrapper.getBoundingClientRect();
-    const rect = range.getBoundingClientRect();
-    const x = rect.left + rect.width / 2 + (fr?.left ?? 0) - wr.left;
-    const y = rect.top - 8 + (fr?.top ?? 0) - wr.top;
+    const { x, y } = menuPoint(doc, range);
     const c = core;
-    const index = c?.currentIndex();
+    const index = sectionOf(doc);
+    // One selection at a time: each chapter of the strip has its own.
+    if (c?.scrolled)
+      for (const other of c.getContents())
+        if (other.doc !== doc) clearSelectionIn(other.doc);
     let cfi = "";
     try {
       cfi = c && index != null ? c.cfiOf(index, range) : "";
@@ -1782,6 +1791,8 @@ ${darkOverrides}
     selectedRange = range;
     selectedText = text;
     selectedCfi = cfi;
+    selectedIndex = index;
+    selectedDoc = doc;
     const ctx = quoteContext(range);
     selectedPrefix = ctx.prefix;
     selectedSuffix = ctx.suffix;
@@ -1798,6 +1809,59 @@ ${darkOverrides}
     });
   }
 
+  /** Where the menu stands for a range of a section document, in the
+   *  wrapper's coordinates. The frame's rect already has the paginator's
+   *  scroll — and the scroll strip's, down or leftward — in it. */
+  function menuPoint(doc: Document, range: Range) {
+    const fr = doc.defaultView?.frameElement?.getBoundingClientRect();
+    const wr = wrapper.getBoundingClientRect();
+    const rect = range.getBoundingClientRect();
+    return {
+      x: rect.left + rect.width / 2 + (fr?.left ?? 0) - wr.left,
+      y: rect.top - 8 + (fr?.top ?? 0) - wr.top,
+      // Whether any of the range is on screen.
+      visible:
+        rect.bottom + (fr?.top ?? 0) > wr.top &&
+        rect.top + (fr?.top ?? 0) < wr.bottom &&
+        rect.right + (fr?.left ?? 0) > wr.left &&
+        rect.left + (fr?.left ?? 0) < wr.right,
+    };
+  }
+
+  /** The strip scrolled under an open menu: it goes with its text, and
+   *  away with it when that has left the screen. */
+  let menuFollowAsked = false;
+  function followMenu() {
+    if (!showMenu || menuFollowAsked) return;
+    menuFollowAsked = true;
+    requestAnimationFrame(() => {
+      menuFollowAsked = false;
+      const range = selectedRange;
+      const doc = selectedDoc;
+      if (!showMenu || !range || !doc) return;
+      const { x, y, visible } = menuPoint(doc, range);
+      if (visible) setClampedMenuPosition(x, y);
+      else dismissMenu();
+    });
+  }
+
+  /** The section a rendered document is: the one on screen in the paged
+   *  modes, any chapter mounted on the scroll strip. */
+  function sectionOf(doc: Document): number | null {
+    const c = core;
+    if (!c) return null;
+    return (
+      c.getContents().find((content) => content.doc === doc)?.index ??
+      c.currentIndex()
+    );
+  }
+
+  /** How the highlight layer is asked about a document: by the document
+   *  on the scroll strip, where every chapter has its own surface. */
+  function surfaceOf(doc: Document): Document | undefined {
+    return core?.scrolled ? doc : undefined;
+  }
+
   function hasLiveSelection(win: Window) {
     const sel = win.getSelection();
     return !!sel && !sel.isCollapsed && sel.toString().trim() !== "";
@@ -1805,7 +1869,18 @@ ${darkOverrides}
 
   /** Non-iOS: the native selection is the source of truth. */
   function tryShowMenuFromSelection(doc: Document, win: Window) {
-    if (!hasLiveSelection(win)) return;
+    if (!hasLiveSelection(win)) {
+      // On the strip a drag can end over another chapter than the one it
+      // selected in: the selection is where it began.
+      const c = core;
+      if (!c?.scrolled) return;
+      const other = c
+        .getContents()
+        .find((x) => x.doc.defaultView && hasLiveSelection(x.doc.defaultView));
+      if (other && other.doc !== doc)
+        tryShowMenuFromSelection(other.doc, other.doc.defaultView!);
+      return;
+    }
     const sel = win.getSelection()!;
     const snapped = snapRangeToWordBounds(sel.getRangeAt(0));
     const text = snapped.toString().trim();
@@ -1827,7 +1902,8 @@ ${darkOverrides}
     showMenu = false;
     selectedRange = null;
     existingHighlight = null;
-    clearSelectionIn(core?.getContents()[0]?.doc);
+    clearSelectionIn(selectedDoc ?? core?.getContents()[0]?.doc);
+    selectedDoc = null;
   }
 
   async function handleCopy() {
@@ -1905,18 +1981,18 @@ ${darkOverrides}
   // ------------------------------------------------------------ gestures
 
   /** The saved highlight under a point of the section document, if any. */
-  function highlightAt(x: number, y: number) {
-    const key = layer?.hitTest(x, y);
+  function highlightAt(x: number, y: number, doc: Document) {
+    const key = layer?.hitTest(x, y, surfaceOf(doc));
     if (!key) return null;
     const hl = highlights.find((h) => h.id === key);
-    const range = layer?.rangeOf(key);
+    const range = layer?.rangeOf(key, surfaceOf(doc));
     return hl && range ? { hl, range } : null;
   }
 
   /** The illustration whose marker is under a point (markers sit above
    *  the marks in the layer's hit test). */
-  function illustrationAt(x: number, y: number) {
-    const key = layer?.hitTest(x, y);
+  function illustrationAt(x: number, y: number, doc: Document) {
+    const key = layer?.hitTest(x, y, surfaceOf(doc));
     if (!key?.startsWith(ILLUSTRATION_KEY)) return null;
     const id = key.slice(ILLUSTRATION_KEY.length);
     return illustrations.find((ill) => ill.id === id) ?? null;
@@ -1994,6 +2070,9 @@ ${darkOverrides}
     };
   }
 
+  /** The strips whose scrolling the menu already follows. */
+  const followed = new WeakSet<HTMLElement>();
+
   function attachGestures(doc: Document) {
     const win = doc.defaultView;
     if (!win) return;
@@ -2035,14 +2114,14 @@ ${darkOverrides}
       if (now - menuShownAt < 500 || now - menuDismissedAt < 700) return;
       if (now - imageZoomAt < 700) return;
       if (hasLiveSelection(win)) return;
-      const ill = illustrationAt(e.clientX, e.clientY);
+      const ill = illustrationAt(e.clientX, e.clientY, doc);
       if (ill) {
         // A generating one is a wait cursor, not a target.
         dismissMenu();
         if (ill.status === "completed") onillustrationclick?.(ill);
         return;
       }
-      const hit = highlightAt(e.clientX, e.clientY);
+      const hit = highlightAt(e.clientX, e.clientY, doc);
       if (hit) {
         showMenuFor(doc, hit.range, hit.hl.text, hit.hl);
         return;
@@ -2057,10 +2136,16 @@ ${darkOverrides}
       else turn(zone);
     });
 
-    // A chapter of the scrolled strip is the browser's to scroll and, for
-    // now, to select in: the swipe, the long-press selection and their
-    // menu are the paged reader's.
-    if (c.scrolled) return;
+    // (On the scroll strip the same listeners hear the same gestures;
+    // what they may not do there is page — see swipeCallbacks — or take
+    // the wheel, which is the browser's to scroll with.)
+    const scrolled = c.scrolled;
+    if (scrolled && c.strip && !followed.has(c.strip.scroller)) {
+      followed.add(c.strip.scroller);
+      c.strip.scroller.addEventListener("scroll", followMenu, {
+        passive: true,
+      });
+    }
 
     const swipe = swipeCallbacks(c);
 
@@ -2074,6 +2159,10 @@ ${darkOverrides}
         },
         isMenuVisible: () => showMenu,
         getSelectionTint: selectionTint,
+        // A long press selects and its drag draws the selection out: the
+        // strip must not follow that finger as it follows any other.
+        onselectstart: () => core?.strip?.hold(true),
+        onselectend: () => core?.strip?.hold(false),
       });
     } else {
       setupSwipeNavigation(doc, win, {
@@ -2083,13 +2172,15 @@ ${darkOverrides}
       doc.addEventListener("mouseup", () =>
         setTimeout(() => tryShowMenuFromSelection(doc, win), 0),
       );
-      doc.addEventListener("wheel", handleWheel, { passive: false });
+      if (!scrolled)
+        doc.addEventListener("wheel", handleWheel, { passive: false });
       // Saved highlights and illustration markers are click targets: say
       // so with the cursor (a generating illustration says "wait").
       doc.addEventListener("mousemove", (e: MouseEvent) => {
         if (!doc.body) return;
-        const ill = illustrationAt(e.clientX, e.clientY);
-        const over = ill || !!layer?.hitTest(e.clientX, e.clientY);
+        const ill = illustrationAt(e.clientX, e.clientY, doc);
+        const over =
+          ill || !!layer?.hitTest(e.clientX, e.clientY, surfaceOf(doc));
         doc.body.style.cursor = !over
           ? ""
           : ill && ill.status !== "completed"
@@ -2144,8 +2235,16 @@ ${darkOverrides}
     const c = new ReaderCore(container, {
       onload: handleLoad,
       onrelocate: handleRelocate,
+      // The scroll strip has a section per mounted chapter, each as much
+      // the reader's as the next; the paginator has the one on screen.
       onoverlayer: ({ doc, index, overlayer }) =>
-        layer?.attach(overlayer, doc, index),
+        core?.scrolled
+          ? layer?.attachPage(overlayer, doc, index)
+          : layer?.attach(overlayer, doc, index),
+      onsectiongone: ({ doc }) => {
+        if (selectedDoc === doc) dismissMenu();
+        layer?.detachPage(doc);
+      },
       onlink: handleLink,
       onpending: handlePending,
       onloadfail: handleLoadFail,

@@ -289,7 +289,12 @@ test("a chapter slow to come is waited for on bare paper, and announced only aft
   await expect(pending).toBeHidden();
   const after = await state(page);
   expect(after.scrollTop).toBe(before.scrollTop);
-  expect(after.screenTop).toBe(before.screenTop);
+  // The reader stood at the seam: the chapter that came begins exactly
+  // at the screen's leading edge, and is the one they are in — told so
+  // without another scroll.
+  expect(after.pinned).toBe(before.pinned + 1);
+  expect(after.screenTop).toBe(0);
+  await expect.poll(async () => (await place(page)).index).toBe(after.pinned);
 });
 
 for (const [name, fixture, index] of [

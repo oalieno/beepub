@@ -1,5 +1,7 @@
 /**
- * AnnotationLayer — saved highlights drawn on the paginator's overlayer.
+ * AnnotationLayer — saved highlights drawn on the paginator's overlayer
+ * (and, in the scroll mode, on the overlayer of every chapter mounted on
+ * the strip: its "pages", each as much the reader's as the next).
  *
  * Positions are CFIs (the shape the sync contract stores); the layer
  * resolves them to Ranges in the current section's document and hands the
@@ -223,6 +225,10 @@ export class AnnotationLayer {
    *  else — the page-turn slide's ghosts, each under its own key. Never
    *  hit-tested. */
   #mirrors = new Map<object, Surface>();
+  /** The scroll strip's mounted chapters, by their documents. Unlike the
+   *  mirrors they are read, tapped and marked: each is hit-tested and
+   *  asked for its ranges like the section on screen. */
+  #pages = new Map<Document, Surface>();
   #resolve: (cfi: string) => NavTarget | null;
 
   /** `resolve` turns a CFI into the paginator's navigation target (section
@@ -245,6 +251,19 @@ export class AnnotationLayer {
   detach() {
     this.#main = null;
     this.#mirrors.clear();
+    this.#pages.clear();
+  }
+
+  /** A chapter came onto the scroll strip: draw what belongs there. */
+  attachPage(overlayer: OverlayerInstance, doc: Document, index: number) {
+    const page = surface(overlayer, doc, index);
+    this.#pages.set(doc, page);
+    for (const item of this.#items.values()) this.#draw(page, item);
+  }
+
+  /** That chapter has left the strip. */
+  detachPage(doc: Document) {
+    this.#pages.delete(doc);
   }
 
   /** Another rendering (`key` names it) got a section: draw what
@@ -267,9 +286,20 @@ export class AnnotationLayer {
   }
 
   #surfaces(): Surface[] {
-    return this.#main
-      ? [this.#main, ...this.#mirrors.values()]
-      : Array.from(this.#mirrors.values());
+    return [
+      ...(this.#main ? [this.#main] : []),
+      ...this.#mirrors.values(),
+      ...this.#pages.values(),
+    ];
+  }
+
+  /** The surface a caller means: a mirror by its key, a page of the
+   *  strip by its document, the section on screen when none is named. */
+  #surfaceOf(where?: object): Surface | null {
+    if (!where) return this.#main;
+    return (
+      this.#mirrors.get(where) ?? this.#pages.get(where as Document) ?? null
+    );
   }
 
   set(item: Annotation) {
@@ -297,9 +327,10 @@ export class AnnotationLayer {
    *  markers sit above the marks whatever the draw order — the old
    *  reader's overlay buttons did, and a passage that is both
    *  highlighted and illustrated opens its picture on tap. With
-   *  `mirror`, the same question of that rendering and its document. */
-  hitTest(x: number, y: number, mirror?: object): string | null {
-    const drawn = (mirror ? this.#mirrors.get(mirror) : this.#main)?.drawn;
+   *  `where` (a mirror's key, or the document of a chapter on the scroll
+   *  strip), the same question of that rendering and its document. */
+  hitTest(x: number, y: number, where?: object): string | null {
+    const drawn = this.#surfaceOf(where)?.drawn;
     if (!drawn) return null;
     const hit = (kinds: (kind: AnnotationKind) => boolean) => {
       // Most recently drawn first, as the overlayer's own hit test does;
@@ -321,13 +352,15 @@ export class AnnotationLayer {
     );
   }
 
-  /** The drawn Range of an annotation in the current section. */
-  rangeOf(key: string): Range | null {
-    return this.#main?.drawn.get(key)?.range ?? null;
+  /** The drawn Range of an annotation in the current section (or in
+   *  the strip's chapter whose document is given). */
+  rangeOf(key: string, where?: object): Range | null {
+    return this.#surfaceOf(where)?.drawn.get(key)?.range ?? null;
   }
 
   redraw() {
     this.#main?.overlayer.redraw();
+    for (const page of this.#pages.values()) page.overlayer.redraw();
   }
 
   #draw(s: Surface, item: Annotation) {

@@ -35,6 +35,11 @@ export interface IOSTouchCallbacks {
   /** The swipe will get no onswipeend (the system cancelled the touch,
    *  or a new one began): whatever followed the finger goes back. */
   onswipecancel?: () => void;
+  /** A long press has begun a selection / the finger that made it is
+   *  up. Between the two a drag extends the selection: whatever would
+   *  otherwise follow the finger (a scrolled strip) must hold still. */
+  onselectstart?: () => void;
+  onselectend?: () => void;
   /** Called on quick tap while menu is visible */
   ontapdismiss: () => void;
   /** Whether the highlight menu is currently shown */
@@ -356,6 +361,7 @@ export function setupIOSTouchSelection(
           anchorOffset = range.startOffset;
           touchState = "selecting";
           didDragSelect = false;
+          callbacks.onselectstart?.();
           emitCurrentRange();
         } else {
           touchState = "idle";
@@ -418,6 +424,7 @@ export function setupIOSTouchSelection(
         // WKWebView can delay the synthesized click well past touchend
         // (up to ~350ms in iframes without a viewport meta).
         suppressClickUntil = Date.now() + 700;
+        callbacks.onselectend?.();
         if (didDragSelect) emitCurrentRange();
       } else if (touchState === "swiping") {
         if (callbacks.onswipeend?.(vx, vy)) {
@@ -440,6 +447,7 @@ export function setupIOSTouchSelection(
   // The system took the touch away (an edge gesture, a notification):
   // no touchend follows.
   doc.addEventListener("touchcancel", () => {
+    if (touchState === "selecting") callbacks.onselectend?.();
     if (touchState !== "swiping") return;
     touchState = "idle";
     callbacks.onswipecancel?.();

@@ -29,8 +29,10 @@
  * into it the line is, and the text on screen from the line on; one that
  * would say what the last one said is not made.
  *
- * Not here yet: highlights, the selection menu, footnotes (slice ②); a
- * chapter that fails to load says nothing (slice ③).
+ * Each chapter carries an overlayer (the core's, for the highlight
+ * layer) over its frame, redrawn when the chapter changes size.
+ *
+ * Not here yet: a chapter that fails to load says nothing (slice ③).
  */
 import type { Book, NavTarget } from "./core";
 import { getVisibleRange } from "./vendor/foliate/paginator.js";
@@ -70,6 +72,22 @@ export interface StripOptions {
     ownVertical: boolean;
   }) => void;
   onrelocate: (detail: StripRelocation) => void;
+  /** A chapter is measured and about to stand on the strip: `attach`
+   *  takes the overlayer that is to lie over it. */
+  onoverlayer: (detail: {
+    doc: Document;
+    index: number;
+    attach: (overlayer: StripOverlayer) => void;
+  }) => void;
+  /** A chapter's document is gone (let go, or the strip built anew). */
+  ongone: (detail: { doc: Document; index: number }) => void;
+}
+
+/** What the strip asks of an overlayer: an element to lay over the
+ *  chapter (sized to it, in its document's coordinates) and a redraw. */
+export interface StripOverlayer {
+  element: Element;
+  redraw(): void;
 }
 
 export interface StripLogEntry {
@@ -117,6 +135,7 @@ interface Chapter {
   vertical: boolean;
   top: number;
   height: number;
+  overlayer: StripOverlayer | null;
   observer: ResizeObserver;
   unload: () => void;
 }
@@ -130,6 +149,8 @@ export class ScrollStrip {
   #chapters: Chapter[] = [];
   #pinned: Chapter | null = null;
   #vertical = false;
+  /** A selection is being drawn out by a finger: the strip holds still. */
+  #held = false;
   #loading: Record<1 | -1, boolean> = { 1: false, [-1]: false };
   #retryAt: Record<1 | -1, number> = { 1: 0, [-1]: 0 };
   #generation = 0;
@@ -223,11 +244,12 @@ export class ScrollStrip {
 
   #setAxis(vertical: boolean) {
     this.#vertical = vertical;
+    const scroll = this.#held ? "hidden" : "auto";
     Object.assign(
       this.#scroller.style,
       vertical
-        ? { overflowX: "auto", overflowY: "hidden", direction: "rtl" }
-        : { overflowX: "hidden", overflowY: "auto", direction: "ltr" },
+        ? { overflowX: scroll, overflowY: "hidden", direction: "rtl" }
+        : { overflowX: "hidden", overflowY: scroll, direction: "ltr" },
     );
     Object.assign(
       this.#canvas.style,
@@ -281,13 +303,16 @@ export class ScrollStrip {
   }
 
   /** The mounted chapters' documents, the one being read first. */
-  getContents(): { index: number; doc: Document }[] {
+  getContents(): {
+    index: number;
+    doc: Document;
+    overlayer: StripOverlayer | null;
+  }[] {
     const pinned = this.#pinned;
     const rest = this.#chapters.filter((chapter) => chapter !== pinned);
-    return (pinned ? [pinned, ...rest] : rest).map(({ index, doc }) => ({
-      index,
-      doc,
-    }));
+    return (pinned ? [pinned, ...rest] : rest).map(
+      ({ index, doc, overlayer }) => ({ index, doc, overlayer }),
+    );
   }
 
   /** The book's last chapter is mounted and its end is on screen. */
@@ -295,6 +320,15 @@ export class ScrollStrip {
     const last = this.#chapters[this.#chapters.length - 1];
     if (!last || this.#adjacent(last.index, 1) != null) return false;
     return this.#at + this.#screen >= last.top + last.height - 1;
+  }
+
+  /** Keep the strip from following the finger (true) while a long
+   *  press's selection is drawn out, and give it back (false). Where it
+   *  stands is not changed by either. */
+  hold(on: boolean) {
+    if (on === this.#held) return;
+    this.#held = on;
+    this.#setAxis(this.#vertical);
   }
 
   setBackground(color: string) {
@@ -311,10 +345,19 @@ export class ScrollStrip {
     const chapter = this.#chapters.find((c) => c.index === target.index);
     if (!chapter) return this.open(target, reason);
     this.#stopGlide();
-    this.#at = chapter.top + this.#offsetOf(chapter, target.anchor);
+    this.#moveTo(chapter.top + this.#offsetOf(chapter, target.anchor));
     this.#pin();
     this.#fill();
     this.#tell(reason, true);
+  }
+
+  /** Stand at `value` along the strip, or as near as the canvas lets
+   *  the screen go. (Kept within the canvas here, not left to the
+   *  scroller: what it reports of itself right after a write is not
+   *  always what it settles on, and the place told must be the place.) */
+  #moveTo(value: number) {
+    const max = Math.max(0, this.#extent - this.#screen);
+    this.#at = Math.max(0, Math.min(max, value));
   }
 
   /** Build the strip anew around `target`. What is on screen stays
@@ -332,12 +375,13 @@ export class ScrollStrip {
     this.#stopGlide();
     for (const old of this.#chapters) this.#discard(old);
     this.#setAxis(chapter.vertical);
+    chapter.frame.style[chapter.vertical ? "height" : "width"] = "100%";
     chapter.top = this.#adjacent(target.index, -1) == null ? 0 : ORIGIN;
     this.#chapters = [chapter];
     this.#pinned = chapter;
     this.#layout();
     chapter.frame.style.visibility = "";
-    this.#at = chapter.top + this.#offsetOf(chapter, target.anchor);
+    this.#moveTo(chapter.top + this.#offsetOf(chapter, target.anchor));
     this.#fill();
     this.#tell(reason, true);
   }
@@ -442,7 +486,9 @@ img, svg, video {
     frame.style.visibility = "hidden";
     frame.dataset.index = String(index);
     const iframe = document.createElement("iframe");
-    iframe.setAttribute("sandbox", "allow-same-origin");
+    // As the paginator's frames (on iOS the gesture layer's CSP keeps a
+    // book's scripts from running, there as here).
+    iframe.setAttribute("sandbox", "allow-same-origin allow-scripts");
     iframe.setAttribute("scrolling", "no");
     iframe.style.display = "block";
     iframe.style.border = "0";
@@ -470,11 +516,18 @@ img, svg, video {
     const mode = doc.defaultView?.getComputedStyle(doc.body).writingMode;
     const ownVertical = !!mode && mode.startsWith("vertical");
     const vertical = decide ? ownVertical : this.#vertical;
+    // Across the strip a chapter has the screen. The chapter the strip
+    // is opened on is measured before the strip runs its way (what is on
+    // screen stays as it is meanwhile): it is given the screen's size in
+    // so many pixels, and the canvas's once it stands on it (see open).
+    const across = decide
+      ? `${vertical ? this.#scroller.clientHeight : this.#scroller.clientWidth}px`
+      : "100%";
     Object.assign(
       frame.style,
       vertical
-        ? { top: "0", right: "0", height: "100%" }
-        : { top: "0", left: "0", width: "100%" },
+        ? { top: "0", right: "0", height: across }
+        : { top: "0", left: "0", width: across },
     );
     Object.assign(
       iframe.style,
@@ -508,6 +561,7 @@ img, svg, video {
       vertical,
       top: 0,
       height: 0,
+      overlayer: null,
       observer: null as unknown as ResizeObserver,
       unload: () => section.unload(),
     };
@@ -524,11 +578,25 @@ img, svg, video {
     // runs in the frame the text was laid out in, before it is painted.
     const Observer = doc.defaultView?.ResizeObserver ?? ResizeObserver;
     chapter.observer = new Observer(() => {
-      if (!measure() || !this.#chapters.includes(chapter)) return;
+      if (!measure()) return;
+      // The marks are measured from the text: where it went, they go.
+      chapter.overlayer?.redraw();
+      if (!this.#chapters.includes(chapter)) return;
       this.#note("resized", index);
       this.#layout();
+      // Should that have moved the reader (a strip that became shorter
+      // than where they stood), it was not they who moved.
+      this.#tell("anchor");
     });
     chapter.observer.observe(doc.documentElement);
+    this.#o.onoverlayer({
+      doc,
+      index,
+      attach: (overlayer) => {
+        chapter.overlayer = overlayer;
+        frame.append(overlayer.element);
+      },
+    });
     this.#note("built", index, performance.now() - started);
     this.#note("styled", index, work);
     return chapter;
@@ -536,6 +604,7 @@ img, svg, video {
 
   #discard(chapter: Chapter) {
     chapter.observer.disconnect();
+    this.#o.ongone({ doc: chapter.doc, index: chapter.index });
     chapter.frame.remove();
     chapter.unload();
   }
@@ -664,7 +733,14 @@ img, svg, video {
         else now.unshift(chapter);
         this.#layout();
         chapter.frame.style.visibility = "";
+        // (It may be the one under the reading line: a strip opened at
+        // the book's end stands before its only chapter until the one
+        // before has joined. Where each stands is unchanged.)
+        const before = this.#pinned;
+        this.#pin();
         this.#note("joined", index);
+        // The reader was waiting for it at the seam: they are in it now.
+        if (this.#pinned !== before) this.#tell("scroll");
         this.#fill();
         this.#readOut();
       })
@@ -809,23 +885,31 @@ img, svg, video {
   /** Report where the reader is — unless it is where the last report
    *  said (`force`: a destination reached is reported even then). */
   #tell(reason: string, force = false) {
-    const pinned = this.#pinned;
-    if (!pinned || this.#destroyed) return;
-    const offset = this.#at - pinned.top;
+    if (!this.#pinned || this.#destroyed) return;
+    // The place is the chapter under the reading line — except at the
+    // very end of the book, where it is the last chapter though that be
+    // too short to reach the line: a finished book is in its last
+    // chapter, by name and by the position saved. (What is pinned, and
+    // so the layout, is the chapter under the line all the same.)
+    const last = this.#chapters[this.#chapters.length - 1];
+    const chapter = this.atEnd && last ? last : this.#pinned;
+    const offset = this.#at - chapter.top;
     const told = this.#told;
     if (
       !force &&
       told &&
-      told.index === pinned.index &&
+      told.index === chapter.index &&
       Math.abs(told.offset - offset) < 1
     )
       return;
-    this.#told = { index: pinned.index, offset };
+    this.#told = { index: chapter.index, offset };
     this.#o.onrelocate({
       reason,
-      index: pinned.index,
-      fraction: Math.max(0, Math.min(1, offset / Math.max(1, pinned.height))),
-      range: this.#visible(pinned, offset),
+      index: chapter.index,
+      fraction: Math.max(0, Math.min(1, offset / Math.max(1, chapter.height))),
+      // (A last chapter the line has not reached is reported by its
+      // beginning — which is on screen — and no narrower.)
+      range: offset < 0 ? null : this.#visible(chapter, offset),
     });
   }
 

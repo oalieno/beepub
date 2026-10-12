@@ -211,6 +211,10 @@ export interface ReaderCoreHandlers {
    *  never for the book's first page — open() just rejects). The reader
    *  is where it was; `retry()` asks for that destination again. */
   onloadfail?: (detail: { index: number }) => void;
+  /** A rendered section's document is gone while the reader reads on
+   *  (the scroll strip let a chapter go, or was built anew): whatever
+   *  was attached to its overlayer goes with it. */
+  onsectiongone?: (detail: { doc: Document; index: number }) => void;
   /** One more section's document is in memory (see sectionAvailable). */
   onavailable?: () => void;
   /** A section loaded into one of the slide's ghosts (the inert
@@ -1273,6 +1277,12 @@ export class ReaderCore {
         reducedMotion: prefersReducedMotion,
         onload: (detail) => this.#onStripLoad(detail),
         onrelocate: (detail) => this.#onStripRelocate(detail),
+        onoverlayer: ({ doc, index, attach }) => {
+          const overlayer = new Overlayer();
+          attach(overlayer);
+          this.#handlers.onoverlayer?.({ doc, index, overlayer });
+        },
+        ongone: (detail) => this.#handlers.onsectiongone?.(detail),
       });
       if (target) this.#land(target, (to) => this.#show(to, "anchor"));
       return;
@@ -1581,7 +1591,12 @@ export class ReaderCore {
   /** The rendered sections, the one being read first: one of them in
    *  the paged modes, every chapter mounted on the strip in "scroll". */
   getContents(): ReturnType<PaginatorElement["getContents"]> {
-    return this.strip ? this.strip.getContents() : this.paginator.getContents();
+    if (!this.strip) return this.paginator.getContents();
+    return this.strip.getContents().map(({ index, doc, overlayer }) => ({
+      index,
+      doc,
+      overlayer: (overlayer as OverlayerInstance | null) ?? undefined,
+    }));
   }
 
   /** A section's parsed, unrendered document — the DOM that kosync
