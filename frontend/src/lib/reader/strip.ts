@@ -64,6 +64,9 @@ const SETTLE_MS = 3000;
 /** No scroll and no finger for this long: the strip is at rest. */
 const REST_MS = 200;
 const RETRY_MS = 5000;
+/** A chapter on its way is not announced before this: a spinner that
+ *  comes and goes at once is worse than the bare paper. */
+const SPINNER_AFTER_MS = 400;
 
 interface Chapter {
   index: number;
@@ -93,6 +96,15 @@ export class ScrollStrip {
   #frameAsked = false;
   #restTimer: ReturnType<typeof setTimeout> | null = null;
   #destroyed = false;
+  /** One spinner for each end of the strip, on the bare paper there. */
+  #spinners: Record<1 | -1, HTMLDivElement>;
+  #spinnerTimers: Record<1 | -1, ReturnType<typeof setTimeout> | null> = {
+    1: null,
+    [-1]: null,
+  };
+  #extent = 0;
+  #wheelTarget: number | null = null;
+  #wheelFrame = 0;
   log: StripLogEntry[] = [];
 
   constructor(options: StripOptions) {
@@ -110,6 +122,30 @@ export class ScrollStrip {
     const canvas = document.createElement("div");
     canvas.style.position = "relative";
     scroller.append(canvas);
+    const spinner = () => {
+      const el = document.createElement("div");
+      el.dataset.testid = "scroll-strip-pending";
+      Object.assign(el.style, {
+        position: "absolute",
+        width: "20px",
+        height: "20px",
+        margin: "-10px",
+        borderRadius: "50%",
+        border: "2px solid rgba(128,128,128,.25)",
+        borderTopColor: "rgba(128,128,128,.9)",
+        display: "none",
+      });
+      el.animate(
+        [{ transform: "rotate(0)" }, { transform: "rotate(360deg)" }],
+        {
+          duration: 800,
+          iterations: Infinity,
+        },
+      );
+      canvas.append(el);
+      return el;
+    };
+    this.#spinners = { 1: spinner(), [-1]: spinner() };
     const readout = document.createElement("div");
     readout.dataset.testid = "scroll-strip-readout";
     Object.assign(readout.style, {
@@ -202,6 +238,9 @@ export class ScrollStrip {
     this.#chapters = [];
     this.#pinned = null;
     this.#loading = { 1: false, [-1]: false };
+    this.#pending(1, false);
+    this.#pending(-1, false);
+    this.#wheelTarget = null;
     this.#decided = false;
     const chapter = await this.#build(target.index, generation);
     if (!chapter) return;
@@ -219,6 +258,9 @@ export class ScrollStrip {
     this.#destroyed = true;
     this.#generation++;
     if (this.#restTimer) clearTimeout(this.#restTimer);
+    this.#pending(1, false);
+    this.#pending(-1, false);
+    cancelAnimationFrame(this.#wheelFrame);
     for (const chapter of this.#chapters) this.#discard(chapter);
     this.#chapters = [];
     this.#scroller.remove();
@@ -424,9 +466,18 @@ img, svg, video {
     // One blank screen after the last chapter mounted while more are to
     // come: the bare paper a chapter not yet here is waited for on.
     const more = this.#adjacent(last.index, 1) != null;
-    this.#canvas.style[this.#vertical ? "width" : "height"] = `${
-      last.top + last.height + (more ? this.#screen : 0)
-    }px`;
+    this.#extent = last.top + last.height + (more ? this.#screen : 0);
+    this.#canvas.style[this.#vertical ? "width" : "height"] =
+      `${this.#extent}px`;
+    // The spinners stand in the middle of the bare paper at either end.
+    const half = this.#screen / 2;
+    const across = this.#vertical ? "top" : "left";
+    for (const dir of [1, -1] as const) {
+      const style = this.#spinners[dir].style;
+      style[side] =
+        `${dir > 0 ? last.top + last.height + half : chapters[0].top - half}px`;
+      style[across] = "50%";
+    }
   }
 
   #scrolled() {
@@ -492,6 +543,7 @@ img, svg, video {
     if (index == null) return;
     const generation = this.#generation;
     this.#loading[dir] = true;
+    this.#pending(dir, true);
     this.#build(index, generation)
       .then((chapter) => {
         if (generation !== this.#generation) {
@@ -499,6 +551,7 @@ img, svg, video {
           return;
         }
         this.#loading[dir] = false;
+        this.#pending(dir, false);
         if (!chapter) return;
         // Still the neighbour of the end it was built for?
         const now = this.#chapters;
@@ -519,10 +572,24 @@ img, svg, video {
         if (generation !== this.#generation) return;
         console.warn(e);
         this.#loading[dir] = false;
+        this.#pending(dir, false);
         this.#retryAt[dir] = performance.now() + RETRY_MS;
         this.#note("failed", index);
         this.#report();
       });
+  }
+
+  /** A chapter is on its way at this end, or no longer. */
+  #pending(dir: 1 | -1, on: boolean) {
+    const timer = this.#spinnerTimers[dir];
+    if (timer) clearTimeout(timer);
+    this.#spinnerTimers[dir] = on
+      ? setTimeout(
+          () => (this.#spinners[dir].style.display = ""),
+          SPINNER_AFTER_MS,
+        )
+      : null;
+    if (!on) this.#spinners[dir].style.display = "none";
   }
 
   #watchTouches(target: Document | HTMLElement) {
@@ -544,10 +611,35 @@ img, svg, video {
         const { deltaX, deltaY } = e as WheelEvent;
         if (!this.#vertical || Math.abs(deltaY) <= Math.abs(deltaX)) return;
         e.preventDefault();
-        this.#at += deltaY;
+        this.#wheel(deltaY);
       },
       { passive: false },
     );
+  }
+
+  /** A wheel notch is a jump of a hundred pixels; the strip is brought
+   *  there over a few frames, as the browser does for its own axis. */
+  #wheel(delta: number) {
+    const max = Math.max(0, this.#extent - this.#screen);
+    this.#wheelTarget = Math.max(
+      0,
+      Math.min(max, (this.#wheelTarget ?? this.#at) + delta),
+    );
+    if (this.#wheelFrame) return;
+    const step = () => {
+      this.#wheelFrame = 0;
+      const target = this.#wheelTarget;
+      if (target == null || this.#destroyed) return;
+      const left = target - this.#at;
+      if (Math.abs(left) < 1) {
+        this.#at = target;
+        this.#wheelTarget = null;
+        return;
+      }
+      this.#at += Math.sign(left) * Math.max(1, Math.abs(left) * 0.2);
+      this.#wheelFrame = requestAnimationFrame(step);
+    };
+    this.#wheelFrame = requestAnimationFrame(step);
   }
 
   #rested() {

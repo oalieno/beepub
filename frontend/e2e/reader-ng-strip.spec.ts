@@ -3,6 +3,7 @@ import { ADMIN_STATE } from "./helpers";
 import {
   LONG_CHAPTERS_BOOK,
   NINE_CHAPTERS_BOOK,
+  connection,
   resetProgress,
   seedFixture,
   seedGesturesSeen,
@@ -142,4 +143,39 @@ test("a horizontal book's strip runs downward", async ({ page, request }) => {
   expect(after.scrollTop).toBe(before.scrollTop);
   expect(after.screenTop).toBe(before.screenTop);
   await page.screenshot({ path: "test-results/strip-horizontal.png" });
+});
+
+test("a chapter slow to come is waited for on bare paper, and announced only after a moment", async ({
+  page,
+  request,
+}) => {
+  const bookId = await seedFixture(request, NINE_CHAPTERS_BOOK);
+  await resetProgress(request, bookId);
+  // Nothing is brought in behind the page, and every chapter asked for
+  // from here on takes its time (the route also keeps the HTTP cache out).
+  await connection(page, { saveData: true });
+  let delay = 0;
+  await page.route("**/api/books/*/content/**", async (route) => {
+    if (delay) await new Promise((r) => setTimeout(r, delay));
+    await route.continue();
+  });
+  await openStrip(page, bookId, 0);
+  delay = 2500;
+  const pending = page.getByTestId("scroll-strip-pending").first();
+  await expect(pending).toBeHidden();
+  // To the end of what is mounted: the bare paper after it.
+  await page.evaluate(() => {
+    const s = window.__beepubStrip.scroller;
+    s.scrollLeft = -s.scrollWidth;
+  });
+  const before = await state(page);
+  await expect(pending).toBeVisible({ timeout: 2000 });
+  // It joins where it was waited for; what was on screen has not moved.
+  await expect
+    .poll(async () => (await state(page)).indices.length, { timeout: 15_000 })
+    .toBeGreaterThan(before.indices.length);
+  await expect(pending).toBeHidden();
+  const after = await state(page);
+  expect(after.scrollTop).toBe(before.scrollTop);
+  expect(after.screenTop).toBe(before.screenTop);
 });
