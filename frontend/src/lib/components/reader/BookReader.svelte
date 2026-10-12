@@ -86,6 +86,7 @@
     marginY = 32,
     letterSpacing = 0,
     pageTurn = "fade",
+    strip = false,
     writingMode = "auto",
     fullPage = false,
     sectionWeights = null,
@@ -140,6 +141,8 @@
     /** Body letter-spacing, px (applies to vertical text too). */
     letterSpacing?: number;
     pageTurn?: PageTurnMode;
+    /** Prototype: the continuous scroll strip instead of pages. */
+    strip?: boolean;
     /** This book's writing direction: its own, or forced horizontal /
      *  vertical. A change lays the page out again at the same place. */
     writingMode?: WritingMode;
@@ -376,6 +379,7 @@ ${darkOverrides}
   // grid follows the writing mode — so the screen-space gutters swap
   // roles between horizontal and vertical sections.
   let vertical = $state(false);
+  let scrollStrip: import("$lib/reader/strip").ScrollStrip | null = null;
 
   // Larger than any window: no limit.
   const UNBOUNDED = 100000;
@@ -2185,6 +2189,34 @@ ${darkOverrides}
         };
         kosyncAutoJump = !saved?.cfi;
       }
+      if (strip) {
+        // Prototype: the strip takes the container; the paginator stays
+        // empty and nothing is saved from here.
+        c.paginator.style.display = "none";
+        const { ScrollStrip } = await import("$lib/reader/strip");
+        if (destroyed) return;
+        const cfi = initialCfi ?? saved?.cfi;
+        const target = (cfi ? c.resolve(cfi) : null) ?? {
+          index: c.firstLinearIndex(),
+        };
+        const s = new ScrollStrip({
+          container,
+          book,
+          styles: () => c.stripStyles(),
+          prepare: (doc) => c.prepareStripSection(doc),
+          gutter: marginX,
+          spacing: marginY,
+          measure: fullPage ? UNBOUNDED : MAX_INLINE_SIZE,
+          background: darkMode ? PAGE_DARK : PAGE_LIGHT,
+          ontap: () => ontap?.(),
+        });
+        scrollStrip = s;
+        (window as unknown as { __beepubStrip?: unknown }).__beepubStrip = s;
+        await s.open(target);
+        if (destroyed) return;
+        onready?.();
+        return;
+      }
       await restorePosition(c, saved);
       if (destroyed) return;
       onready?.();
@@ -2250,6 +2282,8 @@ ${darkOverrides}
     window.removeEventListener("beforeunload", handleBeforeUnload);
     void saveProgress(false);
     healAbort?.abort();
+    scrollStrip?.destroy();
+    scrollStrip = null;
     layer?.detach();
     layer = null;
     core?.destroy();

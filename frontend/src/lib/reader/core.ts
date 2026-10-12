@@ -1431,6 +1431,16 @@ export class ReaderCore {
     return this.paginator.getContents();
   }
 
+  /** For the scroll strip (prototype): the styles and the per-section
+   *  preparation the paginator's own sections get. */
+  stripStyles(): string | [string, string] {
+    return this.#composedStyles();
+  }
+
+  prepareStripSection(doc: Document) {
+    this.#prepareSection(doc);
+  }
+
   /** A section's parsed, unrendered document — the DOM that kosync
    *  xpointers, footnote lookups and anything else structural read,
    *  free of the styles and overlays the rendered copy carries. Parsed

@@ -1365,6 +1365,7 @@
             {marginY}
             {darkMode}
             {pageTurn}
+            strip={page.url.searchParams.get("turn") === "scroll"}
             {writingMode}
             {fullPage}
             {sectionWeights}
