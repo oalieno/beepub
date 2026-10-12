@@ -67,6 +67,8 @@ const RETRY_MS = 5000;
 /** A chapter on its way is not announced before this: a spinner that
  *  comes and goes at once is worse than the bare paper. */
 const SPINNER_AFTER_MS = 400;
+/** How quickly the wheel's spring closes on its target, 1/s. */
+const WHEEL_STIFFNESS = 14;
 
 interface Chapter {
   index: number;
@@ -105,6 +107,11 @@ export class ScrollStrip {
   #extent = 0;
   #wheelTarget: number | null = null;
   #wheelFrame = 0;
+  /** The spring's own position (the scroller rounds what it is given),
+   *  its speed in px/s and the time of its last step. */
+  #wheelAt = 0;
+  #wheelSpeed = 0;
+  #wheelTime = 0;
   log: StripLogEntry[] = [];
 
   constructor(options: StripOptions) {
@@ -611,32 +618,51 @@ img, svg, video {
         const { deltaX, deltaY } = e as WheelEvent;
         if (!this.#vertical || Math.abs(deltaY) <= Math.abs(deltaX)) return;
         e.preventDefault();
-        this.#wheel(deltaY);
+        // Lines (a mouse in Firefox) or pixels.
+        this.#wheel((e as WheelEvent).deltaMode === 1 ? deltaY * 40 : deltaY);
       },
       { passive: false },
     );
   }
 
-  /** A wheel notch is a jump of a hundred pixels; the strip is brought
-   *  there over a few frames, as the browser does for its own axis. */
+  /** A wheel turns downward and a leftward strip has no axis of the
+   *  browser's to follow it with, so the strip follows it itself: as a
+   *  critically damped spring towards where the wheel has asked for. Its
+   *  speed carries over from one notch to the next and dies away at the
+   *  end — no restart at each notch, no sudden stop. */
   #wheel(delta: number) {
     const max = Math.max(0, this.#extent - this.#screen);
+    if (this.#wheelTarget == null) {
+      this.#wheelAt = this.#at;
+      this.#wheelSpeed = 0;
+      this.#wheelTime = performance.now();
+    }
     this.#wheelTarget = Math.max(
       0,
       Math.min(max, (this.#wheelTarget ?? this.#at) + delta),
     );
     if (this.#wheelFrame) return;
-    const step = () => {
+    const step = (now: number) => {
       this.#wheelFrame = 0;
       const target = this.#wheelTarget;
       if (target == null || this.#destroyed) return;
-      const left = target - this.#at;
-      if (Math.abs(left) < 1) {
+      const t = Math.min(0.05, Math.max(0, (now - this.#wheelTime) / 1000));
+      this.#wheelTime = now;
+      const off = this.#wheelAt - target;
+      const pull = this.#wheelSpeed + WHEEL_STIFFNESS * off;
+      const decay = Math.exp(-WHEEL_STIFFNESS * t);
+      this.#wheelAt = target + (off + pull * t) * decay;
+      this.#wheelSpeed =
+        (this.#wheelSpeed - WHEEL_STIFFNESS * pull * t) * decay;
+      if (
+        Math.abs(this.#wheelAt - target) < 0.5 &&
+        Math.abs(this.#wheelSpeed) < 8
+      ) {
         this.#at = target;
         this.#wheelTarget = null;
         return;
       }
-      this.#at += Math.sign(left) * Math.max(1, Math.abs(left) * 0.2);
+      this.#at = this.#wheelAt;
       this.#wheelFrame = requestAnimationFrame(step);
     };
     this.#wheelFrame = requestAnimationFrame(step);
