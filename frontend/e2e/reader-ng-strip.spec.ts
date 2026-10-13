@@ -546,3 +546,51 @@ test("switching between pages and the strip keeps the reader's place", async ({
     )
     .toBe(true);
 });
+
+test("a jump to the element a chapter opens with gives the chapter from its edge, margin and all; the strip shows no scrollbar", async ({
+  page,
+  request,
+}) => {
+  const bookId = await seedFixture(request, NINE_CHAPTERS_BOOK);
+  await resetProgress(request, bookId);
+  await openStrip(page, bookId, 0);
+  // As a table of contents whose entry names the heading by its id does
+  // (the strip is asked itself: the fixture's entries name no element).
+  await page.evaluate(
+    () =>
+      window.__beepubReaderNG.core.strip.goTo({
+        index: 5,
+        anchor: (doc: Document) =>
+          doc.body.querySelector("h1, h2, h3, p") as Element,
+      }, "navigation") as Promise<unknown>,
+  );
+  await expect.poll(async () => (await state(page)).pinned).toBe(5);
+  expect((await state(page)).screenTop).toBe(0);
+  expect((await place(page)).fraction).toBe(0);
+
+  // The same element further in is not the chapter's beginning.
+  await page.evaluate(
+    () =>
+      window.__beepubReaderNG.core.strip.goTo({
+        index: 5,
+        anchor: (doc: Document) => {
+          const leaves = Array.from(doc.body.querySelectorAll("*")).filter(
+            (el) => !el.children.length && el.textContent?.trim(),
+          );
+          return leaves[leaves.length - 1];
+        },
+      }, "navigation") as Promise<unknown>,
+  );
+  await expect.poll(async () => (await state(page)).screenTop).toBeLessThan(0);
+
+  expect(
+    await page.evaluate(() => {
+      const s = window.__beepubReaderNG.core.strip.scroller as HTMLElement;
+      return [
+        getComputedStyle(s).scrollbarWidth,
+        s.offsetHeight - s.clientHeight,
+        s.offsetWidth - s.clientWidth,
+      ];
+    }),
+  ).toEqual(["none", 0, 0]);
+});

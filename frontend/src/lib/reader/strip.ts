@@ -245,8 +245,15 @@ export class ScrollStrip {
       // The layout keeps the read chapter in place itself; a browser
       // that also anchors would move it twice.
       overflowAnchor: "none",
+      // No scrollbar: the chrome says how far through the book this is.
+      scrollbarWidth: "none",
       background: options.background,
     });
+    // (The same, for a WebKit older than `scrollbar-width`.)
+    scroller.className = "beepub-scroll-strip";
+    const bare = document.createElement("style");
+    bare.textContent = ".beepub-scroll-strip::-webkit-scrollbar{display:none}";
+    scroller.append(bare);
     const canvas = document.createElement("div");
     canvas.style.position = "relative";
     scroller.append(canvas);
@@ -473,12 +480,16 @@ export class ScrollStrip {
     if (typeof at === "number") return Math.floor(at * chapter.height);
     const rect = firstRect(at);
     if (!rect) return 0;
+    // The chapter's first words are its beginning: a reader sent to them
+    // gets the chapter from its edge, margin and all, not the heading
+    // hard against the screen's.
+    const edge = this.#vertical ? chapter.height - rect.right : rect.top;
+    if (edge < this.#screen && opens(chapter.doc, at)) return 0;
     // The iframe is as large as its document and never scrolls: a rect
     // in it is measured from the chapter's own edges. A line of text is
     // given its leading back (a glyph's box is thinner than its line),
     // so it does not stand hard against the screen's edge. Whole pixels,
     // and never past the line's own edge (see LINE_INSET).
-    const edge = this.#vertical ? chapter.height - rect.right : rect.top;
     return Math.max(0, Math.floor(edge - leadOf(at, rect, this.#vertical)));
   }
 
@@ -1259,6 +1270,25 @@ type Along = (rect: DOMRect) => { left: number; right: number };
  * through a line, and the walk then stops anywhere in that line: the
  * same place read twice would be saved as two positions.
  */
+/** Whether nothing of the chapter — no text, no picture — comes before
+ *  `at` (an element or a range of `doc`). */
+function opens(doc: Document, at: unknown): boolean {
+  const body = doc.body;
+  if (!body || !at) return false;
+  try {
+    const before = doc.createRange();
+    before.setStart(body, 0);
+    if ("startContainer" in (at as object)) {
+      const range = at as Range;
+      before.setEnd(range.startContainer, range.startOffset);
+    } else before.setEndBefore(at as Node);
+    if (before.toString().trim() !== "") return false;
+    return !before.cloneContents().querySelector("img, svg, video, canvas");
+  } catch {
+    return false;
+  }
+}
+
 function toLineStart(range: Range, start: number, along: Along) {
   const node = range.startContainer;
   if (node.nodeType !== 3) return;
