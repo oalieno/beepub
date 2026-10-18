@@ -149,6 +149,17 @@ export const IMPORT_SHELL_BOOK: Fixture = {
   readyText: "縱組範本首行",
 };
 
+/** A book made on a case-insensitive file system: its OPF lists
+ *  `style/main.css` and `text/chapter1.xhtml`, the zip holds `Style/` and
+ *  `Text/`, the chapter links `../Style/main.css`, and two images the OPF
+ *  lists (the cover among them) are not in the zip at all. Calibre opens
+ *  such books; so must the upload, the server and the reader. */
+export const CASE_FOLDED_BOOK: Fixture = {
+  file: "e2e-case-folded-book.epub",
+  title: "運河郵差大小寫試驗帖",
+  readyText: "運河郵差首行",
+};
+
 /** Three long horizontal chapters (some sixty phone pages each) of
  *  numbered log entries: laying one out is real work, the way a novel's
  *  chapter is on a phone. */

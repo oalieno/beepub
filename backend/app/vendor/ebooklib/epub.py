@@ -1638,7 +1638,32 @@ class EpubReader(object):  # noqa: UP004
     def read_file(self, name):
         # Raises KeyError
         name = zip_path.normpath(name)
-        return self.zf.read(name)
+        try:
+            return self.zf.read(name)
+        except KeyError:
+            # BeePub: books made on case-insensitive file systems name
+            # "Style/a.css" in the zip "style/a.css" in the OPF; readers
+            # (Calibre, Apple Books) find it all the same.
+            other = self._folded().get(name.lower())
+            if other is None:
+                raise
+            return self.zf.read(other)
+
+    def _folded(self):
+        if getattr(self, "_folded_names", None) is None:
+            names = self.zf.namelist() if hasattr(self.zf, "namelist") else []
+            self._folded_names = {n.lower(): n for n in names}
+        return self._folded_names
+
+    def _has_file(self, name):
+        name = zip_path.normpath(name)
+        if not hasattr(self.zf, "getinfo"):  # an unpacked book (Directory)
+            return os.path.exists(os.path.join(self.zf.directory_path, name))
+        try:
+            self.zf.getinfo(name)
+            return True
+        except KeyError:
+            return name.lower() in self._folded()
 
     def _load_container(self):
         meta_inf = self.read_file("META-INF/container.xml")
@@ -1717,6 +1742,15 @@ class EpubReader(object):  # noqa: UP004
     def _load_manifest(self):
         for r in self.container.find("{%s}%s" % (NAMESPACES["OPF"], "manifest")):  # noqa: UP031
             if r is not None and r.tag != "{%s}item" % NAMESPACES["OPF"]:  # noqa: UP031
+                continue
+
+            # BeePub: an item whose file is not in the book is left out, as
+            # Calibre leaves it out, rather than failing the whole book.
+            href = r.get("href") or ""
+            if not (
+                self._has_file(zip_path.join(self.opf_dir, unquote(href)))
+                or self._has_file(zip_path.join(self.opf_dir, href))
+            ):
                 continue
 
             media_type = r.get("media-type")

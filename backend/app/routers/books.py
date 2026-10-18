@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import mimetypes
 import os
 import re
@@ -86,6 +87,8 @@ from app.services.txt2epub import EmptyTextError, convert_txt_to_epub
 from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_book_metadata, fetch_metadata_source
 from app.tasks.text_extract import extract_book_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/books", tags=["books"])
 
@@ -189,6 +192,9 @@ async def _ingest_epub(
         metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
         cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
     except Exception:
+        # The reason stays in the log: the reader is told only that the
+        # file is not a book we can read.
+        logger.exception("EPUB upload rejected: %s", file.filename)
         delete_file(file_path)
         delete_file(cover_path)
         raise HTTPException(status_code=400, detail="Invalid EPUB file")
@@ -1768,7 +1774,15 @@ async def get_book_content(
 
 def _read_epub_entry(file_path: str, path: str) -> bytes:
     with zipfile.ZipFile(file_path, "r") as zf:
-        data = zf.read(path)
+        try:
+            data = zf.read(path)
+        except KeyError:
+            # A book made on a case-insensitive file system may name a file
+            # "style/a.css" that the zip holds as "Style/a.css".
+            folded = {n.lower(): n for n in zf.namelist()}
+            if path.lower() not in folded:
+                raise
+            data = zf.read(folded[path.lower()])
 
     # Fix malformed XHTML: self-close void elements (e.g. <link ...> → <link .../>)
     if path.endswith((".xhtml", ".html", ".htm")):

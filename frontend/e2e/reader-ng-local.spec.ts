@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 import {
+  CASE_FOLDED_BOOK,
   IMPORT_SHELL_BOOK,
   TOUCH_BOOK,
   VERTICAL_BOOK,
@@ -243,4 +244,16 @@ test("an @import-shell stylesheet (the ebpaj template) resolves through every le
     expect(imp.href).toBe("blob");
     expect(imp.rules).toBeGreaterThan(0);
   }
+});
+
+test("a book whose OPF names its files in another letter case opens with its stylesheet", async ({
+  page,
+}) => {
+  await importFixture(page, CASE_FOLDED_BOOK);
+  await openFromShelf(page, CASE_FOLDED_BOOK);
+  const color = await page.evaluate(() => {
+    const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
+    return getComputedStyle(doc.querySelector("p.first")!).color;
+  });
+  expect(color).toBe("rgb(1, 2, 3)");
 });

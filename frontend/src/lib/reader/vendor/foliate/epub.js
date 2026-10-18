@@ -679,8 +679,10 @@ class Resources {
     getItemByID(id) {
         return this.manifestById.get(id)
     }
+    // BeePub: failing the exact path, the path in another letter case (see VENDOR.md)
     getItemByHref(href) {
         return this.manifest.find(item => item.href === href)
+            ?? this.manifest.find(item => item.href?.toLowerCase() === href?.toLowerCase())
     }
     getItemByProperty(prop) {
         return this.manifest.find(item => item.properties?.includes(prop))
@@ -787,7 +789,9 @@ class Loader {
     async loadHref(href, base, parents = []) {
         if (isExternal(href)) return href
         const path = resolveURL(href, base)
+        // BeePub: failing the exact path, the path in another letter case (see VENDOR.md)
         const item = this.manifest.find(item => item.href === path)
+            ?? this.manifest.find(item => item.href?.toLowerCase() === path.toLowerCase())
         if (!item) return href
         return this.loadItem(item, parents.concat(base))
     }
