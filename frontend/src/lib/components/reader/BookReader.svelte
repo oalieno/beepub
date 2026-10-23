@@ -2050,7 +2050,22 @@ ${darkOverrides}
     }
   }
 
-  function swipeCallbacks(c: ReaderCore) {
+  /** A point the gesture layer reports in the coordinates of `doc` (a
+   *  section document in its frame, or the page around it), in the
+   *  reader's container. */
+  function inContainer(
+    doc: Document | null,
+    clientX: number,
+    clientY: number,
+  ): { x: number; y: number } | null {
+    if (!container) return null;
+    const box = container.getBoundingClientRect();
+    const frame = doc?.defaultView?.frameElement;
+    const at = frame ? frame.getBoundingClientRect() : { left: 0, top: 0 };
+    return { x: at.left + clientX - box.left, y: at.top + clientY - box.top };
+  }
+
+  function swipeCallbacks(c: ReaderCore, doc: Document | null = null) {
     return {
       // Finger moving left pulls in the page on the right. (Over a
       // scrolled book a finger scrolls, sideways as any other way.)
@@ -2065,8 +2080,18 @@ ${darkOverrides}
       // threshold swipe). Where the slide has nothing to show — the first
       // and the last page — it declines the release too, so the swipe
       // still reaches turn() and the end of the book.
-      onswipemove: (dx: number) => {
-        if (!c.dragBy(dx)) return;
+      onswipemove: (
+        dx: number,
+        dy: number,
+        clientX?: number,
+        clientY?: number,
+      ) => {
+        // (The curl holds the sheet by the corner nearer the finger.)
+        const at =
+          clientX == null || clientY == null
+            ? null
+            : inContainer(doc, clientX, clientY);
+        if (!c.dragBy(dx, dy, at)) return;
         dismissMenu();
         showFootnote = false;
       },
@@ -2152,7 +2177,7 @@ ${darkOverrides}
       });
     }
 
-    const swipe = swipeCallbacks(c);
+    const swipe = swipeCallbacks(c, doc);
 
     if (isIOSDevice()) {
       setupIOSTouchSelection(doc, win, {

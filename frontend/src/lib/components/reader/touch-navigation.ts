@@ -24,7 +24,14 @@ export interface SwipeCallbacks {
   onswipeleft: () => void;
   onswiperight: () => void;
   /** Finger-follow paging (optional): see ios-touch-selection.ts. */
-  onswipemove?: (dx: number, dy: number) => void;
+  onswipemove?: (
+    dx: number,
+    dy: number,
+    /** Where the finger is, in the coordinates of the listened-to
+     *  document (or element's window). */
+    clientX?: number,
+    clientY?: number,
+  ) => void;
   /** Return true when the gesture was consumed (the page followed the
    *  finger and settles by itself);
    *  otherwise the threshold swipe fires onswipeleft/right. */
@@ -104,7 +111,7 @@ export function setupSwipeNavigation(
         lastX = t.screenX;
         lastY = t.screenY;
         lastT = e.timeStamp;
-        callbacks.onswipemove(dx, dy);
+        callbacks.onswipemove(dx, dy, t.clientX, t.clientY);
       }
     },
     { passive: true },

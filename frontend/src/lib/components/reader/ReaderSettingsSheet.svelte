@@ -82,7 +82,7 @@
     marginX?: number;
     marginY?: number;
     /** "instant" is a session override with no button of its own. */
-    pageTurn?: "fade" | "slide" | "instant" | "scroll";
+    pageTurn?: "fade" | "slide" | "curl" | "instant" | "scroll";
     /** This book's writing direction; row shown when
      *  `onwritingModeChange` is given (CJK text books). */
     writingMode?: WritingMode;
@@ -100,7 +100,7 @@
     onmarginChange?: (value: number) => void;
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
-    onpageTurnChange?: (value: "fade" | "slide" | "scroll") => void;
+    onpageTurnChange?: (value: "fade" | "slide" | "curl" | "scroll") => void;
     onwritingModeChange?: (value: WritingMode) => void;
     /** The largest font size the reader behind the sheet takes. */
     fontSizeMax?: number;
@@ -168,11 +168,12 @@
     { value: 56, label: m.reader_margin_wide },
   ];
   const pageTurnOptions: {
-    value: "fade" | "slide" | "scroll";
+    value: "fade" | "slide" | "curl" | "scroll";
     label: () => string;
   }[] = [
     { value: "fade", label: m.reader_page_turn_fade },
     { value: "slide", label: m.reader_page_turn_slide },
+    { value: "curl", label: m.reader_page_turn_curl },
     { value: "scroll", label: m.reader_page_turn_scroll },
   ];
   const writingModeOptions: { value: WritingMode; label: () => string }[] = [

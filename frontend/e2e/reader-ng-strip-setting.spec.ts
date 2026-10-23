@@ -90,6 +90,7 @@ test("Scroll is chosen in the settings: the reader goes to the strip where it wa
   await expect(row.getByRole("button")).toHaveText([
     "Fast fade",
     "Slide",
+    "Curl",
     "Scroll",
   ]);
   await row.getByRole("button", { name: "Scroll" }).click();
@@ -164,6 +165,7 @@ test("the option is named in Traditional Chinese", async ({
   await expect(row.getByRole("button")).toHaveText([
     "快速淡化",
     "滑動",
+    "捲頁",
     "捲動",
   ]);
   await row.getByRole("button", { name: "捲動" }).click();

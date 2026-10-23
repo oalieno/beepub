@@ -20,7 +20,7 @@
    * margin seeds both gutters). Query params override for this session
    * only — probes and e2e open at a known geometry — and are not written
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1
-   * &turn=fade|slide|scroll|instant (instant — a bare jump — exists only
+   * &turn=fade|slide|curl|scroll|instant (instant — a bare jump — exists only
    * here).
    */
   import { onDestroy, onMount, untrack } from "svelte";
@@ -509,8 +509,11 @@
   }
   /** What a stored or query value means today: before 2026-10 the modes
    *  were instant / animated (a slide without the finger) / follow. */
-  function parsePageTurn(raw: string | null): "fade" | "slide" | "scroll" {
+  function parsePageTurn(
+    raw: string | null,
+  ): "fade" | "slide" | "curl" | "scroll" {
     if (raw === "scroll") return "scroll";
+    if (raw === "curl") return "curl";
     return raw === "slide" || raw === "animated" || raw === "follow"
       ? "slide"
       : "fade";

@@ -355,6 +355,7 @@
   "reader_page_turn": "翻页",
   "reader_page_turn_fade": "快速淡化",
   "reader_page_turn_slide": "滑动",
+  "reader_page_turn_curl": "卷页",
   "reader_page_turn_scroll": "滚动",
   "reader_writing_mode": "文字方向",
   "reader_writing_mode_auto": "自动",

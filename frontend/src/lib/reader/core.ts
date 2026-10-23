@@ -152,16 +152,18 @@ export interface LayoutParams {
   maxColumnCount?: number;
 }
 
-/** How a page turn moves. The reader offers two: "fade" (the page fades
- *  out, the next one fades in — the default) and "slide" (one page
+/** How a page turn moves. The reader offers three: "fade" (the page fades
+ *  out, the next one fades in — the default), "slide" (one page
  *  slides over the other, following the finger; taps and keys play the
- *  same slide on their own — see slide.ts). "instant" is a bare jump
+ *  same slide on their own — see slide.ts) and "curl" (the same two
+ *  sheets, the upper one folded over the spine by its corner instead of
+ *  slid away — curl.ts). "instant" is a bare jump
  *  with no animation, reachable only through the `?turn=instant` session
  *  override — tests and probes read the page right after a turn.
  *
  *  "scroll" is no page turn at all: the book is one strip of chapters
  *  scrolled by the browser (strip.ts), and the paginator stands aside. */
-export type PageTurnMode = "fade" | "slide" | "instant" | "scroll";
+export type PageTurnMode = "fade" | "slide" | "curl" | "instant" | "scroll";
 
 /** The fade of a page turn: out, jump, in. Short enough to read as a
  *  blink of the page rather than a wait. */
@@ -1018,7 +1020,9 @@ export class ReaderCore {
     }
     const mode = this.effectivePageTurn();
     const slide =
-      mode === "slide" && !prefersReducedMotion() ? this.#slide : null;
+      (mode === "slide" || mode === "curl") && !prefersReducedMotion()
+        ? this.#slide
+        : null;
     // A slide under way takes the turn itself (it ends early and this
     // one follows), whatever the page still on screen says about edges.
     if (slide?.busy) {
@@ -1227,41 +1231,50 @@ export class ReaderCore {
     const book = this.book;
     const reflowable = !!book && book.rendition?.layout !== "pre-paginated";
     this.#applyStrip(this.pageTurn === "scroll" && reflowable, land);
-    const wanted = this.pageTurn === "slide" && reflowable;
-    if (!wanted || !book) {
+    const style =
+      this.pageTurn === "slide" || this.pageTurn === "curl"
+        ? this.pageTurn
+        : null;
+    const wanted = !!style && reflowable;
+    // The slide and the curl draw their sheets differently: one is not
+    // turned into the other, it is built anew (its ghosts with it).
+    if (!wanted || !book || (this.#slide && this.#slide.style !== style)) {
       this.#dropSlide();
-      return;
+      if (!wanted || !book) return;
     }
     if (this.#slide) return;
     // The slide ends a turn itself; the paginator's 100ms pause after
     // each one would drop the turn that follows a skipped slide.
     this.paginator.setAttribute("no-turn-lock", "");
-    const slide = new CoverSlide({
-      container: this.#container,
-      live: this.paginator,
-      book,
-      styles: () => this.#composedStyles(),
-      leftward: () => this.advancesLeftward(),
-      reducedMotion: prefersReducedMotion,
-      turnLive: (dir) => this.#paginatorTurn(dir),
-      request: (dir) => void this.#turn(dir),
-      fallback: (dir) => void this.#fadeTurn(dir),
-      pending: (waiting) => this.#handlers.onpending?.(waiting),
-      failed: (index, dir) => {
-        this.#failed = { index, anchor: dir > 0 ? 0 : 1 };
-        this.#handlers.onloadfail?.({ index });
+    const slide = new CoverSlide(
+      {
+        container: this.#container,
+        live: this.paginator,
+        book,
+        styles: () => this.#composedStyles(),
+        leftward: () => this.advancesLeftward(),
+        reducedMotion: prefersReducedMotion,
+        turnLive: (dir) => this.#paginatorTurn(dir),
+        request: (dir) => void this.#turn(dir),
+        fallback: (dir) => void this.#fadeTurn(dir),
+        pending: (waiting) => this.#handlers.onpending?.(waiting),
+        failed: (index, dir) => {
+          this.#failed = { index, anchor: dir > 0 ? 0 : 1 };
+          this.#handlers.onloadfail?.({ index });
+        },
+        visible: () => this.#liveLocation?.range ?? null,
+        onload: (detail, ghost) => this.#onGhostLoad(detail, ghost),
+        onoverlayer: ({ doc, index, attach }, ghost) => {
+          const overlayer = new Overlayer();
+          attach(overlayer);
+          this.#handlers.onghostoverlayer?.({ doc, index, overlayer }, ghost);
+        },
+        ongone: (ghost) => this.#handlers.onghostoverlayer?.(null, ghost),
+        shown: (detail, turned) => this.#onShown(detail, turned),
+        uncovered: () => this.#onUncovered(),
       },
-      visible: () => this.#liveLocation?.range ?? null,
-      onload: (detail, ghost) => this.#onGhostLoad(detail, ghost),
-      onoverlayer: ({ doc, index, attach }, ghost) => {
-        const overlayer = new Overlayer();
-        attach(overlayer);
-        this.#handlers.onghostoverlayer?.({ doc, index, overlayer }, ghost);
-      },
-      ongone: (ghost) => this.#handlers.onghostoverlayer?.(null, ghost),
-      shown: (detail, turned) => this.#onShown(detail, turned),
-      uncovered: () => this.#onUncovered(),
-    });
+      style!,
+    );
     slide.setBackground(this.#pageColor);
     this.#slide = slide;
     // Already reading: a ghost goes to the neighbour of this page.
@@ -1432,6 +1445,11 @@ export class ReaderCore {
     return this.#slide?.ghostFor(dir) ?? null;
   }
 
+  /** The curl's fold on screen (see CoverSlide.fold), for probes. */
+  get curlFold() {
+    return this.#slide?.fold ?? null;
+  }
+
   /** What became of the slide's last turns, and the sections loaded
    *  into its ghosts. */
   get slideLog(): SlideEvent[] {
@@ -1450,13 +1468,20 @@ export class ReaderCore {
     this.strip?.setBackground(color);
   }
 
-  /** The slide following the finger: the gesture layer reports each
-   *  move (previous − current, px along the screen's x axis)… */
-  dragBy(dx: number): boolean {
-    if (this.effectivePageTurn() !== "slide") return false;
+  /** The slide (or the curl) following the finger: the gesture layer
+   *  reports each move (previous − current, px along the screen's axes)
+   *  and, for the curl, which corner to hold the sheet by, where the
+   *  finger is (in the reader's container)… */
+  dragBy(
+    dx: number,
+    dy = 0,
+    at: { x: number; y: number } | null = null,
+  ): boolean {
+    const mode = this.effectivePageTurn();
+    if (mode !== "slide" && mode !== "curl") return false;
     // (While a fallback fade has the page the finger is only kept track
     // of: a sheet joins it once the fade is over.)
-    return this.#slide?.dragBy(dx, this.#fading()) ?? false;
+    return this.#slide?.dragBy(dx, this.#fading(), dy, at) ?? false;
   }
 
   /** …and the release, with its velocity (px/ms). False when the slide

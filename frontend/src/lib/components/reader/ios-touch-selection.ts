@@ -30,7 +30,14 @@ export interface IOSTouchCallbacks {
    * otherwise the threshold swipe fires onswipeleft/right as usual, so the
    * mode can change at any time without re-attaching.
    */
-  onswipemove?: (dx: number, dy: number) => void;
+  onswipemove?: (
+    dx: number,
+    dy: number,
+    /** Where the finger is, in the coordinates of the listened-to
+     *  document (or element's window). */
+    clientX?: number,
+    clientY?: number,
+  ) => void;
   onswipeend?: (vx: number, vy: number) => boolean | void;
   /** The swipe will get no onswipeend (the system cancelled the touch,
    *  or a new one began): whatever followed the finger goes back. */
@@ -396,7 +403,7 @@ export function setupIOSTouchSelection(
         lastX = t.screenX;
         lastY = t.screenY;
         lastT = e.timeStamp;
-        callbacks.onswipemove(dx, dy);
+        callbacks.onswipemove(dx, dy, t.clientX, t.clientY);
       } else if (touchState === "selecting") {
         if (
           Math.abs(t.clientX - startX) > DRAG_THRESHOLD ||

@@ -524,7 +524,7 @@ test("a vertical book slides too, the other way round, and the sheet offers the 
   await openSettings(page, cdp);
   await expect(
     page.getByTestId("setting-page-turn").getByRole("button"),
-  ).toHaveText(["Fast fade", "Slide", "Scroll"]);
+  ).toHaveText(["Fast fade", "Slide", "Curl", "Scroll"]);
 });
 
 /** Whether the two sheets of the turn under way leave any of the

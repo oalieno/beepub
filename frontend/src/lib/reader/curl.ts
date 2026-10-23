@@ -199,28 +199,6 @@ export function foldAt(
 
 // ------------------------------------------------------------- renderer
 
-export interface CurlSheet {
-  /** The sheet in the host's coordinates, px. */
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-  /** The spine is on the sheet's right (the stage is mirrored). */
-  mirror: boolean;
-  /** One page of a two-page spread: the flap may lie over the other
-   *  page, the gutter shades, and a sheet brought back has no lead. */
-  spread: boolean;
-  /** What the sheet shows, already mirrored back if `mirror`. */
-  front: HTMLElement;
-  /** What its back shows. */
-  back: HTMLElement;
-  /** The back is the same page seen through the paper (a single page):
-   *  it is veiled, and comes out mirrored. */
-  seeThrough: boolean;
-  /** Paper colour, under the pages and in the veil. */
-  paper: string;
-}
-
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function el(tag: string, style: Partial<CSSStyleDeclaration>): HTMLElement {
@@ -229,66 +207,55 @@ function el(tag: string, style: Partial<CSSStyleDeclaration>): HTMLElement {
   return e;
 }
 
+/** A sheet for the fold layer: where it lies, which way its spine is,
+ *  and what its back shows. */
+export interface FoldSheet {
+  /** The sheet in the layer's parent's coordinates, px. */
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+  /** The spine is on the sheet's right (the stage is mirrored). */
+  mirror: boolean;
+  /** What its back shows; null: bare paper. */
+  back: HTMLElement | null;
+  /** The back is the same page seen through the paper (a single page):
+   *  it is veiled, and comes out mirrored. */
+  seeThrough: boolean;
+  /** Paper colour, behind the sheet's faces and in the veil. */
+  paper: string;
+}
+
 /**
- * Draws a turn into a host element (positioned, covering the area the
- * pages are laid out in). The caller puts what lies under the sheet into
- * `base`, sets up a sheet, then drives it by a finger (`grab`, `follow`,
- * `release`) or plays it whole (`play`). A turn that has ended stays drawn
- * at its last frame until `clear`, so the caller can land the reader's own
- * page underneath first.
+ * The drawing of a fold, without any say in when or how far: the sheet's
+ * front cut along the fold, the flap folded over it with its shading, the
+ * flap's shadow, and the shade it casts on what it uncovers.
+ *
+ * The front is either a node put into the layer (`setFront`), or an
+ * element that stays where it is beneath the layer (`setFrontInPlace`) —
+ * one that cannot be moved, such as a laid-out page in an iframe, which
+ * would load again if it were. That one is cut by a clip path on itself,
+ * in its own frame: it is expected to cover the sheet's rectangle exactly.
  */
-export class PageCurl {
-  readonly base: HTMLElement;
-  #host: HTMLElement;
-  #gutter: HTMLElement;
-  #clip: HTMLElement;
+export class FoldLayer {
+  /** Goes into the parent the sheet is measured in, over the pages. */
+  readonly root: HTMLElement;
   #stage: HTMLElement;
   #cast: HTMLElement;
   #castShade: HTMLElement;
   #front: HTMLElement;
   #frontSlot: HTMLElement;
+  #inPlace: HTMLElement | null = null;
   #shadow: SVGSVGElement;
   #shadowPoly: SVGPolygonElement;
   #back: HTMLElement;
   #backSlot: HTMLElement;
   #veil: HTMLElement;
   #backShade: HTMLElement;
+  #sheet: FoldSheet | null = null;
 
-  #sheet: CurlSheet | null = null;
-  #turn: {
-    dir: CurlDirection;
-    cy: number;
-    /** p the turn started from: 0 forward, 1 back. */
-    from: number;
-    P: Point | null;
-    p: number;
-  } | null = null;
-  #drag: {
-    x0: number;
-    y0: number;
-    last: { x: number; y: number; t: number };
-    prev: { x: number; y: number; t: number };
-    lead: number | null;
-    yDev: number;
-  } | null = null;
-  #frame: number | null = null;
-  #settle: (() => void) | null = null;
-
-  constructor(host: HTMLElement) {
-    this.#host = host;
-    this.base = el("div", { position: "absolute", inset: "0" });
-    this.#gutter = el("div", {
-      position: "absolute",
-      top: "0",
-      bottom: "0",
-      width: "72px",
-      transform: "translateX(-50%)",
-      pointerEvents: "none",
-      opacity: "0",
-      background:
-        "linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,.10) 40%, rgba(0,0,0,.24) 50%, rgba(0,0,0,.10) 60%, rgba(0,0,0,0) 100%)",
-    });
-    this.#clip = el("div", { position: "absolute", pointerEvents: "none" });
+  constructor() {
+    this.root = el("div", { position: "absolute", pointerEvents: "none" });
     this.#stage = el("div", {
       position: "absolute",
       left: "0",
@@ -364,37 +331,20 @@ export class PageCurl {
     this.#back.append(this.#backSlot, this.#veil, this.#backShade);
     backWrap.append(this.#back);
     this.#stage.append(this.#cast, this.#front, this.#shadow, backWrap);
-    this.#clip.append(this.#stage);
-    host.append(this.base, this.#gutter, this.#clip);
-    host.hidden = true;
-  }
-
-  /** A turn is on screen (being dragged, playing, or ended and not yet
-   *  cleared). */
-  get active(): boolean {
-    return this.#turn != null;
-  }
-
-  /** The turn is being played to its end (not under a finger). */
-  get playing(): boolean {
-    return this.#frame != null && this.#drag == null;
-  }
-
-  /** p of the turn on screen, for probes. */
-  get progress(): number | null {
-    return this.#turn?.p ?? null;
+    this.root.append(this.#stage);
   }
 
   /**
-   * Sets up a sheet to turn. `clipToSheet`: nothing of the turn shows
-   * outside the sheet (a single page: what goes past the spine is gone);
-   * otherwise the host clips (a spread: the flap lands on the facing page).
+   * Sets up a sheet. `clipToSheet`: nothing of the fold shows outside the
+   * sheet (a single page: what goes past the spine is gone); otherwise
+   * the layer covers its parent, which clips (a spread: the flap lands on
+   * the facing page).
    */
-  setSheet(sheet: CurlSheet, clipToSheet: boolean, gutterX: number | null) {
+  setSheet(sheet: FoldSheet, clipToSheet: boolean) {
     this.#sheet = sheet;
     const { left, top, width: W, height: H } = sheet;
     Object.assign(
-      this.#clip.style,
+      this.root.style,
       clipToSheet
         ? {
             left: `${left}px`,
@@ -422,8 +372,8 @@ export class PageCurl {
     this.#back.style.background = sheet.paper;
     this.#veil.style.background = sheet.paper;
     this.#veil.hidden = !sheet.seeThrough;
-    this.#frontSlot.replaceChildren(sheet.front);
-    this.#backSlot.replaceChildren(sheet.back);
+    if (sheet.back) this.#backSlot.replaceChildren(sheet.back);
+    else this.#backSlot.replaceChildren();
     const diag = Math.ceil(Math.hypot(W, H)) * 2;
     for (const sh of [this.#backShade, this.#castShade]) {
       sh.style.width = `${diag}px`;
@@ -435,6 +385,175 @@ export class PageCurl {
       height: `${H}px`,
     });
     this.#shadow.setAttribute("viewBox", `${-W} 0 ${2 * W} ${H}`);
+  }
+
+  /** The sheet's front is `node`, put into the layer (already mirrored
+   *  back by the caller if the sheet is). */
+  setFront(node: HTMLElement) {
+    this.#releaseInPlace();
+    this.#front.hidden = false;
+    this.#frontSlot.replaceChildren(node);
+  }
+
+  /** The sheet's front is `element`, left where it is beneath the layer
+   *  and cut by a clip path of its own. */
+  setFrontInPlace(element: HTMLElement) {
+    if (this.#inPlace !== element) this.#releaseInPlace();
+    this.#inPlace = element;
+    this.#frontSlot.replaceChildren();
+    this.#front.hidden = true;
+  }
+
+  #releaseInPlace() {
+    if (this.#inPlace) this.#inPlace.style.clipPath = "";
+    this.#inPlace = null;
+  }
+
+  /** Draws corner C = (W, cy) carried to P, p of the way over; returns
+   *  the fold (null: the sheet lies flat). */
+  draw(P: Point, p: number, cy: number): Fold | null {
+    const s = this.#sheet;
+    if (!s) return null;
+    const fold = foldAt(P, s.width, s.height, cy);
+    if (!fold) {
+      this.#front.style.clipPath = "none";
+      if (this.#inPlace) this.#inPlace.style.clipPath = "";
+      this.#back.style.clipPath = polygonCss([]);
+      this.#castShade.style.opacity = "0";
+      this.#shadowPoly.setAttribute("points", "");
+      return null;
+    }
+    const a = strength(p);
+    this.#front.style.clipPath = polygonCss(fold.front);
+    if (this.#inPlace) {
+      // In the element's own frame: unmirrored, and offset by nothing —
+      // it covers the sheet.
+      const W = s.width;
+      this.#inPlace.style.clipPath = polygonCss(
+        s.mirror ? fold.front.map((q) => ({ x: W - q.x, y: q.y })) : fold.front,
+      );
+    }
+    this.#back.style.clipPath = polygonCss(fold.folded);
+    this.#back.style.transform = fold.matrix;
+    this.#shadowPoly.setAttribute(
+      "points",
+      fold.lying.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "),
+    );
+    this.#shadowPoly.setAttribute("fill-opacity", (0.32 * a).toFixed(3));
+    const depth = Math.max(8, Math.min(fold.reach / 2, s.width * 0.6));
+    const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg) translateY(-50%)`;
+    // On the flap: dark at the fold, a sheen, then paper.
+    this.#backShade.style.transform = at;
+    this.#backShade.style.opacity = String(a);
+    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.30) 0, rgba(0,0,0,.06) ${depth * 0.12}px, rgba(255,255,255,.28) ${depth * 0.38}px, rgba(255,255,255,0) ${depth * 0.7}px, rgba(0,0,0,.06) ${depth}px, rgba(0,0,0,0) ${depth * 1.6}px)`;
+    // On the page the lifted sheet uncovers.
+    const reach = Math.max(14, depth * 0.55);
+    this.#castShade.style.opacity = String(a);
+    this.#castShade.style.transform = at;
+    this.#castShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.38) 0, rgba(0,0,0,.12) ${reach * 0.35}px, rgba(0,0,0,0) ${reach}px)`;
+    this.#cast.style.clipPath = polygonCss(fold.folded);
+    return fold;
+  }
+
+  /** Nothing drawn; the sheet's faces out of the layer, and an in-place
+   *  front whole again. */
+  clear() {
+    this.#releaseInPlace();
+    this.#frontSlot.replaceChildren();
+    this.#backSlot.replaceChildren();
+    this.#sheet = null;
+  }
+}
+
+/** A sheet for PageCurl: a FoldSheet whose front is put into the layer. */
+export interface CurlSheet extends Omit<FoldSheet, "back"> {
+  /** One page of a two-page spread: the flap may lie over the other
+   *  page, the gutter shades, and a sheet brought back has no lead. */
+  spread: boolean;
+  /** What the sheet shows, already mirrored back if `mirror`. */
+  front: HTMLElement;
+  /** What its back shows. */
+  back: HTMLElement;
+}
+
+/**
+ * Draws a turn into a host element (positioned, covering the area the
+ * pages are laid out in). The caller puts what lies under the sheet into
+ * `base`, sets up a sheet, then drives it by a finger (`grab`, `follow`,
+ * `release`) or plays it whole (`play`). A turn that has ended stays drawn
+ * at its last frame until `clear`, so the caller can land the reader's own
+ * page underneath first.
+ */
+export class PageCurl {
+  readonly base: HTMLElement;
+  #host: HTMLElement;
+  #gutter: HTMLElement;
+  #layer: FoldLayer;
+
+  #sheet: CurlSheet | null = null;
+  #turn: {
+    dir: CurlDirection;
+    cy: number;
+    /** p the turn started from: 0 forward, 1 back. */
+    from: number;
+    P: Point | null;
+    p: number;
+  } | null = null;
+  #drag: {
+    x0: number;
+    y0: number;
+    last: { x: number; y: number; t: number };
+    prev: { x: number; y: number; t: number };
+    lead: number | null;
+    yDev: number;
+  } | null = null;
+  #frame: number | null = null;
+  #settle: (() => void) | null = null;
+
+  constructor(host: HTMLElement) {
+    this.#host = host;
+    this.base = el("div", { position: "absolute", inset: "0" });
+    this.#gutter = el("div", {
+      position: "absolute",
+      top: "0",
+      bottom: "0",
+      width: "72px",
+      transform: "translateX(-50%)",
+      pointerEvents: "none",
+      opacity: "0",
+      background:
+        "linear-gradient(90deg, rgba(0,0,0,0) 0, rgba(0,0,0,.10) 40%, rgba(0,0,0,.24) 50%, rgba(0,0,0,.10) 60%, rgba(0,0,0,0) 100%)",
+    });
+    this.#layer = new FoldLayer();
+    host.append(this.base, this.#gutter, this.#layer.root);
+    host.hidden = true;
+  }
+
+  /** A turn is on screen (being dragged, playing, or ended and not yet
+   *  cleared). */
+  get active(): boolean {
+    return this.#turn != null;
+  }
+
+  /** The turn is being played to its end (not under a finger). */
+  get playing(): boolean {
+    return this.#frame != null && this.#drag == null;
+  }
+
+  /** p of the turn on screen, for probes. */
+  get progress(): number | null {
+    return this.#turn?.p ?? null;
+  }
+
+  /**
+   * Sets up a sheet to turn. `clipToSheet`: nothing of the turn shows
+   * outside the sheet (a single page: what goes past the spine is gone);
+   * otherwise the host clips (a spread: the flap lands on the facing page).
+   */
+  setSheet(sheet: CurlSheet, clipToSheet: boolean, gutterX: number | null) {
+    this.#sheet = sheet;
+    this.#layer.setSheet(sheet, clipToSheet);
+    this.#layer.setFront(sheet.front);
     this.#gutter.hidden = gutterX == null;
     if (gutterX != null) this.#gutter.style.left = `${gutterX}px`;
     this.#gutter.style.opacity = "0";
@@ -487,31 +606,22 @@ export class PageCurl {
     const turn = this.#turn;
     const s = this.#sheet;
     if (!d || !turn || !s) return;
-    const W = s.width;
-    let from = turn.from;
-    let leading = false;
-    const lead = d.lead != null;
-    if (d.lead != null) {
-      const t = Math.min(1, (performance.now() - d.lead) / LEAD_MS);
-      const e = 1 - Math.pow(1 - t, 3);
-      from = 1 + (LEAD - 1) * e;
-      leading = t < 1;
-    }
-    // The whole turn is the finger's way from where it took hold to the
-    // far side: the spine of a single page, the facing page's outer edge
-    // on a spread.
-    const span = Math.max(
-      W * 0.25,
-      turn.dir > 0 ? d.x0 + (s.spread ? W : 0) : W - d.x0,
-    );
-    const dp = (-(d.last.x - d.x0) / span) * (lead ? LEAD : 1);
-    const p = held(from + dp, s.spread, turn.dir);
+    const lead = d.lead == null ? null : performance.now() - d.lead;
+    const p = dragProgress({
+      dir: turn.dir,
+      spread: s.spread,
+      width: s.width,
+      x0: d.x0,
+      dx: d.last.x - d.x0,
+      leadElapsed: lead,
+    });
     d.yDev = (d.last.y - d.y0) * 0.5;
     this.#draw(this.#point(p, d.yDev), p);
     if (this.#frame != null) cancelAnimationFrame(this.#frame);
-    this.#frame = leading
-      ? requestAnimationFrame(() => this.#followFrame())
-      : null;
+    this.#frame =
+      lead != null && lead < LEAD_MS
+        ? requestAnimationFrame(() => this.#followFrame())
+        : null;
   }
 
   /** The finger let go: the turn goes over or falls back, by where the
@@ -527,11 +637,7 @@ export class PageCurl {
     if (!d || !turn || !s) return Promise.resolve(false);
     // px/ms in the sheet's frame; + is away from the spine.
     const v = (d.last.x - d.prev.x) / Math.max(1, d.last.t - d.prev.t);
-    const p = turn.p;
-    const over =
-      turn.dir > 0
-        ? (p > 0.3 || v < -0.35) && v < 0.35
-        : !((p < (s.spread ? 0.7 : 0.88) || v > 0.35) && v > -0.35);
+    const over = releasesOver(turn.dir, turn.p, v, s.spread);
     const target = over ? 1 : 0;
     return this.#animate(target).then(() => target !== turn.from);
   }
@@ -556,15 +662,14 @@ export class PageCurl {
     this.#host.hidden = true;
     this.#gutter.style.opacity = "0";
     this.base.replaceChildren();
-    this.#frontSlot.replaceChildren();
-    this.#backSlot.replaceChildren();
+    this.#layer.clear();
   }
 
   destroy() {
     this.clear();
     this.base.remove();
     this.#gutter.remove();
-    this.#clip.remove();
+    this.#layer.root.remove();
   }
 
   #stop() {
@@ -578,42 +683,25 @@ export class PageCurl {
     return pointAt(p, yDev, s.width, s.height, this.#turn!.cy);
   }
 
-  // The corner runs across on the low arc; let go mid-drag, the finger's
-  // height above that arc is given up early in the run, so the fold turns
-  // as the sheet travels instead of sliding across with it.
   #animate(p1: number): Promise<void> {
     const turn = this.#turn!;
     const s = this.#sheet!;
-    const W = s.width;
-    const H = s.height;
-    let p0 = turn.p;
-    let yDev0 = 0;
-    if (turn.P) {
-      p0 = Math.max(0, Math.min(1, (W - turn.P.x) / (2 * W)));
-      const base =
-        turn.cy + (turn.cy > H / 2 ? -arcLift(p0, H) : arcLift(p0, H));
-      yDev0 = turn.P.y - base;
-    }
-    const dur = 260 + 380 * Math.abs(p1 - p0);
-    const t0 = performance.now();
     return new Promise((resolve) => {
-      const end = () => {
-        this.#stop();
-        this.#draw(this.#point(p1, 0), p1);
-        resolve();
-      };
-      this.#settle = end;
-      const step = (now: number) => {
-        const t = Math.min(1, (now - t0) / dur);
-        if (t >= 1) return end();
-        const e = 1 - Math.pow(1 - t, 3);
-        const q = Math.min(1, t / 0.55);
-        const settle = 1 - (1 - q) * (1 - q);
-        const p = p0 + (p1 - p0) * e;
-        this.#draw(this.#point(p, yDev0 * (1 - settle)), p);
-        this.#frame = requestAnimationFrame(step);
-      };
-      this.#frame = requestAnimationFrame(step);
+      const run = runFold({
+        width: s.width,
+        height: s.height,
+        cy: turn.cy,
+        from: turn.P,
+        p0: turn.p,
+        p1,
+        draw: (P, p) => this.#draw(P, p),
+        frame: (id) => (this.#frame = id),
+        done: () => {
+          this.#stop();
+          resolve();
+        },
+      });
+      this.#settle = () => run.finish();
     });
   }
 
@@ -622,41 +710,128 @@ export class PageCurl {
     const s = this.#sheet!;
     turn.P = P;
     turn.p = p;
-    const fold = foldAt(P, s.width, s.height, turn.cy);
+    const fold = this.#layer.draw(P, p, turn.cy);
     if (!fold) {
-      this.#front.style.clipPath = "none";
-      this.#back.style.clipPath = polygonCss([]);
-      this.#castShade.style.opacity = "0";
-      this.#shadowPoly.setAttribute("points", "");
       this.#gutter.style.opacity = "0";
       return;
     }
-    const a = strength(p);
-    this.#front.style.clipPath = polygonCss(fold.front);
-    this.#back.style.clipPath = polygonCss(fold.folded);
-    this.#back.style.transform = fold.matrix;
-    this.#shadowPoly.setAttribute(
-      "points",
-      fold.lying.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "),
-    );
-    this.#shadowPoly.setAttribute("fill-opacity", (0.32 * a).toFixed(3));
-    const depth = Math.max(8, Math.min(fold.reach / 2, s.width * 0.6));
-    const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg) translateY(-50%)`;
-    // On the flap: dark at the fold, a sheen, then paper.
-    this.#backShade.style.transform = at;
-    this.#backShade.style.opacity = String(a);
-    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.30) 0, rgba(0,0,0,.06) ${depth * 0.12}px, rgba(255,255,255,.28) ${depth * 0.38}px, rgba(255,255,255,0) ${depth * 0.7}px, rgba(0,0,0,.06) ${depth}px, rgba(0,0,0,0) ${depth * 1.6}px)`;
-    // On the page the lifted sheet uncovers.
-    const reach = Math.max(14, depth * 0.55);
-    this.#castShade.style.opacity = String(a);
-    this.#castShade.style.transform = at;
-    this.#castShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.38) 0, rgba(0,0,0,.12) ${reach * 0.35}px, rgba(0,0,0,0) ${reach}px)`;
-    this.#cast.style.clipPath = polygonCss(fold.folded);
     // A spread's gutter darkens only once the sheet stands up at the
     // spine: while just a corner is lifted the paper there lies flat.
     if (s.spread) {
       const up = Math.max(0, Math.min(1, 1 - fold.nearest / (s.width * 0.45)));
-      this.#gutter.style.opacity = (a * up * up).toFixed(3);
+      this.#gutter.style.opacity = (strength(p) * up * up).toFixed(3);
     }
   }
+}
+
+// ------------------------------------------------------------- motion
+
+/**
+ * Where a finger has brought a sheet: the whole turn is the finger's way
+ * from where it took hold (x0, in the sheet's frame) to the far side —
+ * the spine of a single page, the facing page's outer edge on a spread.
+ * A single sheet brought back first comes over by itself as far as LEAD
+ * (`leadElapsed`: ms since the finger took hold; null: no lead), and the
+ * finger takes it from there. Held short of the far side (`held`).
+ */
+export function dragProgress(o: {
+  dir: CurlDirection;
+  spread: boolean;
+  width: number;
+  x0: number;
+  /** The finger's way so far along the sheet's x (+ away from the spine). */
+  dx: number;
+  leadElapsed: number | null;
+}): number {
+  const { dir, spread, width: W, x0, dx, leadElapsed } = o;
+  let from = dir < 0 ? 1 : 0;
+  const lead = leadElapsed != null;
+  if (lead) {
+    const t = Math.min(1, leadElapsed / LEAD_MS);
+    const e = 1 - Math.pow(1 - t, 3);
+    from = 1 + (LEAD - 1) * e;
+  }
+  const span = Math.max(W * 0.25, dir > 0 ? x0 + (spread ? W : 0) : W - x0);
+  const dp = (-dx / span) * (lead ? LEAD : 1);
+  return held(from + dp, spread, dir);
+}
+
+/** Whether a sheet let go `p` of the way over, the finger moving at `v`
+ *  (px/ms in the sheet's frame, + away from the spine), goes over. */
+export function releasesOver(
+  dir: CurlDirection,
+  p: number,
+  v: number,
+  spread: boolean,
+): boolean {
+  return dir > 0
+    ? (p > 0.3 || v < -0.35) && v < 0.35
+    : !((p < (spread ? 0.7 : 0.88) || v > 0.35) && v > -0.35);
+}
+
+/** How long a turn takes from p0 to p1 without the finger. */
+export function foldMs(p0: number, p1: number): number {
+  return 260 + 380 * Math.abs(p1 - p0);
+}
+
+/**
+ * Plays a sheet from where it is to p1 (0 flat, 1 over) along the low
+ * arc; let go mid-drag, the finger's height above that arc is given up
+ * early in the run, so the fold turns as the sheet travels instead of
+ * sliding across with it. `from`: the corner's point now (null: on the
+ * arc at p0). `finish` jumps to the end; `cancel` stops where it is.
+ */
+export function runFold(o: {
+  width: number;
+  height: number;
+  cy: number;
+  from: Point | null;
+  p0: number;
+  p1: number;
+  draw: (P: Point, p: number) => void;
+  /** The animation frame requested, for the caller to cancel. */
+  frame?: (id: number | null) => void;
+  done: () => void;
+}): { finish: () => void; cancel: () => void } {
+  const { width: W, height: H, cy, p1 } = o;
+  let p0 = o.p0;
+  let yDev0 = 0;
+  if (o.from) {
+    p0 = Math.max(0, Math.min(1, (W - o.from.x) / (2 * W)));
+    const base = cy + (cy > H / 2 ? -arcLift(p0, H) : arcLift(p0, H));
+    yDev0 = o.from.y - base;
+  }
+  const dur = foldMs(p0, p1);
+  const t0 = performance.now();
+  let id: number | null = null;
+  let over = false;
+  const stop = () => {
+    over = true;
+    if (id != null) cancelAnimationFrame(id);
+    id = null;
+    o.frame?.(null);
+  };
+  const end = () => {
+    if (over) return;
+    stop();
+    o.draw(pointAt(p1, 0, W, H, cy), p1);
+    o.done();
+  };
+  const step = (now: number) => {
+    if (over) return;
+    // (A frame's time is when the frame began, which can be just before
+    // the run did.)
+    const t = Math.max(0, Math.min(1, (now - t0) / dur));
+    if (t >= 1) return end();
+    const e = 1 - Math.pow(1 - t, 3);
+    const q = Math.min(1, t / 0.55);
+    const settle = 1 - (1 - q) * (1 - q);
+    const p = p0 + (p1 - p0) * e;
+    o.draw(pointAt(p, yDev0 * (1 - settle), W, H, cy), p);
+    id = requestAnimationFrame(step);
+    o.frame?.(id);
+  };
+  id = requestAnimationFrame(step);
+  o.frame?.(id);
+  return { finish: end, cancel: stop };
 }

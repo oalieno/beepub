@@ -81,10 +81,34 @@
  * that page is where they are (`failed` tells the host, which says so
  * to the reader). Only two layouts that disagree on a section's page
  * count hand a turn back to the caller, which fades it instead.
+ *
+ * The curl (style "curl") is the same two sheets drawn another way:
+ * nothing moves; the upper sheet — still the lower page number — is cut
+ * along a fold and the flap is drawn over it, folded over the spine
+ * (curl.ts). The sheet is a paginator and cannot be moved into a layer of
+ * its own (its iframe would load again), so it is cut where it lies, by a
+ * clip path; the flap shows the back of the paper. Its finger, its arc
+ * and its timing are the curl's; everything else is the slide's.
  */
 import type { Book, BookSection, NavTarget, PaginatorElement } from "./core";
+import {
+  FoldLayer,
+  dragProgress,
+  foldMs,
+  LEAD_MS,
+  pointAt,
+  releasesOver,
+  runFold,
+  type Point,
+} from "./curl";
 
 type Dir = 1 | -1;
+
+/** How the two sheets of a turn are drawn: the upper one slides off the
+ *  other ("slide"), or it is folded over the spine by its corner
+ *  ("curl", curl.ts). Everything else — the ghosts, the cover, what is
+ *  owed and when it is paid — is the same machinery. */
+export type TurnStyle = "slide" | "curl";
 
 /** A page of the book as the paginator counts it: text pages run from 1
  *  to pages − 2 (a blank page pads each end of a section). */
@@ -263,6 +287,8 @@ const Z_DIM_OVER = "5";
 const Z_OVER = "6";
 /** The bare paper, once the turn onto it has landed. */
 const Z_BLANK = "7";
+/** The curl's fold, over every sheet. */
+const Z_FOLD = "8";
 
 const LAYOUT_ATTRS = [
   "gap",
@@ -626,8 +652,33 @@ export class CoverSlide {
   /** The ghost step a waiting drag is to be told the end of. */
   #joining: Promise<void> | null = null;
 
-  constructor(host: SlideHost) {
+  // The curl (style "curl"): the fold drawn over the sheets.
+  #style: TurnStyle;
+  #fold: FoldLayer | null = null;
+  /** The sheet the fold cuts, as last set up. */
+  #folded: HTMLElement | null = null;
+  /** The corner the sheet is held by: 0 its top, the height its bottom. */
+  #cy = 0;
+  /** Where the corner was last drawn, and how far over the sheet was
+   *  (0 flat … 1 over): a turn let go goes on from there. */
+  #foldAt: Point | null = null;
+  /** How far over the folded sheet is drawn (0 flat … 1 over); null
+   *  while there is no fold on screen. */
+  #foldOver: number | null = null;
+  /** The fold being played without the finger. */
+  #foldRun: { finish: () => void; cancel: () => void } | null = null;
+  #foldDone: (() => void) | null = null;
+  /** Where the finger took hold, in the container (null: not told). */
+  #grabAt: { x: number; y: number } | null = null;
+  /** How far it has come along the screen's y axis. */
+  #y = 0;
+  /** When a sheet brought back by the finger began coming over by
+   *  itself (curl.ts LEAD), 0: it is not. */
+  #leadAt = 0;
+
+  constructor(host: SlideHost, style: TurnStyle = "slide") {
     this.#host = host;
+    this.#style = style;
     const { container, live } = host;
     const dim = document.createElement("div");
     dim.setAttribute("aria-hidden", "true");
@@ -653,6 +704,26 @@ export class CoverSlide {
     live.style.zIndex = Z_LIVE;
     container.insertBefore(dim, live);
     container.append(blank);
+    if (style === "curl") {
+      const fold = new FoldLayer();
+      fold.root.setAttribute("aria-hidden", "true");
+      fold.root.style.zIndex = Z_FOLD;
+      fold.root.hidden = true;
+      container.append(fold.root);
+      this.#fold = fold;
+    }
+  }
+
+  /** The curl on screen, for probes and tests: how far over the folded
+   *  sheet is (0 flat … 1 turned over), and which sheet that is. */
+  get fold(): { over: number; sheet: HTMLElement | null } | null {
+    if (this.#foldOver == null) return null;
+    return { over: this.#foldOver, sheet: this.#folded };
+  }
+
+  /** The way this slide draws a turn. */
+  get style(): TurnStyle {
+    return this.#style;
   }
 
   /** The ghost a probe most likely means: the one in the turn under
@@ -811,6 +882,8 @@ export class CoverSlide {
     this.#dropAll();
     this.#dim.remove();
     this.#blank.remove();
+    this.#fold?.root.remove();
+    this.#fold = null;
     const { style } = this.#host.live;
     style.zIndex = "";
     style.background = "";
@@ -1045,7 +1118,7 @@ export class CoverSlide {
 
   /** The two sheets of a turn `dir` onto `sheet`'s page, `p` of the way:
    *  the lower page number above, the other drifting beneath it. */
-  #arrange(dir: Dir, p: number, sheet: HTMLElement) {
+  #arrange(dir: Dir, p: number, sheet: HTMLElement, P?: Point) {
     const live = this.#host.live;
     const dim = this.#dim;
     const top = this.#top();
@@ -1068,15 +1141,134 @@ export class CoverSlide {
       dim.style.zIndex = Z_DIM_OVER;
       upper.style.zIndex = Z_OVER;
     }
+    if (this.#fold) {
+      // The curl: nothing moves; the upper sheet is cut along the fold
+      // and the flap drawn over it.
+      flatten(lower);
+      flatten(upper);
+      dim.style.opacity = "0";
+      this.#drawFold(dir, p, upper, P);
+      return;
+    }
     dim.style.opacity = this.#dimOpacity(dir, p);
     upper.style.transform = this.#transform(dir, p);
     upper.style.boxShadow = SHADOW;
     upper.style.willChange = "transform";
   }
 
+  // ------------------------------------------------------------- the curl
+
+  /** How far over the folded sheet is (0 flat … 1 turned over) at
+   *  progress `p` of a turn `dir`: forward, the page on screen is folded
+   *  away; back, the previous page comes flat over it. */
+  #over(dir: Dir, p: number): number {
+    return dir > 0 ? p : 1 - p;
+  }
+
+  /** The sheet the fold cuts is `upper`: set it up when it is another
+   *  one than last time. */
+  #foldSheet(upper: HTMLElement) {
+    const fold = this.#fold!;
+    if (this.#folded === upper) return;
+    const { container } = this.#host;
+    fold.setSheet(
+      {
+        left: 0,
+        top: 0,
+        width: container.clientWidth || 1,
+        height: container.clientHeight || 1,
+        // "Next" to the left (vertical text, a right-to-left book): the
+        // spine is on the right.
+        mirror: this.#host.leftward(),
+        back: null,
+        seeThrough: false,
+        paper: this.#background || "#fff",
+      },
+      true,
+    );
+    fold.setFrontInPlace(upper);
+    this.#folded = upper;
+  }
+
+  /** The fold of the turn `dir`, `p` of the way, onto `upper` — or the
+   *  corner at `P` when one is given (a turn being played on). */
+  #drawFold(dir: Dir, p: number, upper: HTMLElement, P?: Point) {
+    const fold = this.#fold!;
+    this.#foldSheet(upper);
+    const { container } = this.#host;
+    const W = container.clientWidth || 1;
+    const H = container.clientHeight || 1;
+    const q = this.#over(dir, p);
+    const at = P ?? pointAt(q, 0, W, H, this.#cy);
+    fold.root.hidden = false;
+    fold.draw(at, q, this.#cy);
+    this.#foldAt = at;
+    this.#foldOver = q;
+  }
+
+  /** The fold off the screen and every sheet whole again. */
+  #unfold() {
+    const fold = this.#fold;
+    if (!fold) return;
+    this.#foldRun?.cancel();
+    this.#foldRun = null;
+    const done = this.#foldDone;
+    this.#foldDone = null;
+    done?.();
+    fold.clear();
+    fold.root.hidden = true;
+    this.#folded = null;
+    this.#foldAt = null;
+    this.#foldOver = null;
+  }
+
+  /** Plays the fold of a turn `dir` from `from` to `to` (slide progress),
+   *  along the curl's own arc and timing; from where the corner stands
+   *  when the finger let it go. */
+  #animateFold(dir: Dir, from: number, to: number, sheet: HTMLElement) {
+    const top = this.#top();
+    const upper = dir > 0 ? top : sheet;
+    const { container } = this.#host;
+    const W = container.clientWidth || 1;
+    const H = container.clientHeight || 1;
+    this.#foldSheet(upper);
+    const start = this.#folded === upper ? this.#foldAt : null;
+    this.#foldRun?.cancel();
+    return new Promise<void>((resolve) => {
+      const p0 = this.#over(dir, from);
+      const p1 = this.#over(dir, to);
+      let guard: ReturnType<typeof setTimeout> | null = null;
+      const done = () => {
+        if (guard != null) clearTimeout(guard);
+        if (this.#foldDone === done) this.#foldDone = null;
+        this.#foldRun = null;
+        resolve();
+      };
+      this.#foldDone = done;
+      const run = runFold({
+        width: W,
+        height: H,
+        cy: this.#cy,
+        from: start,
+        p0,
+        p1,
+        draw: (P, q) => {
+          this.#fold!.draw(P, q, this.#cy);
+          this.#foldAt = P;
+          this.#foldOver = q;
+        },
+        done,
+      });
+      this.#foldRun = run;
+      // A tab in the background makes no frames; the turn must still end.
+      guard = setTimeout(() => run.finish(), foldMs(p0, p1) + 150);
+    });
+  }
+
   /** Every sheet flat: the cover (if one is up) over the live page, the
    *  other ghosts under it. */
   #flat() {
+    this.#unfold();
     flatten(this.#host.live);
     for (const ghost of this.#ghosts) {
       flatten(ghost.el);
@@ -1147,7 +1339,31 @@ export class CoverSlide {
     if (this.#animations === animations) this.#animations = [];
   }
 
+  /** A turn `dir` onto `sheet`'s page played from `from` to `to`. The
+   *  slide sets the end state in the styles and animates over it; the
+   *  curl draws where it starts and folds on from there frame by frame
+   *  (an end state drawn first would show for a frame). */
+  async #play(
+    dir: Dir,
+    from: number,
+    to: number,
+    ms: number,
+    sheet: HTMLElement,
+    easing: string = EASE_FROM_REST,
+  ) {
+    if (this.#fold) {
+      // Taken up afresh, the sheet is held by its bottom corner.
+      if (!this.#foldAt) this.#cy = this.#host.container.clientHeight || 1;
+      this.#arrange(dir, from, sheet, this.#foldAt ?? undefined);
+      if (from !== to) await this.#animateFold(dir, from, to, sheet);
+      return;
+    }
+    this.#arrange(dir, to, sheet);
+    if (from !== to) await this.#animate(dir, from, to, ms, sheet, easing);
+  }
+
   #finishAnimations() {
+    this.#foldRun?.finish();
     for (const a of this.#animations) {
       try {
         a.finish();
@@ -1176,9 +1392,7 @@ export class CoverSlide {
     // a page that is on its way out: taps and swipes are heard there.
     this.#host.live.style.pointerEvents = "none";
     this.#note({ at: this.#now(), dir, how: to ? "slide" : "spring" });
-    // The end state stands in the styles; the animation plays over it.
-    this.#arrange(dir, to, ghost.el);
-    if (from !== to) await this.#animate(dir, from, to, ms, ghost.el, easing);
+    await this.#play(dir, from, to, ms, ghost.el, easing);
     if (generation !== this.#generation) return;
     this.#state = "idle";
     this.#letGo();
@@ -1496,8 +1710,7 @@ export class CoverSlide {
     this.#note({ at: this.#now(), dir, how: "slide", blank: true });
     blank.style.display = "";
     blank.style.opacity = "";
-    this.#arrange(dir, 1, blank);
-    await this.#animate(dir, 0, 1, TURN_MS, blank);
+    await this.#play(dir, 0, 1, TURN_MS, blank);
     if (generation !== this.#generation) return;
     // Landed: the paper lies over everything, flat.
     this.#flat();
@@ -1568,8 +1781,7 @@ export class CoverSlide {
     this.#host.pending(false);
     this.#note({ at: this.#now(), dir, how: "abandoned" });
     this.#state = "settle";
-    this.#arrange(dir, 0, blank);
-    await this.#animate(dir, 1, 0, TURN_MS, blank);
+    await this.#play(dir, 1, 0, TURN_MS, blank);
     if (generation !== this.#generation) return;
     this.#putBlankAway();
     this.#state = "idle";
@@ -1588,13 +1800,23 @@ export class CoverSlide {
    * is running) the finger is only followed in the books: the slide
    * under way is cut short, and the sheet joins once it is over.
    */
-  dragBy(dx: number, blocked = false): boolean {
+  dragBy(
+    dx: number,
+    blocked = false,
+    dy = 0,
+    at: { x: number; y: number } | null = null,
+  ): boolean {
     if (!this.#enabled || this.#host.reducedMotion()) return false;
     if (!this.#finger) {
       this.#finger = true;
       this.#x = 0;
+      this.#y = 0;
+      // (The point the first move is reported from: the finger has come
+      // this far from where it took hold.)
+      this.#grabAt = at ? { x: at.x + dx, y: at.y + dy } : null;
     }
     this.#x -= dx;
+    this.#y -= dy;
     this.#movedAt = performance.now();
     if (blocked) return true;
     if (this.#state === "idle") {
@@ -1650,6 +1872,15 @@ export class CoverSlide {
       this.#dragDir = dir;
       this.#partner = ghost;
       this.#joining = null;
+      if (this.#fold) {
+        // The curl holds the sheet by the corner nearer the finger; one
+        // brought back comes over by itself first (curl.ts LEAD).
+        const H = this.#host.container.clientHeight || 1;
+        const y0 = this.#grabAt?.y ?? H;
+        this.#cy = y0 < H / 2 ? 0 : H;
+        this.#leadAt = dir < 0 ? performance.now() : 0;
+        this.#foldAt = null;
+      }
       // The sheet appears under a finger that is already some way off:
       // it runs up to it rather than jump.
       this.#stopCatchUp();
@@ -1664,6 +1895,10 @@ export class CoverSlide {
     const dir = this.#dragDir;
     const ghost = this.#partner;
     if (!dir || !ghost) return;
+    if (this.#fold) {
+      this.#paintFold(dir, ghost);
+      return;
+    }
     let p = Math.min(1, Math.abs(this.#x) / this.#width());
     if (this.#joinedAt) {
       const t = (performance.now() - this.#joinedAt) / CATCH_UP_MS;
@@ -1674,6 +1909,48 @@ export class CoverSlide {
     this.#progress = p;
     this.#arrange(dir, p, ghost.el);
     if (this.#joinedAt && !this.#frame)
+      this.#frame = requestAnimationFrame(() => {
+        this.#frame = 0;
+        if (this.#state === "drag") this.#paint();
+      });
+  }
+
+  /** The curl under the finger: the sheet held by its corner, lifted as
+   *  far as the finger has come from where it took hold (in the sheet's
+   *  frame, the spine at x = 0), and no further than curl.ts allows. */
+  #paintFold(dir: Dir, ghost: Ghost) {
+    const { container } = this.#host;
+    const W = container.clientWidth || 1;
+    const H = container.clientHeight || 1;
+    const mirror = this.#host.leftward();
+    const local = (x: number) => (mirror ? W - x : x);
+    const x0 =
+      this.#grabAt != null
+        ? Math.max(0, Math.min(W, local(this.#grabAt.x)))
+        : dir > 0
+          ? W * 0.8
+          : W * 0.2;
+    const lead = this.#leadAt ? performance.now() - this.#leadAt : null;
+    let q = dragProgress({
+      dir,
+      spread: false,
+      width: W,
+      x0,
+      dx: mirror ? -this.#x : this.#x,
+      leadElapsed: lead,
+    });
+    if (this.#joinedAt && dir > 0) {
+      // A sheet joining a finger already under way runs up to it.
+      const t = (performance.now() - this.#joinedAt) / CATCH_UP_MS;
+      if (t >= 1) this.#joinedAt = 0;
+      else q *= 1 - (1 - t) ** 3;
+    } else this.#joinedAt = 0;
+    const p = dir > 0 ? q : 1 - q;
+    this.#progress = p;
+    const P = pointAt(q, this.#y * 0.5, W, H, this.#cy);
+    this.#arrange(dir, p, ghost.el, P);
+    const moving = this.#joinedAt !== 0 || (lead != null && lead < LEAD_MS);
+    if (moving && !this.#frame)
       this.#frame = requestAnimationFrame(() => {
         this.#frame = 0;
         if (this.#state === "drag") this.#paint();
@@ -1693,6 +1970,18 @@ export class CoverSlide {
   #completes(dir: Dir, p: number, vx: number): boolean {
     const toward = this.#toward(dir, vx);
     return toward > FLICK || (p > 0.5 && toward > -FLICK);
+  }
+
+  /** The curl's own rule (curl.ts releasesOver): a sheet let go goes
+   *  over once lifted a little, falls back unless brought well over. */
+  #foldCompletes(dir: Dir, vx: number): boolean {
+    const stale = performance.now() - this.#movedAt > VELOCITY_STALE_MS;
+    // In the sheet's frame, + away from the spine; vx is previous −
+    // current along the screen.
+    const v =
+      stale || !Number.isFinite(vx) ? 0 : this.#host.leftward() ? vx : -vx;
+    const over = releasesOver(dir, this.#over(dir, this.#progress), v, false);
+    return dir > 0 ? over : !over;
   }
 
   /** The same for a swipe no sheet followed: to the reader it was a
@@ -1751,7 +2040,9 @@ export class CoverSlide {
       this.#lateAt !== 0 && performance.now() - this.#lateAt < SEEN_MS;
     const complete = unseen
       ? this.#swiped(dir, vx)
-      : this.#completes(dir, p, vx);
+      : this.#fold
+        ? this.#foldCompletes(dir, vx)
+        : this.#completes(dir, p, vx);
     // From where the sheet stands, which is short of the finger while it
     // is still catching up.
     const from = this.#progress;

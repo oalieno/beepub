@@ -216,6 +216,7 @@ test("the settings sheet offers the modes and stores the choice", async ({
   await expect(row.getByRole("button")).toHaveText([
     "Fast fade",
     "Slide",
+    "Curl",
     "Scroll",
   ]);
 
