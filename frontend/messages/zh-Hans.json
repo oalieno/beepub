@@ -373,6 +373,8 @@
   "reader_pager_direction_auto": "自动",
   "reader_pager_direction_ltr": "从左到右",
   "reader_pager_direction_rtl": "从右到左",
+  "reader_pager_turn_instant": "直接",
+  "reader_pager_turn_curl": "卷页",
   "reader_pager_pairing": "双页配对",
   "reader_pager_pairing_cover": "封面独占",
   "reader_pager_pairing_shift": "从第一页",

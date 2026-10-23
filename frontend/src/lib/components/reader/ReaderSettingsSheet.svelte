@@ -18,7 +18,7 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { WritingMode } from "$lib/reader/core";
-  import type { PagerDirection, PagerMode } from "$lib/reader/pages";
+  import type { PagerDirection, PagerMode, PagerTurn } from "$lib/reader/pages";
 
   /**
    * The reader's settings sheet. Rows appear when their handler is
@@ -43,6 +43,7 @@
     isImageBook = false,
     pagerMode = "single",
     pagerDirection = "auto",
+    pagerTurn = "instant",
     pagerShift = false,
     pagerPadding = 0,
     showSync = false,
@@ -61,6 +62,7 @@
     onfullPageChange,
     onpagerModeChange,
     onpagerDirectionChange,
+    onpagerTurnChange,
     onpagerShiftChange,
     onpagerPaddingChange,
     onhelp,
@@ -110,11 +112,14 @@
      *  pairing and page padding. Present only while the pager renders. */
     pagerMode?: PagerMode;
     pagerDirection?: PagerDirection;
+    /** How a paged comic turns: at once, or curled over the spine. */
+    pagerTurn?: PagerTurn;
     pagerShift?: boolean;
     /** px kept around the pages. */
     pagerPadding?: number;
     onpagerModeChange?: (value: PagerMode) => void;
     onpagerDirectionChange?: (value: PagerDirection) => void;
+    onpagerTurnChange?: (value: PagerTurn) => void;
     onpagerShiftChange?: (value: boolean) => void;
     onpagerPaddingChange?: (value: number) => void;
     onhelp?: () => void;
@@ -193,6 +198,10 @@
       icon: GalleryHorizontal,
     },
     { value: "webtoon", label: m.reader_pager_mode_webtoon, icon: Smartphone },
+  ];
+  const pagerTurnOptions: { value: PagerTurn; label: () => string }[] = [
+    { value: "instant", label: m.reader_pager_turn_instant },
+    { value: "curl", label: m.reader_pager_turn_curl },
   ];
   const pagerShiftOptions: { value: boolean; label: () => string }[] = [
     { value: false, label: m.reader_pager_pairing_cover },
@@ -546,6 +555,30 @@
                     {#if option.icon}
                       <option.icon size={14} />
                     {/if}
+                    {option.label()}
+                  </button>
+                {/each}
+              </div>
+            </div>
+          {/if}
+          {#if onpagerTurnChange && (pagerMode === "single" || pagerMode === "double")}
+            <!-- Only a paged comic turns: a strip scrolls. -->
+            <div
+              class="flex items-center justify-between gap-3"
+              data-testid="setting-pager-turn"
+            >
+              <span class="shrink-0 text-sm {labelClass}"
+                >{m.reader_page_turn()}</span
+              >
+              <div class="flex gap-1">
+                {#each pagerTurnOptions as option}
+                  <button
+                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerTurn ===
+                    option.value
+                      ? activeBtnClass
+                      : inactiveBtnClass}"
+                    onclick={() => onpagerTurnChange?.(option.value)}
+                  >
                     {option.label()}
                   </button>
                 {/each}

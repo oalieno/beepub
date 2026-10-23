@@ -29,7 +29,13 @@
     type PageEntry,
     type PagerDirection,
     type PagerMode,
+    type PagerTurn,
   } from "$lib/reader/pages";
+  import {
+    PageCurl,
+    type CurlDirection,
+    type CurlSheet,
+  } from "$lib/reader/curl";
   import {
     flattenToc,
     tocLabelForSection,
@@ -52,6 +58,7 @@
     direction = "auto",
     shift = false,
     padding = 0,
+    pageTurn = "instant",
     onready,
     onerror,
     ontap,
@@ -83,6 +90,8 @@
     shift?: boolean;
     /** Space kept around the pages, px: the pictures shrink to fit inside. */
     padding?: number;
+    /** How a paged book turns: at once, or a sheet curled over the spine. */
+    pageTurn?: PagerTurn;
     /** First page shown. */
     onready?: () => void;
     onerror?: (error: Error) => void;
@@ -245,11 +254,13 @@
       onbookend?.();
       return;
     }
+    if (curlStep(1)) return;
     goToPage(spreads[spreadIndex + 1][0].index, "user");
   }
 
   export function prev() {
     if (spreadIndex <= 0) return;
+    if (curlStep(-1)) return;
     goToPage(spreads[spreadIndex - 1][0].index, "user");
   }
 
@@ -469,6 +480,418 @@
       : "2 / 3";
   }
 
+  // ------------------------------------------------------------------ curl
+
+  // The curl turn (single and double): a sheet lifted by its corner and
+  // folded over the spine, drawn by PageCurl in a layer over the pages.
+  // The layer holds what lies under the sheet and the sheet itself, built
+  // from the pages' pictures; the reader's own pages stay as they are
+  // beneath it until the turn lands, then the position moves and, once the
+  // landed pages have painted, the layer goes.
+  //
+  // Which sheet turns: between two pairs, the later page of the earlier
+  // pair (the left page of a manga), hinged at the gutter, its back the
+  // first page of the later pair; when the earlier spread is one page
+  // alone (single mode, a cover), that page, hinged at its own spine-side
+  // edge, its back the same page seen through the paper. A pair turning
+  // to a page shown alone has no sheet that lands where the page does:
+  // it turns at once.
+  let curlHost = $state<HTMLDivElement | null>(null);
+  let curl: PageCurl | null = null;
+  const curlOn = $derived(pageTurn === "curl" && flow === "paged");
+  /** A turn is under way: being prepared, dragged, played or landed. */
+  let curlBusy = false;
+  /** Turns asked for while one was under way (taps, keys): + forward. */
+  let curlQueue = 0;
+  /** Bumped by an abort: a turn's pending steps check it and stop. */
+  let curlGen = 0;
+  let curlDrag: {
+    dir: CurlDirection;
+    /** Where the finger was when the turn began to move, and where it
+     *  first touched (its height picks the corner). */
+    x0: number;
+    y0: number;
+    downY: number;
+    t0: number;
+    last: { x: number; y: number; t: number };
+    ready: boolean;
+    released: boolean;
+    target: number;
+  } | null = null;
+
+  $effect(() => {
+    const host = curlHost;
+    if (!host) return;
+    const c = new PageCurl(host);
+    curl = c;
+    return () => {
+      c.destroy();
+      if (curl === c) curl = null;
+      abortCurl();
+    };
+  });
+
+  // A turn under way does not survive the layout it was drawn for.
+  $effect(() => {
+    void [
+      mode,
+      pageTurn,
+      rtl,
+      shift,
+      padding,
+      containerWidth,
+      containerHeight,
+      total,
+    ];
+    untrack(() => {
+      if (curlBusy) abortCurl();
+    });
+  });
+
+  function abortCurl() {
+    curlGen++;
+    curl?.clear();
+    curlDrag = null;
+    curlBusy = false;
+    curlQueue = 0;
+  }
+
+  function reducedMotion(): boolean {
+    return (
+      typeof matchMedia === "function" &&
+      matchMedia("(prefers-reduced-motion: reduce)").matches
+    );
+  }
+
+  function canTurn(dir: CurlDirection): boolean {
+    return dir > 0 ? spreadIndex < spreads.length - 1 : spreadIndex > 0;
+  }
+
+  /** A turn asked for by a tap, a key or the chrome: played as a curl when
+   *  curling, queued behind one under way (which is hurried to its end).
+   *  False: the caller turns at once. */
+  function curlStep(dir: CurlDirection): boolean {
+    if (!curlOn || !curl || scale !== 1 || reducedMotion()) return false;
+    if (curlBusy) {
+      if (!curlDrag) {
+        curlQueue = Math.max(-2, Math.min(2, curlQueue + dir));
+        curl.settle();
+      }
+      return true;
+    }
+    void playCurl(dir);
+    return true;
+  }
+
+  interface CurlPlan {
+    target: number;
+    sheet: CurlSheet;
+    clipToSheet: boolean;
+    gutterX: number | null;
+    base: HTMLElement;
+  }
+
+  function pictureOf(page: PageEntry): HTMLImageElement | null {
+    const url = urls[page.index];
+    if (!url) return null;
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "";
+    img.draggable = false;
+    return img;
+  }
+
+  /** A page filling the sheet, mirrored back when the sheet is drawn in a
+   *  mirrored stage. */
+  function sheetFace(
+    page: PageEntry,
+    flip: boolean,
+    paper: string,
+  ): HTMLElement {
+    const face = document.createElement("div");
+    Object.assign(face.style, {
+      position: "absolute",
+      inset: "0",
+      background: paper,
+      transform: flip ? "scaleX(-1)" : "none",
+    });
+    const img = pictureOf(page);
+    if (img) {
+      img.className = "block h-full w-full object-contain";
+      face.append(img);
+    }
+    return face;
+  }
+
+  /** The pages under the sheet, laid out as the reader lays a spread out. */
+  function underLayout(list: PageEntry[], paper: string): HTMLElement {
+    const root = document.createElement("div");
+    root.className = "flex h-full w-full items-center justify-center";
+    Object.assign(root.style, {
+      position: "absolute",
+      inset: "0",
+      padding: `${padding}px`,
+      background: paper,
+    });
+    list.forEach((page, i) => {
+      const slot = document.createElement("div");
+      slot.className = `flex h-full items-center ${
+        list.length > 1
+          ? `w-1/2 ${i === 0 ? "justify-end" : "justify-start"}`
+          : "w-full justify-center"
+      }`;
+      const img = pictureOf(page);
+      if (img) {
+        img.className =
+          "block h-full max-h-full w-auto max-w-full object-contain";
+        slot.append(img);
+      }
+      root.append(slot);
+    });
+    return root;
+  }
+
+  async function naturalAspect(page: PageEntry): Promise<number> {
+    const img = pictureOf(page);
+    if (img) {
+      try {
+        await img.decode();
+        if (img.naturalWidth && img.naturalHeight)
+          return img.naturalWidth / img.naturalHeight;
+      } catch {
+        /* fall back to the page's recorded size */
+      }
+    }
+    return page.width && page.height ? page.width / page.height : 2 / 3;
+  }
+
+  /** Where a picture lands in a slot: full height, as wide as its shape
+   *  allows (pushed to `align`), letterboxed top and bottom when the slot
+   *  is too narrow for it — the reader's own `h-full w-auto max-w-full
+   *  object-contain`. */
+  function pictureRect(
+    slot: { x: number; y: number; w: number; h: number },
+    aspect: number,
+    align: "start" | "end" | "center",
+  ) {
+    const w = Math.min(slot.w, slot.h * aspect);
+    const h = Math.min(slot.h, w / aspect);
+    const x =
+      align === "end"
+        ? slot.x + slot.w - w
+        : align === "start"
+          ? slot.x
+          : slot.x + (slot.w - w) / 2;
+    return { left: x, top: slot.y + (slot.h - h) / 2, width: w, height: h };
+  }
+
+  async function planCurl(dir: CurlDirection): Promise<CurlPlan | null> {
+    const target = spreadIndex + dir;
+    const earlier = spreads[Math.min(spreadIndex, target)];
+    const later = spreads[Math.max(spreadIndex, target)];
+    if (!earlier || !later || !container) return null;
+    const pair = earlier.length === 2 && later.length === 2;
+    if (!pair && earlier.length !== 1) return null;
+    await Promise.all([...earlier, ...later].map((p) => loadImage(p)));
+    const paper = getComputedStyle(container).backgroundColor;
+    const content = {
+      x: padding,
+      y: padding,
+      w: Math.max(1, containerWidth - 2 * padding),
+      h: Math.max(1, containerHeight - 2 * padding),
+    };
+    // The sheet's spine is on its right in a manga: the left page turns
+    // over the gutter, a page alone over its right edge.
+    const mirror = rtl;
+    if (pair) {
+      // Screen slot of the turning page: left in a manga.
+      const sheetPage = earlier[1];
+      const left = rtl;
+      const slot = {
+        x: content.x + (left ? 0 : content.w / 2),
+        y: content.y,
+        w: content.w / 2,
+        h: content.h,
+      };
+      const rect = pictureRect(
+        slot,
+        await naturalAspect(sheetPage),
+        left ? "end" : "start",
+      );
+      const under = left ? [later[1], earlier[0]] : [earlier[0], later[1]];
+      return {
+        target,
+        sheet: {
+          ...rect,
+          mirror,
+          spread: true,
+          front: sheetFace(sheetPage, mirror, paper),
+          // Reflected once by the fold, once more by a mirrored stage: the
+          // page on the back comes out the right way round.
+          back: sheetFace(later[0], !mirror, paper),
+          seeThrough: false,
+          paper,
+        },
+        clipToSheet: false,
+        gutterX: content.x + content.w / 2,
+        base: underLayout(under, paper),
+      };
+    }
+    const sheetPage = earlier[0];
+    const rect = pictureRect(content, await naturalAspect(sheetPage), "center");
+    return {
+      target,
+      sheet: {
+        ...rect,
+        mirror,
+        spread: false,
+        front: sheetFace(sheetPage, mirror, paper),
+        back: sheetFace(sheetPage, mirror, paper),
+        seeThrough: true,
+        paper,
+      },
+      clipToSheet: true,
+      gutterX: null,
+      base: underLayout(displayOrder(later, rtl), paper),
+    };
+  }
+
+  /** Mounts a plan once its pictures are decoded, so the layer's first
+   *  frame is the pages already on screen, not paper. */
+  async function mountPlan(plan: CurlPlan, c: PageCurl) {
+    const imgs = [
+      ...Array.from(plan.base.querySelectorAll("img")),
+      ...Array.from(plan.sheet.front.querySelectorAll("img")),
+      ...Array.from(plan.sheet.back.querySelectorAll("img")),
+    ];
+    await Promise.all(imgs.map((img) => img.decode().catch(() => {})));
+    c.base.replaceChildren(plan.base);
+    c.setSheet(plan.sheet, plan.clipToSheet, plan.gutterX);
+  }
+
+  async function playCurl(dir: CurlDirection) {
+    const c = curl;
+    if (!c) return;
+    const gen = ++curlGen;
+    curlBusy = true;
+    const plan = await planCurl(dir);
+    if (gen !== curlGen) return;
+    if (!plan) {
+      curlBusy = false;
+      goToPage(spreads[spreadIndex + dir][0].index, "user");
+      return drainCurl();
+    }
+    await mountPlan(plan, c);
+    if (gen !== curlGen) return;
+    c.begin(dir, plan.sheet.height);
+    const played = c.play();
+    if (curlQueue) c.settle();
+    const over = await played;
+    if (gen !== curlGen) return;
+    await landCurl(over ? plan.target : null, gen);
+  }
+
+  async function landCurl(target: number | null, gen: number) {
+    if (target != null) {
+      const spread = spreads[target];
+      if (spread) goToPage(spread[0].index, "user");
+      await tick();
+      // The layer stays until the landed pages have painted beneath it.
+      const imgs = container
+        ? Array.from(
+            container.querySelectorAll<HTMLImageElement>("[data-page] img"),
+          )
+        : [];
+      await Promise.race([
+        Promise.all(imgs.map((img) => img.decode().catch(() => {}))),
+        new Promise((r) => setTimeout(r, 300)),
+      ]);
+      if (gen !== curlGen) return;
+    }
+    curl?.clear();
+    curlBusy = false;
+    drainCurl();
+  }
+
+  function drainCurl() {
+    if (!curlQueue) return;
+    const dir = curlQueue > 0 ? 1 : -1;
+    curlQueue -= dir;
+    if (dir > 0) next();
+    else prev();
+  }
+
+  /** A horizontal drag on the page begins a turn: towards the spine turns
+   *  forward, away from it brings the previous sheet back. */
+  function startCurlDrag(dir: CurlDirection, e: PointerEvent, downY: number) {
+    const c = curl;
+    if (!c) return;
+    const gen = ++curlGen;
+    curlBusy = true;
+    const now = performance.now();
+    const drag = {
+      dir,
+      x0: e.clientX,
+      y0: e.clientY,
+      downY,
+      t0: now,
+      last: { x: e.clientX, y: e.clientY, t: now },
+      ready: false,
+      released: false,
+      target: spreadIndex + dir,
+    };
+    curlDrag = drag;
+    void (async () => {
+      const plan = await planCurl(dir);
+      if (gen !== curlGen) return;
+      if (!plan) {
+        curlDrag = null;
+        curlBusy = false;
+        if (drag.released)
+          goToPage(spreads[spreadIndex + dir][0].index, "user");
+        return;
+      }
+      await mountPlan(plan, c);
+      if (gen !== curlGen) return;
+      drag.target = plan.target;
+      const down = c.toLocal(drag.x0, drag.downY);
+      c.begin(dir, down.y < plan.sheet.height / 2 ? 0 : plan.sheet.height);
+      if (drag.released) {
+        curlDrag = null;
+        const over = await c.play();
+        if (gen === curlGen) await landCurl(over ? plan.target : null, gen);
+        return;
+      }
+      const at = c.toLocal(drag.x0, drag.y0);
+      c.grab(at.x, at.y, drag.t0);
+      const last = c.toLocal(drag.last.x, drag.last.y);
+      c.follow(last.x, last.y, drag.last.t);
+      drag.ready = true;
+    })();
+  }
+
+  function followCurlDrag(e: PointerEvent) {
+    const drag = curlDrag;
+    if (!drag) return;
+    drag.last = { x: e.clientX, y: e.clientY, t: performance.now() };
+    if (drag.ready && curl) {
+      const at = curl.toLocal(e.clientX, e.clientY);
+      curl.follow(at.x, at.y, drag.last.t);
+    }
+  }
+
+  function releaseCurlDrag() {
+    const drag = curlDrag;
+    if (!drag) return;
+    drag.released = true;
+    if (!drag.ready || !curl) return; // the turn plays whole once it is ready
+    curlDrag = null;
+    const gen = curlGen;
+    void curl.release().then((over) => {
+      if (gen === curlGen) void landCurl(over ? drag.target : null, gen);
+    });
+  }
+
   // -------------------------------------------------------------- gestures
 
   interface PointerPoint {
@@ -486,6 +909,8 @@
     moved: boolean;
     startedAt: number;
     pinched: boolean;
+    /** Where the finger first touched, in client coordinates. */
+    clientY: number;
   } | null = null;
   let lastTap: { at: number; x: number; y: number } | null = null;
   let wheelLockUntil = 0;
@@ -496,6 +921,8 @@
 
   function handlePointerDown(e: PointerEvent) {
     if (e.button !== 0 && e.pointerType === "mouse") return;
+    // A sheet under a finger keeps it: a second one does not pinch.
+    if (curlDrag) return;
     pointers.set(e.pointerId, { x: e.screenX, y: e.screenY });
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
     if (pointers.size === 1) {
@@ -509,6 +936,7 @@
         moved: false,
         startedAt: performance.now(),
         pinched: false,
+        clientY: e.clientY,
       };
     } else if (pointers.size === 2 && gesture) {
       const [a, b] = [...pointers.values()];
@@ -534,10 +962,31 @@
       gesture.moved = true;
       return;
     }
+    if (curlDrag) {
+      followCurlDrag(e);
+      return;
+    }
     const dx = e.screenX - gesture.startX;
     const dy = e.screenY - gesture.startY;
     if (Math.abs(dx) > MOVE_THRESHOLD || Math.abs(dy) > MOVE_THRESHOLD)
       gesture.moved = true;
+    if (
+      curlOn &&
+      scale === 1 &&
+      !curlBusy &&
+      gesture.moved &&
+      !gesture.pinched &&
+      Math.abs(dx) > Math.abs(dy) &&
+      !reducedMotion()
+    ) {
+      // Towards the spine turns forward: leftwards in a book read left to
+      // right, rightwards in a manga.
+      const dir: CurlDirection = (rtl ? dx > 0 : dx < 0) ? 1 : -1;
+      if (canTurn(dir)) {
+        startCurlDrag(dir, e, gesture.clientY);
+        return;
+      }
+    }
     if (scale > 1) {
       tx = gesture.startTx + dx;
       ty = gesture.startTy + dy;
@@ -548,6 +997,11 @@
   function handlePointerUp(e: PointerEvent) {
     if (!pointers.has(e.pointerId)) return;
     pointers.delete(e.pointerId);
+    if (curlDrag) {
+      gesture = null;
+      releaseCurlDrag();
+      return;
+    }
     if (!gesture) return;
     if (pointers.size > 0) {
       // Fingers leave a pinch one at a time: the one still down pans from
@@ -586,6 +1040,7 @@
       Math.hypot(lastTap.x - e.clientX, lastTap.y - e.clientY) < 30
     ) {
       lastTap = null;
+      if (curlBusy) return;
       if (scale > 1) resetZoom();
       else zoomAt(ZOOM_STEP, px, py);
       return;
@@ -606,6 +1061,7 @@
   function handlePointerCancel(e: PointerEvent) {
     pointers.delete(e.pointerId);
     if (pointers.size === 0) gesture = null;
+    if (curlDrag && pointers.size === 0) releaseCurlDrag();
   }
 
   function handleWheel(e: WheelEvent) {
@@ -953,6 +1409,13 @@
           get loaded() {
             return current.every((p) => !!urls[p.index]);
           },
+          get pageTurn() {
+            return pageTurn;
+          },
+          /** The curl turn on screen: its progress 0..1, or null. */
+          get curl() {
+            return curl?.progress ?? null;
+          },
           goTo: (index: number) => goToPage(index, "user"),
           next,
           prev,
@@ -1085,7 +1548,9 @@
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="h-full w-full touch-none"
-      style="cursor: {scale > 1 ? 'grab' : 'default'};"
+      style="cursor: {scale > 1
+        ? 'grab'
+        : 'default'}; -webkit-tap-highlight-color: transparent;"
       onpointerdown={handlePointerDown}
       onpointermove={handlePointerMove}
       onpointerup={handlePointerUp}
@@ -1128,6 +1593,14 @@
         {/each}
       </div>
     </div>
+    <!-- The curl turn's layer: the pages under the sheet and the sheet
+         itself, drawn by PageCurl; hidden between turns. -->
+    <div
+      bind:this={curlHost}
+      class="pointer-events-none absolute inset-0 overflow-hidden"
+      data-testid="pager-curl"
+      hidden
+    ></div>
   {/if}
 </div>
 

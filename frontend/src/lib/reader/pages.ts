@@ -175,3 +175,6 @@ export type PagerMode =
   | "webtoon";
 /** Reading direction: the book's own, or forced either way. */
 export type PagerDirection = "auto" | "ltr" | "rtl";
+/** How a paged (single / double) book turns: the next page at once, or a
+ *  sheet lifted by its corner and curled over the spine. */
+export type PagerTurn = "instant" | "curl";

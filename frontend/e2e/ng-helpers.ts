@@ -550,6 +550,16 @@ export const CBZ_BOOK: Fixture = {
   mimeType: "application/vnd.comicbook+zip",
 };
 
+/** Nine portrait pages of flat colours (no wide page), right to left:
+ *  in double page the cover stands alone, then four pairs — every turn
+ *  after the first is a pair turning to a pair. */
+export const CURL_BOOK: Fixture = {
+  file: "e2e-lantern-paper-planes.cbz",
+  title: "燈籠巷的紙飛機",
+  readyText: "",
+  mimeType: "application/vnd.comicbook+zip",
+};
+
 /** Open an image book in the reader: BookReader parses it, finds the layout
  *  pre-paginated and hands it to the image pager. Resolves once the pager
  *  shows its restored page with every image on screen decoded. */
@@ -587,7 +597,11 @@ export function pagerState(page: Page) {
 /** Pick an image-pager setting through the settings sheet. */
 export async function setPagerSetting(
   page: Page,
-  row: "setting-pager-mode" | "setting-pager-direction" | "setting-pager-shift",
+  row:
+    | "setting-pager-mode"
+    | "setting-pager-direction"
+    | "setting-pager-shift"
+    | "setting-pager-turn",
   label: string,
 ) {
   await page.getByRole("button", { name: "Reader settings" }).click();

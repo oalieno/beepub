@@ -69,6 +69,7 @@
     type PageEntry,
     type PagerDirection,
     type PagerMode,
+    type PagerTurn,
   } from "$lib/reader/pages";
   import BookReader from "$lib/components/reader/BookReader.svelte";
   import ImagePager from "$lib/components/reader/ImagePager.svelte";
@@ -451,6 +452,9 @@
     dark: "reader-dark",
     pagerMode: "reader-pager-mode",
     pagerDirection: "reader-pager-direction",
+    /** The image pager's own page turn (instant / curl): a comic's turn
+     *  is chosen apart from a text book's. */
+    pagerTurn: "reader-pager-turn",
     pagerPadding: "reader-pager-padding",
     /** Per book (suffixed with the id): whether its pairs are staggered
      *  is a fact about the file, not a preference. */
@@ -559,6 +563,13 @@
     return v === "ltr" || v === "rtl" ? v : "auto";
   }
   let pagerMode = $state<PagerMode>(browser ? initialPagerMode() : "single");
+  let pagerTurn = $state<PagerTurn>(
+    browser && stored(KEY.pagerTurn) === "curl" ? "curl" : "instant",
+  );
+  function handlePagerTurnChange(value: PagerTurn) {
+    pagerTurn = value;
+    store(KEY.pagerTurn, value);
+  }
   let pagerDirection = $state<PagerDirection>(
     browser ? initialPagerDirection() : "auto",
   );
@@ -1325,6 +1336,7 @@
             {darkMode}
             mode={pagerMode}
             direction={pagerDirection}
+            pageTurn={pagerTurn}
             shift={pagerShift}
             padding={pagerPadding}
             onready={() => (rendered = true)}
@@ -1705,10 +1717,12 @@
       : undefined}
     {pagerMode}
     {pagerDirection}
+    {pagerTurn}
     {pagerShift}
     {pagerPadding}
     onpagerModeChange={claimed ? handlePagerModeChange : undefined}
     onpagerDirectionChange={claimed ? handlePagerDirectionChange : undefined}
+    onpagerTurnChange={claimed ? handlePagerTurnChange : undefined}
     onpagerShiftChange={claimed ? handlePagerShiftChange : undefined}
     onpagerPaddingChange={claimed ? handlePagerPaddingChange : undefined}
     onhelp={() => (showGestureHint = true)}
