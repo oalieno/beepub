@@ -3,7 +3,8 @@
  * the image the page shows, so an image pager draws the pictures directly
  * instead of laying the wrapper XHTML out. A comic packed from a CBZ and a
  * bought image-only manga EPUB come out as the same list; the server's
- * /pages route computes the same thing for third-party clients.
+ * /pages route computes the same thing for third-party clients (all but
+ * the text measure, which only decides here whether a book is pictures).
  */
 import type { Book } from "./core";
 import type { BookLoader } from "./loaders/types";
@@ -20,6 +21,8 @@ export interface PageEntry {
   href: string;
   /** The image's path in the book; null for a page without one. */
   image: string | null;
+  /** Characters of text the page's body shows, whitespace left out. */
+  textLength: number;
   /** Pixel size from the page's viewport meta, when it declares one. */
   width: number | null;
   height: number | null;
@@ -36,6 +39,14 @@ const SVG_IMAGE_RE =
 const VIEWPORT_RE =
   /<meta\b[^>]*?\bname=["']viewport["'][^>]*?\bcontent=["']([^"']*)["']/i;
 const SIZE_RE = /(width|height)\s*=\s*(\d+)/gi;
+const BODY_RE = /<body\b[^>]*>([\s\S]*?)<\/body>/i;
+const HIDDEN_RE = /<(script|style)\b[\s\S]*?<\/\1>/gi;
+const TAG_RE = /<[^>]*>/g;
+const ENTITY_RE = /&(?:#\d+|#x[\da-f]+|\w+);/gi;
+
+/** A page with a picture and less text than this is a picture page: a
+ *  caption or a page number does not make it text. */
+const PICTURE_PAGE_TEXT = 40;
 
 export function isPrePaginated(book: Pick<Book, "rendition">): boolean {
   return book.rendition?.layout === "pre-paginated";
@@ -48,6 +59,36 @@ function viewportSize(text: string): [number, number] | null {
   for (const m of meta[1].matchAll(SIZE_RE))
     found[m[1].toLowerCase()] = Number(m[2]);
   return found.width && found.height ? [found.width, found.height] : null;
+}
+
+/** Characters of text a page's body shows: tags, scripts, styles and
+ *  whitespace left out, an entity counted as one. */
+function visibleTextLength(text: string): number {
+  const body = BODY_RE.exec(text)?.[1] ?? "";
+  return body
+    .replace(HIDDEN_RE, "")
+    .replace(TAG_RE, "")
+    .replace(ENTITY_RE, "&")
+    .replace(/\s+/g, "").length;
+}
+
+export function isPicturePage(
+  page: Pick<PageEntry, "image" | "textLength">,
+): boolean {
+  return page.image != null && page.textLength < PICTURE_PAGE_TEXT;
+}
+
+/**
+ * Whether a pre-paginated book is pictures (a comic, a manga) rather than
+ * laid-out text. Decided over the linear pages: all or nearly all of them
+ * pictures — a tenth of them, at most five, may be text (credits, a
+ * colophon), and a short book may have one.
+ */
+export function isPictureBook(pages: readonly PageEntry[]): boolean {
+  const linear = pages.filter((p) => p.linear);
+  if (!linear.length) return false;
+  const text = linear.filter((p) => !isPicturePage(p)).length;
+  return text <= Math.max(1, Math.min(5, Math.floor(linear.length / 10)));
 }
 
 /** The book's pages in spine order. Sections are read through the loader
@@ -81,6 +122,7 @@ export async function readPages(
       sectionIndex,
       href: section.id,
       image,
+      textLength: visibleTextLength(text),
       width: size?.[0] ?? null,
       height: size?.[1] ?? null,
       spread,

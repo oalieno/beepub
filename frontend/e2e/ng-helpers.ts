@@ -560,6 +560,14 @@ export const CURL_BOOK: Fixture = {
   mimeType: "application/vnd.comicbook+zip",
 };
 
+/** Four pages of set text declared pre-paginated (the first with a small
+ *  ornament above its text): a fixed-layout book that is not pictures. */
+export const FIXED_LAYOUT_TEXT_BOOK: Fixture = {
+  file: "e2e-fixed-layout-text-book.epub",
+  title: "Tidewater Almanac of Small Hours",
+  readyText: "almanac keeper climbs the tide tower",
+};
+
 /** Eight portrait pages of flat colours, left to right: the kosync spec's
  *  own comic, so the e-reader positions it pushes reach no other spec. */
 export const KITE_BOOK: Fixture = {

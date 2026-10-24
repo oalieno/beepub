@@ -2,6 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   CBZ_BOOK,
+  FIXED_LAYOUT_TEXT_BOOK,
+  openBook,
   openComic,
   pagerState,
   seedFixture,
@@ -163,6 +165,20 @@ test("the page is the position: it restores here and in the legacy reader", asyn
       ),
     )
     .toBe(3);
+});
+
+test("a fixed-layout book of text pages goes to the text reader", async ({
+  page,
+}) => {
+  // Pre-paginated, but its pages are set text (one with a small picture
+  // above it): the pager would show the picture or nothing, so the text
+  // reader takes it. There is no fixed-layout renderer: it is reflowed.
+  // (openBook waits for the first page's text in the text reader.)
+  const bookId = await seedFixture(page.request, FIXED_LAYOUT_TEXT_BOOK);
+  await openBook(page, bookId, {}, FIXED_LAYOUT_TEXT_BOOK);
+  expect(await page.evaluate(() => !!window.__beepubReaderNG.pager)).toBe(
+    false,
+  );
 });
 
 test("the continuous modes stack the pages and follow the scroll", async ({

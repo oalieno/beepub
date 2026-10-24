@@ -65,6 +65,7 @@
   } from "$lib/reader/core";
   import type { BookLoader } from "$lib/reader/loaders";
   import {
+    isPictureBook,
     isPrePaginated,
     readPages,
     type PageEntry,
@@ -134,13 +135,17 @@
     pages: PageEntry[] | null;
   } | null>(null);
   /** Two ways in: the OPF declares pre-paginated (bought manga, packed
-   *  CBZ), or the library classified the book an image book and every
-   *  spine item turns out to be a picture — an older image-only EPUB
-   *  that never declared its layout. A short text book (a small fixture)
-   *  has no images, so it stays with the text reader. */
+   *  CBZ) and its pages are pictures, or the library classified the book
+   *  an image book and every spine item turns out to be a picture — an
+   *  older image-only EPUB that never declared its layout. A short text
+   *  book (a small fixture) has no images, and a fixed-layout book of set
+   *  text has text pages, so they stay with the text reader. The pages
+   *  read here go to the pager, which would otherwise read them again. */
   async function claimImageBook(b: Book, l: BookLoader): Promise<boolean> {
     if (isPrePaginated(b)) {
-      claimed = { book: b, loader: l, pages: null };
+      const pages = await readPages(b, l);
+      if (!isPictureBook(pages)) return false;
+      claimed = { book: b, loader: l, pages };
       isImageBook = true;
       return true;
     }
