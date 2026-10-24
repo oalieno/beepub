@@ -1261,7 +1261,7 @@ export class CoverSlide {
       });
       this.#foldRun = run;
       // A tab in the background makes no frames; the turn must still end.
-      guard = setTimeout(() => run.finish(), foldMs(p0, p1) + 150);
+      guard = setTimeout(() => run.finish(), foldMs(p0, p1, W) + 150);
     });
   }
 

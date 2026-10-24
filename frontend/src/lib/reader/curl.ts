@@ -111,6 +111,11 @@ export function strength(p: number): number {
   );
 }
 
+/** A sheet up to this wide is phone-sized: its turn takes the time and
+ *  casts the shade it was made with. A wider one (a tablet, a desktop
+ *  window) turns more slowly, and its shade grows no wider. */
+const PHONE_WIDTH = 500;
+
 /** As in Apple Books, a finger lifts a sheet only so far; past that it
  *  gives a little and stops, and letting go finishes the turn. A sheet
  *  being brought back cannot be laid down by the finger either. */
@@ -440,7 +445,10 @@ export class FoldLayer {
       fold.lying.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "),
     );
     this.#shadowPoly.setAttribute("fill-opacity", (0.32 * a).toFixed(3));
-    const depth = Math.max(8, Math.min(fold.reach / 2, s.width * 0.6));
+    const depth = Math.max(
+      8,
+      Math.min(fold.reach / 2, Math.min(s.width, PHONE_WIDTH) * 0.6),
+    );
     const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg) translateY(-50%)`;
     // On the flap: dark at the fold, a sheen, then paper.
     this.#backShade.style.transform = at;
@@ -769,9 +777,26 @@ export function releasesOver(
     : !((p < (spread ? 0.7 : 0.88) || v > 0.35) && v > -0.35);
 }
 
-/** How long a turn takes from p0 to p1 without the finger. */
-export function foldMs(p0: number, p1: number): number {
-  return 260 + 380 * Math.abs(p1 - p0);
+/** How long a turn takes from p0 to p1 without the finger, on a sheet
+ *  `width` wide. */
+export function foldMs(p0: number, p1: number, width: number): number {
+  return (260 + 380 * Math.abs(p1 - p0)) * (1 + 0.6 * wideness(width));
+}
+
+/** 0 for a phone-sized sheet, 1 for one four times as wide or more. */
+function wideness(width: number): number {
+  return Math.min(1, (Math.sqrt(Math.max(1, width / PHONE_WIDTH)) - 1) / 0.6);
+}
+
+/** Where a turn is `t` of its time along. A phone's sheet leaves at
+ *  speed and settles; a wide one, set off from lying flat, gathers speed
+ *  first, or its corner is across the window before the eye is on it. */
+function foldEase(t: number, fromFlat: boolean, width: number): number {
+  const out = 1 - Math.pow(1 - t, 3);
+  if (!fromFlat) return out;
+  const both = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  const w = wideness(width);
+  return out + (both - out) * w;
 }
 
 /**
@@ -801,7 +826,8 @@ export function runFold(o: {
     const base = cy + (cy > H / 2 ? -arcLift(p0, H) : arcLift(p0, H));
     yDev0 = o.from.y - base;
   }
-  const dur = foldMs(p0, p1);
+  const dur = foldMs(p0, p1, W);
+  const fromFlat = Math.min(p0, 1 - p0) < 0.02;
   const t0 = performance.now();
   let id: number | null = null;
   let over = false;
@@ -823,7 +849,7 @@ export function runFold(o: {
     // the run did.)
     const t = Math.max(0, Math.min(1, (now - t0) / dur));
     if (t >= 1) return end();
-    const e = 1 - Math.pow(1 - t, 3);
+    const e = foldEase(t, fromFlat, W);
     const q = Math.min(1, t / 0.55);
     const settle = 1 - (1 - q) * (1 - q);
     const p = p0 + (p1 - p0) * e;
