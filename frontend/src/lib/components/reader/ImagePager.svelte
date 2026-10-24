@@ -327,6 +327,26 @@
     return true;
   }
 
+  /**
+   * Jump to an e-reader position bridged from kosync. A page is one spine
+   * item, so the device's section hint is the page itself; the percentage
+   * only when the hint is missing or names no page. The xpointer points
+   * into the wrapper XHTML and adds nothing a page does not. Saved at once
+   * (no activity credit): the save clears the server's marker, which would
+   * otherwise offer the same jump on every open.
+   */
+  export async function displayKosyncPosition(
+    pct: number,
+    sectionIndex: number | null,
+    _xpointer: string | null = null,
+  ): Promise<boolean> {
+    if (!total) return false;
+    const index = sectionIndex == null ? null : pageForTarget(sectionIndex);
+    goToPage(index ?? pageFromPercent(pct, total), "restore");
+    await saveProgress(false);
+    return true;
+  }
+
   export function chapterAtPercentage(pct: number): string | null {
     if (!total) return null;
     const index = pageFromPercent(pct, total);

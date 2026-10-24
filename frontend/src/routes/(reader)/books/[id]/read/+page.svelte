@@ -714,7 +714,7 @@
       cancelLabel: m.reader_kosync_dialog_stay(),
     });
     if (jump)
-      void reader?.displayKosyncPosition(
+      void activeReader()?.displayKosyncPosition(
         detail.percentage,
         detail.sectionIndex,
         detail.xpointer,
