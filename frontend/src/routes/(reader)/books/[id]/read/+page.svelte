@@ -27,6 +27,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
+  import { canCurl } from "$lib/platform";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
   import { aiApi } from "$lib/api/bookshelves";
@@ -518,13 +519,18 @@
       ? "slide"
       : "fade";
   }
+  function curlHere<T extends string>(mode: T): T | "slide" {
+    return mode === "curl" && !canCurl() ? "slide" : mode;
+  }
   function initialPageTurn(): PageTurnMode {
     const fromQuery = q.get("turn");
     if (fromQuery === "instant") return "instant";
-    if (fromQuery) return parsePageTurn(fromQuery);
+    if (fromQuery) return curlHere(parsePageTurn(fromQuery));
     // Values from before there were two modes are read as today's and
-    // rewritten, so the key holds one vocabulary.
+    // rewritten, so the key holds one vocabulary. (A curl chosen on a
+    // phone is kept, though a desktop slides instead.)
     const raw = stored(KEY.pageTurn);
+    if (raw === "curl") return curlHere("curl");
     const mode = parsePageTurn(raw);
     if (raw != null && raw !== mode) store(KEY.pageTurn, mode);
     return mode;
@@ -567,7 +573,9 @@
   }
   let pagerMode = $state<PagerMode>(browser ? initialPagerMode() : "single");
   let pagerTurn = $state<PagerTurn>(
-    browser && stored(KEY.pagerTurn) === "curl" ? "curl" : "instant",
+    browser && stored(KEY.pagerTurn) === "curl" && canCurl()
+      ? "curl"
+      : "instant",
   );
   function handlePagerTurnChange(value: PagerTurn) {
     pagerTurn = value;

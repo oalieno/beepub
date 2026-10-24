@@ -89,6 +89,9 @@ export interface PaginatorElement extends HTMLElement {
   prev(distance?: number): Promise<void>;
   next(distance?: number): Promise<void>;
   setStyles(styles: string | [string, string]): void;
+  /** It measures its boxes as laid out rather than as drawn (one drawn
+   *  under a transform). */
+  untransformed?: boolean;
   getContents(): {
     index: number;
     doc: Document;
@@ -1448,6 +1451,12 @@ export class ReaderCore {
   /** The curl's fold on screen (see CoverSlide.fold), for probes. */
   get curlFold() {
     return this.#slide?.fold ?? null;
+  }
+
+  /** The back of the curled sheet: the page it is on, and whether it
+   *  shows (see CoverSlide.back). */
+  get curlBack() {
+    return this.#slide?.back ?? null;
   }
 
   /** What became of the slide's last turns, and the sections loaded

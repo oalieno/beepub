@@ -257,6 +257,11 @@ export class FoldLayer {
   #backSlot: HTMLElement;
   #veil: HTMLElement;
   #backShade: HTMLElement;
+  /** A back that stays in the layer between turns (see holdBack). */
+  #heldBack: HTMLElement | null = null;
+  /** How strongly the flap's sheen shows: full on light paper, faint on
+   *  dark, where a white sheen would be a bright band. */
+  #sheen = 1;
   #sheet: FoldSheet | null = null;
 
   constructor() {
@@ -377,7 +382,10 @@ export class FoldLayer {
     this.#back.style.background = sheet.paper;
     this.#veil.style.background = sheet.paper;
     this.#veil.hidden = !sheet.seeThrough;
-    if (sheet.back) this.#backSlot.replaceChildren(sheet.back);
+    this.#sheen = sheenOn(sheet.paper);
+    if (this.#heldBack) {
+      // (Put in once: one that is moved, an iframe, would load again.)
+    } else if (sheet.back) this.#backSlot.replaceChildren(sheet.back);
     else this.#backSlot.replaceChildren();
     const diag = Math.ceil(Math.hypot(W, H)) * 2;
     for (const sh of [this.#backShade, this.#castShade]) {
@@ -390,6 +398,16 @@ export class FoldLayer {
       height: `${H}px`,
     });
     this.#shadow.setAttribute("viewBox", `${-W} 0 ${2 * W} ${H}`);
+  }
+
+  /** `element` is the back of every sheet from now on (null: no
+   *  longer), and stays in the layer between turns — a laid-out page in
+   *  an iframe, which would load again if it were moved. It is put into
+   *  the back as it is, so it should cover the sheet's rectangle. */
+  holdBack(element: HTMLElement | null) {
+    if (this.#heldBack === element) return;
+    this.#heldBack = element;
+    this.#backSlot.replaceChildren(...(element ? [element] : []));
   }
 
   /** The sheet's front is `node`, put into the layer (already mirrored
@@ -453,7 +471,7 @@ export class FoldLayer {
     // On the flap: dark at the fold, a sheen, then paper.
     this.#backShade.style.transform = at;
     this.#backShade.style.opacity = String(a);
-    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.30) 0, rgba(0,0,0,.06) ${depth * 0.12}px, rgba(255,255,255,.28) ${depth * 0.38}px, rgba(255,255,255,0) ${depth * 0.7}px, rgba(0,0,0,.06) ${depth}px, rgba(0,0,0,0) ${depth * 1.6}px)`;
+    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.30) 0, rgba(0,0,0,.06) ${depth * 0.12}px, rgba(255,255,255,${(0.28 * this.#sheen).toFixed(3)}) ${depth * 0.38}px, rgba(255,255,255,0) ${depth * 0.7}px, rgba(0,0,0,.06) ${depth}px, rgba(0,0,0,0) ${depth * 1.6}px)`;
     // On the page the lifted sheet uncovers.
     const reach = Math.max(14, depth * 0.55);
     this.#castShade.style.opacity = String(a);
@@ -468,9 +486,33 @@ export class FoldLayer {
   clear() {
     this.#releaseInPlace();
     this.#frontSlot.replaceChildren();
-    this.#backSlot.replaceChildren();
+    if (!this.#heldBack) this.#backSlot.replaceChildren();
     this.#sheet = null;
   }
+}
+
+/** How much of the flap's white sheen a paper colour takes: all of it
+ *  on white, a quarter on black. */
+function sheenOn(paper: string): number {
+  const c = paper.trim();
+  let rgb: number[] | null = null;
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+  if (hex) {
+    const h =
+      hex[1].length === 3 ? [...hex[1]].map((d) => d + d).join("") : hex[1];
+    rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  } else {
+    const fn = /^rgba?\(([^)]+)\)/i.exec(c);
+    if (fn)
+      rgb = fn[1]
+        .split(/[\s,/]+/)
+        .slice(0, 3)
+        .map(Number);
+  }
+  if (!rgb || rgb.some((v) => !Number.isFinite(v))) return 1;
+  const [r, g, b] = rgb.map((v) => v / 255);
+  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return 0.25 + 0.75 * light;
 }
 
 /** A sheet for PageCurl: a FoldSheet whose front is put into the layer. */

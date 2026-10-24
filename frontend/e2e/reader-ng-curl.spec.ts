@@ -189,6 +189,10 @@ test("a horizontal book: the page on screen is folded over its left edge as far 
   expect(Math.max(...cut)).toBeLessThan(width - 20);
   // The reader has not moved yet.
   expect(mid.page).toBe(rest.page);
+  // The flap's back is the same page, seen through the paper.
+  await expect
+    .poll(() => page.evaluate(() => window.__beepubReaderNG.core.curlBack))
+    .toEqual({ index: rest.index, page: rest.page, showing: true });
   await page.screenshot({ path: testInfo.outputPath("mid-curl.png") });
   await touchUp(cdp);
   await expect.poll(async () => (await state(page)).page).toBe(rest.page + 1);
@@ -220,6 +224,10 @@ test("a horizontal book: the page on screen is folded over its left edge as far 
   expect(back.over!).toBeGreaterThan(0.7);
   expect(back.over!).toBeLessThan(0.86);
   expect(back.page).toBe(next.page);
+  // Its back is the previous page's.
+  await expect
+    .poll(() => page.evaluate(() => window.__beepubReaderNG.core.curlBack))
+    .toEqual({ index: rest.index, page: rest.page, showing: true });
   await touchUp(cdp);
   await expect.poll(async () => (await state(page)).page).toBe(rest.page);
   await expect.poll(() => settled(page)).toBe(true);

@@ -12,3 +12,10 @@ export function isNative(): boolean {
 export function isWeb(): boolean {
   return !isNative();
 }
+
+/** A curled page is turned by a finger: a device with no touch screen (a
+ *  desktop) is not offered the curl, and one chosen elsewhere turns its
+ *  own way there. */
+export function canCurl(): boolean {
+  return typeof navigator !== "undefined" && navigator.maxTouchPoints > 0;
+}

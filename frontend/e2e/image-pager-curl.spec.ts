@@ -16,7 +16,8 @@ import {
  * the chrome, the progress and the saved page follow what is on screen.
  */
 
-test.use({ storageState: ADMIN_STATE });
+// (The curl is offered only where there is a touch screen.)
+test.use({ storageState: ADMIN_STATE, hasTouch: true });
 test.setTimeout(90_000);
 
 interface Frame {

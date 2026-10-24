@@ -675,6 +675,16 @@ export class CoverSlide {
   /** When a sheet brought back by the finger began coming over by
    *  itself (curl.ts LEAD), 0: it is not. */
   #leadAt = 0;
+  /** The back of the folded sheet: the same page seen through the
+   *  paper, laid out by a paginator of its own that lives in the fold
+   *  layer. Not one of the ghosts — never a turn's sheet or the cover. */
+  #back: Ghost | null = null;
+  #backBox: HTMLElement | null = null;
+  /** The page the back was last sent to. */
+  #backAim: Target | null = null;
+  /** The fold layer kept the container's size between turns, for the
+   *  back's layout to stay the live one's. */
+  #sized: ResizeObserver | null = null;
 
   constructor(host: SlideHost, style: TurnStyle = "slide") {
     this.#host = host;
@@ -708,9 +718,25 @@ export class CoverSlide {
       const fold = new FoldLayer();
       fold.root.setAttribute("aria-hidden", "true");
       fold.root.style.zIndex = Z_FOLD;
-      fold.root.hidden = true;
+      // Out of sight, not out of the layout: the back's paginator keeps
+      // its pages laid out between turns.
+      fold.root.style.visibility = "hidden";
       container.append(fold.root);
       this.#fold = fold;
+      const box = document.createElement("div");
+      Object.assign(box.style, {
+        position: "absolute",
+        inset: "0",
+        opacity: "0",
+        transition: "opacity 120ms",
+      });
+      this.#backBox = box;
+      fold.holdBack(box);
+      this.#sizeFold();
+      this.#sized = new ResizeObserver(() => {
+        if (!this.#folded) this.#sizeFold();
+      });
+      this.#sized.observe(container);
     }
   }
 
@@ -872,6 +898,7 @@ export class CoverSlide {
   reset() {
     this.cancel();
     this.#dropAll();
+    this.#dropBack();
   }
 
   destroy() {
@@ -880,6 +907,9 @@ export class CoverSlide {
     if (this.#relocating != null) clearTimeout(this.#relocating);
     this.#relocating = null;
     this.#dropAll();
+    this.#dropBack();
+    this.#sized?.disconnect();
+    this.#sized = null;
     this.#dim.remove();
     this.#blank.remove();
     this.#fold?.root.remove();
@@ -896,11 +926,13 @@ export class CoverSlide {
     this.#host.live.style.background = color;
     this.#blank.style.background = color;
     for (const ghost of this.#ghosts) ghost.el.style.background = color;
+    if (this.#back) this.#back.el.style.background = color;
   }
 
   /** The injected styles changed. */
   setStyles(styles: string | [string, string]) {
     for (const ghost of this.#ghosts) ghost.el.setStyles(styles);
+    this.#back?.el.setStyles(styles);
   }
 
   /** Out of sight while the live page fades (a fallback turn): the page
@@ -1001,6 +1033,9 @@ export class CoverSlide {
     }
     // Well inside a chapter again: the far rendering is given back.
     for (const ghost of free) this.#drop(ghost);
+    // The page most often turned over next is the one on screen.
+    if (this.#fold && !this.#folded)
+      this.#aimBack({ index: here.index, page: here.page });
   }
 
   /** The ghost to show `target` on: the one in that section, else a
@@ -1165,29 +1200,131 @@ export class CoverSlide {
     return dir > 0 ? p : 1 - p;
   }
 
-  /** The sheet the fold cuts is `upper`: set it up when it is another
-   *  one than last time. */
-  #foldSheet(upper: HTMLElement) {
+  /** The fold layer's sheet: the whole container, its back the page
+   *  seen through the paper. */
+  #sizeFold() {
     const fold = this.#fold!;
-    if (this.#folded === upper) return;
     const { container } = this.#host;
+    // "Next" to the left (vertical text, a right-to-left book): the
+    // spine is on the right.
+    const mirror = this.#host.leftward();
     fold.setSheet(
       {
         left: 0,
         top: 0,
         width: container.clientWidth || 1,
         height: container.clientHeight || 1,
-        // "Next" to the left (vertical text, a right-to-left book): the
-        // spine is on the right.
-        mirror: this.#host.leftward(),
+        mirror,
         back: null,
-        seeThrough: false,
+        seeThrough: true,
         paper: this.#background || "#fff",
       },
       true,
     );
+    // (Mirrored back with the stage, as the front is: seen through the
+    // paper, the page comes out the wrong way round.)
+    this.#backBox!.style.transform = mirror ? "scaleX(-1)" : "";
+  }
+
+  /** The sheet the fold cuts is `upper`: set it up when it is another
+   *  one than last time, and send the back to its page. */
+  #foldSheet(upper: HTMLElement) {
+    const fold = this.#fold!;
+    if (this.#folded === upper) return;
+    this.#sizeFold();
     fold.setFrontInPlace(upper);
     this.#folded = upper;
+    const at = this.#positionOf(upper);
+    if (at) this.#aimBack({ index: at.index, page: at.page });
+  }
+
+  /** Where a sheet (the live paginator or a ghost) stands. */
+  #positionOf(
+    sheet: HTMLElement,
+  ): { index: number; page: number; pages: number } | null {
+    const { live } = this.#host;
+    if (sheet === live) {
+      try {
+        const index = live.getContents()[0]?.index;
+        const pages = live.pages;
+        if (index == null || !(pages >= 3)) return null;
+        return { index, page: live.page, pages };
+      } catch {
+        return null;
+      }
+    }
+    return this.#ghosts.find((g) => g.el === sheet)?.position() ?? null;
+  }
+
+  /** Send the back to `target`; it shows once it is there. */
+  #aimBack(target: Target) {
+    if (this.#host.reducedMotion()) return;
+    this.#backAim = target;
+    let back = this.#back;
+    if (!back || back.stalled) {
+      if (back) this.#dropBack();
+      back = this.#spawnBack();
+    }
+    void back.show(target).then(() => this.#showBack());
+    this.#showBack();
+  }
+
+  #spawnBack(): Ghost {
+    const { live } = this.#host;
+    const back = new Ghost(
+      this.#host,
+      this.#background,
+      (index, pages) => {
+        try {
+          return live.getContents()[0]?.index !== index || live.pages === pages;
+        } catch {
+          return true;
+        }
+      },
+      () => {},
+      () => this.#showBack(),
+    );
+    // (Folded over, it is drawn turned and mirrored: it measures itself
+    // as laid out.)
+    back.el.untransformed = true;
+    back.el.removeAttribute("data-beepub-ghost");
+    back.el.setAttribute("data-beepub-back", "");
+    this.#backBox!.append(back.el);
+    back.planted();
+    this.#back = back;
+    return back;
+  }
+
+  #dropBack() {
+    const back = this.#back;
+    if (!back) return;
+    this.#back = null;
+    this.#backAim = null;
+    back.destroy();
+    this.#host.ongone(back.el);
+    if (this.#backBox) this.#backBox.style.opacity = "0";
+  }
+
+  /** The back shows its text only while it is on the folded sheet's
+   *  page; until then the flap is bare paper. */
+  #showBack() {
+    const box = this.#backBox;
+    if (!box) return;
+    const aim = this.#backAim;
+    const on = !!aim && !!this.#back?.ready(aim);
+    box.style.opacity = on ? "1" : "0";
+  }
+
+  /** The back of the folded sheet, for probes and tests: the page it is
+   *  on, and whether it shows. */
+  get back(): { index: number; page: number; showing: boolean } | null {
+    const at = this.#back?.position();
+    if (!at) return null;
+    return {
+      index: at.index,
+      page: at.page,
+      showing: this.#backBox?.style.opacity === "1",
+    };
   }
 
   /** The fold of the turn `dir`, `p` of the way, onto `upper` — or the
@@ -1200,7 +1337,7 @@ export class CoverSlide {
     const H = container.clientHeight || 1;
     const q = this.#over(dir, p);
     const at = P ?? pointAt(q, 0, W, H, this.#cy);
-    fold.root.hidden = false;
+    fold.root.style.visibility = "";
     fold.draw(at, q, this.#cy);
     this.#foldAt = at;
     this.#foldOver = q;
@@ -1216,7 +1353,7 @@ export class CoverSlide {
     this.#foldDone = null;
     done?.();
     fold.clear();
-    fold.root.hidden = true;
+    fold.root.style.visibility = "hidden";
     this.#folded = null;
     this.#foldAt = null;
     this.#foldOver = null;

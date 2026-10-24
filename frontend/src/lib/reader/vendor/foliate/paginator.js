@@ -715,7 +715,7 @@ export class Paginator extends HTMLElement {
         // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
 
-        const { width, height } = this.#container.getBoundingClientRect()
+        const { width, height } = this.#box(this.#container)
         const size = vertical ? height : width
 
         const style = getComputedStyle(this.#top)
@@ -806,11 +806,18 @@ export class Paginator extends HTMLElement {
         return this.#vertical ? (scrolled ? 'width' : 'height')
             : scrolled ? 'height' : 'width'
     }
+    // (BeePub) A paginator drawn under a transform (the back of a curled
+    // page, folded over) measures its boxes as laid out, not as drawn.
+    untransformed = false
+    #box(el) {
+        if (!this.untransformed) return el.getBoundingClientRect()
+        return { width: el.offsetWidth, height: el.offsetHeight }
+    }
     get size() {
-        return this.#container.getBoundingClientRect()[this.sideProp]
+        return this.#box(this.#container)[this.sideProp]
     }
     get viewSize() {
-        return this.#view.element.getBoundingClientRect()[this.sideProp]
+        return this.#box(this.#view.element)[this.sideProp]
     }
     get start() {
         return Math.abs(this.#container[this.scrollProp])

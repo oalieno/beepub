@@ -19,6 +19,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import type { WritingMode } from "$lib/reader/core";
   import type { PagerDirection, PagerMode, PagerTurn } from "$lib/reader/pages";
+  import { canCurl } from "$lib/platform";
 
   /**
    * The reader's settings sheet. Rows appear when their handler is
@@ -167,15 +168,20 @@
     { value: 32, label: m.reader_margin_normal },
     { value: 56, label: m.reader_margin_wide },
   ];
-  const pageTurnOptions: {
+  // The curl is a finger's: a desktop is not offered it.
+  const curlable = canCurl();
+  type PageTurnOption = {
     value: "fade" | "slide" | "curl" | "scroll";
     label: () => string;
-  }[] = [
-    { value: "fade", label: m.reader_page_turn_fade },
-    { value: "slide", label: m.reader_page_turn_slide },
-    { value: "curl", label: m.reader_page_turn_curl },
-    { value: "scroll", label: m.reader_page_turn_scroll },
-  ];
+  };
+  const pageTurnOptions = (
+    [
+      { value: "fade", label: m.reader_page_turn_fade },
+      { value: "slide", label: m.reader_page_turn_slide },
+      { value: "curl", label: m.reader_page_turn_curl },
+      { value: "scroll", label: m.reader_page_turn_scroll },
+    ] satisfies PageTurnOption[]
+  ).filter((o) => o.value !== "curl" || curlable);
   const writingModeOptions: { value: WritingMode; label: () => string }[] = [
     { value: "auto", label: m.reader_writing_mode_auto },
     { value: "horizontal", label: m.reader_writing_mode_horizontal },
@@ -562,8 +568,9 @@
               </div>
             </div>
           {/if}
-          {#if onpagerTurnChange && (pagerMode === "single" || pagerMode === "double")}
-            <!-- Only a paged comic turns: a strip scrolls. -->
+          {#if onpagerTurnChange && curlable && (pagerMode === "single" || pagerMode === "double")}
+            <!-- Only a paged comic turns: a strip scrolls. Without the curl
+                 (a desktop) there is only the one way, and no row. -->
             <div
               class="flex items-center justify-between gap-3"
               data-testid="setting-pager-turn"
