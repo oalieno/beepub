@@ -22,6 +22,7 @@
   import {
     buildSpreads,
     displayOrder,
+    halves,
     pageFromPercent,
     pagePercent,
     readPages,
@@ -158,7 +159,7 @@
   const spreads = $derived(buildSpreads(pages, twoPage, rtl, shift));
   const spreadIndex = $derived(spreadIndexOf(spreads, pageIndex));
   const current = $derived(spreads[spreadIndex] ?? []);
-  const shown = $derived(displayOrder(current, rtl));
+  const shown = $derived(displayOrder(halves(current, twoPage, shift), rtl));
   const atEnd = $derived(total > 0 && spreadIndex >= spreads.length - 1);
   // Whole percents: the chrome prints this number.
   const percentage = $derived(Math.round(pagePercent(pageIndex, total)));
@@ -489,13 +490,15 @@
   // beneath it until the turn lands, then the position moves and, once the
   // landed pages have painted, the layer goes.
   //
-  // Which sheet turns: between two pairs, the later page of the earlier
-  // pair (the left page of a manga), hinged at the gutter, its back the
-  // first page of the later pair; when the earlier spread is one page
-  // alone (single mode, a cover), that page, hinged at its own spine-side
-  // edge, its back the same page seen through the paper. A pair turning
-  // to a page shown alone has no sheet that lands where the page does:
-  // it turns at once.
+  // Which sheet turns: between two two-page screens, the later page of
+  // the earlier one (the left page of a manga), hinged at the gutter, its
+  // back the first page of the later one — a page alone on a two-page
+  // screen lies in one half and counts as a page of a pair, its other
+  // half bare paper. When the earlier screen is one page across it
+  // (single mode, a wide page), that page, hinged at its own spine-side
+  // edge, its back the same page seen through the paper. A turn onto a
+  // wide page has no sheet that lands where the page does: it turns at
+  // once.
   let curlHost = $state<HTMLDivElement | null>(null);
   let curl: PageCurl | null = null;
   const curlOn = $derived(pageTurn === "curl" && flow === "paged");
@@ -608,7 +611,7 @@
    *  of the screen, for a page of a spread where it lies once shown)
    *  or centred. */
   function sheetFace(
-    page: PageEntry,
+    page: PageEntry | null,
     flip: boolean,
     paper: string,
     toward: "left" | "right" | "center",
@@ -626,7 +629,7 @@
       // (No margin at the gutter: half the page area runs up to it.)
       padding: `${padding}px ${side === "left" ? 0 : padding}px ${padding}px ${side === "right" ? 0 : padding}px`,
     });
-    const img = pictureOf(page);
+    const img = page && pictureOf(page);
     if (img) {
       img.className = "block h-full w-full object-contain";
       img.style.objectPosition = side;
@@ -636,7 +639,7 @@
   }
 
   /** The pages under the sheet, laid out as the reader lays a spread out. */
-  function underLayout(list: PageEntry[], paper: string): HTMLElement {
+  function underLayout(list: (PageEntry | null)[], paper: string): HTMLElement {
     const root = document.createElement("div");
     root.className = "flex h-full w-full items-center justify-center";
     Object.assign(root.style, {
@@ -652,7 +655,7 @@
           ? `w-1/2 ${i === 0 ? "justify-end" : "justify-start"}`
           : "w-full justify-center"
       }`;
-      const img = pictureOf(page);
+      const img = page && pictureOf(page);
       if (img) {
         img.className =
           "block h-full max-h-full w-auto max-w-full object-contain";
@@ -668,8 +671,12 @@
     const earlier = spreads[Math.min(spreadIndex, target)];
     const later = spreads[Math.max(spreadIndex, target)];
     if (!earlier || !later || !container) return null;
-    const pair = earlier.length === 2 && later.length === 2;
-    if (!pair && earlier.length !== 1) return null;
+    // (A page alone on a two-page screen turns as the page of a pair it
+    // lies in the place of.)
+    const e = halves(earlier, twoPage, shift);
+    const l = halves(later, twoPage, shift);
+    const pair = e.length === 2 && l.length === 2;
+    if (!pair && e.length !== 1) return null;
     await Promise.all([...earlier, ...later].map((p) => loadImage(p)));
     const paper = getComputedStyle(container).backgroundColor;
     // The sheet's spine is on its right in a manga: the left page turns
@@ -677,7 +684,10 @@
     const mirror = rtl;
     if (pair) {
       // Screen slot of the turning page: left in a manga.
-      const sheetPage = earlier[1];
+      const sheetPage = e[1];
+      // (A page alone where the first of a pair goes, before a wide one:
+      // nothing turns there.)
+      if (!sheetPage) return null;
       const left = rtl;
       // The sheet is the page, margin and all: half the screen.
       const rect = {
@@ -689,7 +699,7 @@
       // Each page lies against the gutter: the left one on the right of
       // its half, the right one on the left.
       const at = left ? "right" : "left";
-      const under = left ? [later[1], earlier[0]] : [earlier[0], later[1]];
+      const under = left ? [l[1], e[0]] : [e[0], l[1]];
       return {
         target,
         sheet: {
@@ -700,7 +710,7 @@
           // Reflected once by the fold, once more by a mirrored stage: the
           // page on the back comes out the right way round.
           back: sheetFace(
-            later[0],
+            l[0],
             !mirror,
             paper,
             at === "left" ? "right" : "left",
@@ -734,7 +744,7 @@
       },
       clipToSheet: true,
       gutterX: null,
-      base: underLayout(displayOrder(later, rtl), paper),
+      base: underLayout(displayOrder(l, rtl), paper),
     };
   }
 
@@ -1359,7 +1369,7 @@
             return total;
           },
           get shown() {
-            return shown.map((p) => p.index);
+            return shown.flatMap((p) => (p ? [p.index] : []));
           },
           get twoPage() {
             return twoPage;
@@ -1543,35 +1553,40 @@
         class="flex h-full w-full items-center justify-center will-change-transform"
         style="padding: {padding}px; transform: translate({tx}px, {ty}px) scale({scale}); transform-origin: center center;"
       >
-        {#each shown as page, i (page.index)}
-          <div
-            class="flex h-full items-center {shown.length > 1
-              ? `w-1/2 ${i === 0 ? 'justify-end' : 'justify-start'}`
-              : 'w-full justify-center'}"
-            data-page={page.index}
-          >
-            {#if urls[page.index]}
-              <img
-                src={urls[page.index]}
-                alt=""
-                draggable="false"
-                class="block h-full max-h-full w-auto max-w-full object-contain"
-                onerror={() => handleImageError(page)}
-              />
-            {:else if failed[page.index] || !page.image}
-              <div
-                class="flex h-full w-full items-center justify-center text-sm {darkMode
-                  ? 'text-ink-500'
-                  : 'text-muted-foreground'}"
-              >
-                {m.reader_pager_image_failed()}
-              </div>
-            {:else}
-              <div class="flex h-full w-full items-center justify-center">
-                <Spinner class={darkMode ? "border-ink-400" : ""} />
-              </div>
-            {/if}
-          </div>
+        {#each shown as page, i (page?.index ?? `bare-${i}`)}
+          {#if !page}
+            <!-- The bare half beside a page alone. -->
+            <div class="h-full w-1/2"></div>
+          {:else}
+            <div
+              class="flex h-full items-center {shown.length > 1
+                ? `w-1/2 ${i === 0 ? 'justify-end' : 'justify-start'}`
+                : 'w-full justify-center'}"
+              data-page={page.index}
+            >
+              {#if urls[page.index]}
+                <img
+                  src={urls[page.index]}
+                  alt=""
+                  draggable="false"
+                  class="block h-full max-h-full w-auto max-w-full object-contain"
+                  onerror={() => handleImageError(page)}
+                />
+              {:else if failed[page.index] || !page.image}
+                <div
+                  class="flex h-full w-full items-center justify-center text-sm {darkMode
+                    ? 'text-ink-500'
+                    : 'text-muted-foreground'}"
+                >
+                  {m.reader_pager_image_failed()}
+                </div>
+              {:else}
+                <div class="flex h-full w-full items-center justify-center">
+                  <Spinner class={darkMode ? "border-ink-400" : ""} />
+                </div>
+              {/if}
+            </div>
+          {/if}
         {/each}
       </div>
     </div>

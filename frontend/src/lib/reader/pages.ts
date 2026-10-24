@@ -138,8 +138,27 @@ export function buildSpreads(
 }
 
 /** A spread's pages left-to-right on screen. */
-export function displayOrder(spread: PageEntry[], rtl: boolean): PageEntry[] {
+export function displayOrder<T>(spread: T[], rtl: boolean): T[] {
   return rtl ? [...spread].reverse() : spread;
+}
+
+/**
+ * The halves of a two-page screen, in reading order: a pair's pages, or
+ * a portrait page alone in the half a book gives it, the other bare (null)
+ * — the cover where the first page of a pair goes second, any other
+ * page where the first goes. It is the size of a page of a pair, not of
+ * the screen, and turns like one. A wide page, and any page on a
+ * one-page screen, has the screen to itself (the spread as it is).
+ */
+export function halves(
+  spread: PageEntry[],
+  twoPage: boolean,
+  shift = false,
+): (PageEntry | null)[] {
+  if (!twoPage || spread.length !== 1 || isWide(spread[0])) return spread;
+  return spread[0].index === 0 && !shift
+    ? [null, spread[0]]
+    : [spread[0], null];
 }
 
 export function spreadIndexOf(
