@@ -43,7 +43,11 @@
     type TocEntry,
   } from "$lib/reader/toc";
   import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
-  import type { ProgressSave, SyncBackend } from "$lib/reading/sync";
+  import type {
+    ProgressSave,
+    ProgressState,
+    SyncBackend,
+  } from "$lib/reading/sync";
   import * as m from "$lib/paraglide/messages.js";
   import Spinner from "$lib/components/Spinner.svelte";
 
@@ -70,6 +74,7 @@
     onticks,
     ondirection,
     onrestorefallback,
+    onkosyncposition,
     onatend,
     onbookend,
   }: {
@@ -109,6 +114,16 @@
     onticks?: (ticks: number[]) => void;
     ondirection?: (rtl: boolean, vertical: boolean) => void;
     onrestorefallback?: (percentage: number) => void;
+    /** A newer position bridged from an e-reader: adopted outright when
+     *  the book was never read here (autoJumped), otherwise offered. */
+    onkosyncposition?: (detail: {
+      percentage: number;
+      device: string | null;
+      sectionIndex: number | null;
+      xpointer: string | null;
+      autoJumped: boolean;
+      localPercentage?: number;
+    }) => void;
     /** The last page is on screen. */
     onatend?: () => void;
     /** A forward turn past the last page. */
@@ -138,6 +153,17 @@
   let destroyed = false;
   let restoring = false;
   let started = $state(false);
+  // Set on any user move. Decides whether an e-reader position found at
+  // open still gets adopted outright or is only offered.
+  let userNavigated = false;
+  // Position bridged from an e-reader (kosync), newer than the stored CFI.
+  let kosyncMarker: {
+    percentage: number;
+    device: string | null;
+    sectionIndex: number | null;
+    xpointer: string | null;
+  } | null = null;
+  let kosyncAutoJump = false;
   let progressTimer: ReturnType<typeof setInterval> | null = null;
   let saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   let scrollFrame: number | null = null;
@@ -244,6 +270,7 @@
     emitPosition();
     if (continuous) scrollToPage(pageIndex);
     if (reason === "user") {
+      userNavigated = true;
       onactivity?.();
       debouncedSave();
     }
@@ -345,6 +372,38 @@
     goToPage(index ?? pageFromPercent(pct, total), "restore");
     await saveProgress(false);
     return true;
+  }
+
+  /**
+   * Act on an e-reader position bridged from kosync, as BookReader does.
+   * Never read here → adopt the device position outright; otherwise
+   * (positions meaningfully apart) let the page offer the jump — the
+   * saved page stays authoritative until the user accepts.
+   */
+  async function resolveKosyncMarker() {
+    if (!kosyncMarker) return;
+    const marker = kosyncMarker;
+    kosyncMarker = null;
+    if (kosyncAutoJump && !userNavigated) {
+      if (
+        await displayKosyncPosition(
+          marker.percentage,
+          marker.sectionIndex,
+          marker.xpointer,
+        )
+      ) {
+        onkosyncposition?.({ ...marker, autoJumped: true });
+      }
+      return;
+    }
+    const here = pagePercent(pageIndex, total);
+    if (Math.abs(marker.percentage - here) > 1) {
+      onkosyncposition?.({
+        ...marker,
+        autoJumped: false,
+        localPercentage: here,
+      });
+    }
   }
 
   export function chapterAtPercentage(pct: number): string | null {
@@ -489,6 +548,7 @@
     if (found === pageIndex) return;
     const wasAtEnd = atEnd;
     pageIndex = found;
+    userNavigated = true;
     emitPosition();
     onactivity?.();
     debouncedSave();
@@ -1347,6 +1407,7 @@
   async function loadSaved(): Promise<{
     cfi: string | null;
     percentage: number | null;
+    devicePosition: ProgressState["devicePosition"];
   } | null> {
     try {
       const state = await sync.getProgress(bookId);
@@ -1355,6 +1416,7 @@
       return {
         cfi: state.locator ? cfiOfLocator(state.locator) : null,
         percentage: totalProgression == null ? null : totalProgression * 100,
+        devicePosition: state.devicePosition,
       };
     } catch {
       return null;
@@ -1398,6 +1460,16 @@
         target = pageFromPercent(saved.percentage, list.length);
         if (saved.cfi) onrestorefallback?.(saved.percentage);
       }
+      const devicePos = saved?.devicePosition;
+      if (!initialCfi && typeof devicePos?.percentage === "number") {
+        kosyncMarker = {
+          percentage: devicePos.percentage,
+          device: devicePos.device ?? null,
+          sectionIndex: devicePos.sectionIndex ?? null,
+          xpointer: devicePos.xpointer ?? null,
+        };
+        kosyncAutoJump = !saved?.cfi;
+      }
       started = true;
       goToPage(target ?? 0, "restore");
       restoring = false;
@@ -1411,6 +1483,7 @@
         PROGRESS_SAVE_INTERVAL_MS,
       );
       window.addEventListener("beforeunload", handleBeforeUnload);
+      void resolveKosyncMarker();
       // Debug handle — the only way e2e probes and a device Web Inspector
       // reach the pager (same convention as __beepubReaderNG.core).
       (window as unknown as { __beepubReaderNG?: unknown }).__beepubReaderNG = {

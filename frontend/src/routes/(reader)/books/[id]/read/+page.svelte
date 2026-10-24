@@ -1371,6 +1371,7 @@
               toastStore.info(
                 m.reader_restore_fallback({ percentage: Math.round(pct) }),
               )}
+            onkosyncposition={handleKosyncPosition}
             onatend={() => {
               reachedEnd = true;
               prefetchSeriesNeighbors();

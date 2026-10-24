@@ -560,6 +560,15 @@ export const CURL_BOOK: Fixture = {
   mimeType: "application/vnd.comicbook+zip",
 };
 
+/** Eight portrait pages of flat colours, left to right: the kosync spec's
+ *  own comic, so the e-reader positions it pushes reach no other spec. */
+export const KITE_BOOK: Fixture = {
+  file: "e2e-saltfield-kite-postman.cbz",
+  title: "鹽田風箏郵差",
+  readyText: "",
+  mimeType: "application/vnd.comicbook+zip",
+};
+
 /** Open an image book in the reader: BookReader parses it, finds the layout
  *  pre-paginated and hands it to the image pager. Resolves once the pager
  *  shows its restored page with every image on screen decoded. */
