@@ -61,7 +61,6 @@
   } from "$lib/reader/core";
   import type { BookLoader } from "$lib/reader/loaders";
   import {
-    isPictureBook,
     isPrePaginated,
     readPages,
     type PageEntry,
@@ -114,6 +113,10 @@
   let hasDbTitle = false;
   let authors = $state<string[]>([]);
   let isImageBook = $state(false);
+  /** What the library's text extraction made of the book (an image book
+   *  under 500 words: true; text: false), once known — null while it is
+   *  not classified yet, or not heard of in time. */
+  let classified: Promise<boolean | null> = Promise.resolve(null);
   let sectionWeights = $state<number[] | null>(null);
   let ready = $state(false);
   let rendered = $state(false);
@@ -131,17 +134,17 @@
     pages: PageEntry[] | null;
   } | null>(null);
   /** Two ways in: the OPF declares pre-paginated (bought manga, packed
-   *  CBZ) and its pages are pictures, or the library classified the book
-   *  an image book and every spine item turns out to be a picture — an
-   *  older image-only EPUB that never declared its layout. A short text
-   *  book (a small fixture) has no images, and a fixed-layout book of set
-   *  text has text pages, so they stay with the text reader. The pages
-   *  read here go to the pager, which would otherwise read them again. */
+   *  CBZ) and the library has not found the book to be text, or the
+   *  library classified the book an image book and every spine item
+   *  turns out to be a picture — an older image-only EPUB that never
+   *  declared its layout. A short text book (a small fixture) has no
+   *  images, and a fixed-layout book the library found text in (set text:
+   *  a picture book, a magazine) has no picture to a page, so they stay
+   *  with the text reader. */
   async function claimImageBook(b: Book, l: BookLoader): Promise<boolean> {
     if (isPrePaginated(b)) {
-      const pages = await readPages(b, l);
-      if (!isPictureBook(pages)) return false;
-      claimed = { book: b, loader: l, pages };
+      if ((await classified) === false) return false;
+      claimed = { book: b, loader: l, pages: null };
       isImageBook = true;
       return true;
     }
@@ -623,6 +626,8 @@
   // says: a CJK text book). A book already forced keeps the row, so the
   // way back to "auto" never disappears.
   let writingModeOffered = $state(false);
+  /** A fixed-layout book in the text reader: it only fades. */
+  let fixedLayout = $state(false);
   function handleWritingModeChange(value: WritingMode) {
     writingMode = value;
     try {
@@ -1164,6 +1169,7 @@
         hasDbTitle = true;
         authors = localEntry.authors ?? [];
         isImageBook = localEntry.isImageBook === true;
+        classified = Promise.resolve(localEntry.isImageBook ?? null);
         sectionWeights = localEntry.sectionWeights ?? null;
         // Pull the linked server state first so the reader restores the
         // newest position — but bounded: past 2.5s the sync continues in
@@ -1206,8 +1212,16 @@
           if (hints.isImageBook !== undefined) isImageBook = hints.isImageBook;
           if (hints.sectionWeights) sectionWeights = hints.sectionWeights;
         }
-        booksApi
-          .get(bookId)
+        const info = booksApi.get(bookId);
+        // (Bounded: offline the fetch never answers, and the copy's own
+        // hint stands.)
+        classified = Promise.race([
+          info.then((b) => b.is_image_book).catch(() => null),
+          new Promise<boolean | null>((resolve) =>
+            setTimeout(() => resolve(hints?.isImageBook ?? null), 2500),
+          ),
+        ]);
+        info
           .then((b) => {
             authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
             isImageBook = b.is_image_book === true;
@@ -1437,6 +1451,7 @@
             ondirection={(rtl) => (isRtl = rtl)}
             onscrolled={(on) => (scrolled = on)}
             onwritingmodeoffer={(offered) => (writingModeOffered = offered)}
+            onfixedlayout={(fixed) => (fixedLayout = fixed)}
             onkosyncposition={handleKosyncPosition}
             onrestorefallback={(pct) =>
               toastStore.info(
@@ -1719,7 +1734,7 @@
     onletterSpacingChange={handleLetterSpacingChange}
     onmarginXChange={handleMarginXChange}
     onmarginYChange={handleMarginYChange}
-    onpageTurnChange={claimed ? undefined : handlePageTurnChange}
+    onpageTurnChange={claimed || fixedLayout ? undefined : handlePageTurnChange}
     fontSizeMax={FONT_SIZE_MAX}
     {fullPage}
     onfullPageChange={claimed ? undefined : handleFullPageChange}

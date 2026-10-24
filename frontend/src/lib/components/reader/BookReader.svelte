@@ -110,6 +110,7 @@
     ondirection,
     onscrolled,
     onwritingmodeoffer,
+    onfixedlayout,
     onkosyncposition,
     onrestorefallback,
     onpeekchange,
@@ -195,6 +196,10 @@
     /** Whether a writing-direction choice makes sense for this book (a
      *  CJK text book). Fires on every section load. */
     onwritingmodeoffer?: (offered: boolean) => void;
+    /** Whether the book is fixed-layout, set text read reflowed: it turns
+     *  by a fade, never a slide, a curl or the scroll. Fires on every
+     *  section load. */
+    onfixedlayout?: (fixed: boolean) => void;
     /** A newer position bridged from an e-reader: adopted outright when
      *  the book was never read here (autoJumped), otherwise offered. */
     onkosyncposition?: (detail: {
@@ -2230,6 +2235,7 @@ ${darkOverrides}
     if (core?.vertical) pinVerticalPunctuation(doc);
     ondirection?.(!!core?.advancesLeftward(), vertical);
     onwritingmodeoffer?.(!!core?.offersWritingMode());
+    onfixedlayout?.(core?.book?.rendition?.layout === "pre-paginated");
     attachGestures(doc);
   }
 

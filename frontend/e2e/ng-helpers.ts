@@ -564,7 +564,7 @@ export const CURL_BOOK: Fixture = {
  *  ornament above its text): a fixed-layout book that is not pictures. */
 export const FIXED_LAYOUT_TEXT_BOOK: Fixture = {
   file: "e2e-fixed-layout-text-book.epub",
-  title: "Tidewater Almanac of Small Hours",
+  title: "Tidewater Almanac of Long Evenings",
   readyText: "almanac keeper climbs the tide tower",
 };
 

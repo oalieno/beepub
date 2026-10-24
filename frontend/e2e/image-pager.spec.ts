@@ -145,14 +145,27 @@ test("a fixed-layout book of text pages goes to the text reader", async ({
   page,
 }) => {
   // Pre-paginated, but its pages are set text (one with a small picture
-  // above it): the pager would show the picture or nothing, so the text
-  // reader takes it. There is no fixed-layout renderer: it is reflowed.
+  // above it): once the library's text extraction has found it text (500
+  // words and more), the text reader takes it. There is no fixed-layout
+  // renderer: it is reflowed, and it turns only by a fade — the settings
+  // offer no page-turn choice for it.
   // (openBook waits for the first page's text in the text reader.)
   const bookId = await seedFixture(page.request, FIXED_LAYOUT_TEXT_BOOK);
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/books/${bookId}`)).json())
+          .is_image_book,
+      { timeout: 60_000 },
+    )
+    .toBe(false);
   await openBook(page, bookId, {}, FIXED_LAYOUT_TEXT_BOOK);
   expect(await page.evaluate(() => !!window.__beepubReaderNG.pager)).toBe(
     false,
   );
+  await page.getByRole("button", { name: "Reader settings" }).click();
+  await expect(page.getByTestId("setting-font-size")).toBeVisible();
+  await expect(page.getByTestId("setting-page-turn")).toHaveCount(0);
 });
 
 test("the continuous modes stack the pages and follow the scroll", async ({
