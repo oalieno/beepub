@@ -490,15 +490,13 @@
   // beneath it until the turn lands, then the position moves and, once the
   // landed pages have painted, the layer goes.
   //
-  // Which sheet turns: between two two-page screens, the later page of
-  // the earlier one (the left page of a manga), hinged at the gutter, its
-  // back the first page of the later one — a page alone on a two-page
-  // screen lies in one half and counts as a page of a pair, its other
-  // half bare paper. When the earlier screen is one page across it
-  // (single mode, a wide page), that page, hinged at its own spine-side
-  // edge, its back the same page seen through the paper. A turn onto a
-  // wide page has no sheet that lands where the page does: it turns at
-  // once.
+  // Which sheet turns: on a two-page screen, the later page of the
+  // earlier screen (the left page of a manga), hinged at the gutter, its
+  // back the first page of the later one. Every two-page screen has two
+  // leaves to turn by (see leaves): a page alone lies in one half beside
+  // bare paper, a wide page is its two halves. On a one-page screen, the
+  // page, hinged at its own spine-side edge, its back the same page seen
+  // through the paper.
   let curlHost = $state<HTMLDivElement | null>(null);
   let curl: PageCurl | null = null;
   const curlOn = $derived(pageTurn === "curl" && flow === "paged");
@@ -606,61 +604,106 @@
 
   /** A page filling the sheet, mirrored back when the sheet is drawn in a
    *  mirrored stage. */
-  /** A face of a sheet: the whole page, its margin paper, the picture
-   *  where the reader lays it — against the gutter (`toward` that side
-   *  of the screen, for a page of a spread where it lies once shown)
-   *  or centred. */
+  /** What lies in one place of a turn: a page, or one half of a wide
+   *  page (a two-page spread scanned as one picture), or bare paper. */
+  type Leaf = { page: PageEntry; part: "whole" | "left" | "right" } | null;
+
+  /** A screen's leaves in reading order: on a two-page screen always two
+   *  — a pair, a page alone beside bare paper, or the two halves of a
+   *  wide page — so that any two screens turn by the curl; on a one-page
+   *  screen its page. */
+  function leaves(spread: PageEntry[]): Leaf[] {
+    const h = halves(spread, twoPage, shift);
+    if (twoPage && h.length === 1 && h[0]) {
+      const page = h[0];
+      // (In a manga the first half read is the right one.)
+      return rtl
+        ? [
+            { page, part: "right" },
+            { page, part: "left" },
+          ]
+        : [
+            { page, part: "left" },
+            { page, part: "right" },
+          ];
+    }
+    return h.map((page) => page && { page, part: "whole" as const });
+  }
+
+  /**
+   * A face of a sheet: the whole page, its margin paper, the picture
+   * where the reader lays it. `place`: where on the screen the face lies
+   * once shown — a half (a page against the gutter, or its half of a
+   * wide page) or the whole screen (centred).
+   */
   function sheetFace(
-    page: PageEntry | null,
+    leaf: Leaf,
     flip: boolean,
     paper: string,
-    toward: "left" | "right" | "center",
+    place: "left" | "right" | "center",
   ): HTMLElement {
     const face = document.createElement("div");
     // (A flipped face is flipped back by the mirrored stage or the fold:
     // its own sides are the screen's.)
-    const side = toward;
     Object.assign(face.style, {
       position: "absolute",
       inset: "0",
+      overflow: "hidden",
       background: paper,
       transform: flip ? "scaleX(-1)" : "none",
       boxSizing: "border-box",
-      // (No margin at the gutter: half the page area runs up to it.)
-      padding: `${padding}px ${side === "left" ? 0 : padding}px ${padding}px ${side === "right" ? 0 : padding}px`,
     });
-    const img = page && pictureOf(page);
-    if (img) {
+    const img = leaf && pictureOf(leaf.page);
+    if (!img) return face;
+    if (leaf.part === "whole") {
+      // No margin at the gutter: the page lies against it.
+      const gutter =
+        place === "left" ? "right" : place === "right" ? "left" : null;
+      face.style.padding = `${padding}px ${gutter === "right" ? 0 : padding}px ${padding}px ${gutter === "left" ? 0 : padding}px`;
       img.className = "block h-full w-full object-contain";
-      img.style.objectPosition = side;
-      face.append(img);
+      img.style.objectPosition = gutter ?? "center";
+    } else {
+      // Its half of the picture laid across the whole screen.
+      Object.assign(img.style, {
+        position: "absolute",
+        top: `${padding}px`,
+        left: `${leaf.part === "left" ? padding : padding - containerWidth / 2}px`,
+        width: `${Math.max(1, containerWidth - 2 * padding)}px`,
+        height: `${Math.max(1, containerHeight - 2 * padding)}px`,
+        objectFit: "contain",
+      });
     }
+    face.append(img);
     return face;
   }
 
-  /** The pages under the sheet, laid out as the reader lays a spread out. */
-  function underLayout(list: (PageEntry | null)[], paper: string): HTMLElement {
+  /** The pages under the sheet (left to right), laid out as the reader
+   *  lays them: two halves, or one page across the screen. */
+  function underLayout(list: Leaf[], paper: string): HTMLElement {
     const root = document.createElement("div");
-    root.className = "flex h-full w-full items-center justify-center";
     Object.assign(root.style, {
       position: "absolute",
       inset: "0",
-      padding: `${padding}px`,
       background: paper,
     });
-    list.forEach((page, i) => {
+    list.forEach((leaf, i) => {
+      const half = list.length > 1;
       const slot = document.createElement("div");
-      slot.className = `flex h-full items-center ${
-        list.length > 1
-          ? `w-1/2 ${i === 0 ? "justify-end" : "justify-start"}`
-          : "w-full justify-center"
-      }`;
-      const img = page && pictureOf(page);
-      if (img) {
-        img.className =
-          "block h-full max-h-full w-auto max-w-full object-contain";
-        slot.append(img);
-      }
+      Object.assign(slot.style, {
+        position: "absolute",
+        top: "0",
+        bottom: "0",
+        left: half && i === 1 ? "50%" : "0",
+        width: half ? "50%" : "100%",
+      });
+      slot.append(
+        sheetFace(
+          leaf,
+          false,
+          paper,
+          half ? (i === 0 ? "left" : "right") : "center",
+        ),
+      );
       root.append(slot);
     });
     return root;
@@ -671,23 +714,19 @@
     const earlier = spreads[Math.min(spreadIndex, target)];
     const later = spreads[Math.max(spreadIndex, target)];
     if (!earlier || !later || !container) return null;
-    // (A page alone on a two-page screen turns as the page of a pair it
-    // lies in the place of.)
-    const e = halves(earlier, twoPage, shift);
-    const l = halves(later, twoPage, shift);
-    const pair = e.length === 2 && l.length === 2;
-    if (!pair && e.length !== 1) return null;
+    const e = leaves(earlier);
+    const l = leaves(later);
     await Promise.all([...earlier, ...later].map((p) => loadImage(p)));
     const paper = getComputedStyle(container).backgroundColor;
     // The sheet's spine is on its right in a manga: the left page turns
     // over the gutter, a page alone over its right edge.
     const mirror = rtl;
-    if (pair) {
-      // Screen slot of the turning page: left in a manga.
-      const sheetPage = e[1];
+    if (twoPage) {
+      // Screen half of the turning page: left in a manga.
+      const sheetLeaf = e[1];
       // (A page alone where the first of a pair goes, before a wide one:
-      // nothing turns there.)
-      if (!sheetPage) return null;
+      // the half that would turn is bare, and nothing turns there.)
+      if (!sheetLeaf) return null;
       const left = rtl;
       // The sheet is the page, margin and all: half the screen.
       const rect = {
@@ -696,9 +735,7 @@
         width: containerWidth / 2,
         height: containerHeight,
       };
-      // Each page lies against the gutter: the left one on the right of
-      // its half, the right one on the left.
-      const at = left ? "right" : "left";
+      const place = left ? "left" : "right";
       const under = left ? [l[1], e[0]] : [e[0], l[1]];
       return {
         target,
@@ -706,15 +743,11 @@
           ...rect,
           mirror,
           spread: true,
-          front: sheetFace(sheetPage, mirror, paper, at),
+          front: sheetFace(sheetLeaf, mirror, paper, place),
           // Reflected once by the fold, once more by a mirrored stage: the
-          // page on the back comes out the right way round.
-          back: sheetFace(
-            l[0],
-            !mirror,
-            paper,
-            at === "left" ? "right" : "left",
-          ),
+          // page on the back comes out the right way round, in the other
+          // half.
+          back: sheetFace(l[0], !mirror, paper, left ? "right" : "left"),
           seeThrough: false,
           paper,
         },
@@ -723,7 +756,7 @@
         base: underLayout(under, paper),
       };
     }
-    const sheetPage = earlier[0];
+    const sheetLeaf = e[0];
     // The sheet is the page, margin and all: the whole screen.
     const rect = {
       left: 0,
@@ -737,14 +770,14 @@
         ...rect,
         mirror,
         spread: false,
-        front: sheetFace(sheetPage, mirror, paper, "center"),
-        back: sheetFace(sheetPage, mirror, paper, "center"),
+        front: sheetFace(sheetLeaf, mirror, paper, "center"),
+        back: sheetFace(sheetLeaf, mirror, paper, "center"),
         seeThrough: true,
         paper,
       },
       clipToSheet: true,
       gutterX: null,
-      base: underLayout(displayOrder(l, rtl), paper),
+      base: underLayout(l, paper),
     };
   }
 

@@ -92,8 +92,13 @@ export async function readPages(
 }
 
 /** Whether a page is wider than tall — a two-page spread scanned as one
- *  image, shown alone. Unknown sizes count as portrait. */
-export function isWide(page: Pick<PageEntry, "width" | "height">): boolean {
+ *  image, shown alone. Unknown sizes count as portrait. A wide picture
+ *  the book places on the left or right of a pair is one page, not two:
+ *  it pairs, and lies in its half like any other page. */
+export function isWide(
+  page: Pick<PageEntry, "width" | "height" | "spread">,
+): boolean {
+  if (page.spread === "left" || page.spread === "right") return false;
   return page.width != null && page.height != null && page.width > page.height;
 }
 
@@ -101,9 +106,11 @@ export function isWide(page: Pick<PageEntry, "width" | "height">): boolean {
  * Group pages into what one screen shows, in reading order. Single-page
  * layout: one page per screen. Two-page layout follows the rule shared
  * with KOReader: the first page (the cover) alone, a wide page alone, and
- * portrait pages paired. The spread hints commercial EPUBs carry are not
- * consulted: the owner asked for pairs on any screen, and a book whose
- * hints disagree with its pages would otherwise never pair at all.
+ * portrait pages paired. The spread hints commercial EPUBs carry do not
+ * decide the pairs — the owner asked for pairs on any screen, and a book
+ * whose hints disagree with its pages would otherwise never pair at all —
+ * except that a wide picture hinted left or right is a page of one
+ * (isWide).
  *
  * `shift` moves the pairing by one page (Tachidesk's "shift double
  * pages"): the first page joins the second instead of standing alone, for
