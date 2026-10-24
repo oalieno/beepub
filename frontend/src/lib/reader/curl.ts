@@ -442,7 +442,11 @@ export class FoldLayer {
       this.#shadowPoly.setAttribute("points", "");
       return null;
     }
-    const a = strength(p);
+    // How lifted the sheet is goes by how far its corner has come, not
+    // by how far along the turn it is: a finger that pulls the corner
+    // up or down folds a large flap a short way along.
+    const lifted = Math.min(1, fold.reach / (2 * s.width * 0.08));
+    const a = lifted * strength(Math.max(p, 0.08));
     this.#front.style.clipPath = polygonCss(fold.front);
     if (this.#inPlace) {
       // In the element's own frame: unmirrored, and offset by nothing —
