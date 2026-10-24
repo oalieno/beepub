@@ -259,9 +259,6 @@ export class FoldLayer {
   #backShade: HTMLElement;
   /** A back that stays in the layer between turns (see holdBack). */
   #heldBack: HTMLElement | null = null;
-  /** How strongly the flap's sheen shows: full on light paper, faint on
-   *  dark, where a white sheen would be a bright band. */
-  #sheen = 1;
   #sheet: FoldSheet | null = null;
 
   constructor() {
@@ -309,7 +306,7 @@ export class FoldLayer {
     ])
       filter.setAttribute(k, v);
     const blur = document.createElementNS(SVG_NS, "feGaussianBlur");
-    blur.setAttribute("stdDeviation", "9");
+    blur.setAttribute("stdDeviation", "22");
     filter.append(blur);
     defs.append(filter);
     this.#shadowPoly = document.createElementNS(SVG_NS, "polygon");
@@ -382,7 +379,6 @@ export class FoldLayer {
     this.#back.style.background = sheet.paper;
     this.#veil.style.background = sheet.paper;
     this.#veil.hidden = !sheet.seeThrough;
-    this.#sheen = sheenOn(sheet.paper);
     if (this.#heldBack) {
       // (Put in once: one that is moved, an iframe, would load again.)
     } else if (sheet.back) this.#backSlot.replaceChildren(sheet.back);
@@ -462,21 +458,23 @@ export class FoldLayer {
       "points",
       fold.lying.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "),
     );
-    this.#shadowPoly.setAttribute("fill-opacity", (0.32 * a).toFixed(3));
+    this.#shadowPoly.setAttribute("fill-opacity", (0.24 * a).toFixed(3));
     const depth = Math.max(
       8,
       Math.min(fold.reach / 2, Math.min(s.width, PHONE_WIDTH) * 0.6),
     );
     const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg) translateY(-50%)`;
-    // On the flap: dark at the fold, a sheen, then paper.
+    // On the flap: paper, a little darker where it bends at the fold
+    // — no sheen, no bands.
     this.#backShade.style.transform = at;
     this.#backShade.style.opacity = String(a);
-    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.30) 0, rgba(0,0,0,.06) ${depth * 0.12}px, rgba(255,255,255,${(0.28 * this.#sheen).toFixed(3)}) ${depth * 0.38}px, rgba(255,255,255,0) ${depth * 0.7}px, rgba(0,0,0,.06) ${depth}px, rgba(0,0,0,0) ${depth * 1.6}px)`;
+    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.12) 0, rgba(0,0,0,.05) ${depth * 0.25}px, rgba(0,0,0,0) ${depth * 0.7}px)`;
     // On the page the lifted sheet uncovers.
-    const reach = Math.max(14, depth * 0.55);
+    const reach = Math.max(24, depth * 0.9);
     this.#castShade.style.opacity = String(a);
     this.#castShade.style.transform = at;
-    this.#castShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.38) 0, rgba(0,0,0,.12) ${reach * 0.35}px, rgba(0,0,0,0) ${reach}px)`;
+    // (Eased off in many steps: a shade with an edge to it is a line.)
+    this.#castShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.20) 0, rgba(0,0,0,.13) ${reach * 0.15}px, rgba(0,0,0,.07) ${reach * 0.35}px, rgba(0,0,0,.03) ${reach * 0.6}px, rgba(0,0,0,0) ${reach}px)`;
     this.#cast.style.clipPath = polygonCss(fold.folded);
     return fold;
   }
@@ -489,30 +487,6 @@ export class FoldLayer {
     if (!this.#heldBack) this.#backSlot.replaceChildren();
     this.#sheet = null;
   }
-}
-
-/** How much of the flap's white sheen a paper colour takes: all of it
- *  on white, a quarter on black. */
-function sheenOn(paper: string): number {
-  const c = paper.trim();
-  let rgb: number[] | null = null;
-  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
-  if (hex) {
-    const h =
-      hex[1].length === 3 ? [...hex[1]].map((d) => d + d).join("") : hex[1];
-    rgb = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-  } else {
-    const fn = /^rgba?\(([^)]+)\)/i.exec(c);
-    if (fn)
-      rgb = fn[1]
-        .split(/[\s,/]+/)
-        .slice(0, 3)
-        .map(Number);
-  }
-  if (!rgb || rgb.some((v) => !Number.isFinite(v))) return 1;
-  const [r, g, b] = rgb.map((v) => v / 255);
-  const light = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return 0.25 + 0.75 * light;
 }
 
 /** A sheet for PageCurl: a FoldSheet whose front is put into the layer. */
