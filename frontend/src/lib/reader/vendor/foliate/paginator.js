@@ -809,9 +809,22 @@ export class Paginator extends HTMLElement {
     // (BeePub) A paginator drawn under a transform (the back of a curled
     // page, folded over) measures its boxes as laid out, not as drawn.
     untransformed = false
+    // (Its used size, to the fraction of a pixel as the live one has it:
+    // offsetWidth rounds, and a column half a pixel off can break lines
+    // elsewhere and count other pages.)
     #box(el) {
         if (!this.untransformed) return el.getBoundingClientRect()
-        return { width: el.offsetWidth, height: el.offsetHeight }
+        const cs = getComputedStyle(el)
+        const extra = cs.boxSizing === 'border-box' ? [0, 0] : [
+            ['Left', 'Right'], ['Top', 'Bottom'],
+        ].map(sides => sides.reduce((sum, side) =>
+            sum + parseFloat(cs[`padding${side}`]) + parseFloat(cs[`border${side}Width`]), 0))
+        const width = parseFloat(cs.width) + extra[0]
+        const height = parseFloat(cs.height) + extra[1]
+        return {
+            width: Number.isFinite(width) ? width : el.offsetWidth,
+            height: Number.isFinite(height) ? height : el.offsetHeight,
+        }
     }
     get size() {
         return this.#box(this.#container)[this.sideProp]

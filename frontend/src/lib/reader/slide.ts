@@ -1212,12 +1212,15 @@ export class CoverSlide {
     // "Next" to the left (vertical text, a right-to-left book): the
     // spine is on the right.
     const mirror = this.#host.leftward();
+    // (To the fraction of a pixel: the back is laid out in it, and must
+    // break its lines where the live page does.)
+    const { width, height } = container.getBoundingClientRect();
     fold.setSheet(
       {
         left: 0,
         top: 0,
-        width: container.clientWidth || 1,
-        height: container.clientHeight || 1,
+        width: width || 1,
+        height: height || 1,
         mirror,
         back: null,
         seeThrough: true,
