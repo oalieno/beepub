@@ -52,7 +52,7 @@
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import { toastStore } from "$lib/stores/toast";
   import * as m from "$lib/paraglide/messages.js";
-  import type { SearchResult } from "./EpubReader.svelte";
+  import type { SearchResult } from "./search";
   import Spinner from "$lib/components/Spinner.svelte";
   import FootnotePopup from "./FootnotePopup.svelte";
   import HighlightMenu from "./HighlightMenu.svelte";

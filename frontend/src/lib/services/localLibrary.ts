@@ -192,115 +192,190 @@ interface ParsedEpub {
 // Mirrors the backend's word_count < 500 classification threshold.
 const IMAGE_BOOK_THRESHOLD = 500;
 
+/** What the import reads of the foliate parser's book (untyped JS). */
+interface ManifestItem {
+  href: string;
+  id: string;
+  mediaType?: string;
+}
+interface ParsedBook {
+  sections: {
+    id: string;
+    linear?: string;
+    createDocument(): Promise<Document>;
+    resolveHref(href: string): string;
+  }[];
+  metadata?: Record<string, unknown>;
+  resources: {
+    manifest: ManifestItem[];
+    getItemByHref(href: string): ManifestItem | undefined;
+  };
+  getCover(): Promise<Blob | null>;
+  loadBlob(href: string): Promise<Blob>;
+}
+
+/** Open EPUB bytes with the reader's own parser (the foliate EPUB over
+ *  the in-memory zip loader). A file that is no zip, or no EPUB inside,
+ *  is an InvalidEpubError. */
+async function openEpub(buf: ArrayBuffer): Promise<ParsedBook> {
+  const [{ EPUB }, { makeLocalLoader }] = await Promise.all([
+    import("$lib/reader/vendor/foliate/epub.js"),
+    import("$lib/reader/loaders/local"),
+  ]);
+  try {
+    const loader = await makeLocalLoader(buf);
+    // sha1 undefined = foliate's WebCrypto default (font deobfuscation keys)
+    return (await new EPUB({
+      ...loader,
+      sha1: undefined,
+    }).init()) as unknown as ParsedBook;
+  } catch (err) {
+    throw new InvalidEpubError(err);
+  }
+}
+
+/** A metadata value as one string: foliate gives a language map (one
+ *  name per script) where the OPF has alternates, and a contributor
+ *  object where it has more than a name; the first name is the main one. */
+function nameOf(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null;
+  if (value && typeof value === "object") {
+    if ("name" in value) return nameOf((value as { name: unknown }).name);
+    for (const v of Object.values(value)) {
+      const name = nameOf(v);
+      if (name) return name;
+    }
+  }
+  return null;
+}
+
+/** A metadata field foliate leaves single when there is one, a list
+ *  when there are more. */
+function listOf(value: unknown): unknown[] {
+  if (value == null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+/** The book's authors; failing any (every creator an illustrator, an
+ *  editor…), whoever else made it. */
+function authorsOf(metadata: Record<string, unknown>): string[] {
+  const names = (key: string) =>
+    listOf(metadata[key]).flatMap((x) => nameOf(x) ?? []);
+  const authors = names("author");
+  if (authors.length) return authors;
+  for (const key of [
+    "illustrator",
+    "artist",
+    "editor",
+    "translator",
+    "colorist",
+    "narrator",
+    "contributor",
+  ]) {
+    const others = names(key);
+    if (others.length) return others;
+  }
+  return [];
+}
+
 /** Per-section text sizes counted from the open archive — the client-side
  *  twin of the server's chunk aggregation. Whitespace is stripped so the
  *  numbers track visible text, not markup indentation. */
-async function countSectionWeights(book: any): Promise<number[]> {
-  const items: any[] = book.spine?.spineItems ?? [];
-  const weights = new Array<number>(items.length).fill(0);
-  for (const item of items) {
-    if (!item?.linear) continue;
+async function countSectionWeights(book: ParsedBook): Promise<number[]> {
+  const weights = new Array<number>(book.sections.length).fill(0);
+  for (const [index, section] of book.sections.entries()) {
+    if (section.linear === "no") continue;
     try {
-      await item.load(book.load.bind(book));
-      const text: string = item.document?.body?.textContent ?? "";
-      weights[item.index] = text.replace(/\s+/g, "").length;
+      const doc = await section.createDocument();
+      const text = doc.body?.textContent ?? "";
+      weights[index] = text.replace(/\s+/g, "").length;
     } catch {
       // Unloadable section weighs nothing.
-    } finally {
-      try {
-        item.unload?.();
-      } catch {
-        // Already unloaded.
-      }
     }
   }
   return weights;
 }
 
+const IMAGE_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  gif: "image/gif",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+/** An image entry as a Blob typed by its manifest media type (the cover
+ *  file is named by it), else by its extension. Null when not an image. */
+async function imageBlob(book: ParsedBook, href: string): Promise<Blob | null> {
+  const type =
+    book.resources.getItemByHref(href)?.mediaType ??
+    IMAGE_TYPES[href.split(".").pop()?.toLowerCase() ?? ""];
+  if (!type?.startsWith("image/")) return null;
+  const blob = await book.loadBlob(href);
+  return blob.size ? new Blob([blob], { type }) : null;
+}
+
 /**
- * Cover for books without a standard declaration — epub.js only knows
- * properties="cover-image" (EPUB3) and <meta name="cover"> (EPUB2), but
- * e.g. Kadokawa EPUB3s declare the cover only as a guide reference to an
- * XHTML page. Mirror the backend extractor's fallbacks: a manifest image
- * named like a cover, else the first image on the first spine page (cover
- * pages are conventionally spine[0]).
+ * The cover: the one the book declares (properties="cover-image", EPUB2
+ * <meta name="cover">, a guide reference) when it is an image — a guide
+ * cover is often an XHTML page. Otherwise mirror the backend extractor's
+ * fallbacks: a manifest image named like a cover, else the first image
+ * on the first spine page (cover pages are conventionally spine[0]).
  */
-async function fallbackCoverBlob(book: any): Promise<Blob | null> {
+async function coverBlob(book: ParsedBook): Promise<Blob | null> {
   try {
-    const manifest: Record<string, { href?: string; type?: string }> =
-      book.packaging?.manifest ?? {};
-    for (const [id, item] of Object.entries(manifest)) {
+    const declared = await book.getCover();
+    if (declared?.type.startsWith("image/") && declared.size) return declared;
+  } catch {
+    // fall through to the fallbacks
+  }
+  try {
+    for (const item of book.resources.manifest) {
       if (
-        item?.type?.startsWith("image/") &&
+        item.mediaType?.startsWith("image/") &&
         item.href &&
-        /cover/i.test(`${id} ${item.href}`)
+        /cover/i.test(`${item.id} ${item.href}`)
       ) {
-        const blob = await book.archive.getBlob(book.resolve(item.href));
+        const blob = await imageBlob(book, item.href);
         if (blob) return blob;
       }
     }
 
-    const section = book.spine?.get(0);
+    const section = book.sections[0];
     if (!section) return null;
-    await section.load(book.load.bind(book));
-    const doc: Document | null = section.document ?? null;
-    const img = doc?.querySelector("img[src], image");
+    const doc = await section.createDocument();
+    const img = doc.querySelector("img[src], image");
     // || not ?? — an empty attribute must fall through to the next form.
     const src =
       img?.getAttribute("src") ||
       img?.getAttribute("xlink:href") ||
       img?.getAttribute("href");
     if (!src) return null;
-    // Resolve relative to the page, in the leading-slash root form
-    // archive.getBlob expects (it strips the first character).
-    const base = new URL(book.resolve(section.href), "https://epub/");
-    const path = new URL(src, base).pathname;
-    const blob = (await book.archive.getBlob(path)) ?? null;
-    return blob?.type?.startsWith("image/") ? blob : null;
+    // Resolved against the page, as the reader resolves it.
+    return await imageBlob(book, section.resolveHref(src.split("#")[0]));
   } catch {
     return null;
   }
 }
 
-/** Parse metadata and cover from EPUB bytes, in memory, via the epub.js fork. */
+/** Parse metadata and cover from EPUB bytes, in memory, with the reader's
+ *  foliate parser. */
 async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
-  const Epub = (await import("$lib/epubjs/epub.js")).default;
-  // No constructor URL: auto-open swallows failures (it only emits
-  // OPEN_FAILED), which would leave us awaiting promises that never settle
-  // on a corrupt file. Calling open() ourselves gets a rejecting promise.
-  // The fork is untyped JS (same `any` treatment as EpubReader's epubBook).
-  const book: any = (Epub as any)();
-  try {
-    try {
-      await book.open(buf);
-    } catch (err) {
-      throw new InvalidEpubError(err);
-    }
-    const metadata = book.packaging?.metadata ?? {};
-    let cover: Blob | null = null;
-    if (book.cover) {
-      try {
-        cover = (await book.archive.getBlob(book.cover)) ?? null;
-      } catch {
-        cover = null;
-      }
-    }
-    if (!cover) cover = await fallbackCoverBlob(book);
-    const sectionWeights = await countSectionWeights(book);
-    const totalChars = sectionWeights.reduce((a, b) => a + b, 0);
-    return {
-      title: metadata.title || null,
-      authors: metadata.creator ? [metadata.creator] : [],
-      language: metadata.language || null,
-      identifier:
-        book.packaging?.uniqueIdentifier || metadata.identifier || null,
-      cover,
-      sectionWeights,
-      isImageBook: totalChars < IMAGE_BOOK_THRESHOLD,
-    };
-  } finally {
-    book.destroy();
-  }
+  const book = await openEpub(buf);
+  const metadata = book.metadata ?? {};
+  const cover = await coverBlob(book);
+  const sectionWeights = await countSectionWeights(book);
+  const totalChars = sectionWeights.reduce((a, b) => a + b, 0);
+  return {
+    title: nameOf(metadata.title),
+    authors: authorsOf(metadata),
+    language: nameOf(listOf(metadata.language)[0]),
+    identifier: nameOf(metadata.identifier),
+    cover,
+    sectionWeights,
+    isImageBook: totalChars < IMAGE_BOOK_THRESHOLD,
+  };
 }
 
 async function deleteFileQuiet(path: string): Promise<void> {
@@ -422,7 +497,7 @@ export async function removeLocalBook(bookId: string): Promise<void> {
 }
 
 /**
- * Read a local book's EPUB as ArrayBuffer for epub.js.
+ * Read a local book's EPUB as ArrayBuffer for the reader.
  *
  * Unlike the download cache, a read failure does NOT drop the manifest
  * entry — the local file is the only copy, so the entry stays visible and
@@ -533,19 +608,14 @@ export async function readLocalBookDetails(
 ): Promise<LocalBookDetails | null> {
   const bytes = await readLocalBookBytes(bookId);
   if (!bytes) return null;
-  const Epub = (await import("$lib/epubjs/epub.js")).default;
-  const book: any = (Epub as any)();
   try {
-    await book.open(bytes);
-    const meta = book.packaging?.metadata ?? {};
+    const meta = (await openEpub(bytes)).metadata ?? {};
     return {
-      description: meta.description || null,
-      publisher: meta.publisher || null,
-      published: meta.pubdate || null,
+      description: nameOf(meta.description),
+      publisher: nameOf(listOf(meta.publisher)[0]),
+      published: nameOf(meta.published),
     };
   } catch {
     return null;
-  } finally {
-    book.destroy();
   }
 }

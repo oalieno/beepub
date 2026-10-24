@@ -34,6 +34,7 @@
     resolveXpointerRange,
     xpointerFromRange,
   } from "./kosync-xpointer";
+  import type { SearchResult } from "./search";
   import type { HighlightOut, IllustrationOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -1916,13 +1917,6 @@
 
   export function removeHighlightAnnotation(cfiRange: string) {
     rendition?.annotations.remove(cfiRange, "highlight");
-  }
-
-  export interface SearchResult {
-    cfi: string;
-    excerpt: string;
-    sectionLabel: string;
-    sectionIndex: number;
   }
 
   /**

@@ -81,6 +81,29 @@ test.describe("local mode", () => {
     await expect(page.getByText("Read on the night train.")).toBeVisible();
   });
 
+  test("an import keeps what the file says: title, author, cover, sections", async ({
+    page,
+  }) => {
+    await importFixture(page, "e2e-test-book.epub", "E2E Test Book");
+    const entry = await page.evaluate(() =>
+      JSON.parse(
+        localStorage.getItem("CapacitorStorage.local-library") ?? "[]",
+      ).find((e: { title: string }) => e.title === "E2E Test Book"),
+    );
+    expect(entry).toMatchObject({
+      authors: ["E2E Author"],
+      language: "en",
+      identifier: "urn:uuid:00000000-0000-4000-8000-000000000001",
+    });
+    // The declared cover-image, stored under its own type's extension.
+    expect(entry.coverPath).toMatch(/^local-covers\/[^/]+\.jpg$/);
+    expect(entry.sectionWeights).toHaveLength(2);
+    expect(entry.sectionWeights.every((w: number) => w > 0)).toBe(true);
+    const id = await openBookPage(page, "E2E Test Book");
+    await expect(page.getByText("E2E Author").first()).toBeVisible();
+    expect(id).toBe(entry.id);
+  });
+
   test("the reading status is set on the device", async ({ page }) => {
     await importFixture(page, TOUCH_BOOK.file, TOUCH_BOOK.title);
     const id = await openBookPage(page, TOUCH_BOOK.title);

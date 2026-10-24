@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Search, X, LoaderCircle } from "@lucide/svelte";
-  import type { SearchResult } from "./EpubReader.svelte";
+  import type { SearchResult } from "./search";
   import * as m from "$lib/paraglide/messages.js";
 
   let {
