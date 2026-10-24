@@ -634,6 +634,10 @@ export class CoverSlide {
   // The finger.
   /** A swipe is on its way (whether or not a sheet follows it). */
   #finger = false;
+  /** The way a curl under the finger was first lifted: it keeps that
+   *  sheet until let go — a finger come back past where it took hold
+   *  lays it down, and does not lift the other one. 0: none yet. */
+  #curlDir: Dir | 0 = 0;
   /** How far it has come, along the screen's x axis. */
   #x = 0;
   #movedAt = 0;
@@ -1946,6 +1950,7 @@ export class CoverSlide {
     if (!this.#enabled || this.#host.reducedMotion()) return false;
     if (!this.#finger) {
       this.#finger = true;
+      this.#curlDir = 0;
       this.#x = 0;
       this.#y = 0;
       // (The point the first move is reported from: the finger has come
@@ -1967,6 +1972,7 @@ export class CoverSlide {
 
   /** The way the finger has pulled so far. */
   #pull(): Dir | 0 {
+    if (this.#fold && this.#curlDir) return this.#curlDir;
     const p = (this.#host.leftward() ? 1 : -1) * this.#x;
     return p > 0 ? 1 : p < 0 ? -1 : 0;
   }
@@ -2007,6 +2013,7 @@ export class CoverSlide {
     }
     if (this.#dragDir !== dir || this.#partner !== ghost) {
       this.#dragDir = dir;
+      if (this.#fold) this.#curlDir = dir;
       this.#partner = ghost;
       this.#joining = null;
       if (this.#fold) {
