@@ -1606,7 +1606,8 @@ export class ReaderCore {
    *  in a vertical book), so each gets the layout for its own section's
    *  writing mode — see `onghostload`. */
   setGhostLayout(layoutFor: (vertical: boolean) => LayoutParams) {
-    for (const ghost of this.#slide?.ghosts ?? [])
+    // (The back of a curled sheet too: it shows a page as laid out.)
+    for (const ghost of this.#slide?.renderings ?? [])
       this.#writeLayout(
         ghost,
         layoutFor(this.#ghostVertical.get(ghost) ?? this.vertical),

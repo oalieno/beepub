@@ -1,8 +1,15 @@
-import { test, expect, type CDPSession, type Page } from "@playwright/test";
+import {
+  test,
+  expect,
+  devices,
+  type CDPSession,
+  type Page,
+} from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   ANCHOR_BOOK,
   CHAPTER_ANCHORS_BOOK,
+  VERTICAL_LONG_BOOK,
   iphone,
   openBook,
   seedFixture,
@@ -398,4 +405,54 @@ test("Curl is chosen in the settings and kept", async ({ page, context }) => {
   expect(
     await page.evaluate(() => window.__beepubReaderNG.core.effectivePageTurn()),
   ).toBe("curl");
+});
+
+test.describe("on an iPad", () => {
+  const { defaultBrowserType: _webkit, ...ipad } = devices["iPad Pro 11"];
+  test.use({ ...ipad });
+
+  test("after a font size change the flap's back still shows the page through the paper (vertical text, a page height snapped to its lines)", async ({
+    page,
+    context,
+  }) => {
+    const bookId = await seedFixture(page.request, VERTICAL_LONG_BOOK);
+    await openBook(page, bookId, { turn: "curl" }, VERTICAL_LONG_BOOK);
+    const cdp = await context.newCDPSession(page);
+    const y = 700;
+    for (const button of ["Increase font size", "Increase font size"]) {
+      await page.getByRole("button", { name: "Reader settings" }).click();
+      await page.getByRole("button", { name: button }).click();
+      await page.keyboard.press("Escape");
+      await page.waitForTimeout(1000);
+      // Forward in vertical text: from the left edge toward the spine.
+      await touchDown(cdp, { x: 40, y });
+      await touchMove(cdp, { x: 40, y }, { x: 300, y }, 10);
+      await expect
+        .poll(() =>
+          page.evaluate(() => {
+            const { core, paginator } = window.__beepubReaderNG;
+            const back = core.curlBack;
+            return (
+              back && {
+                ...back,
+                live: [paginator.getContents()[0]?.index, paginator.page],
+              }
+            );
+          }),
+        )
+        .toMatchObject({ showing: true });
+      const at = await page.evaluate(() => {
+        const { core, paginator } = window.__beepubReaderNG;
+        return {
+          back: [core.curlBack!.index, core.curlBack!.page],
+          live: [paginator.getContents()[0]?.index, paginator.page],
+        };
+      });
+      expect(at.back).toEqual(at.live);
+      // Laid back down where it was.
+      await touchMove(cdp, { x: 300, y }, { x: 40, y }, 10);
+      await touchUp(cdp);
+      await expect.poll(() => settled(page)).toBe(true);
+    }
+  });
 });

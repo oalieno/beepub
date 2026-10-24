@@ -773,6 +773,14 @@ export class CoverSlide {
     return this.#ghosts.map((g) => g.el);
   }
 
+  /** Every rendering the slide keeps besides the live one: the ghosts,
+   *  and the back of a curled sheet. Each is laid out as a page is. */
+  get renderings(): PaginatorElement[] {
+    const all = this.#ghosts.map((g) => g.el);
+    if (this.#back) all.push(this.#back.el);
+    return all;
+  }
+
   /** The ghost holding the section of the page one turn away in `dir`
    *  (on that page or still on its way there). */
   ghostFor(dir: Dir): PaginatorElement | null {
