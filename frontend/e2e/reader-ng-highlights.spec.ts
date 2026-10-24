@@ -26,7 +26,7 @@ import {
  * when the stored CFI no longer resolves.
  */
 
-/** The first "librarian" as epub.js anchors it (reader-ios-touch.spec). */
+/** The first "librarian" as an epub.js reader stored its CFI. */
 const HIGHLIGHT_CFI = "epubcfi(/6/2!/4/4,/1:13,/1:22)";
 const YELLOW = "#fef08a";
 const BLUE = "#bfdbfe";

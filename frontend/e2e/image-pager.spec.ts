@@ -17,7 +17,7 @@ import {
  * six pages, right-to-left, page four a two-page spread) is claimed from
  * BookReader before it renders and drawn as images. Wide screens pair
  * portrait pages; the cover and the wide page stand alone. Position is
- * the page, saved as a CFI the legacy reader restores from too.
+ * the page, saved as a CFI of the page's spine item.
  */
 
 test.use({ storageState: ADMIN_STATE });
@@ -121,7 +121,7 @@ test("double page: cover alone, then pairs, the spread alone", async ({
   expect((await pagerState(page)).shown).toEqual([0]);
 });
 
-test("the page is the position: it restores here and in the legacy reader", async ({
+test("the page is the position: it restores where it was left", async ({
   page,
 }) => {
   const bookId = await seedFixture(page.request, CBZ_BOOK);
@@ -139,32 +139,6 @@ test("the page is the position: it restores here and in the legacy reader", asyn
 
   await openComic(page, bookId);
   expect((await pagerState(page)).page).toBe(3);
-
-  // The legacy reader reads the same CFI as spine item four.
-  await page.goto(`/books/${bookId}/read-legacy`);
-  await page.waitForFunction(
-    () => {
-      try {
-        const loc = (
-          window as any
-        ).__beepubReader?.rendition?.currentLocation?.();
-        return !!loc?.start?.cfi;
-      } catch {
-        return false;
-      }
-    },
-    null,
-    { timeout: 30_000 },
-  );
-  await expect
-    .poll(() =>
-      page.evaluate(
-        () =>
-          (window as any).__beepubReader.rendition.currentLocation().start
-            .index,
-      ),
-    )
-    .toBe(3);
 });
 
 test("a fixed-layout book of text pages goes to the text reader", async ({

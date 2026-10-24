@@ -1735,7 +1735,7 @@ async def get_book_content(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Serve individual files from within the EPUB zip (for epubjs reader)."""
+    """Serve individual files from within the EPUB zip (the reader streams a book through it)."""
     book = await _get_book_with_access(book_id, current_user, db)
     _require_book_file(book)
     if not os.path.exists(book.file_path):

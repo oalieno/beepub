@@ -1,6 +1,6 @@
 # Rebuilds static/fonts/beepub-vpunct-{serif,sans}.woff2 — the vertical-
-# punctuation subsets injected into reader iframes (see EpubReader.svelte,
-# VPUNCT_RANGE). Run with:
+# punctuation subsets injected into reader iframes (see BookReader.svelte,
+# VPUNCT_SERIF). Run with:
 #   uv run --with fonttools --with brotli python scripts/build-vpunct-fonts.py \
 #     <NotoSerifCJKtc-Regular.otf> <NotoSansCJKtc-Regular.otf>
 #

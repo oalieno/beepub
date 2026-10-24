@@ -307,7 +307,6 @@
               {entry}
               ondelete={handleDelete}
               onexport={isNative() ? handleExport : undefined}
-              onopenlegacy={(e) => goto(`/books/${e.id}/read-legacy`)}
             />
           {/each}
         </div>

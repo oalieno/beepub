@@ -10,9 +10,9 @@ import {
 
 /**
  * reader-ng: vertical-rl (直排) on the new engine — the two engine-agnostic
- * checks from reader-vertical.spec.ts. The paging-grid cases there are
- * about the old fork's pageStep; read-ng's geometry is covered by
- * reader-ng.spec.ts.
+ * checks kept from the legacy reader's vertical spec (its paging-grid
+ * cases were about the old fork's pageStep); read-ng's geometry is
+ * covered by reader-ng.spec.ts.
  */
 
 test.use({ storageState: ADMIN_STATE });

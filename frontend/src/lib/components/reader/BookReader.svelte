@@ -236,8 +236,8 @@
 
   // Apple ships no Traditional-Chinese font that rotates punctuation in
   // vertical writing; these ~4KB Noto CJK TC subsets hold only the
-  // rotation-class punctuation and its vert forms (see EpubReader.svelte
-  // for the full history; rebuild: scripts/build-vpunct-fonts.py). Inert
+  // rotation-class punctuation and its vert forms (rebuild:
+  // scripts/build-vpunct-fonts.py). Inert
   // until a font-family list names them — the themed stacks lead with them.
   const VPUNCT_SERIF = "BeePub VPunct Serif";
   const VPUNCT_SANS = "BeePub VPunct Sans";
@@ -307,7 +307,7 @@ ${mingFaces.join("\n")}`;
       : { rgb: "196, 146, 74", opacity: 0.3 };
   }
 
-  // Port of EpubReader's applyTheme() as plain CSS. Sizing the root too
+  // The reader theme as plain CSS. Sizing the root too
   // makes rem-based book rules follow the setting while the book's own
   // em/% hierarchy is preserved.
   function themeCss(): string {

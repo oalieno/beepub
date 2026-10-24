@@ -101,9 +101,13 @@ export async function openReader(
     },
     { margin, fontSize, lineHeight },
   );
-  await page.goto(`/books/${bookId}/read-legacy`);
-  await page.waitForSelector("iframe", { timeout: 30_000 });
-  await page.waitForTimeout(3000); // locations, progress restore, hooks
+  await page.goto(`/books/${bookId}/read`);
+  await page.waitForFunction(
+    () => !!window.__beepubReaderNG?.core?.lastLocation,
+    null,
+    { timeout: 30_000 },
+  );
+  await page.waitForTimeout(500); // progress restore
   return { browser, context, page };
 }
 
@@ -114,9 +118,11 @@ export async function openReader(
  */
 export async function measureAlignment(page) {
   return page.evaluate(() => {
-    const ifr = document.querySelector("iframe");
-    const doc = ifr?.contentDocument;
-    if (!doc) return null;
+    // The section iframe sits in a closed shadow root: reach it through
+    // the debug handle.
+    const doc = window.__beepubReaderNG?.core?.getContents()[0]?.doc;
+    const ifr = doc?.defaultView?.frameElement;
+    if (!doc || !ifr) return null;
     let sc = ifr.parentElement;
     while (
       sc &&
@@ -223,8 +229,8 @@ export async function touchTap(page, pt, holdMs = 80) {
 export async function pointOnWord(page, word, occurrence = 0) {
   return page.evaluate(
     ([word, occurrence]) => {
-      const ifr = document.querySelector("iframe");
-      const doc = ifr.contentDocument;
+      const doc = window.__beepubReaderNG.core.getContents()[0].doc;
+      const ifr = doc.defaultView.frameElement;
       const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
       let hits = 0;
       while (walker.nextNode()) {

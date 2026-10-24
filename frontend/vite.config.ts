@@ -15,14 +15,6 @@ export default defineConfig({
     tailwindcss(),
     sveltekit(),
   ],
-  resolve: {
-    alias: {
-      epubjs: new URL("./src/lib/epubjs/epub.js", import.meta.url).pathname,
-    },
-  },
-  optimizeDeps: {
-    include: ["epubjs"],
-  },
   build: {
     // Disable minification for Capacitor debug builds
     ...(isCapacitor ? { minify: false, sourcemap: true } : {}),

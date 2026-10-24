@@ -10,13 +10,9 @@
    * reading status (currently reading after a while, finished at the end,
    * both undoable), the book-end overlay with series navigation, the
    * load-error screen, and the local-first sync triggers around a session.
-   * Every piece of chrome is a shared component the legacy reader
-   * (read-legacy, the epub.js fork) renders too; only the engine behind it
-   * differs.
    *
-   * Settings persist under the reader-* keys the legacy reader uses
-   * (font, size, line height, theme are shared; the two gutters, letter
-   * spacing and page-turn mode have their own keys, and the old single
+   * Settings persist under the reader-* keys (font, size, line height,
+   * theme, the two gutters, letter spacing, page-turn mode; the old single
    * margin seeds both gutters). Query params override for this session
    * only — probes and e2e open at a known geometry — and are not written
    * back: ?font=sans|serif&size=18&lh=1.8&ls=0&mx=32&my=32&dark=1

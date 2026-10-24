@@ -19,7 +19,7 @@ import { TOUCH_BOOK, marks, openBook, seedFixture } from "./ng-helpers";
 test.use({ storageState: ADMIN_STATE });
 test.setTimeout(60_000);
 
-/** The first "librarian" as epub.js anchors it (reader-ios-touch.spec). */
+/** The first "librarian" as an epub.js reader stored its CFI. */
 const PASSAGE_CFI = "epubcfi(/6/2!/4/4,/1:13,/1:22)";
 const ILLUSTRATION_ID = "e2e-illustration-1";
 const YELLOW = "#fef08a";

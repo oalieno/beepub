@@ -8,9 +8,6 @@
  * first in their own section, then across the spine. Anything that cannot
  * be relocated unambiguously is reported broken — a guessed anchor would
  * silently move the user's highlight, which is worse.
- *
- * Same contract as the epub.js version (components/reader/highlight-anchor)
- * so the component applies either report the same way.
  */
 import * as CFI from "./vendor/foliate/epubcfi.js";
 import type { Book } from "./core";

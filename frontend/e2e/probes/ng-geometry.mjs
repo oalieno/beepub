@@ -167,8 +167,8 @@ async function openNg(bookId, spec, token, device) {
     lh: "1.8",
     mx: "24",
     my: "48",
-  // Bare page turns, no fade: the page is read right after each one.
-  turn: "instant",
+    // Bare page turns, no fade: the page is read right after each one.
+    turn: "instant",
   });
   if (spec.font) params.set("font", spec.font);
   await page.goto(`/books/${bookId}/read?${params}`);
@@ -186,7 +186,7 @@ async function openNg(bookId, spec, token, device) {
   return { browser, page };
 }
 
-// lib.openReader navigates to the old route; reuse only its context setup.
+// lib.openReader opens at the stored settings; this probe sets its own.
 async function openReaderContext(token, device) {
   const { chromium, devices } = await import("@playwright/test");
   const browser = await chromium.launch();

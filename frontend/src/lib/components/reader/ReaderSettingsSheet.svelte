@@ -23,9 +23,8 @@
 
   /**
    * The reader's settings sheet. Rows appear when their handler is
-   * given, so the two readers share one sheet: the epub.js reader has a
-   * single margin preset row (its block axis is fixed), the new engine
-   * has two px gutters, letter spacing and a page-turn mode.
+   * given: the text reader has two px gutters, letter spacing and a
+   * page-turn mode, the image pager its own rows.
    */
   let {
     open = $bindable(false),
@@ -34,7 +33,6 @@
     fontSizeMax = 32,
     lineHeight = 1.8,
     letterSpacing = 0,
-    pageMargin = 32,
     marginX = 32,
     marginY = 32,
     pageTurn = "fade",
@@ -55,7 +53,6 @@
     onthemeToggle,
     onlineHeightChange,
     onletterSpacingChange,
-    onmarginChange,
     onmarginXChange,
     onmarginYChange,
     onpageTurnChange,
@@ -76,10 +73,8 @@
     lineHeight?: number;
     /** px; row shown when `onletterSpacingChange` is given. */
     letterSpacing?: number;
-    /** Single inline-padding preset (epub.js reader). */
-    pageMargin?: number;
-    /** Screen-space gutters, px (new engine); rows shown when their
-     *  handlers are given. */
+    /** Screen-space gutters, px; rows shown when their handlers are
+     *  given. */
     marginX?: number;
     marginY?: number;
     /** "instant" is a session override with no button of its own. */
@@ -98,7 +93,6 @@
     onthemeToggle?: () => void;
     onlineHeightChange?: (value: number) => void;
     onletterSpacingChange?: (value: number) => void;
-    onmarginChange?: (value: number) => void;
     onmarginXChange?: (value: number) => void;
     onmarginYChange?: (value: number) => void;
     onpageTurnChange?: (value: "fade" | "slide" | "curl" | "scroll") => void;
@@ -162,11 +156,6 @@
     { value: 1.5, label: m.reader_line_compact },
     { value: 1.8, label: m.reader_line_normal },
     { value: 2.2, label: m.reader_line_relaxed },
-  ];
-  const marginOptions = [
-    { value: 16, label: m.reader_margin_narrow },
-    { value: 32, label: m.reader_margin_normal },
-    { value: 56, label: m.reader_margin_wide },
   ];
   // The curl is a finger's: a desktop is not offered it.
   const curlable = canCurl();
@@ -420,24 +409,6 @@
                 onchange: onmarginXChange,
               })}
             {/if}
-          {:else if onmarginChange}
-            <!-- Margins (single inline-padding preset) -->
-            <div class="flex items-center justify-between">
-              <span class="text-sm {labelClass}">{m.reader_margin()}</span>
-              <div class="flex gap-1">
-                {#each marginOptions as option}
-                  <button
-                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageMargin ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    onclick={() => onmarginChange?.(option.value)}
-                  >
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
           {/if}
 
           {#if onfullPageChange}

@@ -12,7 +12,6 @@
     BookOpen,
     Bookmark,
     EllipsisVertical,
-    History,
     Share,
     Trash2,
   } from "@lucide/svelte";
@@ -296,14 +295,8 @@
                   <Share size={14} />
                   {m.local_export()}
                 </DropdownMenu.Item>
+                <DropdownMenu.Separator />
               {/if}
-              <DropdownMenu.Item
-                onclick={() => goto(`/books/${bookId}/read-legacy`)}
-              >
-                <History size={14} />
-                {m.book_open_reader_legacy()}
-              </DropdownMenu.Item>
-              <DropdownMenu.Separator />
               <DropdownMenu.Item variant="destructive" onclick={handleDelete}>
                 <Trash2 size={14} />
                 {m.local_delete()}
@@ -432,16 +425,6 @@
         {m.local_export()}
       </button>
     {/if}
-    <button
-      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-      onclick={() => {
-        showMobileActions = false;
-        goto(`/books/${bookId}/read-legacy`);
-      }}
-    >
-      <History size={20} class="text-muted-foreground shrink-0" />
-      {m.book_open_reader_legacy()}
-    </button>
     <button
       class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
       onclick={() => {

@@ -21,7 +21,6 @@
     Check,
     Cloud,
     EllipsisVertical,
-    History,
     Share,
     Trash2,
   } from "@lucide/svelte";
@@ -33,15 +32,12 @@
     entry,
     ondelete,
     onexport,
-    onopenlegacy,
   }: {
     entry: LocalShelfEntry;
     /** When absent the delete action is not rendered (read-only shelf). */
     ondelete?: (e: MouseEvent, entry: LocalShelfEntry) => void;
     /** Share the EPUB file via the OS share sheet (native only). */
     onexport?: (entry: LocalShelfEntry) => void;
-    /** Legacy reader entry (the previous engine, kept until it is retired). */
-    onopenlegacy?: (entry: LocalShelfEntry) => void;
   } = $props();
 
   function formatSize(bytes: number): string {
@@ -120,7 +116,7 @@
            collapsed into a menu — a bare trash can invites misclicks
            (audit J). Stop both events so the trigger doesn't open the
            book. -->
-      {#if ondelete || onexport || onopenlegacy}
+      {#if ondelete || onexport}
         <DropdownMenu.Root>
           <DropdownMenu.Trigger
             aria-label={m.book_more_actions()}
@@ -137,14 +133,8 @@
                 {m.local_export()}
               </DropdownMenu.Item>
             {/if}
-            {#if onopenlegacy}
-              <DropdownMenu.Item onclick={() => onopenlegacy?.(entry)}>
-                <History size={14} />
-                {m.book_open_reader_legacy()}
-              </DropdownMenu.Item>
-            {/if}
             {#if ondelete}
-              {#if onexport || onopenlegacy}
+              {#if onexport}
                 <DropdownMenu.Separator />
               {/if}
               <DropdownMenu.Item
