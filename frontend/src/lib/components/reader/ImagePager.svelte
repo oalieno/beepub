@@ -603,21 +603,33 @@
 
   /** A page filling the sheet, mirrored back when the sheet is drawn in a
    *  mirrored stage. */
+  /** A face of a sheet: the whole page, its margin paper, the picture
+   *  where the reader lays it — against the gutter (`toward` that side
+   *  of the screen, for a page of a spread where it lies once shown)
+   *  or centred. */
   function sheetFace(
     page: PageEntry,
     flip: boolean,
     paper: string,
+    toward: "left" | "right" | "center",
   ): HTMLElement {
     const face = document.createElement("div");
+    // (A flipped face is flipped back by the mirrored stage or the fold:
+    // its own sides are the screen's.)
+    const side = toward;
     Object.assign(face.style, {
       position: "absolute",
       inset: "0",
       background: paper,
       transform: flip ? "scaleX(-1)" : "none",
+      boxSizing: "border-box",
+      // (No margin at the gutter: half the page area runs up to it.)
+      padding: `${padding}px ${side === "left" ? 0 : padding}px ${padding}px ${side === "right" ? 0 : padding}px`,
     });
     const img = pictureOf(page);
     if (img) {
       img.className = "block h-full w-full object-contain";
+      img.style.objectPosition = side;
       face.append(img);
     }
     return face;
@@ -651,40 +663,6 @@
     return root;
   }
 
-  async function naturalAspect(page: PageEntry): Promise<number> {
-    const img = pictureOf(page);
-    if (img) {
-      try {
-        await img.decode();
-        if (img.naturalWidth && img.naturalHeight)
-          return img.naturalWidth / img.naturalHeight;
-      } catch {
-        /* fall back to the page's recorded size */
-      }
-    }
-    return page.width && page.height ? page.width / page.height : 2 / 3;
-  }
-
-  /** Where a picture lands in a slot: full height, as wide as its shape
-   *  allows (pushed to `align`), letterboxed top and bottom when the slot
-   *  is too narrow for it — the reader's own `h-full w-auto max-w-full
-   *  object-contain`. */
-  function pictureRect(
-    slot: { x: number; y: number; w: number; h: number },
-    aspect: number,
-    align: "start" | "end" | "center",
-  ) {
-    const w = Math.min(slot.w, slot.h * aspect);
-    const h = Math.min(slot.h, w / aspect);
-    const x =
-      align === "end"
-        ? slot.x + slot.w - w
-        : align === "start"
-          ? slot.x
-          : slot.x + (slot.w - w) / 2;
-    return { left: x, top: slot.y + (slot.h - h) / 2, width: w, height: h };
-  }
-
   async function planCurl(dir: CurlDirection): Promise<CurlPlan | null> {
     const target = spreadIndex + dir;
     const earlier = spreads[Math.min(spreadIndex, target)];
@@ -694,12 +672,6 @@
     if (!pair && earlier.length !== 1) return null;
     await Promise.all([...earlier, ...later].map((p) => loadImage(p)));
     const paper = getComputedStyle(container).backgroundColor;
-    const content = {
-      x: padding,
-      y: padding,
-      w: Math.max(1, containerWidth - 2 * padding),
-      h: Math.max(1, containerHeight - 2 * padding),
-    };
     // The sheet's spine is on its right in a manga: the left page turns
     // over the gutter, a page alone over its right edge.
     const mirror = rtl;
@@ -707,17 +679,16 @@
       // Screen slot of the turning page: left in a manga.
       const sheetPage = earlier[1];
       const left = rtl;
-      const slot = {
-        x: content.x + (left ? 0 : content.w / 2),
-        y: content.y,
-        w: content.w / 2,
-        h: content.h,
+      // The sheet is the page, margin and all: half the screen.
+      const rect = {
+        left: left ? 0 : containerWidth / 2,
+        top: 0,
+        width: containerWidth / 2,
+        height: containerHeight,
       };
-      const rect = pictureRect(
-        slot,
-        await naturalAspect(sheetPage),
-        left ? "end" : "start",
-      );
+      // Each page lies against the gutter: the left one on the right of
+      // its half, the right one on the left.
+      const at = left ? "right" : "left";
       const under = left ? [later[1], earlier[0]] : [earlier[0], later[1]];
       return {
         target,
@@ -725,28 +696,39 @@
           ...rect,
           mirror,
           spread: true,
-          front: sheetFace(sheetPage, mirror, paper),
+          front: sheetFace(sheetPage, mirror, paper, at),
           // Reflected once by the fold, once more by a mirrored stage: the
           // page on the back comes out the right way round.
-          back: sheetFace(later[0], !mirror, paper),
+          back: sheetFace(
+            later[0],
+            !mirror,
+            paper,
+            at === "left" ? "right" : "left",
+          ),
           seeThrough: false,
           paper,
         },
         clipToSheet: false,
-        gutterX: content.x + content.w / 2,
+        gutterX: containerWidth / 2,
         base: underLayout(under, paper),
       };
     }
     const sheetPage = earlier[0];
-    const rect = pictureRect(content, await naturalAspect(sheetPage), "center");
+    // The sheet is the page, margin and all: the whole screen.
+    const rect = {
+      left: 0,
+      top: 0,
+      width: containerWidth,
+      height: containerHeight,
+    };
     return {
       target,
       sheet: {
         ...rect,
         mirror,
         spread: false,
-        front: sheetFace(sheetPage, mirror, paper),
-        back: sheetFace(sheetPage, mirror, paper),
+        front: sheetFace(sheetPage, mirror, paper, "center"),
+        back: sheetFace(sheetPage, mirror, paper, "center"),
         seeThrough: true,
         paper,
       },
