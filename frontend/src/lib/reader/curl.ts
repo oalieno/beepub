@@ -229,10 +229,6 @@ export interface FoldSheet {
   seeThrough: boolean;
   /** Paper colour, behind the sheet's faces and in the veil. */
   paper: string;
-  /** Where the pages lie, in the same coordinates: the flap's shadow
-   *  falls on them and nowhere else (not on the margin around a picture
-   *  smaller than the screen). Omitted: anywhere the layer shows. */
-  ground?: { left: number; top: number; width: number; height: number };
 }
 
 /**
@@ -398,16 +394,6 @@ export class FoldLayer {
       height: `${H}px`,
     });
     this.#shadow.setAttribute("viewBox", `${-W} 0 ${2 * W} ${H}`);
-    const g = sheet.ground;
-    if (g) {
-      // In the shadow's own box: the stage's frame (unmirrored), moved
-      // over by the W it reaches past the spine.
-      const x = (X: number) => (sheet.mirror ? W - (X - left) : X - left) + W;
-      const y = (Y: number) => Y - top;
-      const [x0, x1] = [x(g.left), x(g.left + g.width)];
-      const [y0, y1] = [y(g.top), y(g.top + g.height)];
-      this.#shadow.style.clipPath = `polygon(${x0}px ${y0}px, ${x1}px ${y0}px, ${x1}px ${y1}px, ${x0}px ${y1}px)`;
-    } else this.#shadow.style.clipPath = "";
   }
 
   /** `element` is the back of every sheet from now on (null: no
@@ -598,11 +584,6 @@ export class PageCurl {
     this.#layer.setFront(sheet.front);
     this.#gutter.hidden = gutterX == null;
     if (gutterX != null) this.#gutter.style.left = `${gutterX}px`;
-    // (Only as tall as the pages: none in the margin above and below.)
-    const g = sheet.ground ?? sheet;
-    this.#gutter.style.top = `${g.top}px`;
-    this.#gutter.style.bottom = "";
-    this.#gutter.style.height = `${g.height}px`;
     this.#gutter.style.opacity = "0";
   }
 

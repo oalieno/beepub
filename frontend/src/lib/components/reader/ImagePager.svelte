@@ -719,23 +719,6 @@
         left ? "end" : "start",
       );
       const under = left ? [later[1], earlier[0]] : [earlier[0], later[1]];
-      // Where the two facing pages lie: the flap's shadow and the gutter
-      // fall there, not on the margin around them.
-      const half = (onLeft: boolean) => ({
-        x: content.x + (onLeft ? 0 : content.w / 2),
-        y: content.y,
-        w: content.w / 2,
-        h: content.h,
-      });
-      const lying = [
-        rect,
-        pictureRect(half(true), await naturalAspect(under[0]), "end"),
-        pictureRect(half(false), await naturalAspect(under[1]), "start"),
-      ];
-      const gx0 = Math.min(...lying.map((r) => r.left));
-      const gy0 = Math.min(...lying.map((r) => r.top));
-      const gx1 = Math.max(...lying.map((r) => r.left + r.width));
-      const gy1 = Math.max(...lying.map((r) => r.top + r.height));
       return {
         target,
         sheet: {
@@ -748,7 +731,6 @@
           back: sheetFace(later[0], !mirror, paper),
           seeThrough: false,
           paper,
-          ground: { left: gx0, top: gy0, width: gx1 - gx0, height: gy1 - gy0 },
         },
         clipToSheet: false,
         gutterX: content.x + content.w / 2,
