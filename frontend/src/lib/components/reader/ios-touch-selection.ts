@@ -184,8 +184,7 @@ export function setupIOSTouchSelection(
     // Position tiles relative to where the container actually rendered,
     // not where top:0/left:0 nominally puts it — book CSS can still leak
     // onto the injected div and displace it. Viewport-space difference,
-    // so it's also scroll-invariant (marks-pane anchors its highlight
-    // SVG the same way).
+    // so it's also scroll-invariant.
     const base = overlay.getBoundingClientRect();
     for (let i = 0; i < rects.length; i++) {
       const r = rects[i];

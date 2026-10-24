@@ -1191,8 +1191,15 @@
             (localEntry.sectionWeights === undefined ||
               localEntry.isImageBook === undefined)
           ) {
-            booksApi
-              .get(serverBookId)
+            const info = booksApi.get(serverBookId);
+            if (localEntry.isImageBook === undefined)
+              classified = Promise.race([
+                info.then((b) => b.is_image_book).catch(() => null),
+                new Promise<boolean | null>((resolve) =>
+                  setTimeout(() => resolve(null), 2500),
+                ),
+              ]);
+            info
               .then((b) => {
                 if (typeof b.is_image_book === "boolean")
                   isImageBook = b.is_image_book;
@@ -1213,10 +1220,12 @@
           if (hints.sectionWeights) sectionWeights = hints.sectionWeights;
         }
         const info = booksApi.get(bookId);
-        // (Bounded: offline the fetch never answers, and the copy's own
-        // hint stands.)
+        // (Bounded, and offline — the fetch fails at once or never
+        // answers — the copy's own hint stands.)
         classified = Promise.race([
-          info.then((b) => b.is_image_book).catch(() => null),
+          info
+            .then((b) => b.is_image_book)
+            .catch(() => hints?.isImageBook ?? null),
           new Promise<boolean | null>((resolve) =>
             setTimeout(() => resolve(hints?.isImageBook ?? null), 2500),
           ),

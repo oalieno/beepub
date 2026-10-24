@@ -397,7 +397,13 @@
       return;
     }
     const here = pagePercent(pageIndex, total);
-    if (Math.abs(marker.percentage - here) > 1) {
+    // The device's page when it names one: its percentage counts pages
+    // its own way, and the same page can come out a few percent apart.
+    const at =
+      marker.sectionIndex == null ? null : pageForTarget(marker.sectionIndex);
+    if (
+      at != null ? at !== pageIndex : Math.abs(marker.percentage - here) > 1
+    ) {
       onkosyncposition?.({
         ...marker,
         autoJumped: false,

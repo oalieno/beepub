@@ -243,5 +243,5 @@ BeePub is licensed under the GNU Affero General Public License v3.0 or later.
 See [LICENSE](LICENSE).
 
 The backend currently includes vendored EbookLib-derived code, which is licensed
-under AGPLv3-or-later. The frontend uses epub.js, which is BSD-2-Clause
-licensed.
+under AGPLv3-or-later. The frontend vendors foliate-js, which is MIT
+licensed (`frontend/src/lib/reader/vendor/foliate/LICENSE`).

@@ -2311,8 +2311,7 @@ ${darkOverrides}
     core = c;
     layer = new AnnotationLayer((cfi) => c.resolve(cfi));
     // Debug handle — the only way e2e probes and a device Web Inspector
-    // reach engine internals (same convention as __beepubReader). The
-    // slide's ghost is `core.ghost`; `paginator` and getContents() are
+    // reach engine internals. The slide's ghost is `core.ghost`; `paginator` and getContents() are
     // always the live section.
     (window as unknown as { __beepubReaderNG?: unknown }).__beepubReaderNG = {
       core: c,
