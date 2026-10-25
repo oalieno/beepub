@@ -9,15 +9,15 @@ from app.celeryapp import celery
 
 logger = logging.getLogger(__name__)
 
-_IMAGE_BOOK_THRESHOLD = 500
-
 
 async def _run_extract_book_text(book_id: str) -> None:
     """Extract text from an EPUB and store as BookTextChunk rows.
 
-    Also computes word_count and sets is_image_book = (word_count < 500).
-    If chunks already exist but word_count is NULL, classifies from stored chunks
-    without re-opening the EPUB.
+    Also computes word_count and is_image_book: at least 80% of the linear
+    spine items are picture pages (see epub_text.SpinePictures). When chunks
+    already exist, word_count comes from them, but the classification still
+    opens the EPUB: a picture page has no chunk, so the chunks cannot count
+    them.
     """
     import asyncio
 
@@ -27,9 +27,10 @@ async def _run_extract_book_text(book_id: str) -> None:
     from app.models.book import Book
     from app.models.book_text import BookTextChunk
     from app.services.epub_text import (
+        classify_image_book,
         count_words_from_chunks,
         count_words_from_texts,
-        extract_full_text,
+        extract_book_text,
     )
 
     async with create_task_engine() as (_engine, session_factory):
@@ -59,36 +60,38 @@ async def _run_extract_book_text(book_id: str) -> None:
                     await db.commit()
                     return
 
-                if current_wc is not None:
-                    # word_count exists but is_image_book is NULL — backfill
-                    is_image = current_wc < _IMAGE_BOOK_THRESHOLD
-                    await db.execute(
-                        update(Book)
-                        .where(Book.id == bid)
-                        .values(is_image_book=is_image)
+                if current_wc is None:
+                    # word_count is NULL — count it from stored DB chunks
+                    chunk_texts_result = await db.execute(
+                        select(BookTextChunk.text).where(BookTextChunk.book_id == bid)
                     )
-                    await db.commit()
-                    logger.info(
-                        f"Backfilled is_image_book for book {book_id}: word_count={current_wc}, is_image_book={is_image}"
-                    )
-                    return
+                    texts = [row[0] for row in chunk_texts_result.all()]
+                    current_wc = count_words_from_texts(texts)
 
-                # word_count is NULL — classify from stored DB chunks
-                chunk_texts_result = await db.execute(
-                    select(BookTextChunk.text).where(BookTextChunk.book_id == bid)
+                path_row = await db.execute(
+                    select(Book.file_path).where(Book.id == bid)
                 )
-                texts = [row[0] for row in chunk_texts_result.all()]
-                wc = count_words_from_texts(texts)
-                is_image = wc < _IMAGE_BOOK_THRESHOLD
+                file_path = path_row.scalar_one_or_none()
+                try:
+                    is_image = await asyncio.to_thread(classify_image_book, file_path)
+                except Exception:
+                    # Unreadable now, but its text was read once: a text
+                    # book, which the reader can always show (NULL would
+                    # queue it again forever).
+                    logger.warning(
+                        f"Failed to open EPUB for book {book_id}, classifying as text",
+                        exc_info=True,
+                    )
+                    is_image = False
 
                 await db.execute(
                     update(Book)
                     .where(Book.id == bid)
-                    .values(word_count=wc, is_image_book=is_image)
+                    .values(word_count=current_wc, is_image_book=is_image)
                 )
                 await db.commit()
                 logger.info(
-                    f"Classified book {book_id}: word_count={wc}, is_image_book={is_image}"
+                    f"Classified book {book_id}: word_count={current_wc}, is_image_book={is_image}"
                 )
                 return
 
@@ -101,8 +104,8 @@ async def _run_extract_book_text(book_id: str) -> None:
 
             file_path = row[0]
             try:
-                chunks = await asyncio.to_thread(
-                    extract_full_text, file_path, max_chars=10_000_000
+                extracted = await asyncio.to_thread(
+                    extract_book_text, file_path, max_chars=10_000_000
                 )
             except Exception as exc:
                 # Corrupt/unreadable EPUB — classify and auto-report
@@ -132,6 +135,7 @@ async def _run_extract_book_text(book_id: str) -> None:
                 await db.commit()
                 return
 
+            chunks = extracted.chunks
             if not chunks:
                 # No text at all — classify as image book
                 await db.execute(
@@ -154,9 +158,9 @@ async def _run_extract_book_text(book_id: str) -> None:
                     )
                 )
 
-            # Compute word count from extracted chunks and classify
+            # Word count from the extracted chunks; the class from the spine
             wc = count_words_from_chunks(chunks)
-            is_image = wc < _IMAGE_BOOK_THRESHOLD
+            is_image = extracted.pictures.is_image_book
 
             await db.execute(
                 update(Book)

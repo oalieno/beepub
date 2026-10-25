@@ -6,6 +6,7 @@ Foundation utility for word-count, summarize, explain, recap, and chat features.
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from lxml import html
@@ -65,6 +66,89 @@ def _extract_section_title(text: str) -> str | None:
     return None
 
 
+def _body_text(content: bytes) -> str:
+    """The text of the document's body alone — not its <title> or <style>,
+    which the whole-document text includes."""
+    try:
+        body = html.fromstring(content).body
+    except Exception:
+        return ""
+    return body.text_content() if body is not None else ""
+
+
+def is_picture_text(text: str) -> bool:
+    """Whether a page's text says nothing: nothing is left once the
+    whitespace, digits, punctuation and symbols are gone. A manga page's
+    <ploc>12</ploc>, a "- 12 -" footer and a bare <img> wrapper are
+    pictures; "The cat sat." and any caption are text."""
+    for ch in text:
+        if ch.isspace():
+            continue
+        category = unicodedata.category(ch)
+        if category == "Nd" or category[0] in "PS":
+            continue
+        return False
+    return True
+
+
+@dataclass
+class SpinePictures:
+    linear: int  # linear spine items
+    pictures: int  # of those, picture pages
+
+    @property
+    def is_image_book(self) -> bool:
+        """At least 80% of the linear spine items are pictures: a manga
+        keeps its TOC, credits and colophon as text pages."""
+        return self.linear > 0 and self.pictures * 5 >= self.linear * 4
+
+
+def count_picture_pages(book: epub.EpubBook) -> SpinePictures:
+    """Count the linear spine items and the picture pages among them."""
+    linear = pictures = 0
+    for spine_entry in book.spine:
+        if isinstance(spine_entry, tuple):
+            item_id, flag = spine_entry[0], spine_entry[1]
+        else:
+            item_id, flag = spine_entry, "yes"
+        if flag == "no":
+            continue
+        item = book.get_item_with_id(item_id)
+        if item is None:
+            continue
+        linear += 1
+        if is_picture_text(_body_text(item.get_content())):
+            pictures += 1
+    return SpinePictures(linear=linear, pictures=pictures)
+
+
+def classify_image_book(file_path: str) -> bool:
+    """Whether the EPUB is an image book: at least 80% of its linear spine
+    items are picture pages. Raises when the file cannot be read."""
+    book = epub.read_epub(
+        file_path, options={"ignore_ncx": True, "ignore_images": True}
+    )
+    return count_picture_pages(book).is_image_book
+
+
+@dataclass
+class ExtractedText:
+    chunks: list[TextChunk]
+    pictures: SpinePictures
+
+
+def extract_book_text(file_path: str, max_chars: int = 500_000) -> ExtractedText:
+    """The book's text chunks (see extract_full_text) and its picture-page
+    count, from one read of the file. The count walks the whole spine,
+    past where the chunks stop."""
+    book = epub.read_epub(
+        file_path, options={"ignore_ncx": True, "ignore_images": True}
+    )
+    return ExtractedText(
+        chunks=_chunks_of(book, max_chars), pictures=count_picture_pages(book)
+    )
+
+
 def extract_full_text(file_path: str, max_chars: int = 500_000) -> list[TextChunk]:
     """Extract all text from epub, split by spine item.
 
@@ -74,6 +158,10 @@ def extract_full_text(file_path: str, max_chars: int = 500_000) -> list[TextChun
     book = epub.read_epub(
         file_path, options={"ignore_ncx": True, "ignore_images": True}
     )
+    return _chunks_of(book, max_chars)
+
+
+def _chunks_of(book: epub.EpubBook, max_chars: int) -> list[TextChunk]:
     chunks: list[TextChunk] = []
     total_chars = 0
 
