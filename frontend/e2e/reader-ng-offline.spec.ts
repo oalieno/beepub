@@ -10,6 +10,7 @@ import { percentFromPosition } from "../src/lib/reading/progress";
 import { ADMIN_STATE } from "./helpers";
 import {
   NINE_CHAPTERS_BOOK,
+  capWeightsAtFirst,
   connection,
   iphone,
   marks,
@@ -247,6 +248,7 @@ async function open(page: Page, turn: string) {
   const g = await gate(page);
   const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
   await resetProgress(page.request, bookId);
+  await capWeightsAtFirst(page, bookId);
   // Only what the reader reaches for is fetched: the rest of the book's
   // text is not brought in behind the page (reader-ng-text-ahead.spec.ts
   // is about that).
@@ -309,35 +311,39 @@ for (const turn of ["fade", "slide"] as const) {
         await expect(entry(page, name).locator("svg")).toHaveCount(0);
       }
       for (const name of ["渡客", "夜泊", "修纜", "歸港", "版權頁"]) {
-        await expect(entry(page, name)).toHaveAttribute(
-          "data-toc-unavailable",
-        );
+        await expect(entry(page, name)).toHaveAttribute("data-toc-unavailable");
         await expect(entry(page, name)).not.toHaveAttribute("aria-disabled");
         await expect(entry(page, name)).toBeEnabled();
         await expect(entry(page, name)).toHaveAttribute("title", /offline/i);
-        await expect(entry(page, name)).toHaveAccessibleDescription(
-          /offline/i,
-        );
+        await expect(entry(page, name)).toHaveAccessibleDescription(/offline/i);
         await expect(entry(page, name).locator("svg")).toBeVisible();
       }
 
       // A tap asks for the chapter. It does not come.
       await entry(page, "版權頁").click();
       await expect(notice(page)).toContainText("offline");
-      await expect(notice(page).getByRole("button", { name: "Retry" })).toBeVisible();
+      await expect(
+        notice(page).getByRole("button", { name: "Retry" }),
+      ).toBeVisible();
       expect(asked.length).toBe(1);
       // The list stays, the entry is marked as it was; the page behind
       // it has not moved.
       await expect(dialog).toBeVisible();
-      await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
-      await expect(entry(page, "版權頁")).toHaveAttribute("data-toc-unavailable");
+      await expect(entry(page, "版權頁")).not.toHaveAttribute(
+        "data-toc-trying",
+      );
+      await expect(entry(page, "版權頁")).toHaveAttribute(
+        "data-toc-unavailable",
+      );
       expect(await where(page)).toEqual(before);
       expect(asked.length).toBe(1);
       await dialog.getByRole("button", { name: "Close" }).click();
 
       // Still a reader: forward, back, and a chapter that is in memory.
       await page.keyboard.press("PageDown");
-      await expect.poll(async () => (await where(page)).fraction).toBeGreaterThan(0);
+      await expect
+        .poll(async () => (await where(page)).fraction)
+        .toBeGreaterThan(0);
       await expect(notice(page)).toBeHidden();
       await page.keyboard.press("PageUp");
       await expect.poll(async () => (await where(page)).fraction).toBe(0);
@@ -346,22 +352,23 @@ for (const turn of ["fade", "slide"] as const) {
 
       // Nothing was saved but the page the reader was on.
       await page.waitForTimeout(2600);
-      for (const save of seen.saves) expect(save.cfi).toMatch(/^epubcfi\(\/6\/2!/);
+      for (const save of seen.saves)
+        expect(save.cfi).toMatch(/^epubcfi\(\/6\/2!/);
 
       // Asked for again, then the connection returns: it opens by itself.
       await openToc(page, context);
       await entry(page, "版權頁").click();
       await expect(notice(page)).toBeVisible();
-      await expect(entry(page, "版權頁")).not.toHaveAttribute("data-toc-trying");
+      await expect(entry(page, "版權頁")).not.toHaveAttribute(
+        "data-toc-trying",
+      );
       await context.setOffline(false);
       await expect
         .poll(async () => (await where(page)).index, { timeout: 15_000 })
         .toBe(8);
       await expect(notice(page)).toBeHidden();
       await expect(dialog).toBeHidden();
-      await expect
-        .poll(async () => (await where(page)).label)
-        .toBe("版權頁");
+      await expect.poll(async () => (await where(page)).label).toBe("版權頁");
       expect((await where(page)).live).toBe(8);
 
       // Online, nothing is marked, and an entry is an entry.
@@ -416,7 +423,8 @@ for (const turn of ["fade", "slide"] as const) {
       await page.keyboard.press("PageDown");
       await expect(notice(page)).toBeVisible();
       await page.waitForTimeout(2600);
-      for (const save of seen.saves) expect(save.cfi).toMatch(/^epubcfi\(\/6\/(2|8)!/);
+      for (const save of seen.saves)
+        expect(save.cfi).toMatch(/^epubcfi\(\/6\/(2|8)!/);
 
       await context.setOffline(false);
       await expect
@@ -431,7 +439,9 @@ for (const turn of ["fade", "slide"] as const) {
       // And reading on is reading on.
       await expect.poll(() => atRest(page)).toBe(true);
       await page.keyboard.press("PageDown");
-      await expect.poll(async () => (await where(page)).fraction).toBeGreaterThan(0);
+      await expect
+        .poll(async () => (await where(page)).fraction)
+        .toBeGreaterThan(0);
       expectSound(seen);
     });
 
@@ -488,7 +498,8 @@ for (const turn of ["fade", "slide"] as const) {
           childList: true,
         });
       });
-      const spins = () => page.evaluate(() => (window as any).__spins as number);
+      const spins = () =>
+        page.evaluate(() => (window as any).__spins as number);
       const release = gate.hold("c-005");
 
       // A chapter already in memory: turned into with no spinner at all.
@@ -606,7 +617,9 @@ for (const turn of ["fade", "slide"] as const) {
       expect(await where(page)).toEqual(before);
 
       await page.keyboard.press("PageDown");
-      await expect.poll(async () => (await where(page)).fraction).toBeGreaterThan(0);
+      await expect
+        .poll(async () => (await where(page)).fraction)
+        .toBeGreaterThan(0);
       await expect(spinner(page)).toHaveCount(0);
       const turned = await where(page);
       expect(turned.index).toBe(0);
@@ -801,8 +814,12 @@ test("the notice is a toast: at the top of the phone's screen, over the bars and
   // One toast among the toasts, with what a toast has.
   await expect(toasts(page)).toHaveCount(1);
   await expect(notice(page)).toHaveAttribute("role", "status");
-  await expect(notice(page).getByRole("button", { name: "Retry" })).toBeVisible();
-  await expect(notice(page).getByRole("button", { name: "Close" })).toBeVisible();
+  await expect(
+    notice(page).getByRole("button", { name: "Retry" }),
+  ).toBeVisible();
+  await expect(
+    notice(page).getByRole("button", { name: "Close" }),
+  ).toBeVisible();
 
   // On the phone the toasts are at the top, under the status bar — the
   // same place whether the reader's bars show or not.
@@ -1120,6 +1137,7 @@ test.describe("on a desktop", () => {
     const g = await gate(page);
     const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
     await resetProgress(page.request, bookId);
+    await capWeightsAtFirst(page, bookId);
     await connection(page, { saveData: true });
     await openBook(page, bookId, { turn: "fade" }, NINE_CHAPTERS_BOOK);
     await expect.poll(() => available(page, 3)).toBe(true);
@@ -1140,9 +1158,7 @@ test.describe("on a desktop", () => {
 
     // (The toast flies in: read its place once it has settled.)
     await expect
-      .poll(
-        async () => viewport.height - (await rect(notice(page))).bottom,
-      )
+      .poll(async () => viewport.height - (await rect(notice(page))).bottom)
       .toBeGreaterThanOrEqual(8);
     const box = await rect(notice(page));
     expect(viewport.height - box.bottom).toBeLessThanOrEqual(16);

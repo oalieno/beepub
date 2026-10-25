@@ -60,8 +60,7 @@ export const TOUCH_BOOK: Fixture = {
 };
 
 /** Two chapters of unique sentences (the heal tests need unambiguous
- *  quotes), padded past the server's 500-word image-book threshold so the
- *  chrome shows the highlights entry. */
+ *  quotes). */
 export const ANCHOR_BOOK: Fixture = {
   file: "e2e-anchor-book.epub",
   title: "Anchor Drift Ledger",
@@ -127,6 +126,23 @@ export const VERTICAL_MIXED_UNDECLARED_BOOK: Fixture = {
   file: "e2e-vertical-mixed-undeclared-book.epub",
   title: "未宣告直書插畫卷",
   readyText: "卷一其1",
+};
+
+/** A vertical book (page progression rtl) that opens on two horizontal
+ *  colour plates linking a sheet with no writing mode; its chapters and
+ *  colophon link the vertical sheet. The second chapter is the longest. */
+export const VERTICAL_PLATES_FIRST_BOOK: Fixture = {
+  file: "e2e-vertical-plates-first-book.epub",
+  title: "直書卷首彩頁試驗帖",
+  readyText: "首章其1",
+};
+
+/** A horizontal zh-TW novel, no page-progression-direction, whose
+ *  manifest holds a vertical-rl sheet that only its colophon links. */
+export const HORIZONTAL_VERTICAL_COLOPHON_BOOK: Fixture = {
+  file: "e2e-horizontal-vertical-colophon-book.epub",
+  title: "港燈橫排夜記",
+  readyText: "港燈首章第1段",
 };
 
 /** A horizontal zh-TW novel, no page-progression-direction, whose
@@ -280,6 +296,25 @@ export async function seedFixture(
   });
   expect(uploaded.ok()).toBeTruthy();
   return (await uploaded.json()).id;
+}
+
+/**
+ * The reader reads a CJK book's heaviest section at open, to settle its
+ * writing mode, and keeps it in memory. NINE_CHAPTERS_BOOK's chapters
+ * weigh the same but for one character (the fifth's, past the prefetch's
+ * reach): for the specs about what is in memory, its record caps them at
+ * the first chapter's size, so the heaviest is one the reader has anyway
+ * and every chapter past the reach stays out.
+ */
+export async function capWeightsAtFirst(page: Page, bookId: string) {
+  await page.route(`**/api/books/${bookId}`, async (route) => {
+    const response = await route.fetch();
+    const book = await response.json();
+    const weights: number[] | null = book.section_weights;
+    if (weights?.length)
+      book.section_weights = weights.map((w) => Math.min(w, weights[0]));
+    await route.fulfill({ response, json: book });
+  });
 }
 
 export function seedBook(request: APIRequestContext) {
@@ -566,6 +601,15 @@ export const FIXED_LAYOUT_TEXT_BOOK: Fixture = {
   file: "e2e-fixed-layout-text-book.epub",
   title: "Tidewater Almanac of Long Evenings",
   readyText: "almanac keeper climbs the tide tower",
+};
+
+/** An image-only EPUB that declares no layout: 24 picture pages (each an
+ *  <img> and its page number) between two text pages ahead (contents, a
+ *  note) and two behind (the author, a colophon). */
+export const REFLOWABLE_COMIC_BOOK: Fixture = {
+  file: "e2e-harbour-crane-sketchbook.epub",
+  title: "Harbour Crane Sketchbook",
+  readyText: "",
 };
 
 /** Eight portrait pages of flat colours, left to right: the kosync spec's

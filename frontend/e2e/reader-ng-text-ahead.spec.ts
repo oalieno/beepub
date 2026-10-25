@@ -8,6 +8,7 @@ import {
 import { ADMIN_STATE } from "./helpers";
 import {
   NINE_CHAPTERS_BOOK,
+  capWeightsAtFirst,
   connection,
   iphone,
   openBook,
@@ -110,6 +111,7 @@ const starts = (w: Wire, c: string) =>
 async function open(page: Page) {
   const bookId = await seedFixture(page.request, NINE_CHAPTERS_BOOK);
   await resetProgress(page.request, bookId);
+  await capWeightsAtFirst(page, bookId);
   await openBook(page, bookId, {}, NINE_CHAPTERS_BOOK);
   return bookId;
 }

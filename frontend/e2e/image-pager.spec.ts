@@ -3,6 +3,7 @@ import { ADMIN_STATE } from "./helpers";
 import {
   CBZ_BOOK,
   FIXED_LAYOUT_TEXT_BOOK,
+  REFLOWABLE_COMIC_BOOK,
   openBook,
   openComic,
   pagerState,
@@ -166,6 +167,34 @@ test("a fixed-layout book of text pages goes to the text reader", async ({
   await page.getByRole("button", { name: "Reader settings" }).click();
   await expect(page.getByTestId("setting-font-size")).toBeVisible();
   await expect(page.getByTestId("setting-page-turn")).toHaveCount(0);
+});
+
+test("an image-only book with text pages and no declared layout shows its pictures, not its text pages", async ({
+  page,
+}) => {
+  // 24 picture pages and four text pages (contents, a note, the author,
+  // a colophon): the library calls it an image book, and the pager
+  // leaves the text pages out instead of showing them as failed images.
+  const bookId = await seedFixture(page.request, REFLOWABLE_COMIC_BOOK);
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get(`/api/books/${bookId}`)).json())
+          .is_image_book,
+      { timeout: 60_000 },
+    )
+    .toBe(true);
+  await openComic(page, bookId);
+  const state = await pagerState(page);
+  expect(state.total).toBe(24);
+  // The first page is the first picture (spine item 2), and so is the
+  // position it saves.
+  expect(state.cfi).toContain("/6/6!");
+  await page.keyboard.press("End");
+  await expect
+    .poll(async () => (await pagerState(page)).page)
+    .toBeGreaterThanOrEqual(22);
+  await expect(page.getByText("This page could not be loaded")).toHaveCount(0);
 });
 
 test("the continuous modes stack the pages and follow the scroll", async ({

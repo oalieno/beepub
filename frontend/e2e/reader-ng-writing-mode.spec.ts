@@ -267,9 +267,10 @@ test.describe("writing direction", () => {
     const bookId = await seedFixture(page.request, HORIZONTAL_BOOK);
     await openBook(page, bookId, { font: "sans" }, HORIZONTAL_BOOK);
 
-    // Untouched, the book is what it always was.
+    // Untouched, the book is what it always was: horizontal, the mode
+    // settled for it at open (nothing is stored).
     expect(await engine(page)).toEqual({
-      forced: null,
+      forced: "horizontal",
       vertical: false,
       leftward: false,
       body: "horizontal-tb",
@@ -371,7 +372,7 @@ test.describe("writing direction", () => {
     // Back to Auto: nothing of the forced mode stays behind.
     await pick(page, "Auto", "horizontal-tb");
     expect(await engine(page)).toEqual({
-      forced: null,
+      forced: "horizontal",
       vertical: false,
       leftward: false,
       body: "horizontal-tb",
@@ -421,7 +422,7 @@ test.describe("writing direction", () => {
       VERTICAL_BOOK,
     );
     expect(await engine(page)).toEqual({
-      forced: null,
+      forced: "vertical",
       vertical: true,
       leftward: true,
       body: "vertical-rl",
@@ -505,7 +506,7 @@ test.describe("writing direction", () => {
     // Auto hands the book back as it was written.
     await pick(page, "Auto", "vertical-rl");
     expect(await engine(page)).toEqual({
-      forced: null,
+      forced: "vertical",
       vertical: true,
       leftward: true,
       body: "vertical-rl",
@@ -525,9 +526,14 @@ test.describe("writing direction", () => {
         const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
         return getComputedStyle(doc.querySelector("div.main")!).writingMode;
       });
-    // As written: a vertical block inside a body that declares nothing.
-    expect((await engine(page)).body).toBe("horizontal-tb");
-    expect(await inner()).toBe("vertical-rl");
+    // A vertical block inside a body that declares nothing: no vertical
+    // rule reaches the body, so Auto lays the book out horizontally,
+    // block and all — the mode is the body's, one for the whole book.
+    expect(await engine(page)).toMatchObject({
+      forced: "horizontal",
+      body: "horizontal-tb",
+    });
+    expect(await inner()).toBe("horizontal-tb");
 
     await pick(page, "Horizontal", "horizontal-tb");
     expect(await inner()).toBe("horizontal-tb");
@@ -595,10 +601,11 @@ test.describe("writing direction", () => {
     ).toHaveAttribute("aria-pressed", "true");
     await closeSheet(page);
 
-    // Another book is untouched by it.
+    // Another book is untouched by it: the mode settled for its own
+    // heaviest section, horizontal.
     await openBook(page, otherId, { font: "sans" }, INNER_BOOK);
     expect(await engine(page)).toMatchObject({
-      forced: null,
+      forced: "horizontal",
       body: "horizontal-tb",
     });
     await openSheet(page);

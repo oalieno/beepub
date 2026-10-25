@@ -56,8 +56,10 @@ function row(page: Page) {
 }
 
 /** Pick a writing direction in the sheet and wait for the section to be
- *  laid out again (a fresh document) with the landing relocation in. */
-async function pick(page: Page, mode: Mode, body: string) {
+ *  laid out again (a fresh document) with the landing relocation in —
+ *  or, for the mode the book is already laid out in (`same`), check
+ *  that nothing was laid out again. */
+async function pick(page: Page, mode: Mode, body: string, same = false) {
   await page.evaluate(() => {
     const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
     (doc as unknown as { __before: boolean }).__before = true;
@@ -69,6 +71,17 @@ async function pick(page: Page, mode: Mode, body: string) {
   ).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  if (same) {
+    await page.waitForTimeout(300);
+    expect(
+      await page.evaluate(() => {
+        const doc: Document & { __before?: boolean } =
+          window.__beepubReaderNG.core.getContents()[0].doc;
+        return [!!doc.__before, getComputedStyle(doc.body).writingMode];
+      }),
+    ).toEqual([true, body]);
+    return;
+  }
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -528,7 +541,9 @@ test.describe("upright numbers in a book forced vertical", () => {
     // The rendered body is the parsed file's, element for element.
     expect(own).toBe(await pristine());
 
-    await pick(page, "Horizontal", "horizontal-tb");
+    // Auto lays the book out horizontally, as it is written: choosing
+    // Horizontal changes nothing.
+    await pick(page, "Horizontal", "horizontal-tb", true);
     expect(await wrapped(page)).toEqual([]);
     expect(await markup()).toBe(own);
 
@@ -551,16 +566,17 @@ test.describe("upright numbers in a book forced vertical", () => {
     await pick(page, "Horizontal", "horizontal-tb");
     expect(await wrapped(page)).toEqual([]);
     expect(await markup()).toBe(own);
-    await pick(page, "Auto", "horizontal-tb");
+    await pick(page, "Auto", "horizontal-tb", true);
     expect(await wrapped(page)).toEqual([]);
     expect(await markup()).toBe(own);
 
-    // A natively vertical book, in Auto and with Vertical chosen on top.
+    // A natively vertical book, in Auto (laid out vertical already, as it
+    // is written) and with Vertical chosen on top.
     const verticalId = await seedFixture(page.request, DIGITS_VERTICAL_BOOK);
     await openIn(page, verticalId, "auto", DIGITS_VERTICAL_BOOK);
     expect(await wrapped(page)).toEqual([]);
     expect(await markup()).toContain("第12夜");
-    await pick(page, "Vertical", "vertical-rl");
+    await pick(page, "Vertical", "vertical-rl", true);
     expect(
       await page.evaluate(() =>
         window.__beepubReaderNG.core.forcedWritingMode(),
@@ -1068,15 +1084,15 @@ test.describe("upright numbers in a book forced vertical", () => {
     }, here);
     expect(inFile).toEqual({ text, cfi: here });
 
-    // Reopened in Auto: no wrappers, and the stored place is on screen,
-    // standing before the same text.
+    // Reopened in Auto (horizontal, as the book is written): no wrappers,
+    // and the stored place is on screen, standing before the same text.
     await openIn(page, bookId, "auto", DIGITS_BOOK, { restore: "1" });
     expect(await wrapped(page)).toEqual([]);
     expect(
       await page.evaluate(() =>
         window.__beepubReaderNG.core.forcedWritingMode(),
       ),
-    ).toBe(null);
+    ).toBe("horizontal");
     await expect.poll(() => onScreen(page, here)).toBe(true);
     expect(await textAfter(page, here)).toBe(text);
     expect((await location(page)).fraction).toBeGreaterThan(0);

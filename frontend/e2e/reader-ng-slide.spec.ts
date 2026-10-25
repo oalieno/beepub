@@ -1161,7 +1161,7 @@ test("a ghost whose section never arrives is replaced, and the slide comes back"
   expect(await turns(page)).toEqual(["ghost:slide"]);
 });
 
-test("a horizontal plate in a vertical book slides like every other page, laid out its own way", async ({
+test("a horizontal plate in a vertical book slides like every other page, laid out the book's way", async ({
   page,
   context,
 }) => {
@@ -1195,16 +1195,15 @@ test("a horizontal plate in a vertical book slides like every other page, laid o
     })
     .toBe(true);
   await ghostReady(page, 1);
-  // The page on screen is vertical; the plate waiting under it is not,
-  // and has the gutters of a horizontal page.
+  // The page on screen is vertical, and so is the plate waiting under
+  // it, its sheet's horizontal-tb notwithstanding: the book has one
+  // writing mode (its heaviest chapter's), and one layout.
   const vertical = await layout("live");
   const plate = await layout("ghost");
   expect(vertical.writingMode).toBe("vertical-rl");
-  expect(plate.writingMode).toBe("horizontal-tb");
-  expect([plate.gap, plate.margin]).toEqual([vertical.margin, vertical.gap]);
+  expect(plate).toEqual(vertical);
 
-  // Forward is still the finger going right: the book's direction, not
-  // the plate's.
+  // Forward is the finger going right, on the plate as everywhere.
   await touchDown(cdp, at(80));
   await touchMove(cdp, at(80), at(200), 10);
   const mid = await layersWhen(page, "live", 120);
