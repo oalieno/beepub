@@ -438,7 +438,9 @@ ${darkOverrides}
     });
     // The slide's ghosts (the renderings of the pages a turn away) each
     // get the layout for their own section's writing mode — a horizontal
-    // plate in a vertical book sits beside pages written the other way.
+    // plate beside pages written the other way, in a book that keeps its
+    // sections' own modes. (A CJK book has one mode throughout, so its
+    // ghosts all get the live page's layout.)
     c?.setGhostLayout(layoutFor);
   }
 
@@ -2341,7 +2343,9 @@ ${darkOverrides}
       c.setStyles(styles());
       const [book, saved] = await Promise.all([
         // (A book that is on the device whole has no text left to bring.)
-        c.load(loader, { crawl: streamed }),
+        // The section sizes settle a CJK book's writing mode: the route
+        // has waited for them, bounded.
+        c.load(loader, { crawl: streamed, sectionWeights }),
         loadSavedProgress(),
       ]);
       if (destroyed) return;

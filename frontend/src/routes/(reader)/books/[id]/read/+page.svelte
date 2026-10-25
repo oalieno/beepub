@@ -118,6 +118,10 @@
    *  its pages mostly pictures: true; text: false), once known — null while it is
    *  not classified yet, or not heard of in time. */
   let classified: Promise<boolean | null> = Promise.resolve(null);
+  /** How long the open waits for the book's record. */
+  const RECORD_WAIT_MS = 2500;
+  const delay = (ms: number) =>
+    new Promise<void>((resolve) => setTimeout(resolve, ms));
   let sectionWeights = $state<number[] | null>(null);
   let ready = $state(false);
   let rendered = $state(false);
@@ -1201,7 +1205,7 @@
                   setTimeout(() => resolve(null), 2500),
                 ),
               ]);
-            info
+            const record = info
               .then((b) => {
                 if (typeof b.is_image_book === "boolean")
                   isImageBook = b.is_image_book;
@@ -1209,6 +1213,10 @@
                   sectionWeights = b.section_weights;
               })
               .catch(() => {});
+            // The reader settles the book's writing mode at open from its
+            // section sizes: they are waited for, bounded.
+            if (localEntry.sectionWeights === undefined)
+              await Promise.race([record, delay(RECORD_WAIT_MS)]);
           }
         }
       } else {
@@ -1232,7 +1240,7 @@
             setTimeout(() => resolve(hints?.isImageBook ?? null), 2500),
           ),
         ]);
-        info
+        const record = info
           .then((b) => {
             authors = b.display_authors ?? b.authors ?? b.epub_authors ?? [];
             isImageBook = b.is_image_book === true;
@@ -1243,6 +1251,13 @@
             }
           })
           .catch(() => {});
+        // The reader settles the book's writing mode once, at open, by its
+        // heaviest section: it waits for the section sizes, bounded as
+        // `classified` is, so that a fast network and a slow one open the
+        // book the same way (past the bound, and offline, it reads the
+        // book's first section instead). A copy's own sizes do at once.
+        if (!hints?.sectionWeights)
+          await Promise.race([record, delay(RECORD_WAIT_MS)]);
       }
       ready = true;
       // AI status is account-level, not book-level — fetch it whenever AI

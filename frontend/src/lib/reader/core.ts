@@ -509,6 +509,69 @@ function styleBlocks(markup: string): string[] {
   );
 }
 
+/** The hrefs of the stylesheets the markup links. */
+function linkedSheets(markup: string): string[] {
+  const out: string[] = [];
+  for (const m of markup.matchAll(/<link\b([^>]*)>/gi)) {
+    const rel = /\brel\s*=\s*["']([^"']*)["']/i.exec(m[1])?.[1] ?? "";
+    if (!/(^|\s)stylesheet(\s|$)/i.test(rel) || /alternate/i.test(rel))
+      continue;
+    const href = /\bhref\s*=\s*["']([^"']*)["']/i.exec(m[1])?.[1];
+    if (href) out.push(href.split("#")[0]);
+  }
+  return out;
+}
+
+/** The sheets a CSS text imports, as written. */
+function importsOf(css: string): string[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  return [
+    ...text.matchAll(/@import\s+(?:url\(\s*)?["']?([^"')\s;]+)["']?/gi),
+  ].map((m) => m[1]);
+}
+
+/** A text of the book, or null when it cannot be loaded. */
+async function loadQuiet(
+  loader: BookLoader,
+  href: string | undefined,
+): Promise<string | null> {
+  if (!href) return null;
+  try {
+    return await loader.loadText(href);
+  } catch {
+    return null;
+  }
+}
+
+/** The linear section with the most text by the library's count (the
+ *  first of equals); null when there is no count to go by. */
+function heaviestLinear(
+  sections: readonly { linear?: string }[],
+  weights: readonly number[] | null,
+): number | null {
+  let best: number | null = null;
+  let most = 0;
+  weights?.forEach((weight, index) => {
+    if (sections[index] && sections[index].linear !== "no" && weight > most) {
+      best = index;
+      most = weight;
+    }
+  });
+  return best;
+}
+
+/** `href` resolved against the book path `base` (the parser's own rule). */
+function resolvePath(href: string, base: string): string {
+  try {
+    const root = "https://invalid.invalid/";
+    const url = new URL(href, root + base);
+    url.search = "";
+    return decodeURI(url.href.replace(root, ""));
+  } catch {
+    return href;
+  }
+}
+
 /**
  * Whether the CSS text has a vertical-rl rule that applies to the body:
  * a selector made only of html/body/:root/* (with an optional descendant
@@ -590,6 +653,10 @@ export class ReaderCore {
    *  cannot flip the mapping back (and forth) the way a per-section
    *  reading did. */
   #inferredLeftward = false;
+  /** The one writing mode a CJK book (or one written vertically) is laid
+   *  out in when the reader asks for none: settled at load, the same for
+   *  every section, every open (see #resolveWritingMode). */
+  #resolvedMode: Exclude<WritingMode, "auto"> | null = null;
 
   // A faded page turn in progress (see #turn).
   #fadeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -662,7 +729,15 @@ export class ReaderCore {
    *  Nothing is displayed until goTo(). */
   async load(
     loader: BookLoader,
-    { crawl = true }: { crawl?: boolean } = {},
+    {
+      crawl = true,
+      sectionWeights = null,
+    }: {
+      crawl?: boolean;
+      /** The library's text size of each section: the book's writing
+       *  mode is the one its heaviest section is written in. */
+      sectionWeights?: readonly number[] | null;
+    } = {},
   ): Promise<Book> {
     // The parser reads through the prefetcher: bytes it warmed for the
     // sections ahead are answered from memory when the paginator turns
@@ -712,60 +787,124 @@ export class ReaderCore {
     this.book = book;
     prefetch.open(book.sections);
     this.#language = languageInfo(book.metadata?.language);
-    // Whether a forced writing mode applies depends on the book's layout.
-    this.paginator.setStyles(this.#composedStyles());
     this.#inferredLeftward = false;
     this.#nativeVertical = false;
-    if (book.dir !== "rtl" && book.dir !== "ltr")
-      void this.#inferDirection(prefetch.loader);
+    this.#resolvedMode = null;
+    // Before anything renders: the first section is laid out in it.
+    if (book.rendition?.layout !== "pre-paginated")
+      await this.#resolveWritingMode(prefetch.loader, sectionWeights);
+    if (this.book !== book) return book; // destroyed or reopened meanwhile
+    // Whether a forced writing mode applies depends on the book's layout.
+    this.paginator.setStyles(this.#composedStyles());
     this.paginator.open(book);
     // (Nothing of this book is on screen yet: no place to land on.)
     this.#applyPageTurn(false);
     return book;
   }
 
-  /** Look for vertical text before anything renders: the manifest's
-   *  stylesheets and the first linear section's markup (inline styles).
-   *  A book that opens on a horizontal plate is thereby read leftward
-   *  from its first page turn. Sections rendered later refine this.
+  /**
+   * Settle the one writing mode the book is laid out in when the reader
+   * asks for none, before anything renders. A book read one section at a
+   * time in its own sections' modes flips at every horizontal plate, and
+   * the strip ran the way the chapter it opened on was written.
+   *
+   * Only for a book that offers the choice: Chinese, Japanese or Korean
+   * by its language, or one whose text is found running vertically (the
+   * sniff below; a mislabelled language is common). Any other book keeps
+   * its own styles. The book is written the way most of it is: the mode
+   * is its heaviest linear section's, read from that section's own
+   * styles — a horizontal book's vertical colophon sheet in the manifest
+   * says nothing of the book. Without the library's section sizes, the
+   * sniff decides, and a CJK book whose spine runs rtl is vertical.
+   * A stored choice still outranks it (forcedWritingMode).
+   */
+  async #resolveWritingMode(
+    loader: BookLoader,
+    weights: readonly number[] | null,
+  ) {
+    const book = this.book;
+    if (!book) return;
+    const cjk = !!this.#language.isCJK;
+    let sniffed: boolean | null = null;
+    if (!cjk) {
+      // As before: only a book that declares no progression is sniffed.
+      if (book.dir === "rtl" || book.dir === "ltr") return;
+      sniffed = await this.#sniffVertical(loader);
+      if (this.book !== book || !sniffed) return;
+      this.#inferredLeftward = true;
+      this.#nativeVertical = true;
+    }
+    const heaviest = heaviestLinear(book.sections, weights);
+    let vertical: boolean;
+    if (heaviest != null) {
+      vertical = await this.#sectionVertical(loader, heaviest);
+    } else {
+      vertical = sniffed ?? (await this.#sniffVertical(loader));
+      if (!vertical && cjk && book.dir === "rtl") vertical = true;
+    }
+    if (this.book !== book) return;
+    if (vertical) this.#nativeVertical = true;
+    this.#resolvedMode = vertical ? "vertical" : "horizontal";
+  }
+
+  /** Look for vertical text the old way: the manifest's stylesheets and
+   *  the first linear section's markup (inline styles).
    *
    *  Only a rule that reaches the body counts, the way the paginator's
    *  own check reads the body's computed style: publishers' boilerplate
    *  sheets carry `body.vrtl { writing-mode: vertical-rl }` in every
    *  book, horizontal ones included, gated on a class the body may never
    *  wear. */
-  async #inferDirection(loader: BookLoader) {
+  async #sniffVertical(loader: BookLoader): Promise<boolean> {
     const book = this.book;
-    if (!book) return;
+    if (!book) return false;
     const first = book.sections[this.firstLinearIndex()];
-    const load = async (href: string | undefined) => {
-      if (!href) return null;
-      try {
-        return await loader.loadText(href);
-      } catch {
-        return null;
-      }
-    };
-    const markup = await load(first?.id);
-    if (this.book !== book) return; // destroyed or reopened meanwhile
+    const sheets = (book.resources?.manifest ?? []).filter(
+      (item) => item.mediaType === "text/css",
+    );
+    const [markup, ...css] = await Promise.all([
+      loadQuiet(loader, first?.id),
+      ...sheets.map((item) => loadQuiet(loader, item.href)),
+    ]);
     const rootClasses = classesOfRoot(markup ?? "");
     const texts: string[] = [];
     if (markup) {
       texts.push(...inlineRootStyles(markup));
       texts.push(...styleBlocks(markup));
     }
-    const sheets = (book.resources?.manifest ?? []).filter(
-      (item) => item.mediaType === "text/css",
+    for (const text of css) if (text) texts.push(text);
+    return texts.some((text) => verticalBodyRule(text, rootClasses));
+  }
+
+  /** Whether the section's own styles set its body vertical: its inline
+   *  root styles, its <style> blocks and the sheets it links, with what
+   *  those import one level down (publishers put the writing mode behind
+   *  an @import). A section that cannot be loaded is not. */
+  async #sectionVertical(loader: BookLoader, index: number): Promise<boolean> {
+    const section = this.book?.sections[index];
+    const markup = await loadQuiet(loader, section?.id);
+    if (!section || !markup) return false;
+    const rootClasses = classesOfRoot(markup);
+    const blocks = styleBlocks(markup);
+    const texts = [...inlineRootStyles(markup), ...blocks];
+    const resolve = (href: string) =>
+      section.resolveHref ? section.resolveHref(href) : href;
+    const sheets = linkedSheets(markup).map(resolve);
+    const linked = await Promise.all(
+      sheets.map((href) => loadQuiet(loader, href)),
     );
-    for (const item of sheets) {
-      const css = await load(item.href);
-      if (this.book !== book) return;
-      if (css) texts.push(css);
-    }
-    if (texts.some((text) => verticalBodyRule(text, rootClasses))) {
-      this.#inferredLeftward = true;
-      this.#nativeVertical = true;
-    }
+    const imported = await Promise.all([
+      ...blocks.flatMap((css) =>
+        importsOf(css).map((href) => loadQuiet(loader, resolve(href))),
+      ),
+      ...linked.flatMap((css, i) =>
+        importsOf(css ?? "").map((href) =>
+          loadQuiet(loader, resolvePath(href, sheets[i])),
+        ),
+      ),
+    ]);
+    for (const css of [...linked, ...imported]) if (css) texts.push(css);
+    return texts.some((text) => verticalBodyRule(text, rootClasses));
   }
 
   /** load() then show `target`, falling back to the first linear section
@@ -1190,7 +1329,8 @@ export class ReaderCore {
    * a per-section reading, which flips at every plate.
    */
   advancesLeftward(): boolean {
-    // A forced writing mode outranks the book's declared progression:
+    // A forced writing mode — asked for, or settled for a CJK book at
+    // load — outranks the book's declared progression:
     // vertical-rl columns run right to left, horizontal CJK left to right
     // — also in a book whose spine says rtl because it was set vertically.
     const forced = this.forcedWritingMode();
@@ -1525,13 +1665,14 @@ export class ReaderCore {
     return [before, after + PLATE_CSS + (forced ? writingModeCss(forced) : "")];
   }
 
-  /** The writing mode in force, or null when the book's own stands: no
-   *  override asked for, or a fixed-layout book, whose pages are drawn
-   *  rather than set. */
+  /** The writing mode in force: the one asked for, else the one settled
+   *  for the book at load (#resolveWritingMode). Null when the book's own
+   *  stands: a book that offers no choice left on Auto, or a fixed-layout
+   *  book, whose pages are drawn rather than set. */
   forcedWritingMode(): Exclude<WritingMode, "auto"> | null {
-    if (this.writingMode === "auto") return null;
     if (this.book?.rendition?.layout === "pre-paginated") return null;
-    return this.writingMode;
+    if (this.writingMode !== "auto") return this.writingMode;
+    return this.#resolvedMode;
   }
 
   /** Whether choosing a writing direction makes sense for this book: a
