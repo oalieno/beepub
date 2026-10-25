@@ -526,14 +526,14 @@ test.describe("writing direction", () => {
         const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
         return getComputedStyle(doc.querySelector("div.main")!).writingMode;
       });
-    // A vertical block inside a body that declares nothing: no vertical
-    // rule reaches the body, so Auto lays the book out horizontally,
-    // block and all — the mode is the body's, one for the whole book.
+    // A vertical block inside a body that declares nothing: most of the
+    // text is in it, so the book is vertical — on Auto the whole page is
+    // laid out so, the body with it.
     expect(await engine(page)).toMatchObject({
-      forced: "horizontal",
-      body: "horizontal-tb",
+      forced: "vertical",
+      body: "vertical-rl",
     });
-    expect(await inner()).toBe("horizontal-tb");
+    expect(await inner()).toBe("vertical-rl");
 
     await pick(page, "Horizontal", "horizontal-tb");
     expect(await inner()).toBe("horizontal-tb");
@@ -601,12 +601,12 @@ test.describe("writing direction", () => {
     ).toHaveAttribute("aria-pressed", "true");
     await closeSheet(page);
 
-    // Another book is untouched by it: the mode settled for its own
-    // heaviest section, horizontal.
+    // Another book is untouched by it: on Auto, in the mode settled for
+    // its own heaviest section (vertical, on its inner container).
     await openBook(page, otherId, { font: "sans" }, INNER_BOOK);
     expect(await engine(page)).toMatchObject({
-      forced: "horizontal",
-      body: "horizontal-tb",
+      forced: "vertical",
+      body: "vertical-rl",
     });
     await openSheet(page);
     await expect(

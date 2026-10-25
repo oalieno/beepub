@@ -595,6 +595,55 @@ function verticalBodyRule(css: string, rootClasses: Set<string>): boolean {
   return false;
 }
 
+/**
+ * Whether most of a section's text sits in elements its styles set
+ * vertical: a book that sets its writing mode on an inner container
+ * (`div.main`, `.chapter-body`) rather than the body, which no rule
+ * reaching the body tells of. The markup is parsed, not rendered — the
+ * vertical rules' selectors are matched against it and inline styles
+ * read; the cascade is not weighed (a later horizontal rule on the same
+ * element is not seen).
+ */
+function mostTextVertical(markup: string, css: readonly string[]): boolean {
+  let body: HTMLElement | null = null;
+  try {
+    body = new DOMParser().parseFromString(markup, "text/html").body;
+  } catch {
+    return false;
+  }
+  if (!body) return false;
+  const size = (el: Element) =>
+    (el.textContent ?? "").replace(/\s+/g, "").length;
+  const total = size(body);
+  if (!total) return false;
+  const marked = new Set<Element>();
+  for (const el of Array.from(body.querySelectorAll("[style]")))
+    if (VERTICAL_RL.test(el.getAttribute("style") ?? "")) marked.add(el);
+  for (const text of css) {
+    const clean = text.replace(/\/\*[\s\S]*?\*\//g, "");
+    for (const m of clean.matchAll(CSS_BLOCK)) {
+      if (!VERTICAL_RL.test(m[2])) continue;
+      for (const raw of m[1].split(/[{};]/).pop()?.split(",") ?? []) {
+        const selector = raw.trim();
+        if (!selector || selector.startsWith("@")) continue;
+        try {
+          for (const el of Array.from(body.querySelectorAll(selector)))
+            marked.add(el);
+        } catch {
+          // (A selector the parser does not take: a pseudo-element.)
+        }
+      }
+    }
+  }
+  let vertical = 0;
+  for (const el of marked) {
+    let up = el.parentElement;
+    while (up && !marked.has(up)) up = up.parentElement;
+    if (!up) vertical += size(el);
+  }
+  return vertical * 2 > total;
+}
+
 const COMPOUND = /^(html|body|:root|\*)?((?:\.[\w-]+)*)$/;
 
 function selectorReachesBody(
@@ -876,10 +925,11 @@ export class ReaderCore {
     return texts.some((text) => verticalBodyRule(text, rootClasses));
   }
 
-  /** Whether the section's own styles set its body vertical: its inline
-   *  root styles, its <style> blocks and the sheets it links, with what
-   *  those import one level down (publishers put the writing mode behind
-   *  an @import). A section that cannot be loaded is not. */
+  /** Whether the section's own styles set it vertical — its body, or
+   *  the elements most of its text is in: its inline root styles, its
+   *  <style> blocks and the sheets it links, with what those import one
+   *  level down (publishers put the writing mode behind an @import). A
+   *  section that cannot be loaded is not. */
   async #sectionVertical(loader: BookLoader, index: number): Promise<boolean> {
     const section = this.book?.sections[index];
     const markup = await loadQuiet(loader, section?.id);
@@ -904,7 +954,10 @@ export class ReaderCore {
       ),
     ]);
     for (const css of [...linked, ...imported]) if (css) texts.push(css);
-    return texts.some((text) => verticalBodyRule(text, rootClasses));
+    return (
+      texts.some((text) => verticalBodyRule(text, rootClasses)) ||
+      mostTextVertical(markup, texts)
+    );
   }
 
   /** load() then show `target`, falling back to the first linear section
