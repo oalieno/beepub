@@ -14,6 +14,7 @@ import { Capacitor } from "@capacitor/core";
 import { getServerUrl } from "$lib/api/client";
 import { computePartialMd5 } from "$lib/services/partialMd5";
 import { uint8ToBase64 } from "$lib/services/base64";
+import { isImageBookShare, isPictureText } from "$lib/reader/picture";
 
 const MANIFEST_KEY = "local-library";
 const LINKS_KEY_PREFIX = "local-links";
@@ -189,9 +190,6 @@ interface ParsedEpub {
   isImageBook: boolean;
 }
 
-// Mirrors the backend's word_count < 500 classification threshold.
-const IMAGE_BOOK_THRESHOLD = 500;
-
 /** What the import reads of the foliate parser's book (untyped JS). */
 interface ManifestItem {
   href: string;
@@ -280,20 +278,29 @@ function authorsOf(metadata: Record<string, unknown>): string[] {
 
 /** Per-section text sizes counted from the open archive — the client-side
  *  twin of the server's chunk aggregation. Whitespace is stripped so the
- *  numbers track visible text, not markup indentation. */
-async function countSectionWeights(book: ParsedBook): Promise<number[]> {
+ *  numbers track visible text, not markup indentation. Read on the way:
+ *  whether the book is an image book, by the server's rule (see
+ *  $lib/reader/picture). */
+async function countSectionWeights(
+  book: ParsedBook,
+): Promise<{ weights: number[]; isImageBook: boolean }> {
   const weights = new Array<number>(book.sections.length).fill(0);
+  let linear = 0;
+  let pictures = 0;
   for (const [index, section] of book.sections.entries()) {
     if (section.linear === "no") continue;
+    linear += 1;
     try {
       const doc = await section.createDocument();
       const text = doc.body?.textContent ?? "";
       weights[index] = text.replace(/\s+/g, "").length;
+      if (isPictureText(text)) pictures += 1;
     } catch {
-      // Unloadable section weighs nothing.
+      // Unloadable section weighs nothing, and counts as text: a book
+      // that is mostly broken pages stays with the text reader.
     }
   }
-  return weights;
+  return { weights, isImageBook: isImageBookShare(linear, pictures) };
 }
 
 const IMAGE_TYPES: Record<string, string> = {
@@ -365,8 +372,8 @@ async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
   const book = await openEpub(buf);
   const metadata = book.metadata ?? {};
   const cover = await coverBlob(book);
-  const sectionWeights = await countSectionWeights(book);
-  const totalChars = sectionWeights.reduce((a, b) => a + b, 0);
+  const { weights: sectionWeights, isImageBook } =
+    await countSectionWeights(book);
   return {
     title: nameOf(metadata.title),
     authors: authorsOf(metadata),
@@ -374,7 +381,7 @@ async function parseEpub(buf: ArrayBuffer): Promise<ParsedEpub> {
     identifier: nameOf(metadata.identifier),
     cover,
     sectionWeights,
-    isImageBook: totalChars < IMAGE_BOOK_THRESHOLD,
+    isImageBook,
   };
 }
 
