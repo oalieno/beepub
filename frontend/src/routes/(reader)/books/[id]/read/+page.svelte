@@ -61,6 +61,7 @@
   } from "$lib/reader/core";
   import type { BookLoader } from "$lib/reader/loaders";
   import {
+    comicPages,
     isPrePaginated,
     readPages,
     type PageEntry,
@@ -113,8 +114,8 @@
   let hasDbTitle = false;
   let authors = $state<string[]>([]);
   let isImageBook = $state(false);
-  /** What the library's text extraction made of the book (an image book
-   *  under 500 words: true; text: false), once known — null while it is
+  /** What the library's text extraction made of the book (an image book,
+   *  its pages mostly pictures: true; text: false), once known — null while it is
    *  not classified yet, or not heard of in time. */
   let classified: Promise<boolean | null> = Promise.resolve(null);
   let sectionWeights = $state<number[] | null>(null);
@@ -135,12 +136,13 @@
   } | null>(null);
   /** Two ways in: the OPF declares pre-paginated (bought manga, packed
    *  CBZ) and the library has not found the book to be text, or the
-   *  library classified the book an image book and every spine item
-   *  turns out to be a picture — an older image-only EPUB that never
-   *  declared its layout. A short text book (a small fixture) has no
-   *  images, and a fixed-layout book the library found text in (set text:
-   *  a picture book, a magazine) has no picture to a page, so they stay
-   *  with the text reader. */
+   *  library classified the book an image book and every page that says
+   *  nothing turns out to hold a picture — an image-only EPUB that never
+   *  declared its layout. Its text pages without a picture (contents,
+   *  credits, colophon) are left out of the pager's pages. A blank page
+   *  without one means the class was wrong (a text book's separator):
+   *  the book stays with the text reader. A pre-paginated book keeps
+   *  every page: its pairs are the publisher's. */
   async function claimImageBook(b: Book, l: BookLoader): Promise<boolean> {
     if (isPrePaginated(b)) {
       if ((await classified) === false) return false;
@@ -149,8 +151,8 @@
       return true;
     }
     if (!isImageBook) return false;
-    const pages = await readPages(b, l);
-    if (!pages.length || !pages.every((p) => p.image)) return false;
+    const pages = comicPages(await readPages(b, l));
+    if (!pages) return false;
     claimed = { book: b, loader: l, pages };
     return true;
   }

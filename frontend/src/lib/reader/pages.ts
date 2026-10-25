@@ -7,6 +7,7 @@
  */
 import type { Book } from "./core";
 import type { BookLoader } from "./loaders/types";
+import { isPictureText } from "./picture";
 import * as CFI from "./vendor/foliate/epubcfi.js";
 
 export type SpreadHint = "left" | "right" | "center" | null;
@@ -25,6 +26,8 @@ export interface PageEntry {
   height: number | null;
   spread: SpreadHint;
   linear: boolean;
+  /** The page's body says nothing (see picture.ts): a picture, or blank. */
+  picture: boolean;
   /** Point CFI of the page's body — the position the reader stores, in the
    *  same shape the current reader restores from. */
   cfi: string;
@@ -39,6 +42,17 @@ const SIZE_RE = /(width|height)\s*=\s*(\d+)/gi;
 
 export function isPrePaginated(book: Pick<Book, "rendition">): boolean {
   return book.rendition?.layout === "pre-paginated";
+}
+
+/** The text of a page's body, entities decoded. As XHTML first; a page
+ *  that does not parse as XML, as HTML. */
+function bodyText(markup: string): string {
+  if (!markup) return "";
+  const parser = new DOMParser();
+  let doc = parser.parseFromString(markup, "application/xhtml+xml");
+  if (doc.getElementsByTagName("parsererror").length)
+    doc = parser.parseFromString(markup, "text/html");
+  return doc.body?.textContent ?? "";
 }
 
 function viewportSize(text: string): [number, number] | null {
@@ -85,10 +99,26 @@ export async function readPages(
       height: size?.[1] ?? null,
       spread,
       linear: section.linear !== "no",
+      picture: isPictureText(bodyText(text)),
       cfi: CFI.joinIndir(section.cfi ?? CFI.fake.fromIndex(sectionIndex), "/4"),
     });
   });
   return pages;
+}
+
+/**
+ * The pages a comic shows: those with a picture to draw. A text page
+ * without one — a manga's table of contents, credits, colophon — is not
+ * one of its pages (the pager draws pictures only); a text page with a
+ * picture is. Null when the book is no comic after all: a page that says
+ * nothing has no picture either (a text book's blank separator), or no
+ * page has one. Positions stay good: a page is still its spine item.
+ */
+export function comicPages(pages: readonly PageEntry[]): PageEntry[] | null {
+  if (pages.some((p) => p.picture && !p.image)) return null;
+  const shown = pages.filter((p) => p.image);
+  if (!shown.length) return null;
+  return shown.map((p, index) => ({ ...p, index }));
 }
 
 /** Whether a page is wider than tall — a two-page spread scanned as one
