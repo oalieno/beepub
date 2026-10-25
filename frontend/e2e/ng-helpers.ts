@@ -595,6 +595,16 @@ export const CURL_BOOK: Fixture = {
   mimeType: "application/vnd.comicbook+zip",
 };
 
+/** Four pages converted from a fixed layout, as Calibre leaves a
+ *  picture book: each a full-page picture positioned over an empty body,
+ *  its text hidden in a span — nothing in the flow, and no declared
+ *  layout. */
+export const BACKGROUND_PAGES_BOOK: Fixture = {
+  file: "e2e-river-lamp-picture-pages.epub",
+  title: "河邊燈影繪本",
+  readyText: "月光照在小河上",
+};
+
 /** Four pages of set text declared pre-paginated (the first with a small
  *  ornament above its text): a fixed-layout book that is not pictures. */
 export const FIXED_LAYOUT_TEXT_BOOK: Fixture = {

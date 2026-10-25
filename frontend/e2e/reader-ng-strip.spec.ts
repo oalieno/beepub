@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
+  BACKGROUND_PAGES_BOOK,
   LONG_CHAPTERS_BOOK,
   NINE_CHAPTERS_BOOK,
   connection,
@@ -558,11 +559,14 @@ test("a jump to the element a chapter opens with gives the chapter from its edge
   // (the strip is asked itself: the fixture's entries name no element).
   await page.evaluate(
     () =>
-      window.__beepubReaderNG.core.strip.goTo({
-        index: 5,
-        anchor: (doc: Document) =>
-          doc.body.querySelector("h1, h2, h3, p") as Element,
-      }, "navigation") as Promise<unknown>,
+      window.__beepubReaderNG.core.strip.goTo(
+        {
+          index: 5,
+          anchor: (doc: Document) =>
+            doc.body.querySelector("h1, h2, h3, p") as Element,
+        },
+        "navigation",
+      ) as Promise<unknown>,
   );
   await expect.poll(async () => (await state(page)).pinned).toBe(5);
   expect((await state(page)).screenTop).toBe(0);
@@ -571,15 +575,18 @@ test("a jump to the element a chapter opens with gives the chapter from its edge
   // The same element further in is not the chapter's beginning.
   await page.evaluate(
     () =>
-      window.__beepubReaderNG.core.strip.goTo({
-        index: 5,
-        anchor: (doc: Document) => {
-          const leaves = Array.from(doc.body.querySelectorAll("*")).filter(
-            (el) => !el.children.length && el.textContent?.trim(),
-          );
-          return leaves[leaves.length - 1];
+      window.__beepubReaderNG.core.strip.goTo(
+        {
+          index: 5,
+          anchor: (doc: Document) => {
+            const leaves = Array.from(doc.body.querySelectorAll("*")).filter(
+              (el) => !el.children.length && el.textContent?.trim(),
+            );
+            return leaves[leaves.length - 1];
+          },
         },
-      }, "navigation") as Promise<unknown>,
+        "navigation",
+      ) as Promise<unknown>,
   );
   await expect.poll(async () => (await state(page)).screenTop).toBeLessThan(0);
 
@@ -593,4 +600,31 @@ test("a jump to the element a chapter opens with gives the chapter from its edge
       ];
     }),
   ).toEqual(["none", 0, 0]);
+});
+
+test("a page whose picture is set outside the flow is as long as its picture on the strip", async ({
+  page,
+}) => {
+  // A converted picture book: a full-page image positioned over a body
+  // with nothing in the flow. The chapter is measured by its picture, or
+  // each page would show only a sliver of it.
+  const bookId = await seedFixture(page.request, BACKGROUND_PAGES_BOOK);
+  await openBook(page, bookId, { turn: "scroll" }, BACKGROUND_PAGES_BOOK);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const s = window.__beepubReaderNG.core.strip;
+        const chapter = (s.chapters as { index: number; height: number }[])[0];
+        const frame = s.scroller.querySelector(
+          `[data-index="${chapter.index}"] iframe`,
+        ) as HTMLIFrameElement | null;
+        const doc = frame?.contentDocument;
+        const img = doc?.images[0];
+        if (!doc || !img) return false;
+        const r = img.getBoundingClientRect();
+        const root = doc.documentElement.getBoundingClientRect();
+        return r.height > 100 && chapter.height >= r.bottom - root.top - 1;
+      }),
+    )
+    .toBe(true);
 });

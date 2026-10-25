@@ -636,7 +636,19 @@ img, svg, video {
     };
     const measure = () => {
       const rect = doc.documentElement.getBoundingClientRect();
-      const height = Math.ceil(vertical ? rect.width : rect.height);
+      let start = vertical ? rect.left : rect.top;
+      let end = vertical ? rect.right : rect.bottom;
+      // A picture set outside the flow — a page converted from a fixed
+      // layout: a full-page image positioned over a body with nothing in
+      // it — reaches past the document's box. The chapter is as long as
+      // its pictures, or each would show as a sliver of its top.
+      for (const img of Array.from(doc.images)) {
+        const r = img.getBoundingClientRect();
+        if (!r.width || !r.height) continue;
+        start = Math.min(start, vertical ? r.left : r.top);
+        end = Math.max(end, vertical ? r.right : r.bottom);
+      }
+      const height = Math.ceil(end - start);
       if (height === chapter.height) return false;
       chapter.height = height;
       iframe.style[vertical ? "width" : "height"] = `${height}px`;
@@ -672,6 +684,8 @@ img, svg, video {
       this.#tell("anchor");
     });
     chapter.observer.observe(doc.documentElement);
+    // (A picture outside the flow resizes nothing else as it loads.)
+    for (const img of Array.from(doc.images)) chapter.observer.observe(img);
     this.#o.onoverlayer({
       doc,
       index,
