@@ -608,7 +608,8 @@ test("a page whose picture is set outside the flow is as long as its picture on 
   // A converted picture book: a full-page picture positioned over a body
   // with nothing in the flow — an img, or an svg the book sizes by the
   // viewport (on the strip, the chapter's own frame). Each chapter is
-  // measured by its picture, or each page would show only a sliver of it.
+  // measured by its picture, or each page would show only a sliver of it,
+  // and the page sits in the middle of the strip.
   const bookId = await seedFixture(page.request, BACKGROUND_PAGES_BOOK);
   await openBook(page, bookId, { turn: "scroll" }, BACKGROUND_PAGES_BOOK);
   // (Scrolled through, so every page is on the strip.)
@@ -627,7 +628,14 @@ test("a page whose picture is set outside the flow is as long as its picture on 
           if (!doc || !pic) return false;
           const r = pic.getBoundingClientRect();
           const root = doc.documentElement.getBoundingClientRect();
-          return r.height > 300 && chapter.height >= r.bottom - root.top - 1;
+          // In the middle of the strip, the page moved over whole.
+          const width = doc.documentElement.clientWidth;
+          const middle = Math.abs((r.left + r.right) / 2 - width / 2) < 4;
+          return (
+            r.height > 300 &&
+            chapter.height >= r.bottom - root.top - 1 &&
+            middle
+          );
         });
         return pages.length === 4 && pages.every(Boolean);
       }),

@@ -529,8 +529,12 @@ img, svg, video {
   object-fit: contain;
   box-sizing: border-box;
 }
+/* An svg with a viewBox: its own shape, the strip's width at most (a
+   viewport unit here is the frame's width, which the strip does not
+   change; a percentage inside a page set out of the flow means nothing,
+   and the book's own 99vh is the chapter's height). */
 html body svg[viewBox] {
-  ${vertical ? "height: 100% !important; width: auto !important;" : "width: 100% !important; height: auto !important;"}
+  ${vertical ? "height: 100% !important; width: auto !important;" : "width: 100vw !important; height: auto !important;"}
 }`;
   }
 
@@ -637,6 +641,9 @@ html body svg[viewBox] {
       observer: null as unknown as ResizeObserver,
       unload: () => section.unload(),
     };
+    /** How far a page of pictures set outside the flow is moved over to
+     *  sit in the middle of the strip (see measure). */
+    let shift = 0;
     const measure = () => {
       const rect = doc.documentElement.getBoundingClientRect();
       let start = vertical ? rect.left : rect.top;
@@ -645,11 +652,40 @@ html body svg[viewBox] {
       // layout: a full-page image positioned over a body with nothing in
       // it — reaches past the document's box. The chapter is as long as
       // its pictures, or each would show as a sliver of its top.
+      let outside = false;
+      let left = Infinity;
+      let right = -Infinity;
       for (const pic of Array.from(doc.querySelectorAll("img, svg"))) {
         const r = pic.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         start = Math.min(start, vertical ? r.left : r.top);
         end = Math.max(end, vertical ? r.right : r.bottom);
+        if (r.bottom > rect.bottom + 1) outside = true;
+        left = Math.min(left, r.left - shift);
+        right = Math.max(right, r.right - shift);
+      }
+      // Such a page keeps the place its book gave each thing on it (the
+      // top left corner, mostly): the page is moved whole to the middle,
+      // its pictures and anything set over them together.
+      // (Only a page with nothing else in the flow: a chapter of text is
+      // left where it is, whatever its pictures reach.)
+      const flow = doc.body?.getBoundingClientRect();
+      if (!vertical) {
+        const width = doc.documentElement.clientWidth;
+        const next =
+          outside && (!flow || flow.height < 40) && right > left
+            ? Math.max(0, Math.round((width - (right - left)) / 2 - left))
+            : 0;
+        if (next !== shift) {
+          shift = next;
+          if (next)
+            doc.documentElement.style.setProperty(
+              "translate",
+              `${next}px 0`,
+              "important",
+            );
+          else doc.documentElement.style.removeProperty("translate");
+        }
       }
       const height = Math.ceil(end - start);
       if (height === chapter.height) return false;
