@@ -605,25 +605,31 @@ test("a jump to the element a chapter opens with gives the chapter from its edge
 test("a page whose picture is set outside the flow is as long as its picture on the strip", async ({
   page,
 }) => {
-  // A converted picture book: a full-page image positioned over a body
-  // with nothing in the flow. The chapter is measured by its picture, or
-  // each page would show only a sliver of it.
+  // A converted picture book: a full-page picture positioned over a body
+  // with nothing in the flow — an img, or an svg the book sizes by the
+  // viewport (on the strip, the chapter's own frame). Each chapter is
+  // measured by its picture, or each page would show only a sliver of it.
   const bookId = await seedFixture(page.request, BACKGROUND_PAGES_BOOK);
   await openBook(page, bookId, { turn: "scroll" }, BACKGROUND_PAGES_BOOK);
+  // (Scrolled through, so every page is on the strip.)
+  for (let i = 0; i < 8; i++) await page.mouse.wheel(0, 900);
   await expect
     .poll(() =>
       page.evaluate(() => {
         const s = window.__beepubReaderNG.core.strip;
-        const chapter = (s.chapters as { index: number; height: number }[])[0];
-        const frame = s.scroller.querySelector(
-          `[data-index="${chapter.index}"] iframe`,
-        ) as HTMLIFrameElement | null;
-        const doc = frame?.contentDocument;
-        const img = doc?.images[0];
-        if (!doc || !img) return false;
-        const r = img.getBoundingClientRect();
-        const root = doc.documentElement.getBoundingClientRect();
-        return r.height > 100 && chapter.height >= r.bottom - root.top - 1;
+        const chapters = s.chapters as { index: number; height: number }[];
+        const pages = chapters.map((chapter) => {
+          const frame = s.scroller.querySelector(
+            `[data-index="${chapter.index}"] iframe`,
+          ) as HTMLIFrameElement | null;
+          const doc = frame?.contentDocument;
+          const pic = doc?.querySelector("img, svg");
+          if (!doc || !pic) return false;
+          const r = pic.getBoundingClientRect();
+          const root = doc.documentElement.getBoundingClientRect();
+          return r.height > 300 && chapter.height >= r.bottom - root.top - 1;
+        });
+        return pages.length === 4 && pages.every(Boolean);
       }),
     )
     .toBe(true);

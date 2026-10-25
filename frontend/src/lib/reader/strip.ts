@@ -528,6 +528,9 @@ img, svg, video {
   max-height: ${vertical ? "100%" : `${Math.round(this.#scroller.clientHeight * 0.9)}px`} !important;
   object-fit: contain;
   box-sizing: border-box;
+}
+html body svg[viewBox] {
+  ${vertical ? "height: 100% !important; width: auto !important;" : "width: 100% !important; height: auto !important;"}
 }`;
   }
 
@@ -642,8 +645,8 @@ img, svg, video {
       // layout: a full-page image positioned over a body with nothing in
       // it — reaches past the document's box. The chapter is as long as
       // its pictures, or each would show as a sliver of its top.
-      for (const img of Array.from(doc.images)) {
-        const r = img.getBoundingClientRect();
+      for (const pic of Array.from(doc.querySelectorAll("img, svg"))) {
+        const r = pic.getBoundingClientRect();
         if (!r.width || !r.height) continue;
         start = Math.min(start, vertical ? r.left : r.top);
         end = Math.max(end, vertical ? r.right : r.bottom);
@@ -685,7 +688,8 @@ img, svg, video {
     });
     chapter.observer.observe(doc.documentElement);
     // (A picture outside the flow resizes nothing else as it loads.)
-    for (const img of Array.from(doc.images)) chapter.observer.observe(img);
+    for (const pic of Array.from(doc.querySelectorAll("img, svg")))
+      chapter.observer.observe(pic);
     this.#o.onoverlayer({
       doc,
       index,

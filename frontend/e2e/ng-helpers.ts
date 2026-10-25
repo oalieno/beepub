@@ -596,12 +596,13 @@ export const CURL_BOOK: Fixture = {
 };
 
 /** Four pages converted from a fixed layout, as Calibre leaves a
- *  picture book: each a full-page picture positioned over an empty body,
+ *  picture book: each a full-page picture (an img, or an svg sized by
+ *  the viewport, every other page) positioned over an empty body,
  *  its text hidden in a span — nothing in the flow, and no declared
  *  layout. */
 export const BACKGROUND_PAGES_BOOK: Fixture = {
   file: "e2e-river-lamp-picture-pages.epub",
-  title: "河邊燈影繪本",
+  title: "河邊燈影繪本 二",
   readyText: "月光照在小河上",
 };
 
