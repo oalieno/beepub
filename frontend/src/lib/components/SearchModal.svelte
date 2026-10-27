@@ -14,7 +14,20 @@
   import { untrack } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
   import * as Dialog from "$lib/components/ui/dialog";
-  import { Search, BookOpen, FileText, TextSearch, X } from "@lucide/svelte";
+  import {
+    getHistory,
+    recordSearch,
+    removeSearch,
+    clearHistory,
+  } from "$lib/stores/searchHistory";
+  import {
+    Search,
+    BookOpen,
+    FileText,
+    TextSearch,
+    X,
+    History,
+  } from "@lucide/svelte";
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -48,6 +61,42 @@
   let keyword = $state<SearchState<KeywordSearchResult>>(createSearchState());
 
   let selectedIndex = $state(-1);
+
+  // Recent searches, shown while the input is empty. Recorded only when
+  // a search is submitted (Enter) or one of its results is opened —
+  // never while typing.
+  let history = $state<string[]>([]);
+  let showHistory = $derived(!query.trim() && history.length > 0);
+
+  function remember(q: string) {
+    history = recordSearch(q);
+  }
+
+  function runTabSearch() {
+    if (activeTab === "books") doBookSearch();
+    else if (activeTab === "content") doContentSearch();
+    else doKeywordSearch();
+  }
+
+  function pickHistory(term: string) {
+    query = term;
+    selectedIndex = -1;
+    clearTimeout(debounceTimer);
+    runTabSearch();
+    setTimeout(() => inputEl?.focus(), 10);
+  }
+
+  function forgetHistory(term: string) {
+    history = removeSearch(term);
+    selectedIndex = -1;
+    inputEl?.focus();
+  }
+
+  function forgetAllHistory() {
+    history = clearHistory();
+    selectedIndex = -1;
+    inputEl?.focus();
+  }
 
   // One request per tab at a time, and only the newest may touch the
   // state. A request the user has typed past is aborted, so that the
@@ -194,6 +243,8 @@
   // in-between state (query set, loading not yet) rendered the empty
   // state for a frame.
   function handleInput(e: Event) {
+    // A highlight on a recent search is not a highlight on a result.
+    if (showHistory) selectedIndex = -1;
     query = (e.currentTarget as HTMLInputElement).value;
     clearTimeout(debounceTimer);
     if (activeTab === "books") {
@@ -212,6 +263,7 @@
   }
 
   function selectBookResult(result: BookOut) {
+    remember(books.forQuery || query);
     open = false;
     goto(`/books/${result.id}`);
   }
@@ -219,6 +271,8 @@
   function selectContentResult(
     result: SemanticSearchResult | KeywordSearchResult,
   ) {
+    const tab = activeTab === "content" ? content : keyword;
+    remember(tab.forQuery || query);
     open = false;
     goto(`/books/${result.book_id}`);
   }
@@ -238,6 +292,7 @@
   }
 
   function currentResults(): number {
+    if (showHistory) return history.length;
     if (activeTab === "books") return books.results.length;
     if (activeTab === "content") return content.results.length;
     return keyword.results.length;
@@ -262,7 +317,9 @@
       selectedIndex = Math.max(selectedIndex - 1, -1);
     } else if (e.key === "Enter" && selectedIndex >= 0) {
       e.preventDefault();
-      if (activeTab === "books" && books.results[selectedIndex]) {
+      if (showHistory) {
+        if (history[selectedIndex]) pickHistory(history[selectedIndex]);
+      } else if (activeTab === "books" && books.results[selectedIndex]) {
         selectBookResult(books.results[selectedIndex]);
       } else if (activeTab === "content" && content.results[selectedIndex]) {
         selectContentResult(content.results[selectedIndex]);
@@ -277,6 +334,7 @@
       const q = query.trim();
       if (!q) return;
       e.preventDefault();
+      remember(q);
       if (activeTab === "books") {
         openLibrarySearch(q);
       } else if (activeTab === "content") {
@@ -302,6 +360,7 @@
         keyword = createSearchState();
         selectedIndex = -1;
         activeTab = "books";
+        history = getHistory();
         if (prefill) doBookSearch();
         setTimeout(() => inputEl?.focus(), 50);
       });
@@ -388,6 +447,7 @@
               books = createSearchState();
               content = createSearchState();
               keyword = createSearchState();
+              selectedIndex = -1;
               inputEl?.focus();
             }}
           >
@@ -399,6 +459,49 @@
           >↵</kbd
         >
       </div>
+
+      {#if showHistory}
+        <!-- Recent searches (input empty) -->
+        <div class={activeTab === "books" ? "" : "border-b border-border/50"}>
+          <div class="flex items-center justify-between px-4 pt-2.5 pb-1">
+            <p class="text-xs text-muted-foreground">{m.search_recent()}</p>
+            <button
+              class="text-xs text-muted-foreground hover:text-foreground"
+              onclick={forgetAllHistory}
+            >
+              {m.search_history_clear()}
+            </button>
+          </div>
+          <ul
+            class="max-h-[40vh] overflow-y-auto pb-1"
+            aria-label={m.search_recent()}
+            onmouseleave={() => (selectedIndex = -1)}
+          >
+            {#each history as term, i (term)}
+              <li
+                class="flex items-center hover:bg-secondary/50 transition-colors
+                  {i === selectedIndex ? 'bg-secondary/70' : ''}"
+                onmouseenter={() => (selectedIndex = i)}
+              >
+                <button
+                  class="flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 py-2.5 text-left"
+                  onclick={() => pickHistory(term)}
+                >
+                  <History size={16} class="text-muted-foreground shrink-0" />
+                  <span class="text-sm text-foreground truncate">{term}</span>
+                </button>
+                <button
+                  class="shrink-0 px-4 py-2.5 text-muted-foreground hover:text-foreground"
+                  aria-label={m.search_history_remove()}
+                  onclick={() => forgetHistory(term)}
+                >
+                  <X size={14} />
+                </button>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      {/if}
 
       <!-- Results -->
       {#if activeTab === "books"}

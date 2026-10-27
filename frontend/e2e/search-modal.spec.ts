@@ -212,6 +212,14 @@ test("a result picked with the arrow keys is opened by Enter", async ({
   await input.press("ArrowDown");
   await input.press("Enter");
   await expect(page).toHaveURL(bookPage);
+  // Opening a result remembers the search that found it.
+  await openSearch(page);
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("list", { name: "Recent searches" })
+      .getByRole("listitem"),
+  ).toHaveText(["E2E Test"]);
 });
 
 test("typing on aborts the search it has made pointless", async ({ page }) => {
@@ -349,4 +357,187 @@ test("the modal lists the first books of the library search, in its order", asyn
     ).toEqual(answer.items.map((b: { id: string }) => b.id));
     expect(list.total, q).toBe(answer.total);
   }
+});
+
+/**
+ * Recent searches: kept per account on this device, newest first, and
+ * shown under the empty input. A search is remembered when it is
+ * submitted (Enter) or one of its results is opened — never while
+ * typing. (Invented search terms only.)
+ */
+
+async function userId(page: Page): Promise<string> {
+  const me = await page.request.get("/api/auth/me");
+  expect(me.ok()).toBe(true);
+  return (await me.json()).id;
+}
+
+/** Plant a history list under `key` before the app reads it. */
+async function seedHistory(page: Page, key: string, terms: string[]) {
+  await page.evaluate(([k, v]) => localStorage.setItem(k, v), [
+    key,
+    JSON.stringify(terms),
+  ] as const);
+}
+
+function recentList(page: Page) {
+  return page
+    .getByRole("dialog")
+    .getByRole("list", { name: "Recent searches" });
+}
+
+test("a search submitted with Enter is remembered; typing alone is not", async ({
+  page,
+}) => {
+  await page.goto("/");
+  let input = await openSearch(page);
+  // Nothing remembered yet: the empty input shows nothing.
+  await expect(recentList(page)).toHaveCount(0);
+
+  // Typed (and searched as you type) but never submitted.
+  await input.fill("marmalade orbit");
+  await page.waitForTimeout(800);
+  await page.keyboard.press("Escape");
+  input = await openSearch(page);
+  await expect(recentList(page)).toHaveCount(0);
+
+  // Submitted.
+  await input.fill("zephyr quill");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/libraries\/all\?search=zephyr/);
+  input = await openSearch(page);
+  await expect(input).toHaveValue("");
+  const list = recentList(page);
+  await expect(list.getByRole("listitem")).toHaveText(["zephyr quill"]);
+
+  // Stored under this account's own key.
+  const id = await userId(page);
+  const stored = await page.evaluate(
+    (k) => localStorage.getItem(k),
+    `search-history:${id}`,
+  );
+  expect(JSON.parse(stored ?? "[]")).toEqual(["zephyr quill"]);
+
+  // A repeat, spelled differently, moves to the front with its new
+  // spelling rather than appearing twice.
+  await input.fill("cobalt fern");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/search=cobalt/);
+  input = await openSearch(page);
+  await input.fill("Zephyr Quill");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/search=Zephyr/);
+  await openSearch(page);
+  await expect(recentList(page).getByRole("listitem")).toHaveText([
+    "Zephyr Quill",
+    "cobalt fern",
+  ]);
+
+  // And it survives a reload.
+  await page.reload();
+  await openSearch(page);
+  await expect(recentList(page).getByRole("listitem")).toHaveText([
+    "Zephyr Quill",
+    "cobalt fern",
+  ]);
+});
+
+test("a recent search is run again by a click or by the keyboard", async ({
+  page,
+}) => {
+  const asked: string[] = [];
+  await page.route("**/api/search/keyword*", async (route) => {
+    asked.push(new URL(route.request().url()).searchParams.get("q") ?? "");
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({ query: "", total: 0, results: [] }),
+    });
+  });
+  await page.goto("/");
+  await seedHistory(page, `search-history:${await userId(page)}`, [
+    "velvet comet",
+    "tin harbor",
+  ]);
+  const input = await openSearch(page);
+  await page.getByRole("tab", { name: "Full Text" }).click();
+  const list = recentList(page);
+  await expect(list.getByRole("listitem")).toHaveText([
+    "velvet comet",
+    "tin harbor",
+  ]);
+  // The tab's own hint is still there, under the list.
+  await expect(
+    page.getByRole("dialog").getByText("Type a word or phrase and press Enter"),
+  ).toBeVisible();
+
+  await list.getByRole("button", { name: "tin harbor" }).click();
+  await expect(input).toHaveValue("tin harbor");
+  await expect(input).toBeFocused();
+  await expect.poll(() => asked).toEqual(["tin harbor"]);
+  await expect(list).toHaveCount(0);
+
+  // Back to empty: the arrows walk the list, Enter runs the pick.
+  await page.getByRole("dialog").getByRole("button", { name: "Clear" }).click();
+  await expect(list).toBeVisible();
+  await input.press("ArrowDown");
+  await input.press("ArrowDown");
+  await input.press("ArrowUp");
+  await input.press("Enter");
+  await expect(input).toHaveValue("velvet comet");
+  await expect.poll(() => asked).toEqual(["tin harbor", "velvet comet"]);
+});
+
+test("recent searches are removed one at a time or all at once, and belong to one account", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const id = await userId(page);
+  await seedHistory(page, `search-history:${id}`, [
+    "amber lattice",
+    "quiet anvil",
+    "paper moth",
+  ]);
+  // Another account's list on the same device.
+  await seedHistory(
+    page,
+    "search-history:00000000-0000-4000-8000-00000000beef",
+    ["someone else's term"],
+  );
+  await openSearch(page);
+  const list = recentList(page);
+  await expect(list.getByRole("listitem")).toHaveText([
+    "amber lattice",
+    "quiet anvil",
+    "paper moth",
+  ]);
+  await expect(
+    page.getByRole("dialog").getByText("someone else's term"),
+  ).toHaveCount(0);
+
+  await list
+    .getByRole("listitem")
+    .filter({ hasText: "quiet anvil" })
+    .getByRole("button", { name: "Remove from recent searches" })
+    .click();
+  await expect(list.getByRole("listitem")).toHaveText([
+    "amber lattice",
+    "paper moth",
+  ]);
+
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Clear", exact: true })
+    .click();
+  await expect(list).toHaveCount(0);
+  await expect(page.getByText("Recent searches")).toHaveCount(0);
+  const stored = await page.evaluate(
+    (k) => localStorage.getItem(k),
+    `search-history:${id}`,
+  );
+  expect(JSON.parse(stored ?? "[]")).toEqual([]);
+  // The other account's list is left alone.
+  const other = await page.evaluate(() =>
+    localStorage.getItem("search-history:00000000-0000-4000-8000-00000000beef"),
+  );
+  expect(JSON.parse(other ?? "[]")).toEqual(["someone else's term"]);
 });
