@@ -199,6 +199,9 @@
 
 .prose-description {
   line-height: 1.75;
+  /* A run with no break opportunity — a divider of ░ shade blocks, a long
+     URL — wraps instead of widening the page. */
+  overflow-wrap: anywhere;
 }
 .prose-description p {
   margin-bottom: 0.75em;
