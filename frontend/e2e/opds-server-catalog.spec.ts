@@ -115,7 +115,13 @@ test("a full page of covers from the server's own catalog loads", async ({
           const imgs = [...document.querySelectorAll("main img")];
           return (
             imgs.length > 0 &&
-            imgs.every((img) => (img as HTMLImageElement).naturalWidth > 1)
+            // A broken image has no width; a fixture's 1×1 cover is
+            // still a cover that loaded.
+            imgs.every(
+              (img) =>
+                (img as HTMLImageElement).complete &&
+                (img as HTMLImageElement).naturalWidth > 0,
+            )
           );
         }),
       { timeout: 30_000 },

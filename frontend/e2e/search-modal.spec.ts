@@ -136,7 +136,11 @@ test("Enter with results on screen goes to the library search, not into the firs
   await expect(first).toBeVisible({ timeout: 10_000 });
 
   await input.press("Enter");
-  await expect(page).toHaveURL(/\/libraries\/all\?search=E2E(%20|\+)Test$/);
+  // The library then writes the relevance sort it searches by into the
+  // address — often before this looks.
+  await expect(page).toHaveURL(
+    /\/libraries\/all\?search=E2E(%20|\+)Test(&sort=relevance%3Aasc)?$/,
+  );
   await expect(page.getByRole("dialog")).toBeHidden();
   await expect(page.getByPlaceholder("Search all libraries...")).toHaveValue(
     "E2E Test",
