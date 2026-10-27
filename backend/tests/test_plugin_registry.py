@@ -59,6 +59,7 @@ def test_cover_hosts_union_covers_the_known_hosts():
             "cdn.readmoo.com",
             "assets.hardcover.app",
             "cdn.kingstone.com.tw",
+            "assets.kingstone.com.tw",
             "res1.pubu.tw",
             "res2.pubu.tw",
             "res3.pubu.tw",

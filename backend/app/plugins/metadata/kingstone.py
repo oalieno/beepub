@@ -60,7 +60,8 @@ class KingstonePlugin(MetadataPlugin):
             "tags",
         }
     )
-    cover_hosts = frozenset({"cdn.kingstone.com.tw"})
+    # Older listings keep their cover on assets.kingstone.com.tw.
+    cover_hosts = frozenset({"cdn.kingstone.com.tw", "assets.kingstone.com.tw"})
     url_prefix = "https://www.kingstone.com.tw/basic/"
     id_pattern = r"^\d+/?$"
     id_hint = "e.g. 2018612590237"
