@@ -16,10 +16,17 @@
   } = $props();
 
   // EPUBs carry BCP-47 codes ("zh-TW") — show the human name instead.
+  // Chinese is named by its script, not its region: zh-CN is 簡體中文,
+  // not 中文（中國）; zh-TW and zh-HK are 繁體中文. A bare "zh" stays 中文.
   function languageName(code: string): string {
     try {
+      const locale = new Intl.Locale(code);
+      const named =
+        locale.language === "zh" && (locale.region || locale.script)
+          ? `zh-${locale.maximize().script}`
+          : code;
       return (
-        new Intl.DisplayNames([getLocale()], { type: "language" }).of(code) ??
+        new Intl.DisplayNames([getLocale()], { type: "language" }).of(named) ??
         code
       );
     } catch {
