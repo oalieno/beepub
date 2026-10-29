@@ -48,11 +48,13 @@
     download: m.transfers_active_download,
     import: m.transfers_active_import,
     upload: m.transfers_active_upload,
+    convert: m.transfers_active_convert,
   };
   const doneLabel: Record<TransferKind, () => string> = {
     download: m.transfers_row_downloaded,
     import: m.transfers_row_imported,
     upload: m.transfers_row_uploaded,
+    convert: m.transfers_row_converted,
   };
 
   let summary = $derived.by(() => {

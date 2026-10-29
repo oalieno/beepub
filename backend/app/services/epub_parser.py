@@ -6,6 +6,48 @@ from app.services.storage import save_cover_bytes
 from app.vendor import ebooklib
 from app.vendor.ebooklib import epub
 
+_HANT_REGIONS = {"TW", "HK", "MO"}
+
+
+def _script_of(code: str) -> str | None:
+    """'ja', 'zh-Hans' or 'zh-Hant' for a declared language, None for any
+    other — a bare 'zh' names no script."""
+    parts = code.replace("_", "-").split("-")
+    language = parts[0].lower()
+    if language == "ja":
+        return "ja"
+    if language != "zh" or len(parts) == 1:
+        return None
+    rest = {p.upper() for p in parts[1:]}
+    if "HANT" in rest or rest & _HANT_REGIONS:
+        return "zh-Hant"
+    return "zh-Hans"
+
+
+_DETECTED_SCRIPT = {"ja": "ja", "zh-CN": "zh-Hans", "zh-TW": "zh-Hant"}
+
+
+def book_language(declared: list[str], file_path: str) -> str | None:
+    """The book's language: what the package declares, unless its text is
+    plainly Chinese or Japanese and no declared language says so. Tools
+    stamp 'en' on books they know nothing about (calibre's default), and
+    a package may list several."""
+    from app.services.txt2epub import detect_language
+    from app.services.zh_epub import sample_text
+
+    values = [v.strip() for v in declared if v and v.strip().lower() != "und"]
+    try:
+        detected = detect_language(sample_text(file_path), "utf-8")
+    except Exception:
+        detected = None
+    script = _DETECTED_SCRIPT.get(detected or "")
+    if script:
+        return next((v for v in values if _script_of(v) == script), detected)
+    if detected == "zh":
+        # Chinese of no clear script: any declared Chinese says more.
+        return next((v for v in values if v.lower().startswith("zh")), "zh")
+    return values[0] if values else None
+
 
 def is_valid_isbn(value: str) -> bool:
     """ISBN-10 or ISBN-13 with a correct check digit. An unschemed
@@ -55,8 +97,9 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
             result["epub_publisher"] = publisher[0][0]
 
         language = book.get_metadata("DC", "language")
-        if language:
-            result["epub_language"] = language[0][0]
+        result["epub_language"] = book_language(
+            [value for value, _ in language or []], file_path
+        )
 
         description = book.get_metadata("DC", "description")
         if description:

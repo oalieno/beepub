@@ -13,6 +13,7 @@
   import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
   import SplashIntro from "$lib/components/SplashIntro.svelte";
   import OpenedFilesDialog from "$lib/components/OpenedFilesDialog.svelte";
+  import ZhUploadPrompt from "$lib/components/ZhUploadPrompt.svelte";
   import { SplashScreen } from "@capacitor/splash-screen";
   import type { Snippet } from "svelte";
   import type { UserOut } from "$lib/types";
@@ -127,6 +128,10 @@
        the reader. Before sign-in they wait in the inbox. -->
   {#if isLocalMode() || $authStore.user}
     <OpenedFilesDialog />
+  {/if}
+  <!-- Asked after an upload with Simplified Chinese books, on any page. -->
+  {#if $authStore.user}
+    <ZhUploadPrompt />
   {/if}
 {/if}
 {#if showIntro}

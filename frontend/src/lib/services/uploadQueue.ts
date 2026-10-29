@@ -9,6 +9,10 @@ import { writable } from "svelte/store";
 import { booksApi } from "$lib/api/books";
 import type { LocalBookEntry } from "$lib/services/localLibrary";
 import {
+  noteSimplifiedUploads,
+  type PendingBook,
+} from "$lib/services/zhConvert";
+import {
   addTransfer,
   removeTransfer,
   updateTransfer,
@@ -17,7 +21,12 @@ import {
 interface UploadTask {
   title: string;
   /** The book on the server afterwards; duplicate = it was already there. */
-  run: () => Promise<{ status: "done" | "duplicate"; bookId: string }>;
+  run: () => Promise<{
+    status: "done" | "duplicate";
+    bookId: string;
+    /** The new book reads as Simplified Chinese (see zhConvert). */
+    simplified?: PendingBook;
+  }>;
 }
 
 /** Set when a batch into a library finishes with something new in it. */
@@ -36,10 +45,14 @@ function enqueue(libraryId: string, tasks: UploadTask[]): void {
   // One upload at a time, batches in the order they were started.
   chain = chain.then(async () => {
     let landed = 0;
+    const simplified: PendingBook[] = [];
     for (const { task, transferId } of rows) {
-      if (await runOne(task, transferId, libraryId)) landed++;
+      const result = await runOne(task, transferId, libraryId);
+      if (result?.status === "done") landed++;
+      if (result?.simplified) simplified.push(result.simplified);
     }
     if (landed > 0) libraryUploaded.set({ libraryId, at: Date.now() });
+    noteSimplifiedUploads(simplified);
   });
 }
 
@@ -47,12 +60,15 @@ async function runOne(
   task: UploadTask,
   transferId: string,
   libraryId: string,
-): Promise<boolean> {
+): Promise<Awaited<ReturnType<UploadTask["run"]>> | null> {
   updateTransfer(transferId, { status: "running" });
   try {
-    const { status, bookId } = await task.run();
-    updateTransfer(transferId, { status, href: `/books/${bookId}` });
-    return status === "done";
+    const result = await task.run();
+    updateTransfer(transferId, {
+      status: result.status,
+      href: `/books/${result.bookId}`,
+    });
+    return result;
   } catch (e) {
     updateTransfer(transferId, {
       status: "failed",
@@ -62,7 +78,7 @@ async function runOne(
         enqueue(libraryId, [task]);
       },
     });
-    return false;
+    return null;
   }
 }
 
@@ -72,10 +88,16 @@ export function uploadFiles(files: File[], libraryId: string): void {
     libraryId,
     files.map((file) => ({
       title: file.name,
-      run: async () => ({
-        status: "done",
-        bookId: (await booksApi.upload(file, libraryId)).id,
-      }),
+      run: async () => {
+        const book = await booksApi.upload(file, libraryId);
+        return {
+          status: "done",
+          bookId: book.id,
+          simplified: book.zh_simplified
+            ? { id: book.id, title: book.display_title ?? file.name }
+            : undefined,
+        };
+      },
     })),
   );
 }

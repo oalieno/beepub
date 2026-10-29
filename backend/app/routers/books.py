@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import os
 import re
+import shutil
 import uuid
 import zipfile
 from datetime import UTC, date, datetime, timedelta
@@ -32,7 +33,7 @@ from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata
 from app.models.book_text import BookTextChunk
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
-from app.models.reading import ReadingActivity, UserBookInteraction
+from app.models.reading import Highlight, ReadingActivity, UserBookInteraction
 from app.models.tag import BookTag
 from app.models.user import User, UserRole
 from app.plugins.metadata import BookQuery, Clue
@@ -57,7 +58,9 @@ from app.schemas.book import (
     SeriesBookBrief,
     SeriesNeighborsOut,
     SeriesProgress,
+    ZhConversionPreview,
     ZhConversionRequest,
+    ZhConversionSegment,
 )
 from app.schemas.reading import (
     ReadingActivityOut,
@@ -80,10 +83,23 @@ from app.services.storage import (
     download_cover,
     get_book_path,
     get_cover_path,
+    get_kept_epub_path,
     save_cover_bytes,
     save_upload_file,
 )
-from app.services.txt2epub import EmptyTextError, convert_txt_to_epub
+from app.services.txt2epub import (
+    EmptyTextError,
+    convert_txt_to_epub,
+    detect_language,
+)
+from app.services.zh_epub import (
+    Quote,
+    convert_epub,
+    convert_highlight,
+    preview,
+    sample_text,
+    section_of,
+)
 from app.tasks.auto_tag import auto_tag_book
 from app.tasks.metadata import fetch_book_metadata, fetch_metadata_source
 from app.tasks.text_extract import extract_book_text
@@ -173,6 +189,18 @@ async def _validate_upload_library(
     return lib_id
 
 
+def _is_simplified(file_path: str) -> bool:
+    """Whether the book's text reads as Simplified Chinese — by its
+    characters, not its declared language, which is often wrong. Such a
+    book is reported in the upload response and the uploader is asked
+    whether to convert it: never converted unasked."""
+    try:
+        return detect_language(sample_text(file_path), "utf-8") == "zh-CN"
+    except Exception:
+        logger.exception("Could not sample %s for its script", file_path)
+        return False
+
+
 async def _ingest_epub(
     file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
 ) -> Book:
@@ -189,6 +217,7 @@ async def _ingest_epub(
     try:
         # EPUB parsing is blocking zip/XML work — keep it off the event loop
         # (a bulk upload would otherwise stall every other request).
+        simplified = await asyncio.to_thread(_is_simplified, file_path)
         metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
         cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
     except Exception:
@@ -209,6 +238,7 @@ async def _ingest_epub(
         added_by=user.id,
         **metadata,
     )
+    book.zh_simplified = simplified
     db.add(book)
     await db.flush()
     if lib_id:
@@ -234,12 +264,9 @@ async def _ingest_txt(
     await save_upload_file(file, original_path)
     try:
         await asyncio.to_thread(
-            convert_txt_to_epub,
-            original_path,
-            file_path,
-            title_hint,
-            user.upload_zh_conversion,
+            convert_txt_to_epub, original_path, file_path, title_hint
         )
+        simplified = await asyncio.to_thread(_is_simplified, file_path)
         metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
     except EmptyTextError:
         delete_file(original_path)
@@ -261,6 +288,7 @@ async def _ingest_txt(
         added_by=user.id,
         **metadata,
     )
+    book.zh_simplified = simplified
     db.add(book)
     await db.flush()
     if lib_id:
@@ -283,6 +311,7 @@ async def _ingest_mobi(
     await save_upload_file(file, original_path)
     try:
         await asyncio.to_thread(convert_mobi_to_epub, original_path, file_path)
+        simplified = await asyncio.to_thread(_is_simplified, file_path)
         metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
         cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
     except DrmProtectedError:
@@ -305,6 +334,7 @@ async def _ingest_mobi(
         added_by=user.id,
         **metadata,
     )
+    book.zh_simplified = simplified
     db.add(book)
     await db.flush()
     if lib_id:
@@ -1651,6 +1681,47 @@ async def get_book_file(
     )
 
 
+async def _convertible_book(book_id: uuid.UUID, user: User, db: AsyncSession) -> Book:
+    _require_upload_permission(user)
+    book = await _get_book_with_access(book_id, user, db)
+    if book.is_image_book or not book.file_path or not os.path.exists(book.file_path):
+        raise HTTPException(status_code=409, detail="This book has no text to convert")
+    # A Calibre library's files are Calibre's: never rewritten here.
+    if book.calibre_id is not None:
+        raise HTTPException(
+            status_code=409, detail="Books in a Calibre library cannot be converted"
+        )
+    return book
+
+
+def _live_highlights(book_id: uuid.UUID):
+    return select(Highlight).where(
+        Highlight.book_id == book_id, Highlight.deleted_at.is_(None)
+    )
+
+
+@router.get("/{book_id}/zh-conversion", response_model=ZhConversionPreview)
+async def preview_book_zh(
+    book_id: uuid.UUID,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """What converting the book would do: a sentence of it, piece by piece
+    under both modes (none when nothing would change), and how many
+    highlights — every reader's, since the file is shared — go along."""
+    book = await _convertible_book(book_id, current_user, db)
+    segments = await asyncio.to_thread(preview, book.file_path)
+    count = await db.scalar(
+        select(func.count()).select_from(_live_highlights(book.id).subquery())
+    )
+    return ZhConversionPreview(
+        segments=[ZhConversionSegment(**vars(s)) for s in segments]
+        if segments
+        else None,
+        highlights=count or 0,
+    )
+
+
 @router.post("/{book_id}/zh-conversion", response_model=BookOut)
 async def convert_book_zh(
     book_id: uuid.UUID,
@@ -1658,46 +1729,68 @@ async def convert_book_zh(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    """Rebuild a TXT book's EPUB from its source as Traditional Chinese.
-    The text is converted whatever its detected script, since the reader
-    asked; a book that is already Traditional comes out unchanged."""
-    _require_upload_permission(current_user)
-    book = await _get_book_with_access(book_id, current_user, db)
-    if (
-        book.format != "txt"
-        or not book.original_path
-        or not os.path.exists(book.original_path)
-    ):
-        raise HTTPException(
-            status_code=409, detail="Only books imported from TXT can be converted"
-        )
-    file_path = book.file_path or get_book_path(book.id, "book.epub")
+    """Rewrite the book's EPUB as Traditional Chinese, whatever script it
+    was detected as, since the reader asked. The first conversion keeps the
+    file as it was (an EPUB upload has no other copy). Highlights are
+    carried over: each one's quote is cut from the converted text, so the
+    reader re-finds the ones whose offsets moved."""
+    book = await _convertible_book(book_id, current_user, db)
+    file_path = book.file_path
     tmp_path = file_path + ".tmp"
-    title_hint = book.epub_title or book.title or ""
     try:
-        await asyncio.to_thread(
-            convert_txt_to_epub,
-            book.original_path,
-            tmp_path,
-            title_hint,
-            body.mode,
-            True,
-        )
+        result = await asyncio.to_thread(convert_epub, file_path, tmp_path, body.mode)
         metadata = await asyncio.to_thread(parse_epub_metadata, tmp_path)
     except Exception:
+        logger.exception("Conversion failed: %s", book.id)
         delete_file(tmp_path)
-        raise HTTPException(status_code=400, detail="Invalid TXT file")
+        raise HTTPException(status_code=400, detail="The book could not be converted")
+    if not result.changed:
+        delete_file(tmp_path)
+        return book
+    if not book.original_path:
+        original_path = get_kept_epub_path(book.id)
+        await asyncio.to_thread(shutil.copyfile, file_path, original_path)
+        book.original_path = original_path
     os.replace(tmp_path, file_path)
-    book.file_path = file_path
     book.file_size = os.path.getsize(file_path)
     book.partial_md5 = await asyncio.to_thread(compute_partial_md5, file_path)
-    for key in ("epub_title", "epub_authors", "epub_language"):
+    for key in _CONVERTED_METADATA:
         setattr(book, key, metadata.get(key))
-    book.updated_at = datetime.now(UTC)
+    now = datetime.now(UTC)
+    book.updated_at = now
+    for highlight in (await db.scalars(_live_highlights(book.id))).all():
+        quote = convert_highlight(
+            Quote(highlight.text, highlight.prefix, highlight.suffix),
+            result,
+            section_of(highlight.cfi_range, highlight.section_index),
+            body.mode,
+        )
+        if (quote.text, quote.prefix, quote.suffix) != (
+            highlight.text,
+            highlight.prefix,
+            highlight.suffix,
+        ):
+            highlight.text = quote.text
+            highlight.prefix = quote.prefix
+            highlight.suffix = quote.suffix
+            # Devices pull highlights newer than theirs.
+            highlight.updated_at = now
     await db.commit()
     await db.refresh(book)
     extract_book_text.delay(str(book.id))
     return book
+
+
+# What conversion rewrites in the package metadata.
+_CONVERTED_METADATA = (
+    "epub_title",
+    "epub_authors",
+    "epub_publisher",
+    "epub_language",
+    "epub_description",
+    "epub_series",
+    "epub_tags",
+)
 
 
 @router.get("/{book_id}/original")

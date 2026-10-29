@@ -74,6 +74,7 @@
   import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import BackToTop from "$lib/components/BackToTop.svelte";
   import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
+  import ZhConvertDialog from "$lib/components/ZhConvertDialog.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   function newInteraction(
@@ -110,7 +111,6 @@
   // Uploaded as TXT/MOBI/AZW3 and converted at ingest: the file behind the
   // book is the EPUB, and the source is offered separately (web only — the
   // app's "download to phone" wants the EPUB).
-  let isTxt = $derived(book?.format === "txt");
   let isConverted = $derived(
     ["txt", "mobi", "azw3", "cbz"].includes(book?.format ?? ""),
   );
@@ -173,29 +173,25 @@
   );
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
-  // TXT books can be rebuilt from their source as Traditional Chinese.
-  let canConvertZh = $derived(
-    isTxt &&
-      book?.epub_language !== "zh-TW" &&
-      (isAdmin || $authStore.user?.can_upload),
-  );
-  let convertingZh = $state(false);
-  async function convertZh() {
-    if (!book || convertingZh) return;
-    convertingZh = true;
+  // A book whose text may be Simplified Chinese can be converted. Chinese
+  // is told by its script: zh-TW/zh-HK/zh-Hant are already Traditional, a
+  // bare "zh" may be either (the dialog's preview shows which).
+  let canConvertZh = $derived.by(() => {
+    // A Calibre library's files are Calibre's to change.
+    if (!book || isPhysical || book.is_image_book || book.calibre_id != null)
+      return false;
+    if (!(isAdmin || $authStore.user?.can_upload)) return false;
     try {
-      await booksApi.convertZh(
-        bookId,
-        $authStore.user?.upload_zh_conversion ?? "s2tw",
-      );
-      toastStore.success(m.book_convert_zh_done());
-      await loadData();
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    } finally {
-      convertingZh = false;
+      const locale = new Intl.Locale(book.epub_language ?? "");
+      return locale.language === "zh" && locale.maximize().script !== "Hant";
+    } catch {
+      return false;
     }
-  }
+  });
+  let showConvertZh = $state(false);
+  // A copy as uploaded: the source of a converted format, or an EPUB as it
+  // was before conversion to Traditional.
+  let hasOriginal = $derived(isConverted || !!book?.has_original);
 
   // Track if user arrived via internal navigation (vs direct link / external)
   // Persisted in sessionStorage to survive reader round-trip (component gets destroyed)
@@ -831,7 +827,7 @@
                   {m.book_download_to_device()}
                 </DropdownMenu.Item>
               {/if}
-              {#if isConverted && !isNative() && $authStore.user?.can_download}
+              {#if hasOriginal && !isNative() && $authStore.user?.can_download}
                 <DropdownMenu.Item
                   onclick={() =>
                     window.location.assign(`/api/books/${bookId}/original`)}
@@ -841,7 +837,7 @@
                 </DropdownMenu.Item>
               {/if}
               {#if canConvertZh}
-                <DropdownMenu.Item onclick={convertZh} disabled={convertingZh}>
+                <DropdownMenu.Item onclick={() => (showConvertZh = true)}>
                   <Languages size={14} />
                   {m.book_convert_zh()}
                 </DropdownMenu.Item>
@@ -1277,7 +1273,7 @@
         {m.book_download_to_device()}
       </button>
     {/if}
-    {#if isConverted && !isNative() && $authStore.user?.can_download}
+    {#if hasOriginal && !isNative() && $authStore.user?.can_download}
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
         onclick={() => {
@@ -1292,10 +1288,9 @@
     {#if canConvertZh}
       <button
         class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        disabled={convertingZh}
         onclick={() => {
           showMobileActions = false;
-          convertZh();
+          showConvertZh = true;
         }}
       >
         <Languages size={20} class="text-muted-foreground shrink-0" />
@@ -1447,6 +1442,15 @@
   bind:open={showReportModal}
   onreported={handleReported}
 />
+
+{#if book}
+  <ZhConvertDialog
+    open={showConvertZh}
+    books={[{ id: book.id, title: book.display_title ?? "" }]}
+    onclose={() => (showConvertZh = false)}
+    onconverted={loadData}
+  />
+{/if}
 
 <!-- Remove from Work Confirmation -->
 <Dialog.Root bind:open={showWorkRemoveConfirm}>

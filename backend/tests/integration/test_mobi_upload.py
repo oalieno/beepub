@@ -48,11 +48,12 @@ async def test_azw3_becomes_an_epub_with_its_cover(admin_client, library_id):
     assert response.content == AZW3
     assert response.headers["content-disposition"].endswith(".azw3")
 
-    # The Traditional Chinese rebuild is a TXT-only action.
+    # Already Traditional: converting it changes nothing.
     response = await admin_client.post(
         f"/api/books/{book['id']}/zh-conversion", json={"mode": "s2tw"}
     )
-    assert response.status_code == 409
+    assert response.status_code == 200
+    assert response.json()["file_size"] == book["file_size"]
 
 
 async def test_old_mobi_is_packed_into_chapters(admin_client, library_id):

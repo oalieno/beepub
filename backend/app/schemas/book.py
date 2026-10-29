@@ -57,6 +57,10 @@ class BookOut(BaseModel):
     # extraction has run; sections with no text weigh 0.
     section_weights: list[int] | None = None
     has_unresolved_reports: bool = False
+    has_original: bool = False
+    # Set on an upload response only: the book reads as Simplified Chinese
+    # and was not converted, so the uploader is asked.
+    zh_simplified: bool = False
     display_title: str | None
     display_authors: list[str] | None
     display_series: str | None = None
@@ -282,6 +286,18 @@ class ExternalMetadataOut(BaseModel):
 
 
 class ZhConversionRequest(BaseModel):
-    """OpenCC configuration for the Simplified-to-Traditional rebuild."""
+    """OpenCC configuration for the Simplified-to-Traditional rewrite."""
 
     mode: Literal["s2tw", "s2twp"] = "s2tw"
+
+
+class ZhConversionSegment(BaseModel):
+    before: str
+    chars: str
+    phrases: str
+
+
+class ZhConversionPreview(BaseModel):
+    # A sentence piece by piece; None when conversion changes nothing.
+    segments: list[ZhConversionSegment] | None
+    highlights: int

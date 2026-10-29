@@ -123,6 +123,11 @@ def get_book_path(book_id: uuid.UUID, filename: str) -> str:
     return str(Path(settings.books_dir) / f"{book_id}{ext}")
 
 
+def get_kept_epub_path(book_id: uuid.UUID) -> str:
+    """An EPUB upload as it was, kept when the book's file is rewritten."""
+    return str(Path(settings.books_dir) / f"{book_id}.original.epub")
+
+
 def get_cover_path(book_id: uuid.UUID) -> str:
     return str(Path(settings.covers_dir) / f"{book_id}.jpg")
 

@@ -21,10 +21,8 @@
     importToDevice,
     takeOpenedFiles,
   } from "$lib/services/openedFiles";
-  import { getLocale } from "$lib/paraglide/runtime.js";
   import Modal from "$lib/components/Modal.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
-  import ZhConversionToggle from "$lib/components/ZhConversionToggle.svelte";
   import { Button } from "$lib/components/ui/button";
   import * as Select from "$lib/components/ui/select";
   import { UserRole, type LibraryOut, type UserOut } from "$lib/types";
@@ -38,13 +36,9 @@
   // null while loading.
   let targets = $state<LibraryOut[] | null>(null);
   let target = $state<string | null>(null);
-  let showZhToggle = $state(false);
 
   let deviceOk = $derived(
     files.length > 0 && files.every((f) => hasFormat(f, DEVICE_FORMATS)),
-  );
-  let hasTxt = $derived(
-    files.some((f) => f.name.toLowerCase().endsWith(".txt")),
   );
 
   function fmtSize(bytes: number): string {
@@ -84,10 +78,6 @@
     const wasOpen = open;
     files = [...files, ...arrived];
     if (!wasOpen) {
-      // Decided when the dialog opens, like the upload dialog: switching
-      // it off keeps the row until the dialog closes.
-      showZhToggle =
-        getLocale() === "zh-Hant" || !!$authStore.user?.upload_zh_conversion;
       open = true;
       void loadTargets();
     }
@@ -144,34 +134,29 @@
       <p class="text-muted-foreground text-sm">
         {m.opened_file_no_upload()}
       </p>
-    {:else}
-      {#if targets.length > 1}
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          <span class="shrink-0">{m.opened_file_library()}</span>
-          <Select.Root
-            type="single"
-            value={target ?? undefined}
-            onValueChange={(v) => v && (target = v)}
+    {:else if targets.length > 1}
+      <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <span class="shrink-0">{m.opened_file_library()}</span>
+        <Select.Root
+          type="single"
+          value={target ?? undefined}
+          onValueChange={(v) => v && (target = v)}
+        >
+          <Select.Trigger
+            class="flex-1 min-w-0"
+            aria-label={m.opened_file_library()}
           >
-            <Select.Trigger
-              class="flex-1 min-w-0"
-              aria-label={m.opened_file_library()}
-            >
-              <span class="truncate">
-                {targets.find((l) => l.id === target)?.name ?? ""}
-              </span>
-            </Select.Trigger>
-            <Select.Content>
-              {#each targets as library (library.id)}
-                <Select.Item value={library.id}>{library.name}</Select.Item>
-              {/each}
-            </Select.Content>
-          </Select.Root>
-        </div>
-      {/if}
-      {#if showZhToggle && hasTxt}
-        <ZhConversionToggle />
-      {/if}
+            <span class="truncate">
+              {targets.find((l) => l.id === target)?.name ?? ""}
+            </span>
+          </Select.Trigger>
+          <Select.Content>
+            {#each targets as library (library.id)}
+              <Select.Item value={library.id}>{library.name}</Select.Item>
+            {/each}
+          </Select.Content>
+        </Select.Root>
+      </div>
     {/if}
 
     <p class="text-muted-foreground text-xs">

@@ -2,6 +2,7 @@ import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
 import { noteBookEdited } from "$lib/stores/editedBooks";
 import type {
   ZhConversion,
+  ZhConversionPreview,
   BookOut,
   BookReport,
   BookSyncRequest,
@@ -54,7 +55,11 @@ export function groupedQuery(options?: GroupedParams): string {
 }
 
 export const booksApi = {
-  /** Rebuild a TXT book's EPUB from its source as Traditional Chinese. */
+  /** What converting to Traditional Chinese would change. */
+  previewZh: (bookId: string) =>
+    get(`/books/${bookId}/zh-conversion`) as Promise<ZhConversionPreview>,
+
+  /** Rewrite the book's EPUB as Traditional Chinese, highlights included. */
   convertZh: (bookId: string, mode: ZhConversion) =>
     (post(`/books/${bookId}/zh-conversion`, { mode }) as Promise<BookOut>).then(
       noteBookEdited,

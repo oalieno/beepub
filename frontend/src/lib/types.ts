@@ -20,10 +20,24 @@ export interface UserOut {
   /** Demo-mode shared account — username/password changes are disabled. */
   is_demo?: boolean;
   /** OpenCC configuration applied to Simplified Chinese uploads. */
-  upload_zh_conversion?: ZhConversion | null;
 }
 
 export type ZhConversion = "s2tw" | "s2twp";
+
+/** A piece of a sample sentence: as written, with characters converted
+ *  (s2tw), and with Mainland wording rewritten too (s2twp). */
+export interface ZhConversionSegment {
+  before: string;
+  chars: string;
+  phrases: string;
+}
+
+export interface ZhConversionPreview {
+  /** A sentence of the book; null when nothing would change. */
+  segments: ZhConversionSegment[] | null;
+  /** Every reader's highlights in the book — the file is shared. */
+  highlights: number;
+}
 
 export interface UserLibraryAccess {
   library_id: string;
@@ -80,6 +94,10 @@ export interface BookOut {
   field_sources: Record<string, string> | null;
   word_count: number | null;
   is_image_book: boolean | null;
+  /** A copy as uploaded is kept apart from the EPUB that is read. */
+  has_original?: boolean;
+  /** Upload responses only: reads as Simplified Chinese, not converted. */
+  zh_simplified?: boolean;
   /** Per-spine-section text sizes; the reader interpolates reading
    *  percentage from these. Null until text extraction has run. */
   section_weights?: number[] | null;

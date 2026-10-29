@@ -1,6 +1,5 @@
-"""Simplified-to-Traditional conversion of TXT books."""
+"""OpenCC conversion: the two modes, names, and interface text."""
 
-from app.services.txt2epub import Section, TxtBook, apply_zh_conversion
 from app.services.zhconv import convert, convert_name, to_simplified
 
 
@@ -34,34 +33,3 @@ def test_tag_label_overrides_name_real_slugs():
     assert set(_HANS_OVERRIDES) <= set(TAG_LABELS)
     assert TAG_LABELS_HANS["cyberpunk"] == "赛博朋克"
     assert set(TAG_LABELS_HANS) == set(TAG_LABELS)
-
-
-def _book() -> TxtBook:
-    return TxtBook(
-        title="雾港夜航",
-        author="陈默",
-        language="zh-CN",
-        encoding="utf-8",
-        sections=[
-            Section(
-                "第一章 出港", 2, ["缆绳解开的时候，雾还没散。", "软件工程师上了船。"]
-            ),
-        ],
-    )
-
-
-def test_apply_converts_text_and_marks_the_book_traditional():
-    book = apply_zh_conversion(_book(), "s2twp")
-    assert book.language == "zh-TW"
-    assert book.title == "霧港夜航"
-    assert book.author == "陳默"
-    assert book.sections[0].title == "第一章 出港"
-    assert book.sections[0].paragraphs == [
-        "纜繩解開的時候，霧還沒散。",
-        "軟體工程師上了船。",
-    ]
-
-
-def test_character_mode_leaves_phrases_alone():
-    book = apply_zh_conversion(_book(), "s2tw")
-    assert book.sections[0].paragraphs[1] == "軟件工程師上了船。"

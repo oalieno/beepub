@@ -194,6 +194,11 @@ class Book(Base, TimestampMixin):
     )
 
     @property
+    def has_original(self) -> bool:
+        """A copy as uploaded exists apart from the EPUB that is read."""
+        return self.original_path is not None
+
+    @property
     def display_title(self) -> str | None:
         return self.title or self.epub_title
 

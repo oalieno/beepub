@@ -4,8 +4,6 @@
   import { goto, replaceState, afterNavigate } from "$app/navigation";
   import { isNative } from "$lib/platform";
   import { authStore } from "$lib/stores/auth";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import ZhConversionToggle from "$lib/components/ZhConversionToggle.svelte";
   import { librariesApi } from "$lib/api/libraries";
   import { booksApi } from "$lib/api/books";
   import { libraryUploaded, uploadFiles } from "$lib/services/uploadQueue";
@@ -191,18 +189,7 @@
   // Two-step upload: files are listed first (a chance to catch a wrong
   // file, and to see the options that apply to them), then sent together.
   let pendingFiles = $state<File[]>([]);
-  let pendingHasTxt = $derived(
-    pendingFiles.some((f) => f.name.toLowerCase().endsWith(".txt")),
-  );
-
-  // The Simplified-to-Traditional switch is a Traditional Chinese reader's
-  // concern: shown for that UI language, or while the setting is on, and
-  // only when a TXT is waiting. Decided when the dialog opens so switching
-  // it off keeps the row until the dialog closes.
-  let showZhToggle = $state(false);
   function openUploadModal() {
-    showZhToggle =
-      getLocale() === "zh-Hant" || !!$authStore.user?.upload_zh_conversion;
     showUploadModal = true;
   }
   function closeUploadModal() {
@@ -422,9 +409,6 @@
           </li>
         {/each}
       </ul>
-    {/if}
-    {#if showZhToggle && pendingHasTxt}
-      <ZhConversionToggle />
     {/if}
     <div class="flex items-center justify-end gap-3">
       <Button
