@@ -132,8 +132,9 @@ work with *your* library: search books by fuzzy titles, keywords, or tags,
 find passages in the full text, read chapters, recap a book up to where you
 stopped, and pull your highlights and notes.
 
-Create an API token under **Profile → API Tokens**, then connect a client —
-for example Claude Code:
+Create an API token under **Profile → API Tokens**. The dialog that shows the
+token also gives ready-to-copy setup for Claude Code and Codex, plus a prompt
+any other agent can follow. For Claude Code it is:
 
 ```bash
 claude mcp add --transport http beepub https://<your-host>/mcp \

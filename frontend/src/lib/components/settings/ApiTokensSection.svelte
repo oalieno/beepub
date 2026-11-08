@@ -3,6 +3,8 @@
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
   import { Button } from "$lib/components/ui/button";
+  import * as Tabs from "$lib/components/ui/tabs";
+  import { getServerUrl } from "$lib/api/client";
   import { tokensApi } from "$lib/api/tokens";
   import type { ApiToken } from "$lib/types";
   import { confirmDialog } from "$lib/stores/confirm";
@@ -18,7 +20,35 @@
   // again, so the user must actively dismiss it.
   let freshToken = $state<string | null>(null);
   let showTokenDialog = $state(false);
-  let copied = $state(false);
+  // Which copy button last succeeded: the bare token or a setup tab.
+  let copied = $state<"token" | ConnectTab | null>(null);
+
+  // Setup for the agents most people use, plus a prompt any other
+  // agent can follow — the token alone leaves people stranded.
+  type ConnectTab = "claude" | "codex" | "other";
+  let connectTab = $state<ConnectTab>("claude");
+
+  const mcpUrl = $derived(
+    (getServerUrl() ||
+      (typeof window !== "undefined" ? window.location.origin : "")) + "/mcp",
+  );
+
+  function connectSnippet(tab: ConnectTab, token: string): string {
+    switch (tab) {
+      case "claude":
+        return `claude mcp add --transport http beepub ${mcpUrl} \\\n  --header "Authorization: Bearer ${token}"`;
+      case "codex":
+        return `[mcp_servers.beepub]\nurl = "${mcpUrl}"\nhttp_headers = { Authorization = "Bearer ${token}" }`;
+      case "other":
+        return m.profile_api_token_other_prompt({ url: mcpUrl, token });
+    }
+  }
+
+  const connectHint: Record<ConnectTab, () => string> = {
+    claude: m.profile_api_token_claude_hint,
+    codex: m.profile_api_token_codex_hint,
+    other: m.profile_api_token_other_hint,
+  };
 
   async function load() {
     try {
@@ -41,7 +71,8 @@
     try {
       const created = await tokensApi.create(name);
       freshToken = created.token;
-      copied = false;
+      copied = null;
+      connectTab = "claude";
       showTokenDialog = true;
       newName = "";
       tokens = [created, ...tokens];
@@ -52,11 +83,10 @@
     }
   }
 
-  async function copyFresh() {
-    if (!freshToken) return;
+  async function copyText(text: string, key: "token" | ConnectTab) {
     try {
-      await navigator.clipboard.writeText(freshToken);
-      copied = true;
+      await navigator.clipboard.writeText(text);
+      copied = key;
     } catch {
       toastStore.error(m.profile_api_token_copy_failed());
     }
@@ -167,43 +197,80 @@
   </div>
 {/if}
 
+{#snippet copyButton(text: string, key: "token" | ConnectTab)}
+  <Button
+    variant="ghost"
+    size="icon"
+    class="absolute top-1 right-1 size-7 bg-background/80 text-muted-foreground hover:text-foreground"
+    aria-label={copied === key
+      ? m.profile_api_token_copied()
+      : m.profile_api_token_copy()}
+    onclick={() => copyText(text, key)}
+  >
+    {#if copied === key}
+      <Check size={14} class="text-primary" />
+    {:else}
+      <Copy size={14} />
+    {/if}
+  </Button>
+{/snippet}
+
 <Dialog.Root
   bind:open={showTokenDialog}
   onOpenChange={(open) => {
     if (!open) {
       freshToken = null;
-      copied = false;
+      copied = null;
     }
   }}
 >
-  <Dialog.Content class="sm:max-w-md bg-popover">
+  <Dialog.Content class="sm:max-w-lg bg-popover">
     <Dialog.Header>
       <Dialog.Title>{m.profile_api_token_created_title()}</Dialog.Title>
       <Dialog.Description>
         {m.profile_api_token_show_once()}
       </Dialog.Description>
     </Dialog.Header>
-    <div class="flex items-center gap-2">
+    <div class="relative">
       <code
-        class="flex-1 min-w-0 text-[11px] whitespace-nowrap overflow-x-auto select-all bg-background rounded-sm px-2.5 py-2 border border-border"
+        class="block text-[11px] leading-5 whitespace-nowrap overflow-x-auto select-all bg-background rounded-sm py-2 pl-2.5 pr-10 border border-border"
         >{freshToken}</code
       >
-      <Button
-        variant="outline"
-        size="icon"
-        class="shrink-0"
-        aria-label={copied
-          ? m.profile_api_token_copied()
-          : m.profile_api_token_copy()}
-        onclick={copyFresh}
-      >
-        {#if copied}
-          <Check size={16} class="text-primary" />
-        {:else}
-          <Copy size={16} />
-        {/if}
-      </Button>
+      {@render copyButton(freshToken ?? "", "token")}
     </div>
+    {#if freshToken}
+      <div class="space-y-2 min-w-0">
+        <p class="text-sm font-medium">
+          {m.profile_api_token_connect_title()}
+        </p>
+        <Tabs.Root
+          value={connectTab}
+          onValueChange={(v) => (connectTab = v as ConnectTab)}
+        >
+          <Tabs.List class="w-full">
+            <Tabs.Trigger value="claude">Claude Code</Tabs.Trigger>
+            <Tabs.Trigger value="codex">Codex</Tabs.Trigger>
+            <Tabs.Trigger value="other"
+              >{m.profile_api_token_tab_other()}</Tabs.Trigger
+            >
+          </Tabs.List>
+        </Tabs.Root>
+        <p class="text-xs text-muted-foreground">
+          {connectHint[connectTab]()}
+        </p>
+        <div class="relative">
+          <pre
+            class="text-[11px] leading-5 whitespace-pre-wrap [overflow-wrap:anywhere] select-all bg-background rounded-sm py-2 pl-2.5 pr-10 border border-border font-mono">{connectSnippet(
+              connectTab,
+              freshToken,
+            )}</pre>
+          {@render copyButton(
+            connectSnippet(connectTab, freshToken),
+            connectTab,
+          )}
+        </div>
+      </div>
+    {/if}
     <Dialog.Footer>
       <Button class="rounded-xl" onclick={() => (showTokenDialog = false)}>
         {m.common_close()}
