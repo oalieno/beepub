@@ -107,16 +107,27 @@
       ]);
       sources = sourceList;
       book = loaded;
+      // Each field opens on what the book shows — its override, else the
+      // original — so the original can be edited rather than retyped.
       form = {
-        title: loaded.title ?? "",
-        authors: (loaded.authors ?? []).join(", "),
-        publisher: loaded.publisher ?? "",
-        published_date: loaded.published_date ?? "",
-        series: loaded.series ?? "",
+        title: loaded.title ?? originalValue("title"),
+        authors: loaded.authors?.length
+          ? loaded.authors.join(", ")
+          : originalValue("authors"),
+        publisher: loaded.publisher ?? originalValue("publisher"),
+        published_date:
+          loaded.published_date ?? originalValue("published_date"),
+        series: loaded.series ?? originalValue("series"),
         series_index:
-          loaded.series_index != null ? String(loaded.series_index) : "",
-        tags: (loaded.tags ?? []).join(", "),
-        description: loaded.description ?? "",
+          loaded.series != null
+            ? loaded.series_index != null
+              ? String(loaded.series_index)
+              : ""
+            : originalValue("series_index"),
+        tags: loaded.tags?.length
+          ? loaded.tags.join(", ")
+          : originalValue("tags"),
+        description: loaded.description ?? originalValue("description"),
       };
       fieldSources = { ...(loaded.field_sources ?? {}) };
       pool = rows
@@ -210,6 +221,51 @@
     return field === "description" ? stripHtml(value) : value;
   }
 
+  // A Calibre book's original is Calibre's, not the file's.
+  const isCalibre = $derived(book?.calibre_id != null);
+
+  /** The book's own value, as the form shows it: the file's, or for a
+   *  Calibre book Calibre's (descriptions stripped of markup). */
+  function originalValue(field: string): string {
+    if (!book) return "";
+    if (field === "series") return book.epub_series ?? "";
+    if (field === "series_index")
+      return book.epub_series_index != null
+        ? String(book.epub_series_index)
+        : "";
+    return displayValue(field, epubValue(field));
+  }
+
+  // Lists compare item by item, whatever the spacing around the commas.
+  function normalized(field: string, value: string): string {
+    if (field === "authors" || field === "tags")
+      return value
+        .split(",")
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .join(", ");
+    return value.trim();
+  }
+
+  /** Whether the field holds a value of its own: an empty field, or one
+   *  that reads as the original, overrides nothing. */
+  function overrides(field: string): boolean {
+    const value = normalized(field, form[field] ?? "");
+    return value !== "" && value !== normalized(field, originalValue(field));
+  }
+
+  // Series and number go together: the book shows its own number only
+  // while it has a series of its own, so a changed number keeps the series.
+  function seriesOverrides(): boolean {
+    const series = form.series.trim();
+    const index = String(form.series_index ?? "").trim();
+    return (
+      series !== "" &&
+      (series !== originalValue("series") ||
+        index !== originalValue("series_index"))
+    );
+  }
+
   function versionsFor(field: string): FieldVersion[] {
     const list: FieldVersion[] = [];
     const epub = epubValue(field);
@@ -217,7 +273,7 @@
       list.push({
         key: "epub",
         source: null,
-        label: m.metadata_version_epub(),
+        label: isCalibre ? "Calibre" : m.metadata_version_epub(),
         value: epub,
         display: displayValue(field, epub),
         url: null,
@@ -240,14 +296,16 @@
   }
 
   function versionCount(field: string): number {
-    const current = currentValue(field);
-    return versionsFor(field).filter((v) => v.value !== current).length;
+    const current = normalized(field, displayValue(field, currentValue(field)));
+    return versionsFor(field).filter(
+      (v) => normalized(field, v.display) !== current,
+    ).length;
   }
 
-  // Typing is manual provenance; clearing a field drops back to the
-  // EPUB original and loses its provenance key.
+  // Typing is manual provenance; a field emptied, or typed back to the
+  // original, drops back to the original and loses its provenance key.
   function markManual(field: string) {
-    if ((form[field] ?? "").trim()) {
+    if (overrides(field)) {
       fieldSources[field] = "manual";
     } else {
       delete fieldSources[field];
@@ -264,7 +322,7 @@
 
   function pickVersion(field: string, version: FieldVersion) {
     if (version.source === null) {
-      form[field] = "";
+      form[field] = originalValue(field);
       delete fieldSources[field];
     } else {
       form[field] = version.value;
@@ -358,9 +416,14 @@
     if (saving || !book) return;
     saving = true;
     try {
+      // Only what differs from the original is stored; the rest stays the
+      // book's own and follows it (a Calibre sync, a TXT rebuild).
+      const series = seriesOverrides();
+      const kept = (field: string) =>
+        field === "series" ? series : overrides(field);
       const provenance: Record<string, string> = {};
       for (const [field, source] of Object.entries(fieldSources)) {
-        if (field === "cover" || (form[field] ?? "").trim()) {
+        if (field === "cover" || kept(field)) {
           provenance[field] = source;
         }
       }
@@ -368,23 +431,20 @@
         provenance.cover =
           pendingCover.kind === "url" ? pendingCover.source : "manual";
       }
-      const parsedAuthors = form.authors
-        .split(",")
-        .map((a) => a.trim())
-        .filter(Boolean);
-      const parsedTags = form.tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
+      const text = (field: string) =>
+        overrides(field) ? form[field].trim() : null;
+      const list = (field: string) =>
+        overrides(field) ? normalized(field, form[field]).split(", ") : null;
+      const index = String(form.series_index ?? "").trim();
       const updated = await booksApi.updateMetadata(bookId, {
-        title: form.title.trim() || null,
-        authors: parsedAuthors.length > 0 ? parsedAuthors : null,
-        publisher: form.publisher.trim() || null,
-        description: form.description || null,
-        published_date: form.published_date.trim() || null,
-        series: form.series.trim() || null,
-        series_index: form.series_index ? parseFloat(form.series_index) : null,
-        tags: parsedTags.length > 0 ? parsedTags : null,
+        title: text("title"),
+        authors: list("authors"),
+        publisher: text("publisher"),
+        description: overrides("description") ? form.description : null,
+        published_date: text("published_date"),
+        series: series ? form.series.trim() : null,
+        series_index: series && index ? parseFloat(index) : null,
+        tags: list("tags"),
         field_sources: provenance,
       });
       book = updated;
@@ -504,6 +564,7 @@
                 oninput={() => markManual(field)}
               />
               {@render filledFrom(field)}
+              {@render calibreValue(field)}
             </div>
           {/each}
 
@@ -523,6 +584,7 @@
                   oninput={() => markManual(field)}
                 />
                 {@render filledFrom(field)}
+                {@render calibreValue(field)}
               </div>
             {/each}
           </div>
@@ -550,6 +612,15 @@
                 class="w-20"
               />
             </div>
+            {#if isCalibre && originalValue("series") && seriesOverrides()}
+              <p class="text-xs text-muted-foreground">
+                {m.metadata_calibre_value({
+                  value: originalValue("series_index")
+                    ? `${originalValue("series")} #${originalValue("series_index")}`
+                    : originalValue("series"),
+                })}
+              </p>
+            {/if}
           </div>
 
           <div class="space-y-1.5">
@@ -566,6 +637,7 @@
               oninput={() => markManual("tags")}
             />
             {@render filledFrom("tags")}
+            {@render calibreValue("tags")}
           </div>
         </div>
       </div>
@@ -586,6 +658,7 @@
           oninput={() => markManual("description")}
         />
         {@render filledFrom("description")}
+        {@render calibreValue("description")}
       </div>
 
       <div class="flex justify-end gap-2 pt-2">
@@ -630,6 +703,15 @@
           <ExternalLink size={11} />
         </a>
       {/if}
+    </p>
+  {/if}
+{/snippet}
+
+{#snippet calibreValue(field: string)}
+  <!-- What Calibre says under BeePub's own value: shown only where the two differ. -->
+  {#if isCalibre && originalValue(field) && overrides(field)}
+    <p class="text-xs text-muted-foreground line-clamp-2">
+      {m.metadata_calibre_value({ value: originalValue(field) })}
     </p>
   {/if}
 {/snippet}

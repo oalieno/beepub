@@ -759,6 +759,7 @@
   "metadata_versions_none": "還沒有其他版本，往下搜尋其他來源",
   "metadata_search_more": "從其他來源尋找",
   "metadata_filled_from": "已從 {label} 填入",
+  "metadata_calibre_value": "Calibre：{value}",
   "metadata_change_cover": "更換封面",
   "metadata_field_cover": "封面",
   "metadata_cover_upload": "上傳圖片",

@@ -759,6 +759,7 @@
   "metadata_versions_none": "No stored versions yet — search below.",
   "metadata_search_more": "Find in other sources",
   "metadata_filled_from": "Filled from {label}",
+  "metadata_calibre_value": "Calibre: {value}",
   "metadata_change_cover": "Change cover",
   "metadata_field_cover": "Cover",
   "metadata_cover_upload": "Upload image",
