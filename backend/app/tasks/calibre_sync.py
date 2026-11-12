@@ -121,3 +121,43 @@ def sync_calibre_library(
             uuid.UUID(admin_user_id),
         )
     )
+
+
+@celery.task(
+    name="app.tasks.calibre_sync.copy_calibre_library",
+    soft_time_limit=12 * 3600,
+    time_limit=12 * 3600 + 300,
+)
+def copy_calibre_library(library_id: str, skip_unreadable: bool = False) -> None:
+    """Celery task: copy a linked library's books in and unlink it."""
+    import uuid
+
+    from app.celeryapp import run_async
+    from app.services.calibre import copy_calibre_library
+
+    run_async(copy_calibre_library(uuid.UUID(library_id), skip_unreadable))
+
+
+@celery.task(
+    name="app.tasks.calibre_sync.link_and_copy_calibre_library",
+    soft_time_limit=12 * 3600,
+    time_limit=12 * 3600 + 300,
+)
+def link_and_copy_calibre_library(
+    calibre_path: str, library_id: str, admin_user_id: str
+) -> None:
+    """Celery task: a library linked in "copy" mode — synced once, then
+    copied in."""
+    import uuid
+
+    from app.celeryapp import run_async
+    from app.services.calibre import sync_calibre_library
+
+    run_async(
+        sync_calibre_library(
+            calibre_path,
+            uuid.UUID(library_id),
+            uuid.UUID(admin_user_id),
+            then_copy=True,
+        )
+    )

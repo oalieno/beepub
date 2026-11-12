@@ -65,6 +65,7 @@
     X,
     BookOpen,
     Check,
+    HardDrive,
     Library as LibraryIcon,
   } from "@lucide/svelte";
   import * as Dialog from "$lib/components/ui/dialog";
@@ -333,6 +334,15 @@
         run: () => openWorkSearch(b, "create"),
       });
     }
+    // Where delete would be: why it, moving and converting are not here.
+    if (calibre)
+      work.push({
+        key: "calibre",
+        label: m.book_managed_by_calibre(),
+        icon: HardDrive,
+        disabled: true,
+        run: () => {},
+      });
     if (!calibre)
       work.push({
         key: "delete",

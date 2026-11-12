@@ -308,6 +308,14 @@
         >
       </div>
     {/if}
+    {#if book.calibre_id != null}
+      <div>
+        <span class="text-muted-foreground block text-xs mb-0.5"
+          >{m.book_source()}</span
+        >
+        <span class="text-foreground font-medium">Calibre</span>
+      </div>
+    {/if}
     {#if book.word_count}
       <div>
         <span class="text-muted-foreground block text-xs mb-0.5"

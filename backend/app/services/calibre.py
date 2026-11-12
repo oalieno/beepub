@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import shutil
 import sqlite3
 import uuid
 from dataclasses import dataclass, field
@@ -15,7 +16,12 @@ from app.database import create_task_engine
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.services.partial_md5 import compute_partial_md5
-from app.services.storage import delete_file, get_cover_path, save_cover_bytes
+from app.services.storage import (
+    delete_file,
+    get_book_path,
+    get_cover_path,
+    save_cover_bytes,
+)
 from app.tasks.text_extract import extract_book_text
 
 logger = logging.getLogger(__name__)
@@ -275,10 +281,19 @@ async def sync_calibre_library(
     calibre_dir: str,
     library_id: uuid.UUID,
     admin_user_id: uuid.UUID,
+    then_copy: bool = False,
 ) -> None:
-    """Background task: sync a Calibre library into BeePub."""
+    """Background task: sync a Calibre library into BeePub. With
+    ``then_copy`` the books are then copied in and the library cut loose
+    from Calibre (linking in "copy" mode): one run, one progress report."""
     client = aioredis.from_url(settings.redis_url)
     key = _sync_key(library_id)
+    # A library being copied in is about to stop being Calibre's: a sync
+    # in the middle would be working on rows that are changing hands.
+    if await client.exists(_copy_lock_key(library_id)):
+        logger.info(f"Library {library_id} is being copied in, sync skipped")
+        await client.aclose()
+        return
 
     async def _update_progress(
         result: SyncResult, total: int, processed: int, status: str = "running"
@@ -563,7 +578,10 @@ async def sync_calibre_library(
 
             auto_start_backfill()
 
-        await _update_progress(result, total, total, "completed")
+        if then_copy:
+            await copy_calibre_library(library_id)
+        else:
+            await _update_progress(result, total, total, "completed")
 
     except Exception as e:
         result.errors.append(f"Sync failed: {e}")
@@ -572,6 +590,265 @@ async def sync_calibre_library(
             await _update_progress(result, 0, 0, "failed")
         except Exception:
             pass
+    finally:
+        try:
+            await client.aclose()
+        except Exception:
+            pass
+
+
+# --- Copying a Calibre library in -------------------------------------------
+#
+# A linked library reads its books from Calibre's folder. Copying it in
+# makes it an ordinary BeePub library: every book's file is copied to
+# BeePub's storage and the rows are cut loose from Calibre. The rows are
+# the same ones, so progress, highlights, shelves and overrides stay; the
+# bytes are the same, so ``partial_md5`` (KOReader's key) stays too.
+#
+# Nothing in the database changes until every file is across: files are
+# copied first, to paths named after the book's id, then one transaction
+# repoints the rows and unlinks the library. A run cut short leaves only
+# files behind, which the next run finds and does not copy again.
+
+COPY_LOCK_PREFIX = "beepub:calibre:copy"
+# Refreshed with every book, so a run that died frees the library soon.
+COPY_LOCK_TTL = 900
+# Room left on the disk after the copy.
+COPY_FREE_MARGIN = 256 * 1024 * 1024
+# Titles reported back when files cannot be read.
+COPY_UNREADABLE_SHOWN = 100
+
+
+def _copy_lock_key(library_id: uuid.UUID) -> str:
+    return f"{COPY_LOCK_PREFIX}:{library_id}"
+
+
+async def copy_in_progress(library_id: uuid.UUID) -> bool:
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        return bool(await client.exists(_copy_lock_key(library_id)))
+    finally:
+        await client.aclose()
+
+
+async def mark_queued(library_id: uuid.UUID, mode: str) -> None:
+    """A run handed to the worker reads as running from the start: the
+    page polling it would otherwise see nothing and stop looking."""
+    client = aioredis.from_url(settings.redis_url)
+    try:
+        await client.set(
+            _sync_key(library_id),
+            json.dumps(
+                {
+                    "mode": mode,
+                    "status": "running",
+                    "total": 0,
+                    "processed": 0,
+                    "added": 0,
+                    "updated": 0,
+                    "unchanged": 0,
+                    "skipped": 0,
+                    "removed": 0,
+                    "errors": [],
+                    "started_at": datetime.now(UTC).isoformat(),
+                }
+            ),
+            ex=3600,
+        )
+    finally:
+        await client.aclose()
+
+
+def _copy_destination(book: Book) -> str:
+    return get_book_path(book.id, os.path.basename(book.file_path or "book.epub"))
+
+
+def _copied_already(src: str, dest: str) -> bool:
+    try:
+        return os.path.getsize(dest) == os.path.getsize(src)
+    except OSError:
+        return False
+
+
+def _copy_book_file(src: str, dest: str) -> None:
+    """Copy via a temp file: a half-written book never has the real name."""
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    tmp = f"{dest}.part"
+    try:
+        shutil.copy2(src, tmp)
+        if os.path.getsize(tmp) != os.path.getsize(src):
+            raise OSError("copy is not the size of its source")
+        os.replace(tmp, dest)
+    except BaseException:
+        delete_file(tmp)
+        raise
+
+
+def _copy_plan(books: list[Book]) -> dict:
+    """What copying these books in takes: bytes still to copy, room on
+    the disk, and the books whose files cannot be read."""
+    needed = 0
+    unreadable: list[Book] = []
+    for book in books:
+        src = book.file_path
+        if not src or not os.path.isfile(src):
+            unreadable.append(book)
+        elif not _copied_already(src, _copy_destination(book)):
+            needed += os.path.getsize(src)
+    os.makedirs(settings.books_dir, exist_ok=True)
+    return {
+        "bytes_needed": needed,
+        "bytes_free": shutil.disk_usage(settings.books_dir).free,
+        "unreadable": unreadable,
+    }
+
+
+async def _calibre_books_of(db, library_id: uuid.UUID) -> list[Book]:
+    from sqlalchemy import select
+
+    result = await db.execute(
+        select(Book)
+        .join(LibraryBook, LibraryBook.book_id == Book.id)
+        .where(LibraryBook.library_id == library_id)
+        .where(Book.calibre_id.isnot(None))
+        .order_by(Book.created_at, Book.id)
+    )
+    return list(result.scalars().all())
+
+
+async def copy_preview(db, library_id: uuid.UUID) -> dict:
+    """For the confirmation: how many books, how much room they take and
+    how much there is."""
+    books = await _calibre_books_of(db, library_id)
+    plan = await asyncio.to_thread(_copy_plan, books)
+    return {
+        "book_count": len(books),
+        "bytes_needed": plan["bytes_needed"],
+        "bytes_free": plan["bytes_free"],
+        "unreadable_count": len(plan["unreadable"]),
+    }
+
+
+async def copy_calibre_library(
+    library_id: uuid.UUID, skip_unreadable: bool = False
+) -> None:
+    """Background task: copy a linked library's books in and unlink it.
+
+    Books whose files cannot be read stop the run before anything is
+    changed, and are named in the status; ``skip_unreadable`` goes ahead
+    without them — they are removed, as a sync removes a book Calibre no
+    longer has."""
+    from sqlalchemy import select
+
+    client = aioredis.from_url(settings.redis_url)
+    key = _sync_key(library_id)
+    lock = _copy_lock_key(library_id)
+    started_at = datetime.now(UTC).isoformat()
+
+    async def report(status: str, total: int, processed: int, **extra) -> None:
+        progress = {
+            "mode": "copy",
+            "status": status,
+            "total": total,
+            "processed": processed,
+            "added": 0,
+            "updated": 0,
+            "unchanged": 0,
+            "skipped": 0,
+            "removed": 0,
+            "errors": [],
+            "started_at": started_at,
+            **extra,
+        }
+        await client.set(key, json.dumps(progress), ex=3600)
+
+    try:
+        if not await client.set(lock, "1", nx=True, ex=COPY_LOCK_TTL):
+            return
+        try:
+            async with (
+                create_task_engine() as (_engine, SessionLocal),
+                SessionLocal() as db,
+            ):
+                library = (
+                    await db.execute(select(Library).where(Library.id == library_id))
+                ).scalar_one_or_none()
+                if library is None or not library.calibre_path:
+                    await report("failed", 0, 0, errors=["Not a Calibre library"])
+                    return
+                books = await _calibre_books_of(db, library_id)
+                total = len(books)
+                await report("running", total, 0)
+
+                plan = await asyncio.to_thread(_copy_plan, books)
+                unreadable: list[Book] = plan["unreadable"]
+                if unreadable and not skip_unreadable:
+                    await report(
+                        "failed",
+                        total,
+                        0,
+                        reason="unreadable",
+                        unreadable=[
+                            b.display_title or ""
+                            for b in unreadable[:COPY_UNREADABLE_SHOWN]
+                        ],
+                        unreadable_count=len(unreadable),
+                    )
+                    return
+                if plan["bytes_needed"] + COPY_FREE_MARGIN > plan["bytes_free"]:
+                    await report(
+                        "failed",
+                        total,
+                        0,
+                        reason="space",
+                        bytes_needed=plan["bytes_needed"],
+                        bytes_free=plan["bytes_free"],
+                    )
+                    return
+
+                gone = {b.id for b in unreadable}
+                copied: list[tuple[Book, str]] = []
+                for i, book in enumerate(books):
+                    if book.id not in gone:
+                        dest = _copy_destination(book)
+                        if not _copied_already(book.file_path, dest):
+                            await asyncio.to_thread(
+                                _copy_book_file, book.file_path, dest
+                            )
+                        copied.append((book, dest))
+                    await client.expire(lock, COPY_LOCK_TTL)
+                    await report("running", total, i + 1)
+
+                # Every file is across: the rows change hands together.
+                covers: list[str] = []
+                for book, dest in copied:
+                    book.file_path = dest
+                    book.file_size = os.path.getsize(dest)
+                    book.calibre_id = None
+                for book in unreadable:
+                    links = await db.execute(
+                        select(LibraryBook).where(LibraryBook.book_id == book.id)
+                    )
+                    for link in links.scalars().all():
+                        await db.delete(link)
+                    if book.cover_path:
+                        covers.append(book.cover_path)
+                    await db.delete(book)
+                library.calibre_path = None
+                library.auto_sync = False
+                await db.commit()
+                for path in covers:
+                    delete_file(path)
+
+            await report("completed", total, total, removed=len(unreadable))
+        except Exception as e:
+            logger.exception("Copying a Calibre library in failed")
+            try:
+                await report("failed", 0, 0, errors=[str(e)])
+            except Exception:
+                pass
+        finally:
+            await client.delete(lock)
     finally:
         try:
             await client.aclose()

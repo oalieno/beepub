@@ -334,6 +334,12 @@
         </dt>
         <dd class="min-w-0 text-foreground">{book.format.toUpperCase()}</dd>
       {/if}
+      {#if book.calibre_id != null}
+        <dt class="text-xs text-muted-foreground leading-7">
+          {m.book_source()}
+        </dt>
+        <dd class="min-w-0 text-foreground">Calibre</dd>
+      {/if}
     </dl>
 
     {#if book.description ?? book.epub_description}

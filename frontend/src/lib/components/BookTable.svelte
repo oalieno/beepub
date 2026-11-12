@@ -87,6 +87,15 @@
   } = $props();
 
   let columns = $derived(compact ? 6 : 7);
+  // Beside the side panel the title is what gets squeezed: on anything
+  // but a wide screen the date column gives it its room (the sort menu
+  // above still orders by date; the panel shows the book's).
+  const narrowHidden = (display: "table-cell" | "table-column") =>
+    compact
+      ? display === "table-cell"
+        ? "hidden 2xl:table-cell"
+        : "hidden 2xl:table-column"
+      : "";
 
   // A list restored on back predates an edit made on the book page.
   let rows = $derived(books.map((b) => withEdit(b, $editedBooks)));
@@ -240,7 +249,7 @@
     <col class="w-[18%]" />
     <col class="w-24" />
     {#if !compact}<col class="w-24" />{/if}
-    <col class="w-36" />
+    <col class="w-36 {narrowHidden('table-column')}" />
     <col class="w-12" />
   </colgroup>
   <thead class="sticky top-0 z-10">
@@ -266,7 +275,9 @@
           {m.browser_col_size()}
         </th>
       {/if}
-      <th class="p-0 font-medium whitespace-nowrap">
+      <th
+        class="p-0 font-medium whitespace-nowrap {narrowHidden('table-cell')}"
+      >
         {@render sortableHeader("added_at", m.browser_col_added())}
       </th>
       <th><span class="sr-only">{m.book_more_actions()}</span></th>
@@ -480,7 +491,11 @@
             {book.file_size != null ? formatSize(book.file_size) : "—"}
           </td>
         {/if}
-        <td class="px-3 py-2.5 text-muted-foreground truncate">
+        <td
+          class="px-3 py-2.5 text-muted-foreground truncate {narrowHidden(
+            'table-cell',
+          )}"
+        >
           {formatAdded(book)}
         </td>
         <!-- Spotify-like: the row's actions, shown on hover or when picked. -->

@@ -44,10 +44,24 @@ export const adminApi = {
       import("$lib/types").CalibreLibraryInfo[]
     >,
 
-  linkCalibreLibrary: (data: { calibre_path: string; name?: string }) =>
+  linkCalibreLibrary: (data: {
+    calibre_path: string;
+    name?: string;
+    mode?: "sync" | "copy";
+  }) =>
     post("/admin/calibre/libraries", data) as Promise<{
       library_id: string;
     }>,
+
+  previewCalibreCopy: (libraryId: string) =>
+    get(`/admin/calibre/libraries/${libraryId}/copy`) as Promise<
+      import("$lib/types").CalibreCopyPreview
+    >,
+
+  copyCalibreLibrary: (libraryId: string, skipUnreadable = false) =>
+    post(`/admin/calibre/libraries/${libraryId}/copy`, {
+      skip_unreadable: skipUnreadable,
+    }),
 
   syncCalibreLibrary: (libraryId: string) =>
     post(`/admin/calibre/libraries/${libraryId}/sync`, {}),

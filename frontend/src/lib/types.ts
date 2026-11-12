@@ -596,14 +596,30 @@ export interface CalibreSyncStatus {
   unchanged: number;
   skipped: number;
   errors: string[];
+  /** "copy": the library is being copied in, not synced. */
+  mode?: "sync" | "copy";
+  /** Why a copy stopped before changing anything. */
+  reason?: "unreadable" | "space";
+  unreadable?: string[];
+  unreadable_count?: number;
+  bytes_needed?: number;
+  bytes_free?: number;
+}
+
+export interface CalibreCopyPreview {
+  book_count: number;
+  bytes_needed: number;
+  bytes_free: number;
+  unreadable_count: number;
 }
 
 export interface CalibreLibraryStatus {
   library_id: string;
   library_name: string;
-  calibre_path: string;
+  /** Null once the library has been copied in. */
+  calibre_path: string | null;
   calibre_book_count: number | null;
-  imported_book_count: number;
+  imported_book_count: number | null;
   auto_sync: boolean;
   last_synced_at: string | null;
   sync: CalibreSyncStatus | null;

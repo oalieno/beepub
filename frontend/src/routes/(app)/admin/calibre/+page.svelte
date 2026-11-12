@@ -4,8 +4,20 @@
   import { toastStore } from "$lib/stores/toast";
   import { Button } from "$lib/components/ui/button";
   import { Input } from "$lib/components/ui/input";
-  import type { CalibreLibraryInfo, CalibreLibraryStatus } from "$lib/types";
-  import { HardDrive, RefreshCw, Link, LoaderCircle } from "@lucide/svelte";
+  import type {
+    CalibreCopyPreview,
+    CalibreLibraryInfo,
+    CalibreLibraryStatus,
+    CalibreSyncStatus,
+  } from "$lib/types";
+  import {
+    HardDrive,
+    HardDriveDownload,
+    RefreshCw,
+    Link,
+    LoaderCircle,
+  } from "@lucide/svelte";
+  import Modal from "$lib/components/Modal.svelte";
   import BackButton from "$lib/components/BackButton.svelte";
   import { Skeleton } from "$lib/components/ui/skeleton";
   import * as m from "$lib/paraglide/messages.js";
@@ -14,6 +26,21 @@
   let loading = $state(true);
   let linkingPath = $state<string | null>(null);
   let linkName = $state("");
+  let linkMode = $state<"sync" | "copy">("sync");
+  // Copying a linked library in: the confirmation, then (files that
+  // cannot be read) the choice to go ahead without them.
+  let copyTarget = $state<{
+    id: string;
+    name: string;
+    preview: CalibreCopyPreview;
+  } | null>(null);
+  let unreadable = $state<{
+    id: string;
+    name: string;
+    titles: string[];
+    count: number;
+  } | null>(null);
+  let copyBusy = $state(false);
   let syncStatuses = $state<Record<string, CalibreLibraryStatus>>({});
   let pollingIntervals = $state<Record<string, ReturnType<typeof setInterval>>>(
     {},
@@ -80,6 +107,8 @@
         if (status.sync?.status !== "running") {
           clearInterval(pollingIntervals[libraryId]);
           delete pollingIntervals[libraryId];
+          if (status.sync?.mode === "copy")
+            copyEnded(libraryId, status.library_name, status.sync);
           await loadData();
         }
       } catch {
@@ -95,10 +124,12 @@
       const result = await adminApi.linkCalibreLibrary({
         calibre_path: path,
         name,
+        mode: linkMode,
       });
-      toastStore.success(`Library "${name}" linked and sync started`);
+      toastStore.success(m.admin_calibre_linked({ name }));
       linkingPath = null;
       linkName = "";
+      linkMode = "sync";
       await loadData();
       if (result.library_id) {
         startPolling(result.library_id);
@@ -115,6 +146,78 @@
     } catch (e) {
       toastStore.error((e as Error).message);
     }
+  }
+
+  function formatBytes(bytes: number): string {
+    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
+    return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  }
+
+  // What the server leaves free after a copy (calibre.COPY_FREE_MARGIN).
+  const FREE_MARGIN = 256 * 1024 * 1024;
+  let copyFits = $derived(
+    !copyTarget ||
+      copyTarget.preview.bytes_needed + FREE_MARGIN <=
+        copyTarget.preview.bytes_free,
+  );
+
+  async function openCopy(lib: CalibreLibraryInfo) {
+    if (!lib.library_id) return;
+    try {
+      copyTarget = {
+        id: lib.library_id,
+        name: lib.library_name || lib.name,
+        preview: await adminApi.previewCalibreCopy(lib.library_id),
+      };
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    }
+  }
+
+  async function startCopy(id: string, skipUnreadable = false) {
+    if (copyBusy) return;
+    copyBusy = true;
+    try {
+      await adminApi.copyCalibreLibrary(id, skipUnreadable);
+      copyTarget = null;
+      unreadable = null;
+      await loadStatus(id);
+      startPolling(id);
+    } catch (e) {
+      toastStore.error((e as Error).message);
+    } finally {
+      copyBusy = false;
+    }
+  }
+
+  function copyEnded(id: string, name: string, sync: CalibreSyncStatus) {
+    if (sync.status === "completed") {
+      toastStore.success(m.admin_calibre_copied({ name }));
+    } else if (sync.reason === "unreadable") {
+      unreadable = {
+        id,
+        name,
+        titles: sync.unreadable ?? [],
+        count: sync.unreadable_count ?? 0,
+      };
+    } else {
+      toastStore.error(copyFailure(sync));
+    }
+  }
+
+  function copyFailure(sync: CalibreSyncStatus): string {
+    if (sync.reason === "space")
+      return m.admin_calibre_copy_no_space({
+        size: formatBytes(sync.bytes_needed ?? 0),
+        free: formatBytes(sync.bytes_free ?? 0),
+      });
+    if (sync.reason === "unreadable")
+      return m.admin_calibre_unreadable_title({
+        count: String(sync.unreadable_count ?? 0),
+      });
+    return m.admin_calibre_copy_failed({
+      msg: sync.errors[0] ?? "Unknown error",
+    });
   }
 
   async function handleSyncAll() {
@@ -190,6 +293,8 @@
         });
       return text;
     }
+    if (syncInfo.status === "failed" && syncInfo.mode === "copy")
+      return copyFailure(syncInfo);
     if (syncInfo.status === "failed") {
       const msg =
         syncInfo.errors.length > 0 ? syncInfo.errors[0] : "Unknown error";
@@ -198,6 +303,18 @@
     return null;
   }
 </script>
+
+{#snippet copyButton(lib: CalibreLibraryInfo, running: boolean)}
+  <button
+    class="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
+    disabled={running}
+    onclick={() => openCopy(lib)}
+    aria-label={m.admin_calibre_copy_action()}
+    title={m.admin_calibre_copy_action()}
+  >
+    <HardDriveDownload size={16} />
+  </button>
+{/snippet}
 
 <svelte:head>
   <title>{m.admin_calibre_title()}</title>
@@ -258,7 +375,7 @@
     <div class="bg-card card-soft rounded-2xl overflow-hidden">
       <!-- Desktop table header -->
       <div
-        class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3 border-b border-border/50 text-xs font-medium text-muted-foreground uppercase tracking-wider"
+        class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_4rem] gap-x-4 items-center px-5 py-3 border-b border-border/50 text-xs font-medium text-muted-foreground uppercase tracking-wider"
       >
         <span>{m.admin_calibre_col_library()}</span>
         <span>{m.admin_calibre_col_path()}</span>
@@ -276,7 +393,7 @@
         <div class="border-b border-border/30 last:border-b-0">
           <!-- Desktop row -->
           <div
-            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3.5"
+            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_4rem] gap-x-4 items-center px-5 py-3.5"
           >
             <span class="text-sm font-medium text-foreground truncate">
               {lib.library_name || lib.name}
@@ -311,7 +428,8 @@
             >
               {formatRelativeTime(lib.last_synced_at)}
             </span>
-            <div class="flex justify-center">
+            <div class="flex justify-end gap-3">
+              {@render copyButton(lib, syncInfo?.status === "running")}
               <button
                 class="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
                 disabled={syncInfo?.status === "running"}
@@ -353,6 +471,7 @@
                     : 'translate-x-1'}"
                 ></span>
               </button>
+              {@render copyButton(lib, syncInfo?.status === "running")}
               <button
                 class="text-muted-foreground hover:text-foreground transition-colors disabled:opacity-30"
                 disabled={syncInfo?.status === "running"}
@@ -374,7 +493,9 @@
                 class="flex items-center gap-2 text-xs text-muted-foreground mb-1.5"
               >
                 <LoaderCircle size={12} class="animate-spin" />
-                {m.admin_calibre_syncing({
+                {(syncInfo.mode === "copy"
+                  ? m.admin_calibre_copying
+                  : m.admin_calibre_syncing)({
                   processed: String(syncInfo.processed),
                   total: String(syncInfo.total),
                 })}
@@ -397,7 +518,7 @@
         <div class="border-b border-border/30 last:border-b-0">
           <!-- Desktop -->
           <div
-            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_2rem] gap-x-4 items-center px-5 py-3.5"
+            class="hidden sm:grid sm:grid-cols-[1fr_1fr_5rem_3.5rem_4.5rem_4rem] gap-x-4 items-center px-5 py-3.5"
           >
             <span class="text-sm text-muted-foreground truncate"
               >{lib.name}</span
@@ -491,6 +612,27 @@
           >
           <Input id="lib-name" bind:value={linkName} class="rounded-xl" />
         </div>
+        <div class="space-y-2" role="radiogroup">
+          {#each [["sync", m.admin_calibre_mode_sync, m.admin_calibre_mode_sync_hint], ["copy", m.admin_calibre_mode_copy, m.admin_calibre_mode_copy_hint]] as const as [mode, label, hint] (mode)}
+            <button
+              type="button"
+              role="radio"
+              aria-checked={linkMode === mode}
+              class="w-full text-left rounded-xl border px-3.5 py-2.5 transition-colors {linkMode ===
+              mode
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:bg-secondary/60'}"
+              onclick={() => (linkMode = mode)}
+            >
+              <span class="block text-sm font-medium text-foreground"
+                >{label()}</span
+              >
+              <span class="block text-xs text-muted-foreground mt-0.5"
+                >{hint()}</span
+              >
+            </button>
+          {/each}
+        </div>
         <div class="flex justify-end gap-2 pt-2">
           <Button
             variant="ghost"
@@ -504,10 +646,100 @@
             class="rounded-xl"
             disabled={!linkName}
             onclick={() => handleLink(linkingPath!)}
-            >{m.admin_calibre_link_sync()}</Button
+            >{linkMode === "copy"
+              ? m.admin_calibre_link_copy()
+              : m.admin_calibre_link_sync()}</Button
           >
         </div>
       </div>
     </div>
   </div>
 {/if}
+
+<Modal
+  title={copyTarget
+    ? m.admin_calibre_copy_title({ name: copyTarget.name })
+    : ""}
+  open={copyTarget != null}
+  onclose={() => (copyTarget = null)}
+>
+  {#if copyTarget}
+    {@const preview = copyTarget.preview}
+    <div class="space-y-4 text-sm">
+      <p class="text-foreground leading-relaxed">
+        {m.admin_calibre_copy_body({
+          count: String(preview.book_count),
+          size: formatBytes(preview.bytes_needed),
+          free: formatBytes(preview.bytes_free),
+        })}
+      </p>
+      {#if !copyFits}
+        <p class="text-destructive" role="alert">
+          {m.admin_calibre_copy_no_space({
+            size: formatBytes(preview.bytes_needed),
+            free: formatBytes(preview.bytes_free),
+          })}
+        </p>
+      {/if}
+      <div class="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          class="rounded-xl"
+          onclick={() => (copyTarget = null)}>{m.common_cancel()}</Button
+        >
+        <Button
+          class="rounded-xl"
+          disabled={copyBusy || !copyFits || preview.book_count === 0}
+          onclick={() => startCopy(copyTarget!.id)}
+          >{m.admin_calibre_copy_confirm({
+            count: String(preview.book_count),
+          })}</Button
+        >
+      </div>
+    </div>
+  {/if}
+</Modal>
+
+<Modal
+  title={unreadable
+    ? m.admin_calibre_unreadable_title({ count: String(unreadable.count) })
+    : ""}
+  open={unreadable != null}
+  onclose={() => (unreadable = null)}
+>
+  {#if unreadable}
+    <div class="space-y-4 text-sm">
+      <p class="text-foreground leading-relaxed">
+        {m.admin_calibre_unreadable_body()}
+      </p>
+      <ul
+        class="rounded-xl border border-border max-h-56 overflow-y-auto divide-y divide-border/60"
+      >
+        {#each unreadable.titles as title, i (i)}
+          <li class="px-3 py-1.5 truncate text-foreground">{title}</li>
+        {/each}
+        {#if unreadable.count > unreadable.titles.length}
+          <li class="px-3 py-1.5 text-muted-foreground">
+            {m.admin_calibre_unreadable_more({
+              count: String(unreadable.count - unreadable.titles.length),
+            })}
+          </li>
+        {/if}
+      </ul>
+      <div class="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          class="rounded-xl"
+          onclick={() => (unreadable = null)}>{m.common_cancel()}</Button
+        >
+        <Button
+          variant="destructive"
+          class="rounded-xl"
+          disabled={copyBusy}
+          onclick={() => startCopy(unreadable!.id, true)}
+          >{m.admin_calibre_unreadable_skip()}</Button
+        >
+      </div>
+    </div>
+  {/if}
+</Modal>

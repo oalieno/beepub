@@ -1,7 +1,7 @@
 import asyncio
 import os
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -26,7 +26,10 @@ from app.schemas.user import (
 from app.services.auth import derive_kosync_key_hash, hash_password
 from app.services.calibre import (
     _count_calibre_epubs,
+    copy_in_progress,
+    copy_preview,
     get_sync_status,
+    mark_queued,
     scan_calibre_libraries,
     sync_calibre_library,
 )
@@ -269,6 +272,14 @@ async def get_stats(
 class CalibreLibraryCreate(BaseModel):
     calibre_path: str
     name: str | None = None
+    # "sync": the books stay in Calibre's folder and follow it.
+    # "copy": they are copied in and the library is BeePub's own.
+    mode: Literal["sync", "copy"] = "sync"
+
+
+class CalibreCopyRequest(BaseModel):
+    # Go ahead without the books whose files cannot be read (they are removed).
+    skip_unreadable: bool = False
 
 
 @router.get("/calibre/libraries")
@@ -334,12 +345,22 @@ async def link_calibre_library(
     await db.commit()
     await db.refresh(library)
 
-    # Start background sync (must hold a reference to prevent GC)
-    task = asyncio.create_task(
-        sync_calibre_library(body.calibre_path, library.id, current_user.id)
-    )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    if body.mode == "copy":
+        # Hours of copying on a large library: the worker's, not this
+        # process's (which a deploy restarts).
+        from app.tasks.calibre_sync import link_and_copy_calibre_library
+
+        await mark_queued(library.id, "sync")
+        link_and_copy_calibre_library.delay(
+            body.calibre_path, str(library.id), str(current_user.id)
+        )
+    else:
+        # Start background sync (must hold a reference to prevent GC)
+        task = asyncio.create_task(
+            sync_calibre_library(body.calibre_path, library.id, current_user.id)
+        )
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
 
     return {
         "library_id": str(library.id),
@@ -347,6 +368,64 @@ async def link_calibre_library(
         "calibre_path": library.calibre_path,
         "sync_started": True,
     }
+
+
+def _sync_running(sync_status: dict | None) -> bool:
+    """A status left "running" by a run that died stops counting after 30
+    minutes — for a sync. A copy refreshes its status with every book."""
+    if not sync_status or sync_status.get("status") != "running":
+        return False
+    from datetime import UTC, datetime
+
+    try:
+        started = datetime.fromisoformat(sync_status.get("started_at") or "")
+    except (ValueError, TypeError):
+        return True
+    return (datetime.now(UTC) - started).total_seconds() < 1800
+
+
+async def _calibre_library(library_id: uuid.UUID, db: AsyncSession) -> Library:
+    result = await db.execute(select(Library).where(Library.id == library_id))
+    library = result.scalar_one_or_none()
+    if not library:
+        raise HTTPException(status_code=404, detail="Library not found")
+    if not library.calibre_path:
+        raise HTTPException(status_code=400, detail="Not a Calibre library")
+    return library
+
+
+@router.get("/calibre/libraries/{library_id}/copy")
+async def preview_calibre_copy(
+    library_id: uuid.UUID,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """What copying this library in would take (books, bytes, free room)."""
+    await _calibre_library(library_id, db)
+    return await copy_preview(db, library_id)
+
+
+@router.post(
+    "/calibre/libraries/{library_id}/copy", status_code=status.HTTP_202_ACCEPTED
+)
+async def copy_calibre_library_in(
+    library_id: uuid.UUID,
+    body: CalibreCopyRequest,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Copy a linked library's books into BeePub and unlink it from
+    Calibre: an ordinary library from then on. One way."""
+    await _calibre_library(library_id, db)
+    if await copy_in_progress(library_id) or _sync_running(
+        await get_sync_status(library_id)
+    ):
+        raise HTTPException(status_code=409, detail="Sync already in progress")
+    from app.tasks.calibre_sync import copy_calibre_library
+
+    await mark_queued(library_id, "copy")
+    copy_calibre_library.delay(str(library_id), body.skip_unreadable)
+    return {"status": "copy_started"}
 
 
 @router.post(
@@ -364,6 +443,9 @@ async def trigger_calibre_sync(
         raise HTTPException(status_code=404, detail="Library not found")
     if not library.calibre_path:
         raise HTTPException(status_code=400, detail="Not a Calibre library")
+
+    if await copy_in_progress(library_id):
+        raise HTTPException(status_code=409, detail="Sync already in progress")
 
     # Check if sync is already running (with stale detection)
     sync_status = await get_sync_status(library_id)
@@ -429,7 +511,21 @@ async def get_calibre_library_status(
     library = result.scalar_one_or_none()
     if not library:
         raise HTTPException(status_code=404, detail="Library not found")
+    sync = await get_sync_status(library_id)
     if not library.calibre_path:
+        # Copied in a moment ago: no longer Calibre's, but the page that
+        # watched the copy still asks how it ended.
+        if sync and sync.get("mode") == "copy":
+            return {
+                "library_id": str(library.id),
+                "library_name": library.name,
+                "calibre_path": None,
+                "calibre_book_count": None,
+                "imported_book_count": None,
+                "auto_sync": False,
+                "last_synced_at": None,
+                "sync": sync,
+            }
         raise HTTPException(status_code=400, detail="Not a Calibre library")
 
     # Count imported books
@@ -447,8 +543,6 @@ async def get_calibre_library_status(
         calibre_count = await asyncio.to_thread(_count_calibre_epubs, db_path)
     except Exception:
         calibre_count = None
-
-    sync = await get_sync_status(library_id)
 
     return {
         "library_id": str(library.id),
