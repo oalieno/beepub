@@ -83,3 +83,36 @@ export function seriesNumbers(
   if (numbering === "title") return titles.map(volumeFromTitle);
   return titles.map(() => null);
 }
+
+/** Each title after find-and-replace: the new title, `null` where nothing
+ *  changes, `""` where the title would be left empty (not to be applied).
+ *  `error` when the pattern is not a valid regular expression. With
+ *  `regex`, `replace` takes `$1`-style groups. */
+export function replaceTitles(
+  titles: string[],
+  find: string,
+  replace: string,
+  regex: boolean,
+): { results: (string | null)[]; error: boolean } {
+  const unchanged = { results: titles.map(() => null), error: false };
+  if (!find) return unchanged;
+  let run: (title: string) => string;
+  if (regex) {
+    let pattern: RegExp;
+    try {
+      pattern = new RegExp(find, "gu");
+    } catch {
+      return { ...unchanged, error: true };
+    }
+    run = (title) => title.replace(pattern, replace);
+  } else {
+    run = (title) => title.split(find).join(replace);
+  }
+  return {
+    results: titles.map((title) => {
+      const next = run(title).trim();
+      return next === title ? null : next;
+    }),
+    error: false,
+  };
+}

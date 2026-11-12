@@ -325,3 +325,94 @@ async def test_batch_title_is_for_one_book_and_own_values_store_nothing(
     book = await _get(admin_client, ids[0])
     assert book["title"] is None and book["authors"] is None
     assert not book["field_sources"]
+
+
+async def test_batch_titles_one_per_book(admin_client):
+    library_id = await create_library(admin_client, "Replace Shelf")
+    ids = [
+        await _physical(admin_client, library_id, f"銀河觀測手記 {n}")
+        for n in (1, 2, 3)
+    ]
+    await _as_own_values(ids)
+
+    # A book not named in titles is left alone; a blank one goes back to
+    # its own title; a title the book has of its own stores nothing.
+    response = await admin_client.patch(
+        "/api/books/metadata",
+        json={
+            "book_ids": ids,
+            "titles": {ids[0]: "銀河觀測手記 01", ids[1]: "銀河觀測手記 2"},
+        },
+    )
+    assert response.status_code == 200, response.text
+    first, second, third = [await _get(admin_client, i) for i in ids]
+    assert first["title"] == "銀河觀測手記 01"
+    assert first["field_sources"] == {"title": "manual"}
+    assert second["title"] is None and not second["field_sources"]
+    assert third["title"] is None
+
+    response = await admin_client.patch(
+        "/api/books/metadata", json={"book_ids": ids, "titles": {ids[0]: "  "}}
+    )
+    assert response.status_code == 200, response.text
+    first = await _get(admin_client, ids[0])
+    assert first["title"] is None and first["display_title"] == "銀河觀測手記 1"
+
+    for body in (
+        {"book_ids": ids[:1], "titles": {ids[1]: "別本的書名"}},
+        {"book_ids": ids[:1], "title": "甲", "titles": {ids[0]: "乙"}},
+        {"book_ids": ids[:1], "titles": {ids[0]: "長" * 501}},
+    ):
+        response = await admin_client.patch("/api/books/metadata", json=body)
+        assert response.status_code == 422, body
+
+
+async def test_batch_tags_added_and_removed(admin_client):
+    library_id = await create_library(admin_client, "Tag Shelf")
+    ids = [
+        await _physical(admin_client, library_id, f"潮汐圖鑑 {n}") for n in (1, 2, 3)
+    ]
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(Book)
+            .where(Book.id == uuid.UUID(ids[0]))
+            .values(epub_tags=["海洋", "圖鑑"])
+        )
+        await db.execute(
+            update(Book).where(Book.id == uuid.UUID(ids[1])).values(tags=["待整理"])
+        )
+        await db.commit()
+
+    response = await admin_client.patch(
+        "/api/books/metadata",
+        json={
+            "book_ids": ids,
+            "tags_add": ["科普", " 海洋 "],
+            "tags_remove": ["待整理"],
+        },
+    )
+    assert response.status_code == 200, response.text
+    first, second, third = [await _get(admin_client, i) for i in ids]
+    # Each book keeps what it had; a tag it already has is not doubled.
+    assert first["display_tags"] == ["海洋", "圖鑑", "科普"]
+    assert first["epub_tags"] == ["海洋", "圖鑑"]
+    assert first["field_sources"] == {"tags": "manual"}
+    assert second["display_tags"] == ["科普", "海洋"]
+    assert third["display_tags"] == ["科普", "海洋"]
+
+    # Taking off what was added leaves the first book on its own tags
+    # again, with no override; a tag no book has changes nothing.
+    response = await admin_client.patch(
+        "/api/books/metadata",
+        json={"book_ids": ids[:1], "tags_remove": ["科普", "沒有這個"]},
+    )
+    assert response.status_code == 200, response.text
+    first = await _get(admin_client, ids[0])
+    assert first["tags"] is None and not first["field_sources"]
+    assert first["display_tags"] == ["海洋", "圖鑑"]
+
+    response = await admin_client.patch(
+        "/api/books/metadata",
+        json={"book_ids": ids, "tags_add": ["科普"], "tags_remove": ["科普"]},
+    )
+    assert response.status_code == 422

@@ -178,6 +178,10 @@ export const booksApi = {
     book_ids: string[];
     // One book at a time.
     title?: string;
+    // Each book's own new title.
+    titles?: Record<string, string>;
+    tags_add?: string[];
+    tags_remove?: string[];
     authors?: string[];
     publisher?: string;
     series?: string;

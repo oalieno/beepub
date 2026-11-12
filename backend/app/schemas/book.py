@@ -152,6 +152,11 @@ class BookMetadataBulkUpdate(BaseModel):
     book_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
     # Only with a single book.
     title: str | None = Field(default=None, max_length=500)
+    # Each book's new title (find and replace gives every book its own).
+    titles: dict[uuid.UUID, str] | None = None
+    # Tags put on every book, and taken off: each book keeps the rest.
+    tags_add: list[str] | None = None
+    tags_remove: list[str] | None = None
     authors: list[str] | None = None
     publisher: str | None = Field(default=None, max_length=255)
     series: str | None = Field(default=None, max_length=500)

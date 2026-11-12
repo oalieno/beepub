@@ -133,6 +133,7 @@
   let showConvertZh = $state(false);
   let showMove = $state(false);
   let moveLibraries = $state<LibraryOut[]>([]);
+  let moveFrom = $state<string | null>(null);
   let showWorkRemove = $state(false);
   let showWorkSplit = $state(false);
   let showWorkSearch = $state(false);
@@ -393,9 +394,13 @@
   async function openMove(b: BookOut) {
     try {
       // Calibre libraries are sync-managed — not valid move targets.
-      moveLibraries = (await librariesApi.list()).filter(
-        (l) => !l.calibre_path,
-      );
+      // A book from a list does not say which library it is in.
+      const [libraries, own] = await Promise.all([
+        librariesApi.list(),
+        b.library_id ?? booksApi.get(b.id).then((full) => full.library_id),
+      ]);
+      moveLibraries = libraries.filter((l) => !l.calibre_path);
+      moveFrom = own;
       target = b;
       showMove = true;
     } catch (e) {
@@ -592,7 +597,7 @@
       </p>
     {:else}
       {#each moveLibraries as library (library.id)}
-        {@const current = library.id === target?.library_id}
+        {@const current = library.id === moveFrom}
         <!-- The library the book is already in stays in the list, ticked
              and inert: the list then reads as "where it is, where it can
              go" rather than a bare set of names. -->

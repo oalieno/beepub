@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
    * The library table's side panel: the book picked, or — several picked —
-   * their shared series, authors and publisher to change at once, and
-   * delete. Fields the books disagree on start empty and are left alone
+   * their shared series, authors and publisher to change at once, tags to
+   * put on or take off, a find-and-replace over their titles, and delete. Fields the books disagree on start empty and are left alone
    * unless typed into; a field emptied goes back to each book's own value.
    */
   import { onDestroy } from "svelte";
@@ -17,7 +17,13 @@
   import { booksApi } from "$lib/api/books";
   import { toastStore } from "$lib/stores/toast";
   import { sanitizeDescription } from "$lib/sanitize";
-  import { seriesNumbers, type Numbering } from "$lib/services/tableSelection";
+  import {
+    replaceTitles,
+    seriesNumbers,
+    type Numbering,
+  } from "$lib/services/tableSelection";
+  import { Checkbox } from "$lib/components/ui/checkbox";
+  import { X } from "@lucide/svelte";
   import type { BookOut, BookWithInteractionOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
@@ -64,7 +70,75 @@
   let updated = $state<number | null>(null);
   let confirming = $state(false);
 
-  let editing = $derived(Object.keys(edits).length > 0);
+  // Tags: each book keeps its own; these are put on all, or taken off.
+  let tagAdds = $state<string[]>([]);
+  let tagRemoves = $state<string[]>([]);
+  let tagDraft = $state("");
+  /** Every tag among the books, with how many of them carry it. */
+  let tagCounts = $derived.by(() => {
+    const counts = new Map<string, number>();
+    for (const b of books)
+      for (const t of b.display_tags ?? [])
+        counts.set(t, (counts.get(t) ?? 0) + 1);
+    return counts;
+  });
+
+  function addTags(text: string) {
+    for (const tag of text.split(/[,，]/).map((t) => t.trim())) {
+      if (!tag) continue;
+      // Asked back for a tag marked to go: it simply stays.
+      if (tagRemoves.includes(tag))
+        tagRemoves = tagRemoves.filter((t) => t !== tag);
+      else if (!tagAdds.includes(tag) && tagCounts.get(tag) !== books.length)
+        tagAdds = [...tagAdds, tag];
+    }
+    tagDraft = "";
+    updated = null;
+  }
+  function toggleRemove(tag: string) {
+    tagRemoves = tagRemoves.includes(tag)
+      ? tagRemoves.filter((t) => t !== tag)
+      : [...tagRemoves, tag];
+    updated = null;
+  }
+
+  // Titles: find and replace, each book's result shown before it is applied.
+  let find = $state("");
+  let replaceWith = $state("");
+  let regex = $state(false);
+  let replaced = $derived(
+    replaceTitles(
+      books.map((b) => b.display_title ?? ""),
+      find,
+      replaceWith,
+      regex,
+    ),
+  );
+  let titleChanges = $derived(
+    books.flatMap((b, i) => {
+      const next = replaced.results[i];
+      return next == null
+        ? []
+        : [{ id: b.id, from: b.display_title ?? "", to: next }];
+    }),
+  );
+  let titlesToWrite = $derived(titleChanges.filter((c) => c.to !== ""));
+
+  function reset() {
+    edits = {};
+    tagAdds = [];
+    tagRemoves = [];
+    tagDraft = "";
+    find = "";
+    replaceWith = "";
+  }
+
+  let editing = $derived(
+    Object.keys(edits).length > 0 ||
+      tagAdds.length > 0 ||
+      tagRemoves.length > 0 ||
+      titlesToWrite.length > 0,
+  );
   $effect(() => onediting(editing));
   onDestroy(() => onediting(false));
 
@@ -128,9 +202,15 @@
           body.series_indexes = indexes;
         }
       }
+      if (tagAdds.length) body.tags_add = tagAdds;
+      if (tagRemoves.length) body.tags_remove = tagRemoves;
+      if (titlesToWrite.length)
+        body.titles = Object.fromEntries(
+          titlesToWrite.map((c) => [c.id, c.to]),
+        );
       const count = books.length;
       onapplied(await booksApi.updateMetadataBulk(body));
-      edits = {};
+      reset();
       updated = count;
     } catch (e) {
       toastStore.error((e as Error).message);
@@ -230,6 +310,14 @@
           {book.publisher ?? book.epub_publisher}
         </dd>
       {/if}
+      {#if book.display_tags?.length}
+        <dt class="text-xs text-muted-foreground leading-7">
+          {m.selection_tags()}
+        </dt>
+        <dd class="min-w-0 text-foreground">
+          {book.display_tags.join("、")}
+        </dd>
+      {/if}
       <dt class="text-xs text-muted-foreground leading-7">
         {m.browser_col_added()}
       </dt>
@@ -283,6 +371,72 @@
           apply();
         }}
       >
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <Label for="batch-find" class="text-sm text-muted-foreground">
+              {m.selection_title_replace()}
+            </Label>
+            <label
+              class="flex items-center gap-1.5 text-xs text-muted-foreground"
+            >
+              <Checkbox bind:checked={regex} disabled={busy} />
+              {m.selection_regex()}
+            </label>
+          </div>
+          <Input
+            id="batch-find"
+            bind:value={find}
+            placeholder={m.selection_find()}
+            aria-label={m.selection_find()}
+            aria-invalid={replaced.error}
+            disabled={busy}
+            oninput={() => (updated = null)}
+          />
+          <Input
+            bind:value={replaceWith}
+            placeholder={m.selection_replace_with()}
+            aria-label={m.selection_replace_with()}
+            disabled={busy}
+            oninput={() => (updated = null)}
+          />
+          {#if replaced.error}
+            <p class="text-xs text-destructive" role="alert">
+              {m.selection_regex_invalid()}
+            </p>
+          {:else if find && titleChanges.length === 0}
+            <p class="text-xs text-muted-foreground">
+              {m.selection_titles_none()}
+            </p>
+          {:else if titleChanges.length}
+            <p class="text-xs text-primary">
+              {m.selection_titles_changing({
+                count: String(titlesToWrite.length),
+              })}
+            </p>
+            <ol
+              class="rounded-xl border border-border max-h-56 overflow-y-auto divide-y divide-border/60 text-xs"
+              data-testid="title-preview"
+            >
+              {#each titleChanges as change (change.id)}
+                <li class="px-3 py-1.5">
+                  <span class="block truncate text-muted-foreground"
+                    >{change.from}</span
+                  >
+                  {#if change.to}
+                    <span class="block truncate text-foreground"
+                      >{change.to}</span
+                    >
+                  {:else}
+                    <span class="block text-destructive"
+                      >{m.selection_title_blank()}</span
+                    >
+                  {/if}
+                </li>
+              {/each}
+            </ol>
+          {/if}
+        </div>
+
         {#each FIELDS as field (field)}
           {@const start = common(field)}
           <div class="space-y-1.5">
@@ -347,6 +501,74 @@
           </div>
         {/each}
 
+        <div class="space-y-1.5">
+          <Label for="batch-tag" class="text-sm text-muted-foreground">
+            {m.selection_tags()}
+          </Label>
+          {#if tagCounts.size || tagAdds.length}
+            <ul class="flex flex-wrap gap-1.5" data-testid="batch-tags">
+              {#each tagCounts as [tag, count] (tag)}
+                {@const going = tagRemoves.includes(tag)}
+                <!-- A tag only some of the books carry is drawn dashed. -->
+                <li
+                  class="inline-flex items-center gap-1 rounded-full border pl-2.5 pr-1 py-0.5 text-xs {going
+                    ? 'border-destructive/40 text-muted-foreground line-through'
+                    : count < books.length
+                      ? 'border-dashed border-border text-muted-foreground'
+                      : 'border-border bg-secondary text-foreground'}"
+                  title={count < books.length
+                    ? m.selection_tag_some({
+                        count: String(count),
+                        total: String(books.length),
+                      })
+                    : undefined}
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-destructive/10 hover:text-destructive"
+                    disabled={busy}
+                    aria-pressed={going}
+                    aria-label={going
+                      ? m.selection_tag_keep({ tag })
+                      : m.selection_tag_remove({ tag })}
+                    onclick={() => toggleRemove(tag)}><X size={11} /></button
+                  >
+                </li>
+              {/each}
+              {#each tagAdds as tag (tag)}
+                <li
+                  class="inline-flex items-center gap-1 rounded-full border border-primary/50 bg-primary/10 pl-2.5 pr-1 py-0.5 text-xs text-foreground"
+                >
+                  {tag}
+                  <button
+                    type="button"
+                    class="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-primary/20"
+                    disabled={busy}
+                    aria-label={m.selection_tag_remove({ tag })}
+                    onclick={() => (tagAdds = tagAdds.filter((t) => t !== tag))}
+                    ><X size={11} /></button
+                  >
+                </li>
+              {/each}
+            </ul>
+          {/if}
+          <Input
+            id="batch-tag"
+            bind:value={tagDraft}
+            placeholder={m.selection_tag_add()}
+            disabled={busy}
+            onkeydown={(e) => {
+              // Enter adds the tag; it must not apply the whole form.
+              if (e.key === "Enter" && !e.isComposing && tagDraft.trim()) {
+                e.preventDefault();
+                addTags(tagDraft);
+              }
+            }}
+            onblur={() => addTags(tagDraft)}
+          />
+        </div>
+
         <div class="flex items-center gap-2">
           <Button type="submit" class="rounded-xl" disabled={busy || !editing}>
             {#if busy}<Spinner size="sm" />{/if}
@@ -358,7 +580,7 @@
               variant="ghost"
               class="rounded-xl"
               disabled={busy}
-              onclick={() => (edits = {})}>{m.common_cancel()}</Button
+              onclick={reset}>{m.common_cancel()}</Button
             >
           {/if}
         </div>

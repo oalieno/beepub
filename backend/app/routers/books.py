@@ -1696,8 +1696,9 @@ async def update_books_metadata(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Batch edit from the library table: the same authors, publisher or
-    series for every book given, in one transaction — and a title, for one
-    book at a time (the side panel's edit in place). Like the edit page,
+    series for every book given, in one transaction; tags added to or
+    taken off each; a title for one book (edit in place) or one per book
+    (find and replace, worked out by the client, which showed the result). Like the edit page,
     this writes BeePub's overrides only — a Calibre book's Calibre data is
     left as it is — and a value that reads as the book's own stores none."""
     ids = list(dict.fromkeys(body.book_ids))
@@ -1715,6 +1716,19 @@ async def update_books_metadata(
         raise HTTPException(
             status_code=422, detail="A title is given to one book at a time"
         )
+    titles = body.titles or {}
+    if set(titles) - set(ids):
+        raise HTTPException(
+            status_code=422, detail="titles names a book not in book_ids"
+        )
+    if "title" in fields and titles:
+        raise HTTPException(status_code=422, detail="Give title or titles, not both")
+    if any(len(t) > 500 for t in titles.values()):
+        raise HTTPException(status_code=422, detail="A title is too long")
+    tags_add = list(dict.fromkeys(t.strip() for t in body.tags_add or [] if t.strip()))
+    tags_remove = {t.strip() for t in body.tags_remove or [] if t.strip()}
+    if tags_remove & set(tags_add):
+        raise HTTPException(status_code=422, detail="A tag is both added and removed")
     books = await _books_by_ids(db, ids)
 
     authors = (
@@ -1751,6 +1765,18 @@ async def update_books_metadata(
         # following its file (or Calibre) there.
         if "title" in fields:
             written["title"] = None if title == book.epub_title else title
+        if book.id in titles:
+            # Blank reads as "the book's own title again", as elsewhere.
+            new_title = _blank_to_none(titles[book.id])
+            written["title"] = None if new_title == book.epub_title else new_title
+        if tags_add or tags_remove:
+            shown = book.display_tags or []
+            tags = [t for t in shown if t not in tags_remove]
+            tags += [t for t in tags_add if t not in tags]
+            # Untouched tags are not rewritten: a book that follows its
+            # file's tags goes on following them.
+            if tags != shown:
+                written["tags"] = None if tags == (book.epub_tags or []) else tags
         if "authors" in fields:
             written["authors"] = (
                 None if authors == (book.epub_authors or None) else authors

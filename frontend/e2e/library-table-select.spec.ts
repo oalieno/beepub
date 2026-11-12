@@ -337,6 +337,62 @@ test.describe("batch", () => {
     }
     created.splice(0);
   });
+
+  test("several books get tags, and their titles a find-and-replace", async ({
+    page,
+  }) => {
+    const libraryId = await shelfId(page.request);
+    const ids = await seed(page.request, libraryId);
+    await page.request.put(`/api/books/${ids[0]}/metadata`, {
+      data: { tags: ["書信"] },
+    });
+    await openShelf(page, libraryId, "table");
+    await page.getByRole("button", { name: "Title", exact: true }).click();
+    await expect(rows(page)).toHaveCount(3);
+    const byTitle = (title: string) =>
+      page.locator("tr[data-book-row]", { hasText: title });
+    await byTitle("燈下書簡 1").locator("td").nth(1).click();
+    await byTitle("燈下書簡 3")
+      .locator("td")
+      .nth(1)
+      .click({ modifiers: ["Shift"] });
+    const panel = page.getByTestId("selection-panel");
+
+    // One book's tag shows; a new one is typed, Enter adds it without
+    // applying anything yet.
+    const tags = panel.getByTestId("batch-tags").locator("li");
+    await expect(tags).toHaveText(["書信"]);
+    await panel.getByLabel("Tags").fill("散文");
+    await panel.getByLabel("Tags").press("Enter");
+    await expect(tags).toHaveText(["書信", "散文"]);
+    await panel.getByRole("button", { name: "Remove tag 書信" }).click();
+
+    // Titles: a pattern that is not one says so; a real one shows each
+    // title it changes.
+    await panel.getByLabel("Regular expression").click();
+    await panel.getByLabel("Find", { exact: true }).fill("(\\d");
+    await expect(panel.getByRole("alert")).toHaveText(
+      "This regular expression is not valid.",
+    );
+    await panel.getByLabel("Find", { exact: true }).fill(" (\\d)$");
+    await panel.getByLabel("Replace with").fill(" 第0$1卷");
+    await expect(panel.getByText("3 titles will change")).toBeVisible();
+    await expect(panel.getByTestId("title-preview").locator("li")).toHaveText([
+      /燈下書簡 1\s*燈下書簡 第01卷/,
+      /燈下書簡 2\s*燈下書簡 第02卷/,
+      /燈下書簡 3\s*燈下書簡 第03卷/,
+    ]);
+
+    await panel.getByRole("button", { name: "Apply to 3" }).click();
+    await expect(panel.getByText("Updated 3")).toBeVisible();
+    await expect(byTitle("燈下書簡 第02卷")).toBeVisible();
+    await expect(tags).toHaveText(["散文"]);
+    for (const [i, id] of ids.entries()) {
+      const book = await (await page.request.get(`/api/books/${id}`)).json();
+      expect(book.display_title).toBe(`燈下書簡 第0${i + 1}卷`);
+      expect(book.display_tags).toEqual(["散文"]);
+    }
+  });
 });
 
 test.describe("in place", () => {
