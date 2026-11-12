@@ -1,6 +1,10 @@
 <script lang="ts">
   import { Skeleton } from "$lib/components/ui/skeleton";
   import BookGridSkeleton from "./BookGridSkeleton.svelte";
+  import BookTableSkeleton from "./BookTableSkeleton.svelte";
+
+  // The view the library will open in: the table (desktop, when picked).
+  let { table = false }: { table?: boolean } = $props();
 </script>
 
 <div role="status" aria-label="Loading">
@@ -26,6 +30,10 @@
   <!-- Book count -->
   <Skeleton class="h-4 w-40 mb-4" />
 
-  <!-- Book grid -->
-  <BookGridSkeleton count={12} />
+  {#if table}
+    <BookTableSkeleton rows={12} />
+  {:else}
+    <!-- Book grid -->
+    <BookGridSkeleton count={12} />
+  {/if}
 </div>

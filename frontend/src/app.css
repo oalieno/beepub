@@ -156,6 +156,35 @@
 @utility scrollbar-thin {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
+  /* Chromium and Safari draw the standard thin scrollbar with arrow
+     buttons at its ends (Windows): there the old pseudo-elements draw it
+     instead — a bare thumb, no buttons. They apply only once the standard
+     properties are back to auto. Firefox keeps the standard ones. */
+  @supports selector(::-webkit-scrollbar) {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+    &::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    &::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+      background: var(--border);
+      background-clip: content-box;
+      border: 3px solid transparent;
+      border-radius: 9999px;
+    }
+    &::-webkit-scrollbar-thumb:hover {
+      background: var(--muted-foreground);
+      background-clip: content-box;
+    }
+    &::-webkit-scrollbar-button,
+    &::-webkit-scrollbar-corner {
+      display: none;
+    }
+  }
 }
 
 @layer base {

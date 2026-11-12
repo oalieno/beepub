@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from "svelte";
+  import { tick, untrack } from "svelte";
   import { page } from "$app/state";
   import { goto, afterNavigate } from "$app/navigation";
   import { keyboardVisible } from "$lib/stores/keyboard";
@@ -10,20 +10,15 @@
   import { coverUrl } from "$lib/api/client";
   import GeneratedCover from "$lib/components/GeneratedCover.svelte";
   import { authedSrc } from "$lib/actions/authedSrc";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
-  import { librariesApi } from "$lib/api/libraries";
   import { toastStore } from "$lib/stores/toast";
-  import { shareBook, type DownloadRequest } from "$lib/stores/downloads";
+  import type { DownloadRequest } from "$lib/stores/downloads";
   import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
   import DownloadButton from "$lib/components/DownloadButton.svelte";
   import { confirmDialog } from "$lib/stores/confirm";
   import StarRating from "$lib/components/StarRating.svelte";
-  import Modal from "$lib/components/Modal.svelte";
   import type {
     BookOut,
     ExternalMetadataOut,
-    BookshelfOut,
-    LibraryOut,
     InteractionOut,
     HighlightOut,
     ReadingStatus,
@@ -34,35 +29,18 @@
   import { BookDetailSkeleton } from "$lib/components/skeletons";
   import { UserRole } from "$lib/types";
   import {
-    Heart,
     BookOpen,
-    Trash2,
-    Pencil,
-    RefreshCw,
-    Share,
-    FolderInput,
-    ShelvingUnit,
     EllipsisVertical,
-    NotebookPen,
     Bookmark,
-    Flag,
     TriangleAlert,
     Download,
     Layers,
-    Link,
-    Unlink,
-    Scissors,
-    Plus,
     X,
-    Search,
     Star,
     BookCopy,
     FileText,
-    Languages,
   } from "@lucide/svelte";
   import BackButton from "$lib/components/BackButton.svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { Button } from "$lib/components/ui/button";
   import { isNative } from "$lib/platform";
   import { readingSyncStamp } from "$lib/services/readingSync";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -73,8 +51,11 @@
   import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
   import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
   import BackToTop from "$lib/components/BackToTop.svelte";
-  import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
-  import ZhConvertDialog from "$lib/components/ZhConvertDialog.svelte";
+  import BookActions, {
+    downloadRequestFor,
+    type Edition,
+  } from "$lib/components/book-actions/BookActions.svelte";
+  import BookActionMenuItems from "$lib/components/book-actions/BookActionMenuItems.svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   function newInteraction(
@@ -109,31 +90,18 @@
   // status/rating/notes only (a percentage is meaningless for paper).
   let isPhysical = $derived(book?.format === "physical");
   // Uploaded as TXT/MOBI/AZW3 and converted at ingest: the file behind the
-  // book is the EPUB, and the source is offered separately (web only — the
-  // app's "download to phone" wants the EPUB).
+  // book is the EPUB, and the source is offered separately (its ⋯ menu).
   let isConverted = $derived(
     ["txt", "mobi", "azw3", "cbz"].includes(book?.format ?? ""),
   );
   let sourceFormat = $derived((book?.format ?? "").toUpperCase());
   let externalMeta = $state<ExternalMetadataOut[]>([]);
-  let bookshelves = $state<BookshelfOut[]>([]);
   let bookHighlights = $state<HighlightOut[]>([]);
   let similarBooks = $state<BookOut[]>([]);
-  let editions = $state<
-    Array<{
-      id: string;
-      display_title: string | null;
-      display_authors: string[] | null;
-      cover_path: string | null;
-      metadata_count: number;
-    }>
-  >([]);
+  let editions = $state<Edition[]>([]);
   let primaryBookId = $state<string | null>(null);
   let seriesNeighbors = $state<SeriesNeighborsOut | null>(null);
   let loading = $state(true);
-  let showAddToShelf = $state(false);
-  let showMoveLibrary = $state(false);
-  let moveLibraries = $state<LibraryOut[]>([]);
   let notesStartEditing = $state(false);
   let notesSectionEl = $state<HTMLDivElement | null>(null);
 
@@ -141,57 +109,18 @@
     notesSectionEl?.scrollIntoView({ behavior: "smooth", block: "start" });
     if (startEditing) notesStartEditing = true;
   }
-  let showReportModal = $state(false);
   let showMobileActions = $state(false);
-
-  // Work management state
-  let showWorkRemoveConfirm = $state(false);
-  let showWorkSplitConfirm = $state(false);
-  let showWorkSearchModal = $state(false);
-  let workSearchMode = $state<"add" | "create">("add");
-  let workSearchQuery = $state("");
-  let workSearchResults = $state<BookOut[]>([]);
-  let workSearchTotal = $state(0);
-  let workSearching = $state(false);
-  let workSearchTimeout: ReturnType<typeof setTimeout> | null = null;
-  const WORK_SEARCH_LIMIT = 20;
+  // The ⋯ menu's actions and their dialogs (shared with the library table).
+  let bookActions = $state<BookActions>();
   let savingStatus = $state(false);
 
   // Download-to-library (native only): the state lives in the app-wide
   // queue, keyed by book — this page is reused across volumes.
   let downloadRequest = $derived<DownloadRequest | null>(
-    book
-      ? {
-          bookId: book.id,
-          title: book.display_title ?? book.title ?? "Untitled",
-          known: {
-            isImageBook: book.is_image_book,
-            sectionWeights: book.section_weights ?? null,
-          },
-        }
-      : null,
+    book ? downloadRequestFor(book) : null,
   );
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
-  // A book whose text may be Simplified Chinese can be converted. Chinese
-  // is told by its script: zh-TW/zh-HK/zh-Hant are already Traditional, a
-  // bare "zh" may be either (the dialog's preview shows which).
-  let canConvertZh = $derived.by(() => {
-    // A Calibre library's files are Calibre's to change.
-    if (!book || isPhysical || book.is_image_book || book.calibre_id != null)
-      return false;
-    if (!(isAdmin || $authStore.user?.can_upload)) return false;
-    try {
-      const locale = new Intl.Locale(book.epub_language ?? "");
-      return locale.language === "zh" && locale.maximize().script !== "Hant";
-    } catch {
-      return false;
-    }
-  });
-  let showConvertZh = $state(false);
-  // A copy as uploaded: the source of a converted format, or an EPUB as it
-  // was before conversion to Traditional.
-  let hasOriginal = $derived(isConverted || !!book?.has_original);
 
   // Track if user arrived via internal navigation (vs direct link / external)
   // Persisted in sessionStorage to survive reader round-trip (component gets destroyed)
@@ -250,14 +179,12 @@
     loading = true;
     notFound = false;
     try {
-      const [b, ext, shelves] = await Promise.all([
+      const [b, ext] = await Promise.all([
         booksApi.get(bookId),
         booksApi.getExternal(bookId).catch(() => [] as ExternalMetadataOut[]),
-        bookshelvesApi.list(),
       ]);
       book = b;
       externalMeta = ext;
-      bookshelves = shelves;
       const secondaryFetches: Promise<void>[] = [
         booksApi
           .getInteraction(bookId)
@@ -309,6 +236,11 @@
     } finally {
       loading = false;
     }
+    // Come from the library table's ⋯ menu: the notes, open to write in.
+    if (book && page.url.hash === "#notes") {
+      await tick();
+      scrollToNotes(true);
+    }
   }
 
   async function handleRating(rating: number | null) {
@@ -324,129 +256,7 @@
     }
   }
 
-  async function toggleFavorite() {
-    if (!book) return;
-    const newVal = !interaction?.is_favorite;
-    try {
-      await booksApi.updateFavorite(bookId, newVal);
-      interaction = interaction
-        ? { ...interaction, is_favorite: newVal }
-        : newInteraction({ is_favorite: newVal });
-      toastStore.success(
-        newVal ? m.book_favorite_added() : m.book_favorite_removed(),
-      );
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleDelete() {
-    if (
-      !(await confirmDialog({
-        title: m.book_delete_confirm(),
-        destructive: true,
-      }))
-    )
-      return;
-    try {
-      await booksApi.delete(bookId);
-      toastStore.success(m.book_deleted());
-      // The book page no longer exists — replace it in history so back
-      // doesn't land on a 404.
-      goto(book?.library_id ? `/libraries/${book.library_id}` : "/", {
-        replaceState: true,
-      });
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  // --- Work management handlers ---
-
-  async function handleWorkRemove() {
-    if (!book?.work_id) return;
-    try {
-      await worksApi.removeBook(book.work_id, bookId);
-      book.work_id = null;
-      editions = [];
-      primaryBookId = null;
-      showWorkRemoveConfirm = false;
-      toastStore.success(m.work_book_removed());
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleWorkSplit() {
-    if (!book?.work_id) return;
-    try {
-      await worksApi.deleteWork(book.work_id);
-      book.work_id = null;
-      editions = [];
-      primaryBookId = null;
-      showWorkSplitConfirm = false;
-      toastStore.success(m.work_split_success());
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleWorkAddBook(targetBookId: string) {
-    if (!book) return;
-    try {
-      if (workSearchMode === "add" && book.work_id) {
-        await worksApi.addBook(book.work_id, targetBookId);
-        toastStore.success(m.work_book_added());
-      } else {
-        const work = await worksApi.create([bookId, targetBookId]);
-        book.work_id = work.id;
-        toastStore.success(m.work_created());
-      }
-      const data = await booksApi.getEditions(bookId);
-      editions = data.editions;
-      primaryBookId = data.primary_book_id;
-      showWorkSearchModal = false;
-      workSearchQuery = "";
-      workSearchResults = [];
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  function handleWorkSearch(query: string) {
-    if (workSearchTimeout) clearTimeout(workSearchTimeout);
-    if (query.length < 2) {
-      workSearchResults = [];
-      workSearchTotal = 0;
-      workSearching = false;
-      return;
-    }
-    workSearching = true;
-    workSearchTimeout = setTimeout(async () => {
-      try {
-        const res = await booksApi.search(query, WORK_SEARCH_LIMIT);
-        const editionIds = new Set(editions.map((e) => e.id));
-        workSearchResults = res.items.filter(
-          (b) => b.id !== bookId && !editionIds.has(b.id),
-        );
-        workSearchTotal = res.total;
-      } catch {
-        workSearchResults = [];
-        workSearchTotal = 0;
-      } finally {
-        workSearching = false;
-      }
-    }, 300);
-  }
-
-  function openWorkSearch(mode: "add" | "create") {
-    workSearchMode = mode;
-    workSearchQuery = book?.display_title ?? book?.title ?? "";
-    workSearchResults = [];
-    workSearchTotal = 0;
-    showWorkSearchModal = true;
-    if (workSearchQuery) handleWorkSearch(workSearchQuery);
-  }
+  // --- The editions row (the ⋯ menu's work items are BookActions') ---
 
   async function handleRemoveEdition(editionId: string) {
     if (!book?.work_id) return;
@@ -473,15 +283,6 @@
       await worksApi.update(book.work_id, { primary_book_id: targetBookId });
       primaryBookId = targetBookId;
       toastStore.success(m.work_primary_set());
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function handleRefreshMeta() {
-    try {
-      await booksApi.refreshMetadata(bookId);
-      toastStore.success(m.book_refresh_queued());
     } catch (e) {
       toastStore.error((e as Error).message);
     }
@@ -549,42 +350,22 @@
       : newInteraction({ notes });
   }
 
-  function handleReported() {
+  function favorited(value: boolean) {
+    interaction = interaction
+      ? { ...interaction, is_favorite: value }
+      : newInteraction({ is_favorite: value });
+  }
+
+  function reported() {
     if (book) book = { ...book, has_unresolved_reports: true };
   }
 
-  async function addToShelf(shelfId: string) {
-    try {
-      await bookshelvesApi.addBook(shelfId, bookId);
-      toastStore.success(m.book_added_to_shelf());
-      showAddToShelf = false;
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function openMoveLibrary() {
-    try {
-      // Calibre libraries are sync-managed — not valid move targets.
-      moveLibraries = (await librariesApi.list()).filter(
-        (l) => !l.calibre_path,
-      );
-      showMoveLibrary = true;
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
-  }
-
-  async function moveToLibrary(libraryId: string) {
-    try {
-      const result = await booksApi.moveToLibrary(bookId, libraryId);
-      if (result.status === "moved") {
-        toastStore.success(m.book_moved_library());
-      }
-      showMoveLibrary = false;
-    } catch (e) {
-      toastStore.error((e as Error).message);
-    }
+  function deleted() {
+    // The book page no longer exists — replace it in history so back
+    // doesn't land on a 404.
+    goto(book?.library_id ? `/libraries/${book.library_id}` : "/", {
+      replaceState: true,
+    });
   }
 </script>
 
@@ -790,117 +571,7 @@
               </button>
             </DropdownMenu.Trigger>
             <DropdownMenu.Content align="start" side="top">
-              <DropdownMenu.Item onclick={toggleFavorite}>
-                <Heart
-                  size={14}
-                  class={interaction?.is_favorite
-                    ? "fill-red-500 text-red-500"
-                    : ""}
-                />
-                {interaction?.is_favorite
-                  ? m.book_remove_favorite()
-                  : m.book_add_favorite()}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item onclick={() => (showAddToShelf = true)}>
-                <ShelvingUnit size={14} />
-                {m.book_add_to_shelf()}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item onclick={() => scrollToNotes(true)}>
-                <NotebookPen
-                  size={14}
-                  class={interaction?.notes ? "text-primary" : ""}
-                />
-                {m.book_notes()}
-              </DropdownMenu.Item>
-              <DropdownMenu.Item onclick={() => (showReportModal = true)}>
-                <Flag
-                  size={14}
-                  class={book.has_unresolved_reports ? "text-destructive" : ""}
-                />
-                {m.book_report_issue()}
-              </DropdownMenu.Item>
-              {#if isNative() && !isPhysical && $authStore.user?.can_download}
-                <DropdownMenu.Item
-                  onclick={() => downloadRequest && shareBook(downloadRequest)}
-                >
-                  <Share size={14} />
-                  {m.book_download_to_device()}
-                </DropdownMenu.Item>
-              {/if}
-              {#if hasOriginal && !isNative() && $authStore.user?.can_download}
-                <DropdownMenu.Item
-                  onclick={() =>
-                    window.location.assign(`/api/books/${bookId}/original`)}
-                >
-                  <FileText size={14} />
-                  {m.book_download_original({ format: sourceFormat })}
-                </DropdownMenu.Item>
-              {/if}
-              {#if canConvertZh}
-                <DropdownMenu.Item onclick={() => (showConvertZh = true)}>
-                  <Languages size={14} />
-                  {m.book_convert_zh()}
-                </DropdownMenu.Item>
-              {/if}
-              {#if isAdmin}
-                <DropdownMenu.Separator />
-                <DropdownMenu.Item
-                  onclick={() => goto(`/books/${bookId}/edit`)}
-                >
-                  <Pencil size={14} />
-                  {m.book_edit_metadata()}
-                </DropdownMenu.Item>
-                <DropdownMenu.Item onclick={handleRefreshMeta}>
-                  <RefreshCw size={14} />
-                  {m.book_refresh_metadata()}
-                </DropdownMenu.Item>
-                {#if book.calibre_id === null}
-                  <!-- Calibre books are sync-managed; they cannot move. -->
-                  <DropdownMenu.Item onclick={openMoveLibrary}>
-                    <FolderInput size={14} />
-                    {m.book_move_library()}
-                  </DropdownMenu.Item>
-                {/if}
-                <DropdownMenu.Separator />
-                {#if book.work_id}
-                  {#if primaryBookId === bookId}
-                    <DropdownMenu.Item disabled>
-                      <Star size={14} class="fill-amber-500 text-amber-500" />
-                      {m.work_is_primary()}
-                    </DropdownMenu.Item>
-                  {:else}
-                    <DropdownMenu.Item onclick={() => handleSetPrimary(bookId)}>
-                      <Star size={14} />
-                      {m.work_set_as_primary()}
-                    </DropdownMenu.Item>
-                  {/if}
-                  <DropdownMenu.Item onclick={() => openWorkSearch("add")}>
-                    <Plus size={14} />
-                    {m.work_add_to_work()}
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    onclick={() => (showWorkRemoveConfirm = true)}
-                  >
-                    <Unlink size={14} />
-                    {m.work_remove_from_work()}
-                  </DropdownMenu.Item>
-                  <DropdownMenu.Item
-                    onclick={() => (showWorkSplitConfirm = true)}
-                  >
-                    <Scissors size={14} />
-                    {m.work_split_work()}
-                  </DropdownMenu.Item>
-                {:else}
-                  <DropdownMenu.Item onclick={() => openWorkSearch("create")}>
-                    <Link size={14} />
-                    {m.work_link_book()}
-                  </DropdownMenu.Item>
-                {/if}
-                <DropdownMenu.Item variant="destructive" onclick={handleDelete}>
-                  <Trash2 size={14} />
-                  {m.book_delete()}
-                </DropdownMenu.Item>
-              {/if}
+              <BookActionMenuItems groups={bookActions?.groups() ?? []} />
             </DropdownMenu.Content>
           </DropdownMenu.Root>
         </div>
@@ -1202,416 +873,46 @@
   </div>
 
   <BottomSheet bind:open={showMobileActions}>
-    <button
-      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-      onclick={() => {
-        toggleFavorite();
-        showMobileActions = false;
-      }}
-    >
-      <Heart
-        size={20}
-        class={interaction?.is_favorite
-          ? "fill-red-500 text-red-500 shrink-0"
-          : "text-muted-foreground shrink-0"}
-      />
-      {interaction?.is_favorite
-        ? m.book_remove_favorite()
-        : m.book_add_favorite()}
-    </button>
-    <button
-      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-      onclick={() => {
-        showAddToShelf = true;
-        showMobileActions = false;
-      }}
-    >
-      <ShelvingUnit size={20} class="text-muted-foreground shrink-0" />
-      {m.book_add_to_shelf()}
-    </button>
-    <button
-      class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-      onclick={() => {
-        showMobileActions = false;
-        scrollToNotes(true);
-      }}
-    >
-      <NotebookPen
-        size={20}
-        class={interaction?.notes
-          ? "text-primary shrink-0"
-          : "text-muted-foreground shrink-0"}
-      />
-      {m.book_notes()}
-    </button>
-    <button
-      class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors {book.has_unresolved_reports
-        ? 'text-destructive'
-        : 'text-foreground'}"
-      onclick={() => {
-        showReportModal = true;
-        showMobileActions = false;
-      }}
-    >
-      <Flag
-        size={20}
-        class={book.has_unresolved_reports
-          ? "text-destructive shrink-0"
-          : "text-muted-foreground shrink-0"}
-      />
-      {m.book_report_issue()}
-    </button>
-    {#if isNative() && !isPhysical && $authStore.user?.can_download}
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          showMobileActions = false;
-          if (downloadRequest) void shareBook(downloadRequest);
-        }}
-      >
-        <Share size={20} class="text-muted-foreground shrink-0" />
-        {m.book_download_to_device()}
-      </button>
-    {/if}
-    {#if hasOriginal && !isNative() && $authStore.user?.can_download}
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          showMobileActions = false;
-          window.location.assign(`/api/books/${bookId}/original`);
-        }}
-      >
-        <FileText size={20} class="text-muted-foreground shrink-0" />
-        {m.book_download_original({ format: sourceFormat })}
-      </button>
-    {/if}
-    {#if canConvertZh}
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          showMobileActions = false;
-          showConvertZh = true;
-        }}
-      >
-        <Languages size={20} class="text-muted-foreground shrink-0" />
-        {m.book_convert_zh()}
-      </button>
-    {/if}
-    {#if isAdmin}
-      <div class="border-t border-border my-1"></div>
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          goto(`/books/${bookId}/edit`);
-          showMobileActions = false;
-        }}
-      >
-        <Pencil size={20} class="text-muted-foreground shrink-0" />
-        {m.book_edit_metadata()}
-      </button>
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          handleRefreshMeta();
-          showMobileActions = false;
-        }}
-      >
-        <RefreshCw size={20} class="text-muted-foreground shrink-0" />
-        {m.book_refresh_metadata()}
-      </button>
-      <div class="border-t border-border my-1"></div>
-      {#if book.work_id}
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            openWorkSearch("add");
-            showMobileActions = false;
-          }}
-        >
-          <Plus size={20} class="text-muted-foreground shrink-0" />
-          {m.work_add_to_work()}
-        </button>
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            showWorkRemoveConfirm = true;
-            showMobileActions = false;
-          }}
-        >
-          <Unlink size={20} class="text-muted-foreground shrink-0" />
-          {m.work_remove_from_work()}
-        </button>
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            showWorkSplitConfirm = true;
-            showMobileActions = false;
-          }}
-        >
-          <Scissors size={20} class="text-muted-foreground shrink-0" />
-          {m.work_split_work()}
-        </button>
-      {:else}
-        <button
-          class="flex items-center gap-4 w-full px-2 py-3.5 text-foreground text-[15px] rounded-lg active:bg-secondary transition-colors"
-          onclick={() => {
-            openWorkSearch("create");
-            showMobileActions = false;
-          }}
-        >
-          <Link size={20} class="text-muted-foreground shrink-0" />
-          {m.work_link_book()}
-        </button>
+    {#each bookActions?.groups() ?? [] as group, i}
+      {#if i > 0}
+        <div class="border-t border-border my-1"></div>
       {/if}
-      <button
-        class="flex items-center gap-4 w-full px-2 py-3.5 text-destructive text-[15px] rounded-lg active:bg-secondary transition-colors"
-        onclick={() => {
-          handleDelete();
-          showMobileActions = false;
-        }}
-      >
-        <Trash2 size={20} class="text-destructive shrink-0" />
-        {m.book_delete()}
-      </button>
-    {/if}
+      {#each group as action (action.key)}
+        <button
+          class="flex items-center gap-4 w-full px-2 py-3.5 text-[15px] rounded-lg active:bg-secondary transition-colors disabled:opacity-50 {action.destructive
+            ? 'text-destructive'
+            : 'text-foreground'}"
+          disabled={action.disabled}
+          onclick={() => {
+            showMobileActions = false;
+            action.run();
+          }}
+        >
+          <action.icon
+            size={20}
+            class="shrink-0 {action.tone ??
+              (action.destructive
+                ? 'text-destructive'
+                : 'text-muted-foreground')}"
+          />
+          {action.label}
+        </button>
+      {/each}
+    {/each}
   </BottomSheet>
 {/if}
 
-{#if book}
-  <Modal
-    title={m.book_add_to_bookshelf()}
-    open={showAddToShelf}
-    onclose={() => (showAddToShelf = false)}
-  >
-    <div class="space-y-2">
-      {#if bookshelves.length === 0}
-        <p class="text-muted-foreground text-sm">
-          {m.book_no_bookshelves()}<a href="/bookshelves" class="text-primary"
-            >{m.book_create_bookshelf()}</a
-          >.
-        </p>
-      {:else}
-        {#each bookshelves as shelf}
-          <button
-            class="w-full text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary hover:shadow-sm transition-all"
-            onclick={() => addToShelf(shelf.id)}
-          >
-            <p class="font-medium text-foreground">{shelf.name}</p>
-            {#if shelf.description}
-              <p class="text-muted-foreground text-xs mt-0.5">
-                {shelf.description}
-              </p>
-            {/if}
-          </button>
-        {/each}
-      {/if}
-    </div>
-  </Modal>
-
-  <Modal
-    title={m.book_move_library()}
-    open={showMoveLibrary}
-    onclose={() => (showMoveLibrary = false)}
-  >
-    <div class="space-y-2">
-      {#if moveLibraries.length === 0}
-        <p class="text-muted-foreground text-sm">
-          {m.book_move_library_none()}
-        </p>
-      {:else}
-        {#each moveLibraries as library}
-          <button
-            class="w-full text-left px-4 py-3 rounded-xl bg-secondary/50 hover:bg-secondary hover:shadow-sm transition-all"
-            onclick={() => moveToLibrary(library.id)}
-          >
-            <p class="font-medium text-foreground">{library.name}</p>
-            {#if library.description}
-              <p class="text-muted-foreground text-xs mt-0.5">
-                {library.description}
-              </p>
-            {/if}
-          </button>
-        {/each}
-      {/if}
-    </div>
-  </Modal>
-{/if}
-
-<ReportIssueModal
-  {bookId}
-  bind:open={showReportModal}
-  onreported={handleReported}
+<BookActions
+  bind:this={bookActions}
+  {book}
+  favorite={interaction?.is_favorite ?? false}
+  hasNotes={!!interaction?.notes}
+  bind:editions
+  bind:primaryBookId
+  onfavorite={(_, value) => favorited(value)}
+  onnotes={() => scrollToNotes(true)}
+  onreported={reported}
+  onconverted={loadData}
+  onwork={(_, workId) => book && (book.work_id = workId)}
+  ondeleted={deleted}
 />
-
-{#if book}
-  <ZhConvertDialog
-    open={showConvertZh}
-    books={[{ id: book.id, title: book.display_title ?? "" }]}
-    onclose={() => (showConvertZh = false)}
-    onconverted={loadData}
-  />
-{/if}
-
-<!-- Remove from Work Confirmation -->
-<Dialog.Root bind:open={showWorkRemoveConfirm}>
-  <Dialog.Content class="sm:max-w-sm bg-popover">
-    <Dialog.Header>
-      <Dialog.Title>{m.work_remove_from_work()}</Dialog.Title>
-      <Dialog.Description
-        >{m.work_remove_from_work_confirm()}</Dialog.Description
-      >
-    </Dialog.Header>
-    <Dialog.Footer>
-      <Button
-        variant="outline"
-        class="rounded-xl"
-        onclick={() => (showWorkRemoveConfirm = false)}
-      >
-        {m.common_cancel()}
-      </Button>
-      <Button
-        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
-        onclick={handleWorkRemove}
-      >
-        {m.work_remove_from_work()}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
-
-<!-- Split Work Confirmation -->
-<Dialog.Root bind:open={showWorkSplitConfirm}>
-  <Dialog.Content class="sm:max-w-sm bg-popover">
-    <Dialog.Header>
-      <Dialog.Title>{m.work_split_work()}</Dialog.Title>
-      <Dialog.Description
-        >{m.work_split_work_confirm({
-          count: editions.length + 1,
-        })}</Dialog.Description
-      >
-    </Dialog.Header>
-    <Dialog.Footer>
-      <Button
-        variant="outline"
-        class="rounded-xl"
-        onclick={() => (showWorkSplitConfirm = false)}
-      >
-        {m.common_cancel()}
-      </Button>
-      <Button
-        class="rounded-xl bg-destructive text-white hover:bg-destructive/90"
-        onclick={handleWorkSplit}
-      >
-        {m.work_split_work()}
-      </Button>
-    </Dialog.Footer>
-  </Dialog.Content>
-</Dialog.Root>
-
-<!-- Work Search Modal (Add to Work / Link to Another Book) -->
-{#if showWorkSearchModal}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm"
-    onclick={() => {
-      showWorkSearchModal = false;
-      workSearchQuery = "";
-      workSearchResults = [];
-      workSearchTotal = 0;
-    }}
-    onkeydown={(e) => e.key === "Escape" && (showWorkSearchModal = false)}
-  >
-    <div
-      role="presentation"
-      class="max-w-xl mt-[12vh] mx-4 sm:mx-auto bg-card rounded-2xl shadow-2xl border border-border/50 overflow-hidden"
-      onclick={(e) => e.stopPropagation()}
-    >
-      <!-- Header -->
-      <div class="px-4 py-3 border-b border-border/50">
-        <p class="text-sm font-medium text-foreground">
-          {workSearchMode === "add" ? m.work_add_to_work() : m.work_link_book()}
-        </p>
-      </div>
-
-      <!-- Search input -->
-      <div class="flex items-center gap-3 px-4 py-3 border-b border-border/50">
-        <Search size={20} class="text-muted-foreground shrink-0" />
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          bind:value={workSearchQuery}
-          oninput={() => handleWorkSearch(workSearchQuery)}
-          placeholder={m.work_search_placeholder()}
-          class="flex-1 bg-transparent text-foreground placeholder:text-muted-foreground outline-none text-base"
-          autofocus
-        />
-        {#if workSearchQuery}
-          <button
-            aria-label={m.common_clear()}
-            class="text-muted-foreground hover:text-foreground"
-            onclick={() => {
-              workSearchQuery = "";
-              workSearchResults = [];
-              workSearchTotal = 0;
-            }}
-          >
-            <X size={16} />
-          </button>
-        {/if}
-        <kbd
-          class="hidden sm:inline text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded"
-          >esc</kbd
-        >
-      </div>
-
-      <!-- Results -->
-      <div class="min-h-[240px] max-h-[60vh] overflow-y-auto">
-        {#if workSearching}
-          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-            {m.work_searching()}
-          </div>
-        {:else if workSearchQuery.length >= 2 && workSearchResults.length === 0}
-          <div class="px-4 py-8 text-center text-muted-foreground text-sm">
-            {m.work_no_results()}
-          </div>
-        {:else}
-          {#each workSearchResults as result (result.id)}
-            <button
-              class="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-secondary/50 transition-colors"
-              onclick={() => handleWorkAddBook(result.id)}
-            >
-              <div
-                class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
-              >
-                {#if result.cover_path}
-                  <img
-                    use:authedSrc={coverUrl(result.id, result.updated_at)}
-                    alt=""
-                    class="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-                {:else}
-                  <BookOpen size={16} class="text-muted-foreground/30" />
-                {/if}
-              </div>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium text-foreground truncate">
-                  {result.display_title ?? m.common_untitled()}
-                </p>
-                <p class="text-xs text-muted-foreground truncate">
-                  {(result.display_authors ?? []).join(", ") || "\u00A0"}
-                </p>
-              </div>
-            </button>
-          {/each}
-          {#if workSearchTotal > WORK_SEARCH_LIMIT}
-            <p
-              class="px-4 py-3 text-center text-xs text-muted-foreground border-t border-border/50"
-            >
-              {m.work_search_more_results({ count: workSearchTotal })}
-            </p>
-          {/if}
-        {/if}
-      </div>
-    </div>
-  </div>
-{/if}

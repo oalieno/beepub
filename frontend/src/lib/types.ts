@@ -221,6 +221,11 @@ export interface BookWithInteractionOut extends BookOut {
 export interface PaginatedBooksWithInteraction {
   items: BookWithInteractionOut[];
   total: number;
+  /** Where the page starts in the whole list (with `around`, where the
+   *  server chose to start it). */
+  offset?: number;
+  /** The `around` book's place in the whole list; null when not in it. */
+  around_index?: number | null;
 }
 
 export interface BookshelfOut {

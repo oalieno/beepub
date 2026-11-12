@@ -42,7 +42,9 @@ from app.plugins.metadata.service import lookup_all, resolve_one, search_all
 from app.rate_limit import limiter
 from app.schemas.book import (
     BookCoverUpdate,
+    BookIdsRequest,
     BookLibraryUpdate,
+    BookMetadataBulkUpdate,
     BookMetadataUpdate,
     BookOut,
     BookWithInteractionOut,
@@ -1073,6 +1075,30 @@ async def get_discover_browse(
     return sections
 
 
+# How many books the page opened ``around`` a book shows before it.
+AROUND_BEFORE = 20
+
+
+def _list_order(sort: str, order: str) -> list:
+    """The flat book list's ORDER BY — ending on Book.id, so the order is
+    total and a book's place in it (``around``) is the place it is paged at."""
+    sort_map = {
+        "display_title": coalesce(Book.title, Book.epub_title),
+        "added_at": coalesce(Book.calibre_added_at, Book.created_at),
+        "series_index": coalesce(Book.series_index, Book.epub_series_index),
+        "popularity_score": Book.popularity_score,
+    }
+    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
+    if sort == "series_index":
+        series_col = coalesce(Book.series, Book.epub_series)
+        if order == "desc":
+            return [series_col.desc().nullslast(), sort_col.desc().nullslast(), Book.id]
+        return [series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id]
+    if order == "desc":
+        return [sort_col.desc(), Book.id]
+    return [sort_col.asc(), Book.id]
+
+
 @router.get("", response_model=PaginatedBooksWithInteraction)
 async def list_all_books(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -1089,6 +1115,7 @@ async def list_all_books(
     order: str = Query("desc"),
     limit: int = Query(60, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    around: uuid.UUID | None = Query(None),
 ):
     """The flat book list: one row per book, across every accessible library.
 
@@ -1099,8 +1126,12 @@ async def list_all_books(
 
     ``ids`` narrows to the given books — the app's "downloaded" shelf, whose
     membership lives on the device; it pages the ids itself.
+
+    ``around`` opens the page on a book instead of at ``offset``: it starts
+    a few books before it (the library table keeps the book in view when its
+    order changes). A book not in the list leaves ``offset`` as asked; the
+    response's ``around_index`` says which happened.
     """
-    from sqlalchemy.sql.functions import coalesce
 
     from app.routers.libraries import (
         accessible_book_ids_select,
@@ -1170,22 +1201,17 @@ async def list_all_books(
     total = (await db.execute(count_query)).scalar() or 0
 
     # Apply sorting and pagination
-    sort_map = {
-        "display_title": coalesce(Book.title, Book.epub_title),
-        "added_at": coalesce(Book.calibre_added_at, Book.created_at),
-        "series_index": coalesce(Book.series_index, Book.epub_series_index),
-        "popularity_score": Book.popularity_score,
-    }
     if series and sort == "created_at":
         sort = "series_index"
         order = "asc"
     if sort == "relevance" and tiered is None:
         # Nothing to be relevant to (a stale URL) — the default order.
         sort, order = "created_at", "desc"
-    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
+    around_index: int | None = None
     if sort == "relevance":
         # Ranked over ids, the page's books fetched afterwards (see
-        # relevance_ranked_ids).
+        # relevance_ranked_ids). ``around`` does not apply: a search starts
+        # from its best match.
         page_ids = list(
             await db.scalars(
                 relevance_ranked_ids(base_query, tiered, search)
@@ -1199,23 +1225,20 @@ async def list_all_books(
         }
         books = [books_by_id[book_id] for book_id in page_ids]
     else:
-        if sort == "series_index":
-            series_col = coalesce(Book.series, Book.epub_series)
-            if order == "desc":
-                base_query = base_query.order_by(
-                    series_col.desc().nullslast(),
-                    sort_col.desc().nullslast(),
-                    Book.id,
-                )
-            else:
-                base_query = base_query.order_by(
-                    series_col.asc().nullslast(), sort_col.asc().nullslast(), Book.id
-                )
-        elif order == "desc":
-            base_query = base_query.order_by(sort_col.desc(), Book.id)
-        else:
-            base_query = base_query.order_by(sort_col.asc(), Book.id)
-        result = await db.execute(base_query.offset(offset).limit(limit))
+        order_by = _list_order(sort, order)
+        if around is not None:
+            # The book's place in this very order, so the page can open on it.
+            ranked = base_query.with_only_columns(
+                Book.id.label("id"),
+                func.row_number().over(order_by=order_by).label("rn"),
+            ).subquery()
+            rank = await db.scalar(select(ranked.c.rn).where(ranked.c.id == around))
+            if rank is not None:
+                around_index = rank - 1
+                offset = max(0, around_index - AROUND_BEFORE)
+        result = await db.execute(
+            base_query.order_by(*order_by).offset(offset).limit(limit)
+        )
         books = result.scalars().all()
 
     # Enrich with edition_count + work-propagated reading status. The page is
@@ -1260,7 +1283,9 @@ async def list_all_books(
             item.last_read_at = own_progress.get("last_read_at")
         items.append(item)
 
-    return PaginatedBooksWithInteraction(items=items, total=total)
+    return PaginatedBooksWithInteraction(
+        items=items, total=total, offset=offset, around_index=around_index
+    )
 
 
 @router.get("/grouped", response_model=PaginatedGrouped)
@@ -1575,6 +1600,47 @@ async def get_book_editions(
     }
 
 
+def _series_key(book: Book) -> str | None:
+    return (book.series or book.epub_series or "").strip().lower() or None
+
+
+async def _series_neighbours(
+    db: AsyncSession, books: list[Book], leaving: set[uuid.UUID]
+) -> list[uuid.UUID]:
+    """One book still in each series these books leave, per library —
+    popularity is clustered by (library, series), so the series left
+    behind is recomputed too."""
+    libraries = dict(
+        (
+            await db.execute(
+                select(LibraryBook.book_id, LibraryBook.library_id).where(
+                    LibraryBook.book_id.in_([b.id for b in books])
+                )
+            )
+        ).all()
+    )
+    neighbours: list[uuid.UUID] = []
+    for library_id, key in {
+        (libraries.get(b.id), _series_key(b)) for b in books if _series_key(b)
+    }:
+        query = select(Book.id).where(
+            Book.id.not_in(leaving),
+            func.lower(func.btrim(func.coalesce(Book.series, Book.epub_series))) == key,
+        )
+        if library_id is not None:
+            query = query.where(
+                Book.id.in_(
+                    select(LibraryBook.book_id).where(
+                        LibraryBook.library_id == library_id
+                    )
+                )
+            )
+        neighbour = await db.scalar(query.limit(1))
+        if neighbour is not None:
+            neighbours.append(neighbour)
+    return neighbours
+
+
 @router.put("/{book_id}/metadata", response_model=BookOut)
 async def update_book_metadata(
     book_id: uuid.UUID,
@@ -1589,24 +1655,10 @@ async def update_book_metadata(
     data = body.model_dump()
     series_will_change = (
         "series" in body.model_fields_set and data["series"] != book.series
-    ) or (
-        "epub_series" in body.model_fields_set
-        and data["epub_series"] != book.epub_series
     )
-    old_series_sibling_id: uuid.UUID | None = None
-    if series_will_change:
-        old_key = (book.series or book.epub_series or "").strip().lower() or None
-        if old_key:
-            sibling = await db.execute(
-                select(Book.id)
-                .where(
-                    Book.id != book.id,
-                    func.lower(func.btrim(func.coalesce(Book.series, Book.epub_series)))
-                    == old_key,
-                )
-                .limit(1)
-            )
-            old_series_sibling_id = sibling.scalar_one_or_none()
+    neighbours = (
+        await _series_neighbours(db, [book], {book.id}) if series_will_change else []
+    )
 
     for field in body.model_fields_set:
         setattr(book, field, data[field])
@@ -1615,14 +1667,179 @@ async def update_book_metadata(
     if series_will_change:
         from app.services.popularity import recompute_popularity
 
-        affected = [book.id] + (
-            [old_series_sibling_id] if old_series_sibling_id else []
-        )
-        await recompute_popularity(db, affected)
+        await recompute_popularity(db, [book.id, *neighbours])
 
     await db.commit()
     await db.refresh(book)
     return book
+
+
+def _blank_to_none(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
+async def _books_by_ids(db: AsyncSession, ids: list[uuid.UUID]) -> list[Book]:
+    """The books, in the order asked; 404 naming any that do not exist."""
+    found = {b.id: b for b in await db.scalars(select(Book).where(Book.id.in_(ids)))}
+    missing = [str(i) for i in ids if i not in found]
+    if missing:
+        raise HTTPException(
+            status_code=404, detail=f"Books not found: {', '.join(missing)}"
+        )
+    return [found[i] for i in ids]
+
+
+@router.patch("/metadata", response_model=list[BookOut])
+async def update_books_metadata(
+    body: BookMetadataBulkUpdate,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Batch edit from the library table: the same authors, publisher or
+    series for every book given, in one transaction — and a title, for one
+    book at a time (the side panel's edit in place). Like the edit page,
+    this writes BeePub's overrides only — a Calibre book's Calibre data is
+    left as it is — and a value that reads as the book's own stores none."""
+    ids = list(dict.fromkeys(body.book_ids))
+    fields = body.model_fields_set - {"book_ids"}
+    indexes = body.series_indexes or {}
+    if indexes and "series" not in fields:
+        raise HTTPException(
+            status_code=422, detail="series_indexes needs series alongside"
+        )
+    if set(indexes) - set(ids):
+        raise HTTPException(
+            status_code=422, detail="series_indexes names a book not in book_ids"
+        )
+    if "title" in fields and len(ids) != 1:
+        raise HTTPException(
+            status_code=422, detail="A title is given to one book at a time"
+        )
+    books = await _books_by_ids(db, ids)
+
+    authors = (
+        [a.strip() for a in body.authors or [] if a.strip()] or None
+        if "authors" in fields
+        else None
+    )
+    publisher = _blank_to_none(body.publisher)
+    series = _blank_to_none(body.series)
+    title = _blank_to_none(body.title)
+
+    # Books whose shown series changes: their old series and new are both
+    # recomputed for popularity.
+    leaving = (
+        [
+            b
+            for b in books
+            if _series_key(b)
+            != ((series or b.epub_series or "").strip().lower() or None)
+        ]
+        if "series" in fields
+        else []
+    )
+    neighbours = (
+        await _series_neighbours(db, leaving, {b.id for b in leaving})
+        if leaving
+        else []
+    )
+
+    for book in books:
+        sources = dict(book.field_sources or {})
+        written: dict[str, object] = {}
+        # A value the book has of its own is no override: the book keeps
+        # following its file (or Calibre) there.
+        if "title" in fields:
+            written["title"] = None if title == book.epub_title else title
+        if "authors" in fields:
+            written["authors"] = (
+                None if authors == (book.epub_authors or None) else authors
+            )
+        if "publisher" in fields:
+            written["publisher"] = (
+                None if publisher == book.epub_publisher else publisher
+            )
+        if "series" in fields:
+            # The book shows its own number only under a series of its own:
+            # one not given keeps the number the book shows now.
+            index = (
+                indexes[book.id] if book.id in indexes else book.display_series_index
+            )
+            if series is None or (
+                series == book.epub_series and index == book.epub_series_index
+            ):
+                written["series"] = None
+                book.series_index = None
+            else:
+                written["series"] = series
+                book.series_index = index
+        for field, value in written.items():
+            setattr(book, field, value)
+            # Provenance as the edit page keeps it: a typed value is manual,
+            # a dropped override loses its key.
+            if value is None:
+                sources.pop(field, None)
+            else:
+                sources[field] = "manual"
+        book.field_sources = sources or None
+    await db.flush()
+
+    if leaving:
+        from app.services.popularity import recompute_popularity
+
+        await recompute_popularity(db, [b.id for b in leaving] + neighbours)
+
+    await db.commit()
+    return list(
+        await db.scalars(
+            select(Book)
+            .where(Book.id.in_(ids))
+            .execution_options(populate_existing=True)
+        )
+    )
+
+
+def _book_files(book: Book) -> list[str]:
+    """The files a book's row owns. A Calibre book's own file is on a
+    read-only mount and stays."""
+    paths = []
+    if book.calibre_id is None and book.file_path:
+        paths.append(book.file_path)
+    if book.original_path:
+        paths.append(book.original_path)
+    if book.cover_path:
+        paths.append(book.cover_path)
+    return paths
+
+
+@router.post("/delete", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_books(
+    body: BookIdsRequest,
+    current_user: Annotated[User, Depends(require_admin)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Delete several books at once, all or none. Not Calibre books: the
+    next sync would bring them back."""
+    books = await _books_by_ids(db, list(dict.fromkeys(body.book_ids)))
+    calibre = [str(b.id) for b in books if b.calibre_id is not None]
+    if calibre:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Books in a Calibre library cannot be deleted: {', '.join(calibre)}",
+        )
+    paths = [path for b in books for path in _book_files(b)]
+    work_ids = {b.work_id for b in books if b.work_id}
+    for book in books:
+        await db.delete(book)
+    if work_ids:
+        from app.services.work_library import cleanup_orphan_works
+
+        await cleanup_orphan_works(db, list(work_ids))
+    # Files go after the commit: a failed commit must not leave rows
+    # pointing at deleted files.
+    await db.commit()
+    for path in paths:
+        delete_file(path)
 
 
 @router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -1635,16 +1852,9 @@ async def delete_book(
     book = result.scalar_one_or_none()
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
-    # Only delete the EPUB file for non-Calibre books (Calibre files are on
-    # a read-only mount). Files are removed AFTER the commit — if the commit
-    # fails, a row pointing at a deleted file would be unrecoverable.
-    paths = []
-    if book.calibre_id is None and book.file_path:
-        paths.append(book.file_path)
-    if book.original_path:
-        paths.append(book.original_path)
-    if book.cover_path:
-        paths.append(book.cover_path)
+    # Files are removed AFTER the commit — if the commit fails, a row
+    # pointing at a deleted file would be unrecoverable.
+    paths = _book_files(book)
     work_id = book.work_id
     await db.delete(book)
     if work_id:

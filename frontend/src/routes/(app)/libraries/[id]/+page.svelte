@@ -62,6 +62,21 @@
   let heading = $derived(library?.name ?? m.allbooks_heading());
 
   let bookBrowser = $state<BookBrowser>();
+  // The desktop table: the page fills the screen and stops scrolling; the
+  // table and its panel scroll inside it.
+  let pane = $state(false);
+  // Before the list is up: whether it will be the table (BookBrowser keeps
+  // the choice under the same key; phones always get the grid).
+  const opensAsTable =
+    typeof window !== "undefined" &&
+    window.matchMedia("(min-width: 768px)").matches &&
+    (() => {
+      try {
+        return localStorage.getItem("library-view") === "table";
+      } catch {
+        return false;
+      }
+    })();
   let restoreData = $state<BookBrowserState | null>(null);
   let restoredFromSnapshot = $state(false);
   let pendingScrollY = $state(0);
@@ -109,6 +124,8 @@
       await tick();
       await tick();
       window.scrollTo(0, pendingScrollY);
+      // Only now may the list's edges load on scroll.
+      bookBrowser?.scrollRestored();
       restoreData = null;
       return;
     }
@@ -246,12 +263,16 @@
   <title>{m.library_page_title({ name: heading })}</title>
 </svelte:head>
 
-<div class="px-6 sm:px-8 py-6">
+<div
+  class="px-6 sm:px-8 py-6 {pane && !loading
+    ? 'md:h-[calc(100dvh-env(safe-area-inset-top,0px))] md:flex md:flex-col md:overflow-hidden'
+    : ''}"
+>
   {#if loading}
-    <LibraryDetailSkeleton />
+    <LibraryDetailSkeleton table={opensAsTable} />
   {:else}
     <div
-      class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6"
+      class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 shrink-0"
     >
       <div class="min-w-0">
         <!-- Calibre-style: the library name IS the switcher — tapping it
@@ -320,7 +341,9 @@
         : undefined}
       ondragleave={canUpload ? () => (dragOver = false) : undefined}
       ondrop={canUpload ? onDrop : undefined}
-      class={dragOver ? "ring-2 ring-primary/30 rounded-2xl" : ""}
+      class="{dragOver ? 'ring-2 ring-primary/30 rounded-2xl' : ''} {pane
+        ? 'md:flex-1 md:min-h-0 md:flex md:flex-col'
+        : ''}"
     >
       {#key `${id}:${reloadNonce}`}
         <BookBrowser
@@ -341,6 +364,8 @@
             ? m.browser_search_in_library({ name: library.name })
             : m.browser_search_all()}
           onStateChange={handleStateChange}
+          onpane={(on) => (pane = on)}
+          library={scope}
           searchEverywhereHref={scope
             ? (q) => `/libraries/all?search=${encodeURIComponent(q)}`
             : undefined}

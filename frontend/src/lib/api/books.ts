@@ -172,6 +172,24 @@ export const booksApi = {
 
   delete: (bookId: string) => del(`/books/${bookId}`),
 
+  // The library table's batch edit: the fields given go to every book; a
+  // blank one drops the override, so each shows its own value again.
+  updateMetadataBulk: (data: {
+    book_ids: string[];
+    // One book at a time.
+    title?: string;
+    authors?: string[];
+    publisher?: string;
+    series?: string;
+    series_indexes?: Record<string, number | null>;
+  }) =>
+    (patch("/books/metadata", data) as Promise<BookOut[]>).then((books) =>
+      books.map(noteBookEdited),
+    ),
+
+  deleteMany: (bookIds: string[]) =>
+    post("/books/delete", { book_ids: bookIds }) as Promise<void>,
+
   getFileUrl: (bookId: string) => `${apiBase()}/books/${bookId}/file`,
 
   getCoverUrl: (bookId: string) => `${apiBase()}/books/${bookId}/cover`,
@@ -412,6 +430,8 @@ export const booksApi = {
     order?: string;
     limit?: number;
     offset?: number;
+    // Open the page on this book instead of at `offset`.
+    around?: string;
   }) => {
     const params = new URLSearchParams();
     for (const id of options?.ids ?? []) params.append("ids", id);
@@ -426,6 +446,7 @@ export const booksApi = {
     if (options?.order) params.set("order", options.order);
     if (options?.limit != null) params.set("limit", String(options.limit));
     if (options?.offset != null) params.set("offset", String(options.offset));
+    if (options?.around) params.set("around", options.around);
     const qs = params.toString();
     return get(
       `/books${qs ? `?${qs}` : ""}`,

@@ -9,3 +9,4 @@ export { default as HomeSkeleton } from "./HomeSkeleton.svelte";
 export { default as LibraryDetailSkeleton } from "./LibraryDetailSkeleton.svelte";
 export { default as FormSkeleton } from "./FormSkeleton.svelte";
 export { default as TableSkeleton } from "./TableSkeleton.svelte";
+export { default as BookTableSkeleton } from "./BookTableSkeleton.svelte";

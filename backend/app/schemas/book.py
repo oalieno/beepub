@@ -107,6 +107,11 @@ class BookWithInteractionOut(BookOut):
 class PaginatedBooksWithInteraction(BaseModel):
     items: list[BookWithInteractionOut]
     total: int
+    # Where this page starts — the requested offset, or with ``around`` the
+    # offset chosen to show that book.
+    offset: int = 0
+    # The ``around`` book's place in the whole list; None when it is not in it.
+    around_index: int | None = None
 
     model_config = {"from_attributes": True}
 
@@ -137,6 +142,25 @@ class BookMetadataUpdate(BaseModel):
             if not source or len(source) > 50:
                 raise ValueError(f"Invalid source for {key}")
         return value
+
+
+class BookMetadataBulkUpdate(BaseModel):
+    """Several books' metadata at once: the fields present are written to
+    every book, the others left alone. A blank value (empty, or only
+    spaces) drops the override, so the book shows its own value again."""
+
+    book_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    # Only with a single book.
+    title: str | None = Field(default=None, max_length=500)
+    authors: list[str] | None = None
+    publisher: str | None = Field(default=None, max_length=255)
+    series: str | None = Field(default=None, max_length=500)
+    # Each book's number in ``series``; a book left out keeps the number it shows.
+    series_indexes: dict[uuid.UUID, float | None] | None = None
+
+
+class BookIdsRequest(BaseModel):
+    book_ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
 
 
 class PhysicalBookCreate(BaseModel):
