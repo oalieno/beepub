@@ -182,6 +182,11 @@ interface Chapter {
   unload: () => void;
 }
 
+/** `value`, at the next animation frame. */
+function inFrame<T>(value: T): Promise<T> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve(value)));
+}
+
 export class ScrollStrip {
   #o: StripOptions;
   #scroller: HTMLDivElement;
@@ -854,6 +859,13 @@ html body svg[viewBox] {
     const generation = this.#generation;
     this.#pending(dir, true);
     const attempt: Promise<boolean> = this.#build(index, generation)
+      // A chapter joins in an animation frame, not whenever its load
+      // happens to end. Chromium, while a finger or a fling is moving a
+      // leftward (rtl) strip, moves the reader by the canvas's growth
+      // if the layout is asked for outside a frame — a whole chapter,
+      // at which the next one is called for, and so on to the book's
+      // end. In a frame the scroller's position is the compositor's.
+      .then((chapter) => inFrame(chapter))
       .then((chapter) => {
         if (generation !== this.#generation) {
           if (chapter) this.#discard(chapter);
