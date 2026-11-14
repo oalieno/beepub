@@ -6,6 +6,7 @@ import re
 import shutil
 import uuid
 import zipfile
+import zlib
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
@@ -920,18 +921,26 @@ async def get_random_books(
         accessible_books = accessible_books.where(cond)
     accessible_book_ids = accessible_books.subquery()
 
-    result = await db.execute(
-        select(Book)
-        .where(
-            Book.id.in_(select(accessible_book_ids.c.book_id)),
-            Book.cover_path.isnot(None),
+    # Drawn over ids, the books fetched afterwards: shuffling whole rows
+    # sorts the entire table's worth of them.
+    drawn = list(
+        await db.scalars(
+            select(Book.id)
+            .where(
+                Book.id.in_(select(accessible_book_ids.c.book_id)),
+                Book.cover_path.isnot(None),
+            )
+            .order_by(func.random())
+            .limit(count)
         )
-        .order_by(func.random())
-        .limit(count)
     )
+    by_id = {
+        book.id: book
+        for book in await db.scalars(select(Book).where(Book.id.in_(drawn)))
+    }
     # An empty library is not an error — the frontend renders its own
     # "nothing to pull" state for an empty list.
-    return result.scalars().all()
+    return [by_id[book_id] for book_id in drawn if book_id in by_id]
 
 
 @router.get("/discover/recommendations", response_model=list[BookWithInteractionOut])
@@ -1201,10 +1210,19 @@ async def list_all_books(
         tiered = await tiered_book_search(db, search, base_query)
         base_query = base_query.where(or_(*tiered.conditions))
 
-    # Count over ids — the total needs nothing else from a book.
-    count_query = select(func.count()).select_from(
-        base_query.with_only_columns(Book.id).subquery()
-    )
+    if ids or author or tag or series or format or has_rating or search:
+        # Count over ids — the total needs nothing else from a book.
+        count_query = select(func.count()).select_from(
+            base_query.with_only_columns(Book.id).subquery()
+        )
+    else:
+        # Nothing about the books themselves is asked: the count is of
+        # their places in the libraries (a book has exactly one), without
+        # reading the books table — on every page of an endless list.
+        placed = accessible_ids
+        if library:
+            placed = placed.where(LibraryBook.library_id == library)
+        count_query = select(func.count()).select_from(placed.subquery())
     total = (await db.execute(count_query)).scalar() or 0
 
     # Apply sorting and pagination
@@ -2077,7 +2095,9 @@ async def get_book_content(
     # (cover/xhtml edits), mtime advances and the ETag changes, so the
     # browser's cached copy is invalidated naturally.
     epub_mtime = int(os.path.getmtime(book.file_path))
-    etag = f'"{epub_mtime:x}-{abs(hash(path)):x}"'
+    # (A checksum, not hash(): that one differs in every process, and
+    # a restart would make every reader fetch its chapters again.)
+    etag = f'"{epub_mtime:x}-{zlib.crc32(path.encode()):x}"'
     # A book's own files are another author's, served from this site's
     # address. Opened by their URL they must not become a page of the
     # site: one that runs scripts would run them as the reader signed in.
@@ -2349,7 +2369,13 @@ async def get_series_neighbors(
         return SeriesNeighborsOut()
 
     is_admin = current_user.role == UserRole.admin
-    series_col = coalesce(Book.series, Book.epub_series)
+    # "The book's series is this one", spelled so that the indexes on the
+    # two columns can answer it — an equality on the coalesce of them
+    # reads every book.
+    in_series = or_(
+        Book.series == series_name,
+        and_(Book.series.is_(None), Book.epub_series == series_name),
+    )
     index_col = coalesce(Book.series_index, Book.epub_series_index)
 
     # Accessible libraries subquery (deny-list: exclude libraries user is excluded from)
@@ -2390,7 +2416,7 @@ async def get_series_neighbors(
 
     # Base: books in same series within the current book's libraries (excluding current)
     base = select(Book).where(
-        series_col == series_name,
+        in_series,
         index_col.isnot(None),
         Book.id != book_id,
         Book.id.in_(accessible_book_ids),
@@ -2459,7 +2485,7 @@ async def get_series_neighbors(
         .select_from(Book)
         .join(LibraryBook, LibraryBook.book_id == Book.id)
         .where(
-            series_col == series_name,
+            in_series,
             index_col.isnot(None),
             LibraryBook.library_id.in_(scoped_libs),
         )

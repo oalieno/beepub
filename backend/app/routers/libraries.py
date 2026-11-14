@@ -2,7 +2,7 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import exists, func, select
+from sqlalchemy import exists, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -73,24 +73,24 @@ async def list_libraries(
 
     # Batch query: top 4 book IDs with covers per library
 
-    ranked = (
-        select(
-            LibraryBook.library_id,
-            LibraryBook.book_id,
-            func.row_number()
-            .over(
-                partition_by=LibraryBook.library_id,
-                order_by=LibraryBook.added_at.desc(),
-            )
-            .label("rn"),
-        )
+    # For each library its four newest (LATERAL: one short walk of the
+    # library's own index, not a ranking of every book in all of them).
+    newest = (
+        select(LibraryBook.book_id)
         .join(Book, Book.id == LibraryBook.book_id)
-        .where(LibraryBook.library_id.in_(library_ids))
-        .where(Book.cover_path.isnot(None))
-        .subquery()
+        .where(
+            LibraryBook.library_id == Library.id,
+            Book.cover_path.isnot(None),
+        )
+        .order_by(LibraryBook.added_at.desc())
+        .limit(4)
+        .lateral()
     )
     preview_result = await db.execute(
-        select(ranked.c.library_id, ranked.c.book_id).where(ranked.c.rn <= 4)
+        select(Library.id, newest.c.book_id)
+        .select_from(Library)
+        .join(newest, true())
+        .where(Library.id.in_(library_ids))
     )
     previews: dict[str, list] = {}
     for lib_id, book_id in preview_result.all():

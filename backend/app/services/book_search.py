@@ -264,7 +264,11 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
         )
     )
     fuzzy = [literal(norm_q).op("<%")(col) for col in _normalized_columns()]
-    if await db.scalar(select_exists(scope, fuzzy)):
+    # The trigram match first, over the books table alone, then the scope
+    # (OFFSET 0 keeps the two apart): asked as one EXISTS, the planner
+    # expects an early hit and reads every book when there is none.
+    near = select(Book.id).where(or_(*fuzzy)).offset(0).subquery()
+    if await db.scalar(select(exists(scope.where(Book.id.in_(select(near.c.id)))))):
         return TieredSearch(fuzzy, norm_q, fuzzy=True, mode="fuzzy")
 
     return TieredSearch(_no_match(), norm_q, fuzzy=False, mode="phrase")

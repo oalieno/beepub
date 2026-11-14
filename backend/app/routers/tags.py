@@ -27,10 +27,11 @@ async def list_tags(
         select(
             BookTag.tag,
             BookTag.category,
-            func.count(func.distinct(BookTag.book_id)).label("book_count"),
+            # (book_id, tag) is unique: the rows of a tag are its books.
+            func.count().label("book_count"),
         )
         .group_by(BookTag.tag, BookTag.category)
-        .order_by(func.count(func.distinct(BookTag.book_id)).desc())
+        .order_by(func.count().desc())
     )
     if category:
         query = query.where(BookTag.category == category)
