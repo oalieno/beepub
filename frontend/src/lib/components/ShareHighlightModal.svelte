@@ -1,5 +1,4 @@
 <script lang="ts">
-  import html2canvas from "html2canvas";
   import { X, Download, Share2, LoaderCircle } from "@lucide/svelte";
   import ShareHighlightCard from "./ShareHighlightCard.svelte";
   import type { HighlightOut } from "$lib/types";
@@ -69,6 +68,9 @@
     await document.fonts.ready;
 
     try {
+      // Loaded when a picture is actually made: it is a fifth of a megabyte
+      // that every opening of the reader would otherwise carry.
+      const { default: html2canvas } = await import("html2canvas");
       const canvas = await html2canvas(clone, {
         scale: 1,
         useCORS: true,

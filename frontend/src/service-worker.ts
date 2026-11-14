@@ -21,12 +21,11 @@ const IMMUTABLE = "/_app/immutable/";
 
 /*
  * What is fetched ahead, when the worker installs: the app's shell. Not
- * the typefaces — some 330 slices, 15 MB, of which a page uses a handful
- * — and not the few large pictures a rare page shows: those are cached
- * when they are first asked for (the fetch handler below), which keeps
- * what a reader has actually used available offline.
+ * the typefaces — some 330 slices, 15 MB, of which a page uses a handful:
+ * those are cached when they are first asked for (the fetch handler
+ * below), which keeps what a reader has actually used available offline.
  */
-const ON_FIRST_USE = /\.woff2?$|\/(bookpack|error-\d+)\.png$/;
+const ON_FIRST_USE = /\.woff2?$/;
 const AHEAD = ASSETS.filter((path) => !ON_FIRST_USE.test(path));
 
 /** A new version's cache starts from what the older ones hold of the

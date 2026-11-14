@@ -14,7 +14,7 @@
   class="flex min-h-dvh flex-col items-center justify-center px-4 py-8 text-center"
 >
   <img
-    src={page.status >= 500 ? "/error-500.png" : "/error-404.png"}
+    src={page.status >= 500 ? "/error-500.webp" : "/error-404.webp"}
     alt={page.status >= 500
       ? "BeePub mascot slumped against a cracked 500, smoke rising from its antennae"
       : "BeePub mascot peeking out of a hole it dug in front of a cracked 404, puzzled"}

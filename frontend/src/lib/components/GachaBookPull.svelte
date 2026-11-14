@@ -143,12 +143,12 @@
         </button>
       </div>
     {:else if phase === "idle"}
-      <!-- Card pack using bookpack.png. The float animation lives on the
+      <!-- Card pack using bookpack.webp. The float animation lives on the
            img and the hover scale on the button so the transforms don't
            fight each other. -->
       <button class="w-full pack-idle cursor-pointer" onclick={pull}>
         <img
-          src="/bookpack.png"
+          src="/bookpack.webp"
           alt="BeePub Book Pack"
           class="w-full h-auto drop-shadow-xl pack-float"
           draggable="false"
@@ -160,7 +160,7 @@
         <!-- Top strip (peels away) -->
         <div class="absolute inset-0 pack-tear-top overflow-hidden">
           <img
-            src="/bookpack.png"
+            src="/bookpack.webp"
             alt=""
             class="w-full h-auto"
             draggable="false"
@@ -169,7 +169,7 @@
         <!-- Bottom body (stays then fades) -->
         <div class="absolute inset-0 pack-tear-body overflow-hidden">
           <img
-            src="/bookpack.png"
+            src="/bookpack.webp"
             alt=""
             class="w-full h-auto"
             draggable="false"
@@ -177,7 +177,7 @@
         </div>
         <!-- Invisible spacer to maintain height -->
         <img
-          src="/bookpack.png"
+          src="/bookpack.webp"
           alt=""
           class="w-full h-auto invisible"
           draggable="false"

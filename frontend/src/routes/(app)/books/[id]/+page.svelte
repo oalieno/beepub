@@ -393,7 +393,7 @@
   {:else if notFound}
     <div class="flex flex-col items-center text-center py-8">
       <img
-        src="/error-404.png"
+        src="/error-404.webp"
         alt=""
         style="width: min(26rem, 80vw); max-height: 36dvh; height: auto; object-fit: contain;"
         class="mb-4"
