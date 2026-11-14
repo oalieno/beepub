@@ -2075,9 +2075,17 @@ async def get_book_content(
     # browser's cached copy is invalidated naturally.
     epub_mtime = int(os.path.getmtime(book.file_path))
     etag = f'"{epub_mtime:x}-{abs(hash(path)):x}"'
+    # A book's own files are another author's, served from this site's
+    # address. Opened by their URL they must not become a page of the
+    # site: one that runs scripts would run them as the reader signed in.
+    # `sandbox` leaves anything opened that way without scripts and
+    # without the site's origin; the reader, which fetches them and shows
+    # them in its own frames, is not affected.
     headers = {
         "ETag": etag,
         "Cache-Control": "private, max-age=86400, must-revalidate",
+        "Content-Security-Policy": "sandbox",
+        "X-Content-Type-Options": "nosniff",
     }
 
     if request.headers.get("if-none-match") == etag:
@@ -2091,7 +2099,9 @@ async def get_book_content(
     except KeyError:
         raise HTTPException(status_code=404, detail="Path not found in EPUB")
     content_type, _ = mimetypes.guess_type(path)
-    if content_type is None:
+    # A chapter is not sent as a page at all (the reader goes by the
+    # book's own manifest, not by this header).
+    if content_type is None or content_type in _DOCUMENT_TYPES:
         content_type = "application/octet-stream"
 
     return Response(
@@ -2099,6 +2109,9 @@ async def get_book_content(
         media_type=content_type,
         headers=headers,
     )
+
+
+_DOCUMENT_TYPES = frozenset({"text/html", "application/xhtml+xml"})
 
 
 def _read_epub_entry(file_path: str, path: str) -> bytes:
