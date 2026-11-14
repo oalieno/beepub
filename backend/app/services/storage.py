@@ -162,7 +162,9 @@ async def save_upload_file(upload_file: UploadFile, dest_path: str) -> int:
     return size
 
 
-def delete_file(path: str) -> None:
+def delete_file(path: str | None) -> None:
+    if not path:
+        return
     try:
         os.remove(path)
     except FileNotFoundError:

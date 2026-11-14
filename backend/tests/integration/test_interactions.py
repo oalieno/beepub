@@ -288,3 +288,50 @@ async def test_reading_status(admin_client, book_id):
     assert response.status_code == 200, response.text
     interaction = (await admin_client.get(f"/api/books/{book_id}/interaction")).json()
     assert interaction["reading_status"] == "read"
+
+
+async def test_background_work_is_asked_for_on_entering_a_section(
+    admin_client, book_id, monkeypatch
+):
+    """The reader saves every few seconds; extraction and summaries are
+    asked for when the section changes, not with each save."""
+    asked: list[tuple] = []
+
+    class Recorder:
+        def __init__(self, name):
+            self.name = name
+
+        def delay(self, *args):
+            asked.append((self.name, *args))
+
+    import app.tasks.summarize as summarize
+    from app.routers import interactions
+
+    monkeypatch.setattr(interactions, "extract_book_text", Recorder("extract"))
+    monkeypatch.setattr(summarize, "summarize_chunks", Recorder("summarize"))
+
+    async def save(section: int, page: int):
+        response = await admin_client.put(
+            f"/api/books/{book_id}/progress",
+            json={
+                "cfi": f"epubcfi(/6/{2 * section + 2}!/4/{2 * page})",
+                "percentage": 10.0 * section + page,
+                "section_index": section,
+            },
+        )
+        assert response.status_code == 200, response.text
+
+    await save(0, 1)
+    await save(0, 2)
+    await save(0, 3)
+    assert [a[0] for a in asked] == ["extract", "summarize"]
+    await save(1, 1)
+    assert [a[0] for a in asked] == ["extract", "summarize"] * 2
+    assert asked[-1][-1] == 1
+
+
+async def test_an_unknown_sort_is_the_default_order(admin_client, book_id):
+    for sort in ("metadata", "registry", "book_tags", "no_such_column"):
+        response = await admin_client.get("/api/books", params={"sort": sort})
+        assert response.status_code == 200, (sort, response.text)
+        assert response.json()["total"] == 1

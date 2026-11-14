@@ -161,6 +161,7 @@ async def delete_library(
     # Delete all books in this library (and their files). Files are removed
     # AFTER the commit — a failed commit must not leave rows pointing at
     # already-deleted files.
+    from app.services.book_files import book_files
     from app.services.storage import delete_file
 
     book_result = await db.execute(
@@ -171,11 +172,7 @@ async def delete_library(
     paths: list[str] = []
     work_ids: set[uuid.UUID] = set()
     for book in book_result.scalars().all():
-        # Only delete EPUB file for non-Calibre books (Calibre files are on read-only mount)
-        if book.calibre_id is None:
-            paths.append(book.file_path)
-        if book.cover_path:
-            paths.append(book.cover_path)
+        paths.extend(book_files(book))
         if book.work_id:
             work_ids.add(book.work_id)
         await db.delete(book)

@@ -70,6 +70,7 @@ from app.schemas.reading import (
     ReadingStatsOut,
 )
 from app.schemas.series import PaginatedGrouped
+from app.services.book_files import book_files, invalidate_derived_text
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_pages import read_page_manifest
@@ -1088,7 +1089,13 @@ def _list_order(sort: str, order: str) -> list:
         "series_index": coalesce(Book.series_index, Book.epub_series_index),
         "popularity_score": Book.popularity_score,
     }
-    sort_col = sort_map.get(sort, getattr(Book, sort, Book.created_at))
+    # A column of the table by its name, or the newest first: any other
+    # attribute of the model (a relationship, `metadata`) is not an order.
+    sort_col = sort_map.get(sort)
+    if sort_col is None:
+        sort_col = (
+            getattr(Book, sort) if sort in Book.__table__.columns else Book.created_at
+        )
     if sort == "series_index":
         series_col = coalesce(Book.series, Book.epub_series)
         if order == "desc":
@@ -1825,19 +1832,6 @@ async def update_books_metadata(
     )
 
 
-def _book_files(book: Book) -> list[str]:
-    """The files a book's row owns. A Calibre book's own file is on a
-    read-only mount and stays."""
-    paths = []
-    if book.calibre_id is None and book.file_path:
-        paths.append(book.file_path)
-    if book.original_path:
-        paths.append(book.original_path)
-    if book.cover_path:
-        paths.append(book.cover_path)
-    return paths
-
-
 @router.post("/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_books(
     body: BookIdsRequest,
@@ -1853,7 +1847,7 @@ async def delete_books(
             status_code=409,
             detail=f"Books in a Calibre library cannot be deleted: {', '.join(calibre)}",
         )
-    paths = [path for b in books for path in _book_files(b)]
+    paths = [path for b in books for path in book_files(b)]
     work_ids = {b.work_id for b in books if b.work_id}
     for book in books:
         await db.delete(book)
@@ -1880,7 +1874,7 @@ async def delete_book(
         raise HTTPException(status_code=404, detail="Book not found")
     # Files are removed AFTER the commit — if the commit fails, a row
     # pointing at a deleted file would be unrecoverable.
-    paths = _book_files(book)
+    paths = book_files(book)
     work_id = book.work_id
     await db.delete(book)
     if work_id:
@@ -1971,8 +1965,12 @@ async def convert_book_zh(
     carried over: each one's quote is cut from the converted text, so the
     reader re-finds the ones whose offsets moved."""
     book = await _convertible_book(book_id, current_user, db)
+    # One conversion of a book at a time: a second request waits here, and
+    # then sees what the first one did (the kept original above all).
+    await db.execute(select(Book.id).where(Book.id == book.id).with_for_update())
+    await db.refresh(book)
     file_path = book.file_path
-    tmp_path = file_path + ".tmp"
+    tmp_path = f"{file_path}.{uuid.uuid4().hex}.tmp"
     try:
         result = await asyncio.to_thread(convert_epub, file_path, tmp_path, body.mode)
         metadata = await asyncio.to_thread(parse_epub_metadata, tmp_path)
@@ -1985,7 +1983,9 @@ async def convert_book_zh(
         return book
     if not book.original_path:
         original_path = get_kept_epub_path(book.id)
-        await asyncio.to_thread(shutil.copyfile, file_path, original_path)
+        # (Never over a copy already kept: that one is the original.)
+        if not os.path.exists(original_path):
+            await asyncio.to_thread(shutil.copyfile, file_path, original_path)
         book.original_path = original_path
     os.replace(tmp_path, file_path)
     book.file_size = os.path.getsize(file_path)
@@ -2011,6 +2011,9 @@ async def convert_book_zh(
             highlight.suffix = quote.suffix
             # Devices pull highlights newer than theirs.
             highlight.updated_at = now
+    # The text extracted from the file as it was — search, the companion's
+    # quotes, summaries, vectors — is of the old script: extracted anew.
+    await invalidate_derived_text(db, book)
     await db.commit()
     await db.refresh(book)
     extract_book_text.delay(str(book.id))

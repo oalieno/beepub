@@ -310,6 +310,25 @@ async def _run_embed_book_summary(book_id: str) -> None:
                 )
                 return
 
+            # Already embedded from these same summaries, by this model:
+            # nothing to do (the task is asked for after every
+            # summarization pass, most of which summarize nothing new).
+            current = (
+                await db.execute(
+                    select(
+                        BookEmbedding.source,
+                        BookEmbedding.source_summary_count,
+                        BookEmbedding.embedding_model,
+                    ).where(BookEmbedding.book_id == bid)
+                )
+            ).one_or_none()
+            if current is not None and tuple(current) == (
+                "summary",
+                valid_count,
+                model,
+            ):
+                return
+
             # Truncate at safe char limit for CJK text
             if len(summary_text) > _CHAR_FALLBACK_LIMIT:
                 summary_text = summary_text[:_CHAR_FALLBACK_LIMIT]

@@ -15,6 +15,7 @@ from app.config import settings
 from app.database import create_task_engine
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
+from app.services.book_files import invalidate_derived_text
 from app.services.partial_md5 import compute_partial_md5
 from app.services.storage import (
     delete_file,
@@ -410,20 +411,7 @@ async def sync_calibre_library(
                                     # File changed since last sync — drop stale
                                     # chunks and reset derived flags so the
                                     # re-extract task runs cleanly.
-                                    from app.models.book_text import (
-                                        BookTextChunk,
-                                    )
-
-                                    await db.execute(
-                                        BookTextChunk.__table__.delete().where(
-                                            BookTextChunk.book_id == book.id
-                                        )
-                                    )
-                                    book.has_text = False
-                                    book.is_summarized = False
-                                    book.has_embedding = False
-                                    book.word_count = None
-                                    book.is_image_book = None
+                                    await invalidate_derived_text(db, book)
                                     re_extract_book_ids.append(str(book.id))
                                 book.epub_mtime = current_epub_mtime
                                 # Calibre rewrites the EPUB on metadata edits,

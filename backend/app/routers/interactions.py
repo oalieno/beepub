@@ -225,25 +225,24 @@ async def update_progress(
             if 0 < delta < MAX_READING_SESSION_GAP:
                 delta_seconds = int(delta)
                 today = await _today_in_app_timezone(db)
-                result = await db.execute(
-                    select(ReadingActivity).where(
-                        ReadingActivity.user_id == current_user.id,
-                        ReadingActivity.device_id == WEB_DEVICE_ID,
-                        ReadingActivity.date == today,
+                # One statement, the adding done by the database: two
+                # saves at once (two tabs; a save and the page's last
+                # beacon) neither collide on the day's row nor lose
+                # each other's seconds.
+                stmt = pg_insert(ReadingActivity).values(
+                    user_id=current_user.id,
+                    device_id=WEB_DEVICE_ID,
+                    date=today,
+                    seconds=delta_seconds,
+                )
+                await db.execute(
+                    stmt.on_conflict_do_update(
+                        index_elements=["user_id", "device_id", "date"],
+                        set_={
+                            "seconds": ReadingActivity.seconds + stmt.excluded.seconds
+                        },
                     )
                 )
-                activity = result.scalar_one_or_none()
-                if activity:
-                    activity.seconds = activity.seconds + delta_seconds
-                else:
-                    db.add(
-                        ReadingActivity(
-                            user_id=current_user.id,
-                            device_id=WEB_DEVICE_ID,
-                            date=today,
-                            seconds=delta_seconds,
-                        )
-                    )
 
     progress: dict = {
         "cfi": body.cfi,
@@ -270,11 +269,16 @@ async def update_progress(
         progress["total_pages"] = body.total_pages
     if body.xpointer is not None:
         progress["xpointer"] = body.xpointer
+    entered_section = body.section_index is not None and body.section_index != (
+        interaction.reading_progress or {}
+    ).get("section_index")
     interaction.reading_progress = progress
     await db.commit()
 
-    # Trigger text extraction + summary generation in the background
-    if body.section_index is not None:
+    # Text extraction and the summaries up to here, in the background —
+    # when the reader enters a section, not on every save within one (a
+    # save arrives every few seconds while reading).
+    if entered_section:
         from app.tasks.summarize import summarize_chunks
 
         extract_book_text.delay(str(book_id))

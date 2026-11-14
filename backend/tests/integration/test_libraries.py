@@ -80,6 +80,47 @@ async def test_delete_library_deletes_its_books(admin_client):
     assert listing["total"] == 0
 
 
+async def test_delete_library_with_a_physical_and_a_converted_book(admin_client):
+    """A physical book has no file, and a TXT upload keeps two (the EPUB
+    made from it and the file as uploaded): the delete answers, and leaves
+    none of them behind."""
+    import os
+
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.book import Book
+
+    library_id = await create_library(admin_client)
+    response = await admin_client.post(
+        "/api/books/physical",
+        json={"library_id": library_id, "title": "紙本測試書"},
+    )
+    assert response.status_code == 201, response.text
+    response = await admin_client.post(
+        "/api/books",
+        files={
+            "file": (
+                "novel.txt",
+                ("第一章 潮聲\n" + "退潮之後，沙灘上留著昨夜的腳印。\n" * 40).encode(),
+                "text/plain",
+            )
+        },
+        data={"library_id": library_id},
+    )
+    assert response.status_code == 201, response.text
+    async with AsyncSessionLocal() as db:
+        book = (
+            await db.execute(select(Book).where(Book.id == response.json()["id"]))
+        ).scalar_one()
+        files = [book.file_path, book.original_path]
+    assert all(path and os.path.exists(path) for path in files)
+
+    response = await admin_client.delete(f"/api/libraries/{library_id}")
+    assert response.status_code == 204, response.text
+    assert not any(os.path.exists(path) for path in files)
+
+
 async def test_library_listing_carries_own_progress(admin_client):
     """The browse grid shows "n% read" — both the flat book list and the
     grouped one must carry the user's own reading_percentage inline."""

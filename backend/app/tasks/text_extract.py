@@ -43,8 +43,12 @@ async def _run_extract_book_text(book_id: str) -> None:
             )
             if existing.scalar_one_or_none() is not None:
                 # Chunks exist — ensure has_text flag is set
+                # (Only where it is not: an unconditional update rewrites
+                # the row, and its updated_at, each time this is asked.)
                 await db.execute(
-                    update(Book).where(Book.id == bid).values(has_text=True)
+                    update(Book)
+                    .where(Book.id == bid, Book.has_text.is_(False))
+                    .values(has_text=True)
                 )
 
                 # Check if classification is needed

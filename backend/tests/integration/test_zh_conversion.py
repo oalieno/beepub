@@ -145,3 +145,49 @@ async def test_upload_language_is_read_from_the_text(admin_client, library_id):
     )
     book = await _upload(admin_client, library_id, epub)
     assert book["epub_language"] == "zh-TW"
+
+
+async def test_conversion_drops_the_text_extracted_from_the_old_file(
+    admin_client, library_id
+):
+    """Search, the companion's quotes and the summaries are made from the
+    extracted text: after a conversion it is extracted again, not kept in
+    the script the book no longer has."""
+    from sqlalchemy import func, select
+
+    from app.database import AsyncSessionLocal
+    from app.models.book_text import BookTextChunk
+    from app.tasks.text_extract import _run_extract_book_text
+
+    book = await _upload(admin_client, library_id, SIMPLIFIED_EPUB)
+    await _run_extract_book_text(book["id"])
+
+    async def chunks() -> int:
+        async with AsyncSessionLocal() as db:
+            return await db.scalar(
+                select(func.count())
+                .select_from(BookTextChunk)
+                .where(BookTextChunk.book_id == book["id"])
+            )
+
+    assert await chunks() > 0
+
+    response = await admin_client.post(
+        f"/api/books/{book['id']}/zh-conversion", json={"mode": "s2twp"}
+    )
+    assert response.status_code == 200, response.text
+    assert await chunks() == 0
+
+    # Extracted anew, it is the converted text.
+    await _run_extract_book_text(book["id"])
+    async with AsyncSessionLocal() as db:
+        text = "".join(
+            (
+                await db.scalars(
+                    select(BookTextChunk.text).where(
+                        BookTextChunk.book_id == book["id"]
+                    )
+                )
+            ).all()
+        )
+    assert "頭髮" in text and "头发" not in text

@@ -289,9 +289,15 @@ async def sync_reading_state(
         interaction = await _get_or_create_interaction(current_user.id, book_id, db)
 
     client_won = False
+    entered_section = False
     if body.progress is not None:
         server_last = _stored_last_read(interaction.reading_progress)
         if server_last is None or body.progress.last_read_at > server_last:
+            entered_section = (
+                body.progress.section_index is not None
+                and body.progress.section_index
+                != (interaction.reading_progress or {}).get("section_index")
+            )
             interaction.reading_progress = _rebuilt_progress(
                 body.progress, interaction.reading_progress
             )
@@ -308,11 +314,9 @@ async def sync_reading_state(
 
     await db.commit()
 
-    if (
-        client_won
-        and body.progress is not None
-        and body.progress.section_index is not None
-    ):
+    # (On entering a section, not on every save within one: see PUT
+    # /progress.)
+    if client_won and entered_section and body.progress is not None:
         from app.tasks.summarize import summarize_chunks
 
         extract_book_text.delay(str(book_id))
