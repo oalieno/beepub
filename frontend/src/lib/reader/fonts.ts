@@ -114,3 +114,54 @@ export function routeLegacyMing(doc: Document) {
   link.href = new URL(legacyMingSheet, window.location.href).href;
   doc.head.append(link);
 }
+
+/*
+ * Most books name fonts themselves — `p { font-family: serif }` is the
+ * common one — and a rule on an element is heard before the page's own
+ * list on the body, so the typeface chosen in the settings would reach
+ * only the text no rule touches. Each such list in a chapter is
+ * therefore led by LEAD_FONTS, a custom property the reader's theme
+ * sets to the chosen typeface: the book's own fonts stay behind it, for
+ * the characters it lacks (a publisher's font for rare ones) and for
+ * the device's own, where the property names no typeface at all.
+ */
+
+export const LEAD_FONTS = "--beepub-font";
+
+/** A list that is left as the book has it: code, and what is no list. */
+const NOT_LED =
+  /mono|courier|consolas|menlo|var\(|^\s*(inherit|initial|unset|revert)/i;
+
+function lead(style: CSSStyleDeclaration) {
+  const list = style.getPropertyValue("font-family");
+  if (!list || NOT_LED.test(list)) return;
+  style.setProperty(
+    "font-family",
+    `var(${LEAD_FONTS}), ${list}`,
+    style.getPropertyPriority("font-family"),
+  );
+}
+
+function leadRules(rules: CSSRuleList) {
+  for (const rule of Array.from(rules)) {
+    // (A style rule: an @font-face has a `style` too, and is not one.)
+    if ("selectorText" in rule) lead((rule as CSSStyleRule).style);
+    if ("cssRules" in rule) leadRules((rule as CSSGroupingRule).cssRules);
+  }
+}
+
+/** For a chapter's document, once it has loaded: the chosen typeface
+ *  leads every font list the book declares. */
+export function leadBookFonts(doc: Document) {
+  for (const sheet of Array.from(doc.styleSheets)) {
+    try {
+      leadRules(sheet.cssRules);
+    } catch {
+      // A stylesheet that cannot be read is not one of the book's own.
+    }
+  }
+  for (const el of Array.from(
+    doc.querySelectorAll<HTMLElement>('[style*="font" i]'),
+  ))
+    lead(el.style);
+}

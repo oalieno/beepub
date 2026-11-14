@@ -93,8 +93,8 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
       faces: [...doc.querySelectorAll("style")]
         .map((s) => s.textContent)
         .join("\n"),
-      pPin: p?.style.fontFamily ?? "",
-      kaiPin: kai?.style.fontFamily ?? "",
+      pFonts: p ? getComputedStyle(p).fontFamily : "",
+      kaiFonts: kai ? getComputedStyle(kai).fontFamily : "",
       emPin: em?.style.fontFamily ?? "",
     };
   });
@@ -113,12 +113,13 @@ test("vertical punctuation faces reach a book that bypasses the body font stack"
   // (Old Ming names a book sets by hand: reader-ng-fonts.spec.ts.)
   expect(state.faces).not.toContain("jsdelivr");
 
-  // `p { font-family: serif }` bypasses the body stack → pinned inline with
-  // the book's own stack preserved behind the face. Same for class-declared
-  // fonts. Elements that merely inherit must stay unpinned.
-  expect(state.pPin).toMatch(/^"BeePub VPunct (Serif|Sans)", serif$/);
-  expect(state.kaiPin).toContain("BeePub VPunct");
-  expect(state.kaiPin).toContain("標楷體");
+  // `p { font-family: serif }` bypasses the body stack → the reader's
+  // leading fonts (the punctuation face first) are put ahead of the
+  // book's own list, which stays behind them. Same for class-declared
+  // fonts. Elements that merely inherit are left untouched.
+  expect(state.pFonts).toMatch(/^"BeePub VPunct (Serif|Sans)", serif$/);
+  expect(state.kaiFonts).toMatch(/^"BeePub VPunct (Serif|Sans)"/);
+  expect(state.kaiFonts).toContain("標楷體");
   expect(state.emPin).toBe("");
 
   const bracketLoaded = await page.evaluate(async () => {

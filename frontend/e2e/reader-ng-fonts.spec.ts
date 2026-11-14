@@ -164,3 +164,75 @@ test("a book that asks for an old Ming font by name is set in the app's Ming, fr
 
   expect([...elsewhere]).toEqual([]);
 });
+
+test("the chosen typeface leads the fonts a book names for itself; its code stays as it is", async ({
+  page,
+  request,
+}) => {
+  const bookId = await seedFixture(request, NINE_CHAPTERS_BOOK);
+  await resetProgress(request, bookId);
+  // The book as most are made: its paragraphs name a font themselves.
+  await page.route("**/api/books/*/content/**", async (route) => {
+    if (!/\.xhtml$/.test(new URL(route.request().url()).pathname))
+      return route.continue();
+    const response = await route.fetch();
+    const body = (await response.text())
+      .replace(
+        "</head>",
+        "<style>p { font-family: serif; } @media all { h1, h2 { font: bold 1.4em sans-serif; } } code { font-family: monospace; }</style></head>",
+      )
+      .replace(
+        "</body>",
+        '<p id="plain">一段文字</p><p id="own" style="font-family: \'DFKai-SB\', cursive">一封信</p><code id="code">x = 1</code></body>',
+      );
+    await route.fulfill({ response, body });
+  });
+  const lists = () =>
+    page.evaluate(() => {
+      const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
+      const of = (el: Element | null) =>
+        el ? getComputedStyle(el).fontFamily : "";
+      return {
+        plain: of(doc.getElementById("plain")),
+        own: of(doc.getElementById("own")),
+        heading: of(doc.querySelector("h1, h2")),
+        code: of(doc.getElementById("code")),
+      };
+    });
+  await openBook(page, bookId, { font: "", turn: "fade" }, NINE_CHAPTERS_BOOK);
+
+  // The Ming first, the book's own list behind it.
+  let now = await lists();
+  expect(now.plain).toMatch(
+    /^"BeePub VPunct Serif", "Noto Serif TC Variable", serif$/,
+  );
+  expect(now.own).toMatch(
+    /^"BeePub VPunct Serif", "Noto Serif TC Variable", "?DFKai-SB"?, cursive$/,
+  );
+  if (now.heading)
+    expect(now.heading).toMatch(/"Noto Serif TC Variable", sans-serif$/);
+  // (Its own list — behind the punctuation face, as the book is vertical.)
+  expect(now.code).toMatch(/^("BeePub VPunct Serif", )?monospace$/);
+
+  // Another is chosen: the same paragraphs follow it.
+  await page.getByRole("button", { name: "Reader settings" }).click();
+  await page.getByTestId("reader-font-kai").click();
+  await expect
+    .poll(async () => (await lists()).plain)
+    .toMatch(/^"BeePub VPunct Serif", "LXGW WenKai TC", .*serif$/);
+  await expect
+    .poll(async () =>
+      page.evaluate(async () => {
+        const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
+        await doc.fonts.ready;
+        return doc.fonts.check('16px "LXGW WenKai TC"', "一段文字");
+      }),
+    )
+    .toBe(true);
+
+  // The device's own: the book's list, as the book has it.
+  await page.getByTestId("reader-font-system").click();
+  await expect
+    .poll(async () => (await lists()).plain)
+    .toBe('"BeePub VPunct Sans", serif');
+});

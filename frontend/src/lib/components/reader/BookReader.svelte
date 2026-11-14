@@ -73,6 +73,8 @@
   import {
     DEFAULT_READER_FONT,
     faceOf,
+    LEAD_FONTS,
+    leadBookFonts,
     routeLegacyMing,
     type ReaderFont,
   } from "$lib/reader/fonts";
@@ -262,12 +264,17 @@
    *  device's own — which is what shows until the typeface's slices have
    *  arrived, and for good where they cannot be fetched. */
   function fontStack(): string {
+    return `${leadFonts()}, ${faceOf(fontFamily).serif ? SERIF_FONTS : SANS_FONTS}`;
+  }
+
+  /** The head of that list — also what leads the lists the book itself
+   *  declares (leadBookFonts). */
+  function leadFonts(): string {
     const face = faceOf(fontFamily);
     return [
       `"${face.serif ? VPUNCT_SERIF : VPUNCT_SANS}"`,
       ...(face.family ? [`"${face.family}"`] : []),
       ...face.kin.map((name) => `"${name}"`),
-      face.serif ? SERIF_FONTS : SANS_FONTS,
     ].join(", ");
   }
 
@@ -314,7 +321,7 @@
       ? `p, div, span, li, ul, ol, dl, dt, dd, table, tr, td, th, caption, h1, h2, h3, h4, h5, h6, blockquote, pre, code, section, article, aside, figure, figcaption, small, em, strong, b, i, u { color: inherit; }
 a { color: #d8a558; }`
       : "";
-    return `html { font-size: ${fontSize}px !important; }
+    return `html { font-size: ${fontSize}px !important; ${LEAD_FONTS}: ${leadFonts()}; }
 body {
   font-family: ${fontStack()};
   font-size: ${fontSize}px !important;
@@ -2226,6 +2233,7 @@ ${darkOverrides}
     // first layout instead of a render later.
     vertical = !!core?.vertical;
     pushLayout();
+    leadBookFonts(doc);
     if (core?.vertical) pinVerticalPunctuation(doc);
     routeLegacyMing(doc);
     ondirection?.(!!core?.advancesLeftward(), vertical);
@@ -2246,6 +2254,7 @@ ${darkOverrides}
     vertical: boolean;
   }) {
     core?.setGhostLayout(layoutFor);
+    leadBookFonts(doc);
     if (isVertical) pinVerticalPunctuation(doc);
     routeLegacyMing(doc);
     // The live document gets this from the gesture layer.
