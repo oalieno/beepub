@@ -683,7 +683,7 @@
                 >
                   {#if edition.cover_path}
                     <img
-                      use:authedSrc={coverUrl(edition.id)}
+                      use:authedSrc={coverUrl(edition.id, null, "thumb")}
                       alt={edition.display_title ?? ""}
                       class="w-full h-full object-cover"
                       loading="lazy"
@@ -762,7 +762,11 @@
               >
                 {#if simBook.cover_path}
                   <img
-                    use:authedSrc={coverUrl(simBook.id, simBook.updated_at)}
+                    use:authedSrc={coverUrl(
+                      simBook.id,
+                      simBook.updated_at,
+                      "thumb",
+                    )}
                     alt={simBook.display_title ?? ""}
                     class="w-full h-full object-cover"
                     loading="lazy"

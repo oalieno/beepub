@@ -54,7 +54,7 @@
           />
         {:else}
           <img
-            use:authedSrc={coverUrl(previews[0])}
+            use:authedSrc={coverUrl(previews[0], null, "thumb")}
             alt=""
             class="absolute inset-0 w-full h-full object-cover blur-xl scale-110 opacity-60"
           />
@@ -77,7 +77,7 @@
               />
             {:else}
               <img
-                use:authedSrc={coverUrl(preview)}
+                use:authedSrc={coverUrl(preview, null, "thumb")}
                 alt=""
                 class="h-40 w-auto object-cover rounded-xs absolute"
                 style={coverStyle}

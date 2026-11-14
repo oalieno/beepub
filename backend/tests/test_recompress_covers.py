@@ -37,7 +37,9 @@ def test_rewrites_big_covers_in_place_and_keeps_mtime(tmp_path):
     assert big.stat().st_mtime == 1_000_000_000
     with Image.open(big) as img:
         assert img.size == (800, 1200)
-    assert [p.name for p in tmp_path.iterdir()] == ["big.jpg"]
+    # No temp file left behind; the rewritten cover has its thumbnail.
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["big.jpg", "thumb"]
+    assert [p.name for p in (tmp_path / "thumb").iterdir()] == ["big.jpg.webp"]
 
 
 def test_small_covers_are_left_alone(tmp_path):

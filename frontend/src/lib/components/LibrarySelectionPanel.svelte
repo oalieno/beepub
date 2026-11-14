@@ -250,7 +250,7 @@
 {#snippet cover(book: BookOut, cls: string)}
   {#if book.cover_path}
     <img
-      use:authedSrc={coverUrl(book.id, book.updated_at)}
+      use:authedSrc={coverUrl(book.id, book.updated_at, "thumb")}
       alt="{book.display_title} cover"
       class="{cls} object-cover rounded-sm book-shadow"
     />

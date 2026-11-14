@@ -197,6 +197,7 @@
             use:authedSrc={coverUrl(
               series.cover_book.id,
               series.cover_book.updated_at,
+              "thumb",
             )}
             alt="{series.series_name} cover"
             class="max-w-full h-auto rounded-sm book-shadow"

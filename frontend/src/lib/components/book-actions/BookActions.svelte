@@ -791,7 +791,11 @@
               >
                 {#if result.cover_path}
                   <img
-                    use:authedSrc={coverUrl(result.id, result.updated_at)}
+                    use:authedSrc={coverUrl(
+                      result.id,
+                      result.updated_at,
+                      "thumb",
+                    )}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"

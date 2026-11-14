@@ -90,7 +90,9 @@
       title: book.display_title ?? m.common_untitled(),
       authors: book.display_authors ?? [],
       percentage: book.reading_percentage ?? null,
-      authedCover: book.cover_path ? coverUrl(book.id, book.updated_at) : null,
+      authedCover: book.cover_path
+        ? coverUrl(book.id, book.updated_at, "thumb")
+        : null,
     };
   }
 

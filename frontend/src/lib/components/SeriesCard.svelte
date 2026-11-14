@@ -45,7 +45,7 @@
         class="relative inline-flex book-shadow-hover transition-all duration-300"
       >
         <img
-          use:authedSrc={coverUrl(cover.id, cover.updated_at)}
+          use:authedSrc={coverUrl(cover.id, cover.updated_at, "thumb")}
           alt="{series.series_name} cover"
           class="w-full h-full object-cover rounded-sm book-shadow"
           loading="lazy"

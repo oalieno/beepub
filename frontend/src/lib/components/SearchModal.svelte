@@ -534,7 +534,7 @@
                   >
                     {#if result.cover_path}
                       <img
-                        use:authedSrc={coverUrl(result.id)}
+                        use:authedSrc={coverUrl(result.id, null, "thumb")}
                         alt=""
                         class="w-full h-full object-cover"
                         loading="lazy"
@@ -619,7 +619,7 @@
                   class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
                 >
                   <img
-                    use:authedSrc={coverUrl(result.book_id)}
+                    use:authedSrc={coverUrl(result.book_id, null, "thumb")}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"
@@ -715,7 +715,7 @@
                   class="w-10 h-14 shrink-0 rounded-sm overflow-hidden bg-secondary flex items-center justify-center"
                 >
                   <img
-                    use:authedSrc={coverUrl(result.book_id)}
+                    use:authedSrc={coverUrl(result.book_id, null, "thumb")}
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"

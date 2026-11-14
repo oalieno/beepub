@@ -68,6 +68,67 @@ def encode_cover(data: bytes) -> bytes:
         return out.getvalue()
 
 
+# Beside each cover, a small one for the lists: a grid card is a few
+# hundred device pixels wide, and a page of sixty full covers is some
+# 11 MB against 2. WebP, which every browser the app runs in reads.
+THUMBNAIL_WIDTH = 480
+THUMBNAIL_QUALITY = 75
+
+
+def cover_thumbnail_path(cover_path: str) -> str:
+    """Where a cover's thumbnail is kept: `thumb/<cover's file name>.webp`
+    beside it — served as `/covers/thumb/<id>.jpg.webp`."""
+    path = Path(cover_path)
+    return str(path.parent / "thumb" / f"{path.name}.webp")
+
+
+def encode_cover_thumbnail(cover: bytes) -> bytes:
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(cover)) as img:
+        img = img.convert("RGB")
+        if img.width > THUMBNAIL_WIDTH:
+            height = max(1, round(img.height * THUMBNAIL_WIDTH / img.width))
+            img = img.resize((THUMBNAIL_WIDTH, height), Image.LANCZOS)
+        out = io.BytesIO()
+        img.save(out, "WEBP", quality=THUMBNAIL_QUALITY, method=4)
+        return out.getvalue()
+
+
+def write_cover_thumbnail(cover_path: str) -> bool:
+    """Make (or remake) the thumbnail of the cover at this path. Best
+    effort: a cover without one is shown full-size where the small one
+    is asked for. Via a temp file, so a reader never gets half of one."""
+    dest = cover_thumbnail_path(cover_path)
+    tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
+    try:
+        with open(cover_path, "rb") as f:
+            encoded = encode_cover_thumbnail(f.read())
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with open(tmp, "wb") as f:
+            f.write(encoded)
+        os.replace(tmp, dest)
+        return True
+    except Exception:
+        delete_file(tmp)
+        return False
+
+
+def is_cover_file(path: str) -> bool:
+    """A cover in its place (`<id>.jpg`), not one on its way there (the
+    temp files a replacement is written to first)."""
+    return path.endswith(".jpg")
+
+
+def place_cover(tmp_path: str, dest_path: str) -> None:
+    """Put a cover written to a temp file in its place, its thumbnail
+    remade with it."""
+    os.replace(tmp_path, dest_path)
+    write_cover_thumbnail(dest_path)
+
+
 def save_cover_bytes(data: bytes, dest_path: str) -> bool:
     """Decode-and-re-encode arbitrary image bytes into the canonical
     JPEG cover. The decode is the validation — non-image payloads
@@ -77,6 +138,8 @@ def save_cover_bytes(data: bytes, dest_path: str) -> bool:
         os.makedirs(os.path.dirname(dest_path), exist_ok=True)
         with open(dest_path, "wb") as f:
             f.write(encoded)
+        if is_cover_file(dest_path):
+            write_cover_thumbnail(dest_path)
         return True
     except Exception:
         delete_file(dest_path)
@@ -163,9 +226,11 @@ async def save_upload_file(upload_file: UploadFile, dest_path: str) -> int:
 
 
 def delete_file(path: str | None) -> None:
+    """Remove a file, if it is there — and, with a cover, its thumbnail."""
     if not path:
         return
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
+    for target in [path, cover_thumbnail_path(path)] if is_cover_file(path) else [path]:
+        try:
+            os.remove(target)
+        except FileNotFoundError:
+            pass

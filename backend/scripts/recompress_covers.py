@@ -36,7 +36,11 @@ def recompress(path: Path, dry_run: bool = False) -> int | None:
     when it was left alone."""
     from PIL import Image
 
-    from app.services.storage import COVER_MAX_WIDTH, encode_cover
+    from app.services.storage import (
+        COVER_MAX_WIDTH,
+        encode_cover,
+        write_cover_thumbnail,
+    )
 
     before = path.stat()
     if before.st_size <= SMALL_BYTES:
@@ -58,6 +62,7 @@ def recompress(path: Path, dry_run: bool = False) -> int | None:
         tmp.unlink()
         return None
     os.replace(tmp, path)
+    write_cover_thumbnail(str(path))
     return len(data) - len(encoded)
 
 

@@ -9,7 +9,7 @@ import zipfile
 import zlib
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, NamedTuple
+from typing import Annotated, Any, Literal, NamedTuple
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -82,12 +82,14 @@ from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
     MAX_COVER_DOWNLOAD_SIZE,
+    cover_thumbnail_path,
     cover_url_allowed,
     delete_file,
     download_cover,
     get_book_path,
     get_cover_path,
     get_kept_epub_path,
+    place_cover,
     save_cover_bytes,
     save_upload_file,
 )
@@ -2319,10 +2321,18 @@ async def get_book_cover(
     book_id: uuid.UUID,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    size: Literal["full", "thumb"] = Query("full"),
 ):
+    """The cover, for clients that cannot use the static path (the app
+    sends a token, not a cookie). ``size=thumb`` is the small one the
+    lists show — the full cover where a book has none yet."""
     book = await _get_book_with_access(book_id, current_user, db)
     if not book.cover_path or not os.path.exists(book.cover_path):
         raise HTTPException(status_code=404, detail="Cover not found")
+    if size == "thumb":
+        thumbnail = cover_thumbnail_path(book.cover_path)
+        if os.path.exists(thumbnail):
+            return FileResponse(thumbnail, media_type="image/webp")
     return FileResponse(book.cover_path, media_type="image/jpeg")
 
 
@@ -2346,7 +2356,7 @@ async def update_book_cover(
     tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
     if not await download_cover(body.url, tmp):
         raise HTTPException(status_code=502, detail="Cover download failed")
-    os.replace(tmp, dest)
+    place_cover(tmp, dest)
     book.cover_path = dest
     # Same path as the old cover: bump the stamp the cover URL is keyed
     # on, or browsers keep showing the cached image.
@@ -2374,7 +2384,7 @@ async def upload_book_cover(
     tmp = f"{dest}.tmp-{uuid.uuid4().hex[:8]}"
     if not save_cover_bytes(data, tmp):
         raise HTTPException(status_code=422, detail="Not a decodable image")
-    os.replace(tmp, dest)
+    place_cover(tmp, dest)
     book.cover_path = dest
     # Same path as the old cover: bump the stamp the cover URL is keyed
     # on, or browsers keep showing the cached image.

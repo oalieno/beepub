@@ -1877,7 +1877,7 @@
           >
             {#if seriesNext.cover_path}
               <img
-                use:authedSrc={coverUrl(seriesNext.id)}
+                use:authedSrc={coverUrl(seriesNext.id, null, "thumb")}
                 alt={seriesNext.title ?? "Next book"}
                 class="h-52 sm:h-64 md:h-96 w-auto rounded-md shadow-xl object-cover"
               />

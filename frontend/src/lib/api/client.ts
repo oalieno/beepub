@@ -122,19 +122,33 @@ export function apiBase(): string {
  * Cover image URL. Web uses nginx fast path (/covers/), native uses API.
  * Pass `version` (e.g. book.updated_at) to bust browser/CDN caches when
  * the cover is replaced.
+ *
+ * `size: "thumb"` is the small cover (480px wide, WebP) for where covers
+ * are shown small and many — cards, rows, results: a fifth of the bytes.
+ * A book that has no thumbnail yet answers with its full cover.
  */
-export function coverUrl(bookId: string, version?: string | number): string {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const native =
-    typeof window !== "undefined" &&
-    ((window as any).Capacitor?.isNativePlatform?.() ?? false);
-  const base = native
+export function coverUrl(
+  bookId: string,
+  version?: string | number | null,
+  size: "full" | "thumb" = "full",
+): string {
+  const thumb = size === "thumb";
+  const base = isNativePlatform()
     ? `${apiBase()}/books/${bookId}/cover`
-    : `/covers/${bookId}.jpg`;
-  if (version === undefined || version === null) return base;
-  const v =
-    typeof version === "string" ? Date.parse(version) || version : version;
-  return `${base}?v=${encodeURIComponent(String(v))}`;
+    : thumb
+      ? `/covers/thumb/${bookId}.jpg.webp`
+      : `/covers/${bookId}.jpg`;
+  const params = new URLSearchParams();
+  if (thumb && isNativePlatform()) params.set("size", "thumb");
+  if (version !== undefined && version !== null)
+    params.set(
+      "v",
+      String(
+        typeof version === "string" ? Date.parse(version) || version : version,
+      ),
+    );
+  const query = params.toString();
+  return query ? `${base}?${query}` : base;
 }
 
 function isNativePlatform(): boolean {

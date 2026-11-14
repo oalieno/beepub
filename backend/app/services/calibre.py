@@ -21,6 +21,7 @@ from app.services.storage import (
     delete_file,
     get_book_path,
     get_cover_path,
+    place_cover,
     save_cover_bytes,
 )
 from app.tasks.text_extract import extract_book_text
@@ -115,7 +116,7 @@ def _copy_cover(src: str, dest: str) -> bool:
             return False
         st = os.stat(src)
         os.utime(tmp, ns=(st.st_atime_ns, st.st_mtime_ns))
-        os.replace(tmp, dest)
+        place_cover(tmp, dest)
         return True
     except Exception:
         delete_file(tmp)

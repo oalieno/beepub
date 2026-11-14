@@ -262,7 +262,7 @@
                 >
                   {#if book.cover_path}
                     <img
-                      use:authedSrc={coverUrl(book.id)}
+                      use:authedSrc={coverUrl(book.id, null, "thumb")}
                       alt="{book.display_title} cover"
                       class="w-full h-full object-cover"
                       loading="lazy"
