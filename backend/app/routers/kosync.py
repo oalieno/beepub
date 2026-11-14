@@ -40,6 +40,7 @@ from app.models.kosync import KosyncProgress
 from app.models.reading import UserBookInteraction
 from app.models.user import User
 from app.routers.libraries import accessible_book_ids_select
+from app.services import login_throttle
 from app.services.auth import verify_password
 from app.services.credential_cache import CredentialCache
 from app.services.kosync_bridge import (
@@ -71,6 +72,8 @@ async def get_kosync_user(
             _credential_cache.invalidate(cache_key)
 
     if user is None:
+        if login_throttle.refused(username, key):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         result = await db.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
         # No key hash yet = the user never logged in since kosync support
@@ -80,6 +83,7 @@ async def get_kosync_user(
             or user.kosync_key_hash is None
             or not await asyncio.to_thread(verify_password, key, user.kosync_key_hash)
         ):
+            login_throttle.record_wrong(username, key)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
         _credential_cache.put(cache_key, user.id)
 

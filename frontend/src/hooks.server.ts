@@ -1,4 +1,4 @@
-import { redirect, type Handle } from "@sveltejs/kit";
+import { redirect, type Handle, type RequestEvent } from "@sveltejs/kit";
 import { sequence } from "@sveltejs/kit/hooks";
 import { env } from "$env/dynamic/private";
 import { building } from "$app/environment";
@@ -64,6 +64,18 @@ async function tryRefresh(
   }
 }
 
+/** Whether the person reached the site over https (a TLS proxy in front
+ *  says so in X-Forwarded-Proto). Over plain http a browser drops a
+ *  cookie marked Secure, so the flag follows the scheme — as the backend's
+ *  own cookies do. */
+function overHttps(event: RequestEvent): boolean {
+  const forwarded = event.request.headers.get("x-forwarded-proto");
+  const scheme = forwarded
+    ? forwarded.split(",")[0].trim()
+    : event.url.protocol.replace(":", "");
+  return scheme === "https";
+}
+
 const authHandle: Handle = async ({ event, resolve }) => {
   // Skip auth during static build (adapter-static fallback page generation)
   if (building) {
@@ -93,7 +105,7 @@ const authHandle: Handle = async ({ event, resolve }) => {
           event.cookies.set("token", token, {
             path: "/",
             httpOnly: true,
-            secure: true,
+            secure: overHttps(event),
             sameSite: "lax",
             maxAge: ACCESS_MAX_AGE,
           });
@@ -121,7 +133,7 @@ const authHandle: Handle = async ({ event, resolve }) => {
       event.cookies.set("token", token, {
         path: "/",
         httpOnly: true,
-        secure: true,
+        secure: overHttps(event),
         sameSite: "lax",
         maxAge: ACCESS_MAX_AGE,
       });

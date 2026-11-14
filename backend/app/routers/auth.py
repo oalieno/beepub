@@ -19,6 +19,7 @@ from app.schemas.auth import (
     UpdateUsernameRequest,
 )
 from app.schemas.user import UserOut
+from app.services import login_throttle
 from app.services.auth import (
     create_access_token,
     create_refresh_token,
@@ -72,14 +73,16 @@ def _set_refresh_cookie(response: Response, token: str, secure: bool) -> None:
     )
 
 
-def _clear_auth_cookies(response: Response) -> None:
+def _clear_auth_cookies(response: Response, secure: bool) -> None:
+    # (Secure as the cookies were set: over plain http a browser ignores a
+    # Set-Cookie that carries the flag — the deletion too.)
     response.delete_cookie(
-        key=ACCESS_COOKIE_NAME, httponly=True, secure=True, samesite="lax", path="/"
+        key=ACCESS_COOKIE_NAME, httponly=True, secure=secure, samesite="lax", path="/"
     )
     response.delete_cookie(
         key=REFRESH_COOKIE_NAME,
         httponly=True,
-        secure=True,
+        secure=secure,
         samesite="lax",
         path=REFRESH_COOKIE_PATH,
     )
@@ -151,13 +154,23 @@ async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    if login_throttle.locked(form_data.username):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed attempts. Try again later.",
+        )
+    invalid = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid credentials",
+    )
+    if login_throttle.refused(form_data.username, form_data.password):
+        raise invalid
     result = await db.execute(select(User).where(User.username == form_data.username))
     user = result.scalar_one_or_none()
     if not user or not verify_password(form_data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
-        )
+        login_throttle.record_wrong(form_data.username, form_data.password)
+        raise invalid
+    login_throttle.record_right(form_data.username)
     if not user.is_active:
         raise HTTPException(status_code=400, detail="Account is disabled")
 
@@ -210,18 +223,18 @@ async def refresh(
 
     payload = decode_token(raw)
     if payload is None or payload.get("type") != "refresh":
-        _clear_auth_cookies(response)
+        _clear_auth_cookies(response, _cookie_secure(request))
         raise invalid
 
     user_id = payload.get("sub")
     if not user_id:
-        _clear_auth_cookies(response)
+        _clear_auth_cookies(response, _cookie_secure(request))
         raise invalid
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
-        _clear_auth_cookies(response)
+        _clear_auth_cookies(response, _cookie_secure(request))
         raise invalid
 
     new_access = create_access_token({"sub": str(user.id)})
@@ -230,8 +243,8 @@ async def refresh(
 
 
 @router.post("/logout")
-async def logout(response: Response):
-    _clear_auth_cookies(response)
+async def logout(request: Request, response: Response):
+    _clear_auth_cookies(response, _cookie_secure(request))
     return {"ok": True}
 
 

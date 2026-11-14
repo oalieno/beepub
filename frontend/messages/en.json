@@ -1100,6 +1100,7 @@
   "error_image_not_found": "Image file not found",
   "error_image_not_ready": "Image not ready",
   "error_invalid_credentials": "Invalid credentials",
+  "error_too_many_attempts": "Too many failed attempts. Try again later.",
   "error_invalid_source": "Invalid source",
   "error_library_not_found": "Library not found",
   "error_no_books_found": "No accessible books found",

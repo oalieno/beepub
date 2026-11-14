@@ -28,6 +28,7 @@ from app.routers.libraries import (
     accessible_book_ids_select,
     accessible_libraries_condition,
 )
+from app.services import login_throttle
 from app.services.auth import verify_password
 from app.services.book_search import tiered_book_search
 from app.services.credential_cache import CredentialCache
@@ -91,12 +92,15 @@ async def get_opds_user(
             _credential_cache.invalidate(cache_key)
 
     if user is None:
+        if login_throttle.refused(username, password):
+            raise _unauthorized()
         result = await db.execute(select(User).where(User.username == username))
         user = result.scalar_one_or_none()
         # bcrypt off the event loop — covers arrive in concurrent bursts.
         if user is None or not await asyncio.to_thread(
             verify_password, password, user.password_hash
         ):
+            login_throttle.record_wrong(username, password)
             raise _unauthorized()
         _credential_cache.put(cache_key, user.id)
 

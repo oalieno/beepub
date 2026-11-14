@@ -65,6 +65,8 @@ const ERROR_MAP: Record<string, () => string> = {
   "Sync already in progress": () => m.error_sync_in_progress(),
   "User not found": () => m.error_user_not_found(),
   "Username already exists": () => m.error_username_exists(),
+  "Too many failed attempts. Try again later.": () =>
+    m.error_too_many_attempts(),
 };
 
 export function getServerUrl(): string {

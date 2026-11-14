@@ -152,6 +152,9 @@ async def clean_state(database: list[str]):
     the loop they were created on.
     """
     from app.database import engine
+    from app.services import login_throttle
+
+    login_throttle._wrong.clear()
 
     tables = ", ".join(f'"{name}"' for name in database)
     async with engine.begin() as conn:

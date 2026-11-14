@@ -21,9 +21,21 @@ export const load: LayoutLoad = async ({ data }) => {
     if (!token) return { user: null };
     try {
       const serverUrl = getServerUrl();
-      const res = await fetch(`${serverUrl}/api/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const me = (bearer: string) =>
+        fetch(`${serverUrl}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${bearer}` },
+        });
+      let res = await me(token);
+      if (res.status === 401) {
+        // The access token has run out since the app was last open; the
+        // refresh token, which lasts far longer, gets a new one. Only
+        // when that is refused too is the person signed out.
+        const { refreshAccessToken } = await import("$lib/api/client");
+        const fresh = (await refreshAccessToken())
+          ? localStorage.getItem("token")
+          : null;
+        if (fresh) res = await me(fresh);
+      }
       if (res.ok) return { user: await res.json() };
     } catch {
       // Server unreachable — try cached user for offline mode

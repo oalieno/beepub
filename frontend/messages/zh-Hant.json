@@ -1100,6 +1100,7 @@
   "error_image_not_found": "找不到圖片檔案",
   "error_image_not_ready": "圖片尚未準備好",
   "error_invalid_credentials": "帳號或密碼錯誤",
+  "error_too_many_attempts": "嘗試次數過多，請稍後再試",
   "error_invalid_source": "無效的來源",
   "error_library_not_found": "找不到書庫",
   "error_no_books_found": "找不到可存取的書籍",
