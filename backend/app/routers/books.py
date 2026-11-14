@@ -9,7 +9,7 @@ import zipfile
 import zlib
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any, NamedTuple
 from zoneinfo import ZoneInfo
 
 from fastapi import (
@@ -1085,6 +1085,104 @@ async def get_discover_browse(
     return sections
 
 
+class _Place(NamedTuple):
+    """Where a book stands in the list: how many come before it, and —
+    when the order is one key and the id — that key and the book's own
+    value of it (None when numbering every row was the only way)."""
+
+    index: int
+    key: Any = None
+    value: Any = None
+    book_id: uuid.UUID | None = None
+
+    def before(self, order: str):
+        tie = and_(self.key == self.value, Book.id < self.book_id)
+        if order == "desc":
+            # Descending, Postgres puts the books with no key first.
+            return or_(self.key > self.value, self.key.is_(None), tie)
+        return or_(self.key < self.value, tie)
+
+    def from_here(self, order: str):
+        tie = and_(self.key == self.value, Book.id >= self.book_id)
+        if order == "desc":
+            return or_(self.key < self.value, tie)
+        return or_(self.key > self.value, self.key.is_(None), tie)
+
+
+async def _place_in_order(
+    db: AsyncSession,
+    base_query,
+    book_id: uuid.UUID,
+    sort: str,
+    order: str,
+    order_by: list,
+) -> _Place | None:
+    """The book's place in the list in the given order (None when it is
+    not in the list).
+
+    Counted, where the order is one key and the id: the books whose key
+    sorts before this book's — a walk of the key's index up to the book,
+    where numbering every row of the list sorts all of it first."""
+    if sort != "series_index":
+        key = order_by[0].element
+        found = (
+            await db.execute(
+                base_query.with_only_columns(key).where(Book.id == book_id)
+            )
+        ).first()
+        if found is None:
+            return None
+        if found[0] is not None:
+            place = _Place(0, key, found[0], book_id)
+            count = await db.scalar(
+                select(func.count()).select_from(
+                    base_query.with_only_columns(Book.id)
+                    .where(place.before(order))
+                    .subquery()
+                )
+            )
+            return place._replace(index=count or 0)
+    ranked = base_query.with_only_columns(
+        Book.id.label("id"),
+        func.row_number().over(order_by=order_by).label("rn"),
+    ).subquery()
+    rank = await db.scalar(select(ranked.c.rn).where(ranked.c.id == book_id))
+    return None if rank is None else _Place(rank - 1)
+
+
+async def _page_at(
+    db: AsyncSession, base_query, place: _Place, order: str, limit: int
+) -> list[Book]:
+    """The page that opens AROUND_BEFORE books ahead of the place: those
+    few, read backwards from it, then the rest forwards — two short walks
+    from the book, where an OFFSET walks the whole list up to it."""
+    key = place.key
+    backwards = (
+        [key.asc(), Book.id.desc()] if order == "desc" else [key.desc(), Book.id.desc()]
+    )
+    forwards = [key.desc(), Book.id] if order == "desc" else [key.asc(), Book.id]
+    ahead = list(
+        await db.scalars(
+            base_query.where(place.before(order))
+            .order_by(*backwards)
+            .limit(min(AROUND_BEFORE, place.index))
+        )
+    )
+    ahead.reverse()
+    # (The page is `limit` books from its start, wherever the book falls.)
+    ahead = ahead[:limit]
+    if len(ahead) == limit:
+        return ahead
+    rest = list(
+        await db.scalars(
+            base_query.where(place.from_here(order))
+            .order_by(*forwards)
+            .limit(limit - len(ahead))
+        )
+    )
+    return ahead + rest
+
+
 # How many books the page opened ``around`` a book shows before it.
 AROUND_BEFORE = 20
 
@@ -1253,18 +1351,17 @@ async def list_all_books(
         order_by = _list_order(sort, order)
         if around is not None:
             # The book's place in this very order, so the page can open on it.
-            ranked = base_query.with_only_columns(
-                Book.id.label("id"),
-                func.row_number().over(order_by=order_by).label("rn"),
-            ).subquery()
-            rank = await db.scalar(select(ranked.c.rn).where(ranked.c.id == around))
-            if rank is not None:
-                around_index = rank - 1
-                offset = max(0, around_index - AROUND_BEFORE)
-        result = await db.execute(
-            base_query.order_by(*order_by).offset(offset).limit(limit)
-        )
-        books = result.scalars().all()
+            place = await _place_in_order(db, base_query, around, sort, order, order_by)
+        if around is not None and place is not None:
+            around_index = place.index
+            offset = max(0, around_index - AROUND_BEFORE)
+        if around is not None and place is not None and place.key is not None:
+            books = await _page_at(db, base_query, place, order, limit)
+        else:
+            result = await db.execute(
+                base_query.order_by(*order_by).offset(offset).limit(limit)
+            )
+            books = result.scalars().all()
 
     # Enrich with edition_count + work-propagated reading status. The page is
     # bounded by `limit` (<=200), so propagation runs only over the current page.
