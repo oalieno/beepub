@@ -20,6 +20,7 @@ import { searchMatcher } from "./vendor/foliate/search.js";
 import { textWalker } from "./vendor/foliate/text-walker.js";
 import type { BookLoader } from "./loaders/types";
 import { SectionLoadError, isSectionLoadError } from "./load-error";
+import { keepInert } from "./inert";
 import { ImagePrefetcher } from "./prefetch";
 import { CoverSlide, type SlideEvent } from "./slide";
 import { ScrollStrip, type StripLayout, type StripRelocation } from "./strip";
@@ -810,6 +811,8 @@ export class ReaderCore {
       ...prefetch.loader,
       sha1: undefined,
     }).init()) as unknown as Book;
+    // No script in the book runs (see inert.ts).
+    keepInert((book as { transformTarget?: EventTarget }).transformTarget);
     // Every CFI the book resolves — for the paginator, the highlight
     // layer, the anchor check — reads the section with the upright-number
     // wrappers transparent (see tcy.ts); on a document without wrappers
