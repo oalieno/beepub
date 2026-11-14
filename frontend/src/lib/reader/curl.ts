@@ -86,7 +86,12 @@ export function clampToSpine(
 }
 
 /** The corner's way across: p along the turn, raised on a low arc, plus
- *  the finger's own height above that arc (yDev). */
+ *  the finger's own height above that arc (yDev).
+ *
+ *  The corner is never carried past the edge it lies on, away from the
+ *  sheet (a finger holding the bottom corner and moving down): the only
+ *  fold that would take it there runs through the spine's far end, down
+ *  the sheet's diagonal — half the sheet turned over at the first pixel. */
 export function pointAt(
   p: number,
   yDev: number,
@@ -94,7 +99,9 @@ export function pointAt(
   H: number,
   cy: number,
 ): Point {
-  const y = cy + yDev + (cy > H / 2 ? -arcLift(p, H) : arcLift(p, H));
+  const bottom = cy > H / 2;
+  const raw = cy + yDev + (bottom ? -arcLift(p, H) : arcLift(p, H));
+  const y = bottom ? Math.min(raw, H) : Math.max(raw, 0);
   return clampToSpine({ x: W - 2 * W * p, y }, W, H, cy);
 }
 

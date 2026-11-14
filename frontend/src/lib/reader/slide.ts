@@ -242,6 +242,9 @@ const READY_WAIT_MS = 200;
 const PENDING_MAX_MS = 60_000;
 /** The page's content comes up on the paper over this long. */
 const ARRIVE_MS = 150;
+/** How far sideways a finger has to come before the curl lifts a sheet
+ *  for it. */
+const CURL_TAKE_PX = 6;
 /** A sheet that joins a drag already under way reaches the finger over
  *  this long instead of jumping to it… */
 const CATCH_UP_MS = 110;
@@ -1985,6 +1988,10 @@ export class CoverSlide {
   #pull(): Dir | 0 {
     if (this.#fold && this.#curlDir) return this.#curlDir;
     const p = (this.#host.leftward() ? 1 : -1) * this.#x;
+    // A sheet is not lifted by a finger moving up or down the page that
+    // strays a pixel sideways: a curl back brings the whole previous
+    // sheet over at once (curl.ts LEAD).
+    if (this.#fold && Math.abs(p) < CURL_TAKE_PX) return 0;
     return p > 0 ? 1 : p < 0 ? -1 : 0;
   }
 
@@ -2030,9 +2037,13 @@ export class CoverSlide {
       if (this.#fold) {
         // The curl holds the sheet by the corner nearer the finger; one
         // brought back comes over by itself first (curl.ts LEAD).
+        // (Where the finger is now, and its height counted from here: a
+        // finger that came down the page before it pulled does not find
+        // the sheet already folded that far.)
         const H = this.#host.container.clientHeight || 1;
-        const y0 = this.#grabAt?.y ?? H;
+        const y0 = this.#grabAt ? this.#grabAt.y + this.#y : H;
         this.#cy = y0 < H / 2 ? 0 : H;
+        this.#y = 0;
         this.#leadAt = dir < 0 ? performance.now() : 0;
         this.#foldAt = null;
       }
