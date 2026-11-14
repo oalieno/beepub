@@ -1207,5 +1207,22 @@
   "opened_file_library": "Server library",
   "opened_file_device_hint": "Books added to this device are in its library once you switch to This device.",
   "opened_file_device_epub_only": "This device's library only takes EPUB files.",
-  "opened_file_no_upload": "There is no server library you can upload to."
+  "opened_file_no_upload": "There is no server library you can upload to.",
+  "browser_view_shelf": "Bookshelf view",
+  "shelf_open": "Open this book",
+  "shelf_prev": "Previous",
+  "shelf_next": "Next",
+  "shelf_put_back": "Put it back",
+  "shelf_shut": "Close the book",
+  "shelf_about": "About this book",
+  "shelf_read_again": "Read again",
+  "shelf_details": "Book page",
+  "shelf_no_description": "This book has no description yet.",
+  "shelf_from": "from the library of BeePub",
+  "shelf_no_webgl": "This browser cannot draw 3D. Use the grid view instead.",
+  "shelf_take": "{title}, {author}",
+  "shelf_enter": "Immersive bookshelf",
+  "shelf_bee_toggle": "Show the bee",
+  "shelf_bee_pick": "Let the bee pick one",
+  "shelf_tap_me": "Tap me"
 }

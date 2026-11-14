@@ -26,6 +26,7 @@
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@tailwindcss/vite": "^4.2.1",
     "@types/spark-md5": "^3.0.5",
+    "@types/three": "^0.187.0",
     "bits-ui": "^2.16.2",
     "clsx": "^2.1.1",
     "prettier": "^3.8.1",
@@ -52,7 +53,8 @@
     "html2canvas": "^1.4.1",
     "jszip": "^3.7.1",
     "marked": "^17.0.4",
-    "spark-md5": "^3.0.2"
+    "spark-md5": "^3.0.2",
+    "three": "0.187.0"
   },
   "packageManager": "pnpm@10.30.3+sha512.c961d1e0a2d8e354ecaa5166b822516668b7f44cb5bd95122d590dd81922f606f5473b6d23ec4a5be05e7fcd18e8488d47d978bbe981872f1145d06e9a740017"
 }

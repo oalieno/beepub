@@ -8,11 +8,13 @@
     BookOpen,
     BookX,
     LayoutGrid,
+    LibraryBig,
     List,
   } from "@lucide/svelte";
   import * as Select from "$lib/components/ui/select";
   import * as m from "$lib/paraglide/messages.js";
   import BookGrid from "$lib/components/BookGrid.svelte";
+  import BookShelf from "$lib/components/shelf/BookShelf.svelte";
   import BookTable, {
     type RowDraft,
     type RowField,
@@ -140,11 +142,15 @@
   // the cover cards deliberately dropped. The preference persists per
   // browser; phones always render the grid.
   const VIEW_KEY = "library-view";
-  let viewMode = $state<"grid" | "table">(
-    typeof localStorage !== "undefined" &&
-      localStorage.getItem(VIEW_KEY) === "table"
-      ? "table"
-      : "grid",
+  type ViewMode = "grid" | "table" | "shelf";
+  let viewMode = $state<ViewMode>(
+    typeof localStorage === "undefined"
+      ? "grid"
+      : localStorage.getItem(VIEW_KEY) === "table"
+        ? "table"
+        : localStorage.getItem(VIEW_KEY) === "shelf"
+          ? "shelf"
+          : "grid",
   );
   let isDesktop = $state(false);
 
@@ -157,6 +163,10 @@
   });
 
   let tableView = $derived(viewMode === "table" && isDesktop);
+  // Books standing on shelves (on any screen). Like the table it shows
+  // every book, never a series as one card.
+  let shelfView = $derived(viewMode === "shelf");
+  let shelfInside = $state(false); // the bookshelf is the whole screen
   $effect(() => onpane?.(tableView));
 
   // The table scrolls in its own pane; the grid scrolls the page.
@@ -188,7 +198,7 @@
             : initialSort,
     // The table is flat — series live in their own column.
     // svelte-ignore state_referenced_locally
-    collapse: collapsible && initialCollapse && viewMode !== "table",
+    collapse: collapsible && initialCollapse && viewMode === "grid",
   };
 
   let books = $state<BookWithInteractionOut[]>(init.books);
@@ -775,12 +785,12 @@
     handleImmediateChange();
   }
 
-  function setViewMode(mode: "grid" | "table") {
+  function setViewMode(mode: ViewMode) {
     if (mode === viewMode) return;
     viewMode = mode;
     localStorage.setItem(VIEW_KEY, mode);
     clearSelection();
-    if (mode === "table" && collapse) {
+    if (mode !== "grid" && collapse) {
       collapse = false;
       handleImmediateChange();
     } else if (windowStart > 0) {
@@ -945,7 +955,7 @@
       {m.browser_filters()}
     </button>
 
-    {#if collapsible && !tableView}
+    {#if collapsible && !tableView && !shelfView}
       <button
         class="inline-flex items-center gap-1.5 h-8 text-xs px-2.5 rounded-full font-medium transition-colors {collapse
           ? 'bg-primary/15 text-primary'
@@ -1016,7 +1026,7 @@
         </span>
       {/if}
       <div
-        class="hidden md:flex items-center rounded-full bg-secondary p-0.5"
+        class="flex items-center rounded-full bg-secondary p-0.5"
         role="group"
         aria-label={m.browser_view_label()}
       >
@@ -1032,7 +1042,8 @@
           <LayoutGrid size={14} />
         </button>
         <button
-          class="p-1.5 rounded-full transition-colors {viewMode === 'table'
+          class="hidden md:block p-1.5 rounded-full transition-colors {viewMode ===
+          'table'
             ? 'bg-card text-foreground shadow-sm'
             : 'text-muted-foreground hover:text-foreground'}"
           title={m.browser_view_table()}
@@ -1041,6 +1052,17 @@
           onclick={() => setViewMode("table")}
         >
           <List size={14} />
+        </button>
+        <button
+          class="p-1.5 rounded-full transition-colors {viewMode === 'shelf'
+            ? 'bg-card text-foreground shadow-sm'
+            : 'text-muted-foreground hover:text-foreground'}"
+          title={m.browser_view_shelf()}
+          aria-label={m.browser_view_shelf()}
+          aria-pressed={viewMode === "shelf"}
+          onclick={() => setViewMode("shelf")}
+        >
+          <LibraryBig size={14} />
         </button>
       </div>
     </div>
@@ -1104,7 +1126,25 @@
   {/if}
 </div>
 
-{#if loading}
+{#if shelfView && (shelfInside || (!loading && shownCount > 0))}
+  <!-- Inside the bookshelf a search must not take it away: it stays
+       through the loading and through a search that finds nothing. -->
+  <BookShelf
+    {books}
+    onend={loadMore}
+    query={searchQuery}
+    onquery={(q) => {
+      searchQuery = q;
+      handleSearchInput();
+    }}
+    placeholder={searchPlaceholder || m.browser_search_all()}
+    busy={loading}
+    empty={hasActiveFilters
+      ? m.browser_no_matches()
+      : emptyMessage || m.browser_no_books()}
+    oninside={(v) => (shelfInside = v)}
+  />
+{:else if loading}
   {#if tableView}
     <!-- The pane as it will be: a table card beside the panel's room. -->
     <div class="md:flex-1 md:min-h-0">
@@ -1220,7 +1260,7 @@
   {:else}
     <BookGrid {books} />
   {/if}
-  {#if hasMore && !tableView}
+  {#if hasMore && !tableView && !shelfView}
     <!-- Never a scroll anchor: rows added above it would have the browser
          scroll down to keep it in place — in reach, loading for ever. -->
     <div

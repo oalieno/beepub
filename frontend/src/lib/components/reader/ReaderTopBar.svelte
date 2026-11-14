@@ -11,6 +11,7 @@
     chapterLabel = null,
     darkMode = false,
     backHref = null,
+    onback,
   }: {
     bookId?: string;
     title?: string;
@@ -19,6 +20,8 @@
     darkMode?: boolean;
     /** Overrides the back target (local books return to their shelf). */
     backHref?: string | null;
+    /** Taken instead of going to `backHref`. */
+    onback?: () => void;
   } = $props();
 </script>
 
@@ -34,9 +37,11 @@
         ? 'text-ink-400 hover:bg-ink-800'
         : 'text-muted-foreground hover:bg-secondary'}"
       onclick={() =>
-        goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
-          replaceState: true,
-        })}
+        onback
+          ? onback()
+          : goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
+              replaceState: true,
+            })}
       aria-label={m.reader_back_to_detail()}
     >
       <ArrowLeft size={20} />

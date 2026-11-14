@@ -1207,5 +1207,22 @@
   "opened_file_library": "服务器书库",
   "opened_file_device_hint": "添加到本地的书，切换到本地后就在书库里。",
   "opened_file_device_epub_only": "本地书库只支持 EPUB 文件。",
-  "opened_file_no_upload": "没有你可以上传的服务器书库。"
+  "opened_file_no_upload": "没有你可以上传的服务器书库。",
+  "browser_view_shelf": "书柜视图",
+  "shelf_open": "翻开这本",
+  "shelf_prev": "上一本",
+  "shelf_next": "下一本",
+  "shelf_put_back": "放回书柜",
+  "shelf_shut": "合上书",
+  "shelf_about": "关于这本书",
+  "shelf_read_again": "再读一次",
+  "shelf_details": "书籍页面",
+  "shelf_no_description": "这本书还没有简介。",
+  "shelf_from": "from the library of BeePub",
+  "shelf_no_webgl": "这个浏览器不能画 3D，请改用网格视图。",
+  "shelf_take": "{title}，{author}",
+  "shelf_enter": "沉浸式书柜",
+  "shelf_bee_toggle": "显示蜜蜂",
+  "shelf_bee_pick": "让蜜蜂挑一本",
+  "shelf_tap_me": "点我"
 }

@@ -22,7 +22,8 @@
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
-  import { goto } from "$app/navigation";
+  import { beforeNavigate, goto } from "$app/navigation";
+  import { portal } from "$lib/components/shelf/portal";
   import { canCurl } from "$lib/platform";
   import { page } from "$app/state";
   import { booksApi } from "$lib/api/books";
@@ -1151,6 +1152,32 @@
     }
   }
 
+  // ---------------------------------------------- in from the bookshelf
+  // A book opened on the bookshelf is entered through its page: the
+  // screen is all light as this page mounts (portal.ts), and opens onto
+  // the book once its page is on screen. Back then goes out the same way,
+  // to that book open in hand on its shelf.
+  const fromShelf = browser && portal.origin !== null;
+  onMount(() => portal.landing(darkMode));
+  $effect(() => {
+    if (rendered || loadError) void portal.arrive();
+  });
+  beforeNavigate((nav) => {
+    const from = portal.origin;
+    if (!from || !nav.to) return;
+    const to = nav.to.url.pathname + nav.to.url.search;
+    // Only a way back to that shelf, or on to another volume, keeps it.
+    if (to !== from.href && !/^\/books\/[^/]+\/read$/.test(nav.to.url.pathname))
+      portal.origin = null;
+  });
+  let backing = false;
+  async function backToShelf() {
+    if (backing) return;
+    backing = true;
+    await portal.leave(darkMode);
+    history.back();
+  }
+
   // ------------------------------------------------------------ lifecycle
 
   let prevHtmlOverflow = "";
@@ -1349,6 +1376,7 @@
         illustrationCount={illustrations.length}
         offline={!$isOnline}
         backHref={localEntry ? `/local/${bookId}` : null}
+        onback={fromShelf ? backToShelf : undefined}
         showAi={aiEnabled}
         onprev={scrolled ? undefined : () => activeReader()?.prev()}
         onnext={scrolled ? undefined : () => activeReader()?.next()}
@@ -1368,6 +1396,7 @@
       {chapterLabel}
       {darkMode}
       backHref={localEntry ? `/local/${bookId}` : null}
+      onback={fromShelf ? backToShelf : undefined}
     />
   </div>
 

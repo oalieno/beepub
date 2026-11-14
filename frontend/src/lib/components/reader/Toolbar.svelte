@@ -30,6 +30,7 @@
     illustrationCount = 0,
     offline = false,
     backHref = null,
+    onback,
     showAi = true,
     onprev,
     onnext,
@@ -55,6 +56,8 @@
     offline?: boolean;
     /** Overrides the back target (local books return to their shelf). */
     backHref?: string | null;
+    /** Taken instead of going to `backHref`. */
+    onback?: () => void;
     /** AI actions are BeePub-server features; hidden for other backends. */
     showAi?: boolean;
     onprev?: () => void;
@@ -87,9 +90,11 @@
     title={m.reader_go_back()}
     aria-label={m.reader_go_back()}
     onclick={() =>
-      goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
-        replaceState: true,
-      })}
+      onback
+        ? onback()
+        : goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
+            replaceState: true,
+          })}
   >
     <ArrowLeft size={20} />
   </button>

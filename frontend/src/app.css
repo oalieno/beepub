@@ -94,6 +94,11 @@
    via a prop instead of the .dark class). Matches the brand palette so the
    reader's dark surfaces agree with the app-wide dark theme. */
 @theme {
+  /* A book's own type: the serif its spine, title page and the
+     bookshelf's signs are set in (`font-book`). */
+  --font-book:
+    "Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC",
+    "PMingLiU", serif;
   --color-ink-50: #f7f4ef;
   --color-ink-100: #ece5da;
   --color-ink-200: #d8cfc2;
