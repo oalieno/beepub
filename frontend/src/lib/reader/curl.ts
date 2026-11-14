@@ -204,12 +204,51 @@ export function foldAt(
 
 // ------------------------------------------------------------- renderer
 
-const SVG_NS = "http://www.w3.org/2000/svg";
+/*
+ * What a frame of the turn costs. The fold's shape changes every frame,
+ * so whatever is drawn from it is drawn again every frame; only what is
+ * moved, scaled or faded is left to the compositor. Hence:
+ *
+ * - the flap's shadow, which is soft all over, is drawn small
+ *   (SHADOW_SCALE) and shown enlarged: blurring it at the screen's own
+ *   resolution took most of a frame's time by itself;
+ * - the two shades are one fixed gradient each, on a layer of its own,
+ *   brought to the fold's length and depth by a transform.
+ */
+
+/** The flap's shadow is drawn this many times smaller than it is shown. */
+const SHADOW_SCALE = 4;
+/** Its softness (a Gaussian's sigma) and its reach past the sheet's
+ *  edges, in the sheet's px. */
+const SHADOW_SIGMA = 22;
+const SHADOW_MARGIN = 72;
+const SHADOW_OPACITY = 0.24;
+/** A shade's layer before it is scaled: as wide as a shade gets on a
+ *  phone, so it is seldom enlarged along the gradient. */
+const SHADE_W = 256;
+const SHADE_H = 64;
 
 function el(tag: string, style: Partial<CSSStyleDeclaration>): HTMLElement {
   const e = document.createElement(tag);
   Object.assign(e.style, style);
   return e;
+}
+
+/** A shade: a gradient running away from the fold, drawn once on a layer
+ *  of its own and only ever moved, scaled and faded after that. */
+function shade(gradient: string): HTMLElement {
+  return el("div", {
+    position: "absolute",
+    left: "0",
+    top: "0",
+    width: `${SHADE_W}px`,
+    height: `${SHADE_H}px`,
+    transformOrigin: "0 0",
+    pointerEvents: "none",
+    background: gradient,
+    opacity: "0",
+    willChange: "transform, opacity",
+  });
 }
 
 /** A sheet for the fold layer: where it lies, which way its spine is,
@@ -251,8 +290,9 @@ export class FoldLayer {
   #front: HTMLElement;
   #frontSlot: HTMLElement;
   #inPlace: HTMLElement | null = null;
-  #shadow: SVGSVGElement;
-  #shadowPoly: SVGPolygonElement;
+  #shadow: HTMLCanvasElement;
+  /** The shades' length along the fold, px. */
+  #span = 0;
   #back: HTMLElement;
   #backSlot: HTMLElement;
   #veil: HTMLElement;
@@ -277,45 +317,24 @@ export class FoldLayer {
       height: "100%",
     };
     this.#cast = el("div", { ...fill, overflow: "visible" });
-    this.#castShade = el("div", {
-      position: "absolute",
-      left: "0",
-      top: "0",
-      transformOrigin: "0 0",
-    });
+    // On the page the lifted sheet uncovers.
+    // (Eased off in many steps: a shade with an edge to it is a line.)
+    this.#castShade = shade(
+      "linear-gradient(90deg, rgba(0,0,0,.20) 0, rgba(0,0,0,.13) 15%, rgba(0,0,0,.07) 35%, rgba(0,0,0,.03) 60%, rgba(0,0,0,0) 100%)",
+    );
     this.#cast.append(this.#castShade);
     this.#front = el("div", { ...fill, overflow: "hidden" });
     this.#frontSlot = el("div", fill);
     this.#front.append(this.#frontSlot);
-    this.#shadow = document.createElementNS(SVG_NS, "svg");
+    // The flap's shadow is drawn on a canvas rather than left to a CSS
+    // drop-shadow: WebKit leaves stale paint behind a filtered element
+    // whose clip path moves every frame.
+    this.#shadow = document.createElement("canvas");
     this.#shadow.setAttribute("aria-hidden", "true");
     Object.assign(this.#shadow.style, {
       position: "absolute",
-      top: "0",
-      overflow: "visible",
+      pointerEvents: "none",
     });
-    const defs = document.createElementNS(SVG_NS, "defs");
-    const filter = document.createElementNS(SVG_NS, "filter");
-    const filterId = `curl-blur-${Math.random().toString(36).slice(2, 8)}`;
-    filter.setAttribute("id", filterId);
-    for (const [k, v] of [
-      ["x", "-30%"],
-      ["y", "-30%"],
-      ["width", "160%"],
-      ["height", "160%"],
-    ])
-      filter.setAttribute(k, v);
-    const blur = document.createElementNS(SVG_NS, "feGaussianBlur");
-    blur.setAttribute("stdDeviation", "22");
-    filter.append(blur);
-    defs.append(filter);
-    this.#shadowPoly = document.createElementNS(SVG_NS, "polygon");
-    this.#shadowPoly.setAttribute("fill", "#000");
-    this.#shadowPoly.setAttribute("filter", `url(#${filterId})`);
-    this.#shadow.append(defs, this.#shadowPoly);
-    // The flap's shadow is a blurred SVG outline rather than a CSS
-    // drop-shadow: WebKit leaves stale paint behind a filtered element
-    // whose clip path moves every frame.
     const backWrap = el("div", fill);
     this.#back = el("div", {
       ...fill,
@@ -328,13 +347,11 @@ export class FoldLayer {
       inset: "0",
       opacity: ".86",
     });
-    this.#backShade = el("div", {
-      position: "absolute",
-      left: "0",
-      top: "0",
-      transformOrigin: "0 0",
-      pointerEvents: "none",
-    });
+    // On the flap: paper, a little darker where it bends at the fold
+    // — no sheen, no bands.
+    this.#backShade = shade(
+      "linear-gradient(90deg, rgba(0,0,0,.12) 0, rgba(0,0,0,.05) 35.7%, rgba(0,0,0,0) 100%)",
+    );
     this.#back.append(this.#backSlot, this.#veil, this.#backShade);
     backWrap.append(this.#back);
     this.#stage.append(this.#cast, this.#front, this.#shadow, backWrap);
@@ -383,17 +400,54 @@ export class FoldLayer {
       // (Put in once: one that is moved, an iframe, would load again.)
     } else if (sheet.back) this.#backSlot.replaceChildren(sheet.back);
     else this.#backSlot.replaceChildren();
-    const diag = Math.ceil(Math.hypot(W, H)) * 2;
-    for (const sh of [this.#backShade, this.#castShade]) {
-      sh.style.width = `${diag}px`;
-      sh.style.height = `${diag * 2}px`;
-    }
+    // (Twice the sheet's diagonal either way of the fold's midpoint.)
+    this.#span = Math.ceil(Math.hypot(W, H)) * 4;
+    const k = SHADOW_SCALE;
+    const m = SHADOW_MARGIN;
+    const w = Math.ceil((2 * W + 2 * m) / k);
+    const h = Math.ceil((H + 2 * m) / k);
+    if (this.#shadow.width !== w) this.#shadow.width = w;
+    if (this.#shadow.height !== h) this.#shadow.height = h;
     Object.assign(this.#shadow.style, {
-      left: `${-W}px`,
-      width: `${2 * W}px`,
-      height: `${H}px`,
+      left: `${-W - m}px`,
+      top: `${-m}px`,
+      width: `${w * k}px`,
+      height: `${h * k}px`,
     });
-    this.#shadow.setAttribute("viewBox", `${-W} 0 ${2 * W} ${H}`);
+  }
+
+  /** The shadow the flap lying at `lying` casts, `alpha` strong (0: none).
+   *  Only the shadow is drawn, not the flap's shape: the shape is drawn
+   *  off the canvas, and its shadow thrown back onto it. */
+  #drawShadow(lying: Point[], alpha: number) {
+    const canvas = this.#shadow;
+    const ctx = canvas.getContext("2d");
+    const s = this.#sheet;
+    if (!ctx || !s) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (alpha <= 0 || lying.length < 3) return;
+    const k = SHADOW_SCALE;
+    const away = (canvas.width + canvas.height) * 4;
+    ctx.shadowColor = `rgba(0,0,0,${alpha.toFixed(3)})`;
+    // (A canvas's blur is twice the sigma, and is not scaled by the
+    // transform; nor is the offset.)
+    ctx.shadowBlur = (2 * SHADOW_SIGMA) / k;
+    ctx.shadowOffsetX = -away;
+    ctx.shadowOffsetY = 0;
+    ctx.setTransform(
+      1 / k,
+      0,
+      0,
+      1 / k,
+      (s.width + SHADOW_MARGIN) / k + away,
+      SHADOW_MARGIN / k,
+    );
+    ctx.fillStyle = "#000";
+    ctx.beginPath();
+    lying.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y)));
+    ctx.closePath();
+    ctx.fill();
   }
 
   /** `element` is the back of every sheet from now on (null: no
@@ -439,7 +493,7 @@ export class FoldLayer {
       if (this.#inPlace) this.#inPlace.style.clipPath = "";
       this.#back.style.clipPath = polygonCss([]);
       this.#castShade.style.opacity = "0";
-      this.#shadowPoly.setAttribute("points", "");
+      this.#drawShadow([], 0);
       return null;
     }
     // How lifted the sheet is goes by how far its corner has come, not
@@ -458,27 +512,21 @@ export class FoldLayer {
     }
     this.#back.style.clipPath = polygonCss(fold.folded);
     this.#back.style.transform = fold.matrix;
-    this.#shadowPoly.setAttribute(
-      "points",
-      fold.lying.map((q) => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join(" "),
-    );
-    this.#shadowPoly.setAttribute("fill-opacity", (0.24 * a).toFixed(3));
+    this.#drawShadow(fold.lying, SHADOW_OPACITY * a);
     const depth = Math.max(
       8,
       Math.min(fold.reach / 2, Math.min(s.width, PHONE_WIDTH) * 0.6),
     );
-    const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg) translateY(-50%)`;
-    // On the flap: paper, a little darker where it bends at the fold
-    // — no sheen, no bands.
-    this.#backShade.style.transform = at;
+    // Each shade starts at the fold and runs away from it: as long as
+    // the fold could be, and as deep as the sheet is lifted.
+    const at = `translate(${fold.mid.x}px,${fold.mid.y}px) rotate(${fold.angle}deg)`;
+    const along = this.#span / SHADE_H;
+    const sized = (deep: number) =>
+      `${at} scale(${deep / SHADE_W},${along}) translateY(-50%)`;
+    this.#backShade.style.transform = sized(depth * 0.7);
     this.#backShade.style.opacity = String(a);
-    this.#backShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.12) 0, rgba(0,0,0,.05) ${depth * 0.25}px, rgba(0,0,0,0) ${depth * 0.7}px)`;
-    // On the page the lifted sheet uncovers.
-    const reach = Math.max(24, depth * 0.9);
+    this.#castShade.style.transform = sized(Math.max(24, depth * 0.9));
     this.#castShade.style.opacity = String(a);
-    this.#castShade.style.transform = at;
-    // (Eased off in many steps: a shade with an edge to it is a line.)
-    this.#castShade.style.background = `linear-gradient(90deg, rgba(0,0,0,.20) 0, rgba(0,0,0,.13) ${reach * 0.15}px, rgba(0,0,0,.07) ${reach * 0.35}px, rgba(0,0,0,.03) ${reach * 0.6}px, rgba(0,0,0,0) ${reach}px)`;
     this.#cast.style.clipPath = polygonCss(fold.folded);
     return fold;
   }
