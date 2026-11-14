@@ -17,6 +17,18 @@
     ArrowLeft,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import {
+    DEFAULT_READER_FONT,
+    READER_FONTS,
+    type ReaderFont,
+  } from "$lib/reader/fonts";
+
+  const fontLabel: Record<(typeof READER_FONTS)[number], () => string> = {
+    mincho: m.reader_font_mincho,
+    gothic: m.reader_font_gothic,
+    kai: m.reader_font_kai,
+    system: m.reader_font_system,
+  };
   import type { WritingMode } from "$lib/reader/core";
   import type { PagerDirection, PagerMode, PagerTurn } from "$lib/reader/pages";
   import { canCurl } from "$lib/platform";
@@ -28,7 +40,7 @@
    */
   let {
     open = $bindable(false),
-    fontFamily = "serif",
+    fontFamily = DEFAULT_READER_FONT,
     fontSize = 16,
     fontSizeMax = 32,
     lineHeight = 1.8,
@@ -47,7 +59,7 @@
     pagerPadding = 0,
     showSync = false,
     syncBusy = null,
-    onfontToggle,
+    onfontChange,
     onfontIncrease,
     onfontDecrease,
     onthemeToggle,
@@ -68,7 +80,7 @@
     onsyncpush,
   }: {
     open?: boolean;
-    fontFamily?: string;
+    fontFamily?: ReaderFont;
     fontSize?: number;
     lineHeight?: number;
     /** px; row shown when `onletterSpacingChange` is given. */
@@ -87,7 +99,7 @@
     /** Kosync-backed books get manual pull/push controls. */
     showSync?: boolean;
     syncBusy?: "pull" | "push" | null;
-    onfontToggle?: () => void;
+    onfontChange?: (font: ReaderFont) => void;
     onfontIncrease?: () => void;
     onfontDecrease?: () => void;
     onthemeToggle?: () => void;
@@ -327,32 +339,25 @@
             </div>
           </div>
 
-          <!-- Font family -->
-          <div class="flex items-center justify-between">
+          <!-- Typeface -->
+          <div class="flex items-center justify-between gap-3">
             <span class="text-sm {labelClass}">{m.reader_font()}</span>
-            <div class="flex gap-1">
-              <button
-                class="px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
-                'sans-serif'
-                  ? activeBtnClass
-                  : inactiveBtnClass}"
-                onclick={() => {
-                  if (fontFamily !== "sans-serif") onfontToggle?.();
-                }}
-              >
-                {m.reader_font_sans()}
-              </button>
-              <button
-                class="px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
-                'serif'
-                  ? activeBtnClass
-                  : inactiveBtnClass}"
-                onclick={() => {
-                  if (fontFamily !== "serif") onfontToggle?.();
-                }}
-              >
-                {m.reader_font_serif()}
-              </button>
+            <div class="flex flex-wrap justify-end gap-1">
+              {#each READER_FONTS as font (font)}
+                <button
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
+                  font
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  aria-pressed={fontFamily === font}
+                  data-testid="reader-font-{font}"
+                  onclick={() => {
+                    if (fontFamily !== font) onfontChange?.(font);
+                  }}
+                >
+                  {fontLabel[font]()}
+                </button>
+              {/each}
             </div>
           </div>
 

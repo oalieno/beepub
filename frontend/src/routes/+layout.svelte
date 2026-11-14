@@ -1,5 +1,9 @@
 <script lang="ts">
   import "../app.css";
+  // The app's own type is served with it, not asked of a font service:
+  // a self-hosted library opens without one.
+  import "@fontsource-variable/inter/wght.css";
+  import "@fontsource-variable/playfair-display/wght.css";
   import { browser } from "$app/environment";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
@@ -36,6 +40,10 @@
       void SplashScreen.hide({ fadeOutDuration: 0 }).catch(() => {});
     initNetworkWatcher();
     initReadingSync();
+    // The Chinese serif comes in a hundred slices, each fetched only for
+    // the characters a page uses. The list of them is long, so it is
+    // asked for once the page is up rather than held up for.
+    void import("@fontsource-variable/noto-serif-tc/wght.css");
   });
 
   $effect(() => {

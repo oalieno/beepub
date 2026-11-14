@@ -74,7 +74,7 @@
   <!-- Quote mark -->
   <div
     style="
-      font-family: 'Playfair Display', Georgia, serif;
+      font-family: 'Playfair Display Variable', Georgia, serif;
       font-size: 120px;
       color: #c4924a;
       line-height: 1;
@@ -89,7 +89,7 @@
   <!-- Highlight text -->
   <div
     style="
-      font-family: 'Noto Serif TC', 'Playfair Display', Georgia, 'Times New Roman', serif;
+      font-family: 'Noto Serif TC Variable', 'Playfair Display Variable', Georgia, 'Times New Roman', serif;
       font-size: {fontSize}px;
       font-weight: 400;
       color: #1a1510;
@@ -107,7 +107,7 @@
   {#if note}
     <div
       style="
-        font-family: 'Inter', 'Noto Serif TC', system-ui, sans-serif;
+        font-family: 'Inter Variable', 'Noto Serif TC Variable', system-ui, sans-serif;
         font-size: 28px;
         font-style: italic;
         color: #8a7e6d;
@@ -145,7 +145,7 @@
     <!-- Book title -->
     <div
       style="
-        font-family: 'Inter', 'Noto Serif TC', system-ui, sans-serif;
+        font-family: 'Inter Variable', 'Noto Serif TC Variable', system-ui, sans-serif;
         font-size: 30px;
         font-weight: 600;
         color: #3d3529;
@@ -159,7 +159,7 @@
     {#if authors.length > 0}
       <div
         style="
-          font-family: 'Inter', 'Noto Serif TC', system-ui, sans-serif;
+          font-family: 'Inter Variable', 'Noto Serif TC Variable', system-ui, sans-serif;
           font-size: 26px;
           font-weight: 400;
           color: #8a7e6d;

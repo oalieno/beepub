@@ -386,9 +386,13 @@ export async function openBook(
     mx: "24",
     my: "48",
     turn: "instant",
+    // The device's own serif: the typefaces the app serves arrive in
+    // slices, and a page set before they have is set again after.
+    font: "serif",
     ...query,
   });
   if (!params.get("turn")) params.delete("turn");
+  if (!params.get("font")) params.delete("font");
   await seedGesturesSeen(page);
   await page.goto(`/books/${bookId}/read?${params}`);
   await page.waitForFunction(

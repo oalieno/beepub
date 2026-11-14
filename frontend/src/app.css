@@ -16,8 +16,9 @@
      OS — otherwise dark mode gets white scrollbars on every overflow row. */
   color-scheme: light;
   --radius: 0.75rem;
-  --font-heading: "Playfair Display", Georgia, "Times New Roman", serif;
-  --font-body: "Inter", system-ui, -apple-system, sans-serif;
+  --font-heading:
+    "Playfair Display Variable", Georgia, "Times New Roman", serif;
+  --font-body: "Inter Variable", system-ui, -apple-system, sans-serif;
   --background: #faf7f2;
   --foreground: #1a1510;
   --card: #ffffff;
@@ -97,8 +98,8 @@
   /* A book's own type: the serif its spine, title page and the
      bookshelf's signs are set in (`font-book`). */
   --font-book:
-    "Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC",
-    "PMingLiU", serif;
+    "Noto Serif TC Variable", "Noto Serif CJK TC", "Source Han Serif TC",
+    "Songti TC", "PMingLiU", serif;
   --color-ink-50: #f7f4ef;
   --color-ink-100: #ece5da;
   --color-ink-200: #d8cfc2;

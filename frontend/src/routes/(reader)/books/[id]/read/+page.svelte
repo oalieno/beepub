@@ -19,6 +19,11 @@
    * &turn=fade|slide|curl|scroll|instant (instant — a bare jump — exists only
    * here).
    */
+  import {
+    DEFAULT_READER_FONT,
+    readerFont,
+    type ReaderFont,
+  } from "$lib/reader/fonts";
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
@@ -513,11 +518,13 @@
     return fallback;
   }
 
-  function initialFont(): string {
+  function initialFont(): ReaderFont {
+    // (The query's two are the device's own fonts: a test's fixed
+    // ground, whatever typeface the app serves.)
     const fromQuery = q.get("font");
-    if (fromQuery === "sans") return "sans-serif";
-    if (fromQuery === "serif") return "serif";
-    return stored(KEY.font) ?? "serif";
+    if (fromQuery === "sans") return "system";
+    if (fromQuery === "serif") return "system-serif";
+    return readerFont(fromQuery || stored(KEY.font));
   }
   /** What a stored or query value means today: before 2026-10 the modes
    *  were instant / animated (a slide without the finger) / follow. */
@@ -556,7 +563,9 @@
     return document.documentElement.classList.contains("dark");
   }
 
-  let fontFamily = $state(browser ? initialFont() : "serif");
+  let fontFamily = $state<ReaderFont>(
+    browser ? initialFont() : DEFAULT_READER_FONT,
+  );
   let fontSize = $state(browser ? pick("size", [KEY.size], 16) : 16);
   let lineHeight = $state(browser ? pick("lh", [KEY.lineHeight], 1.8) : 1.8);
   let letterSpacing = $state(browser ? pick("ls", [KEY.letterSpacing], 0) : 0);
@@ -653,9 +662,9 @@
   }
   let darkMode = $state(initialDark());
 
-  function handleFontToggle() {
-    fontFamily = fontFamily === "serif" ? "sans-serif" : "serif";
-    store(KEY.font, fontFamily);
+  function handleFontChange(font: ReaderFont) {
+    fontFamily = font;
+    store(KEY.font, font);
   }
   function handleFontIncrease() {
     if (fontSize >= FONT_SIZE_MAX) return;
@@ -1781,7 +1790,7 @@
     {isImageBook}
     showSync={isKosync}
     syncBusy={kosyncBusy}
-    onfontToggle={handleFontToggle}
+    onfontChange={handleFontChange}
     onfontIncrease={handleFontIncrease}
     onfontDecrease={handleFontDecrease}
     onthemeToggle={handleThemeToggle}

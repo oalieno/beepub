@@ -70,6 +70,11 @@
     parseHighlightColor,
   } from "./highlight-style";
   import { blockScripts, setupIOSTouchSelection } from "./ios-touch-selection";
+  import {
+    DEFAULT_READER_FONT,
+    faceOf,
+    type ReaderFont,
+  } from "$lib/reader/fonts";
   import { isIOSDevice, setupSwipeNavigation } from "./touch-navigation";
   import { snapRangeToWordBounds } from "./word-snap";
 
@@ -78,7 +83,7 @@
     source,
     sync,
     initialCfi = null,
-    fontFamily = "serif",
+    fontFamily = DEFAULT_READER_FONT,
     fontSize = 16,
     lineHeight = 1.8,
     darkMode = false,
@@ -129,7 +134,7 @@
     /** Explicit jump target (a highlight from the detail page): a visit
      *  that keeps the saved position and offers the way back. */
     initialCfi?: string | null;
-    fontFamily?: string;
+    fontFamily?: ReaderFont;
     fontSize?: number;
     lineHeight?: number;
     darkMode?: boolean;
@@ -248,8 +253,22 @@
   const VPUNCT_SANS = "BeePub VPunct Sans";
   const VPUNCT_RANGE =
     "U+2015, U+2026, U+3008-3011, U+3014-301F, U+FF08-FF09, U+FF3B, U+FF3D, U+FF5B, U+FF5D, U+FF5E";
-  const SERIF_FONTS = `"${VPUNCT_SERIF}", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif`;
-  const SANS_FONTS = `"${VPUNCT_SANS}", "Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif`;
+  const SERIF_FONTS = `"Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "Songti SC", Georgia, "Times New Roman", serif`;
+  const SANS_FONTS = `"Noto Sans CJK TC", "Source Han Sans TC", "PingFang TC", "PingFang SC", "Microsoft JhengHei", "Microsoft YaHei", system-ui, sans-serif`;
+
+  /** The body's font list: the punctuation face, the chosen typeface
+   *  (when the app serves one), the device's fonts of its kind, then the
+   *  device's own — which is what shows until the typeface's slices have
+   *  arrived, and for good where they cannot be fetched. */
+  function fontStack(): string {
+    const face = faceOf(fontFamily);
+    return [
+      `"${face.serif ? VPUNCT_SERIF : VPUNCT_SANS}"`,
+      ...(face.family ? [`"${face.family}"`] : []),
+      ...face.kin.map((name) => `"${name}"`),
+      face.serif ? SERIF_FONTS : SANS_FONTS,
+    ].join(", ");
+  }
 
   // Legacy Ming/Song fonts (細明體, PMingLiU, Apple LiSung …) that book CSS
   // names by hand render with bad aliasing on hi-dpi screens; re-routing
@@ -277,6 +296,12 @@
     // Absolute URLs: section documents are blob: URLs, so a relative path
     // would resolve against nothing.
     const fonts = window.location.origin + "/fonts";
+    // The chosen typeface's stylesheet, by URL (an @import comes before
+    // every other rule): its slices are found beside it.
+    const sheet = faceOf(fontFamily).sheet;
+    const typeface = sheet
+      ? `@import url("${new URL(sheet, window.location.href).href}");\n`
+      : "";
     const mingFaces = MING_ALIASES.flatMap((name) =>
       MING_WEIGHTS.map(
         ([weight, suffix]) => `@font-face {
@@ -288,7 +313,7 @@
 }`,
       ),
     );
-    return `@font-face {
+    return `${typeface}@font-face {
   font-family: "${VPUNCT_SERIF}";
   src: url("${fonts}/beepub-vpunct-serif.woff2") format("woff2");
   unicode-range: ${VPUNCT_RANGE};
@@ -324,7 +349,7 @@ a { color: #d8a558; }`
       : "";
     return `html { font-size: ${fontSize}px !important; }
 body {
-  font-family: ${fontFamily === "serif" ? SERIF_FONTS : SANS_FONTS};
+  font-family: ${fontStack()};
   font-size: ${fontSize}px !important;
   line-height: ${lineHeight};
   letter-spacing: ${letterSpacing}px;
@@ -350,7 +375,7 @@ ${darkOverrides}
   function pinVerticalPunctuation(doc: Document) {
     const win = doc.defaultView;
     if (!win || !doc.body) return;
-    const punctFamily = fontFamily === "serif" ? VPUNCT_SERIF : VPUNCT_SANS;
+    const punctFamily = faceOf(fontFamily).serif ? VPUNCT_SERIF : VPUNCT_SANS;
     const pin = (el: Element, parentFonts: string) => {
       for (const child of Array.from(el.children)) {
         const fonts = win.getComputedStyle(child).fontFamily || "";

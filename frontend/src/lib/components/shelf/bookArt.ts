@@ -11,7 +11,7 @@ export interface Look {
 }
 
 const SERIF =
-  '"Noto Serif TC", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "PMingLiU", serif';
+  '"Noto Serif TC Variable", "Noto Serif CJK TC", "Source Han Serif TC", "Songti TC", "PMingLiU", serif';
 export const PAPER: RGB = [232, 218, 190];
 // For a book with no cover: quiet cloth colours.
 const CLOTHS: RGB[] = [

@@ -193,7 +193,7 @@
     display: flex;
     margin-top: 18px;
     font:
-      700 clamp(32px, 10vw, 40px) / 1 "Playfair Display",
+      700 clamp(32px, 10vw, 40px) / 1 "Playfair Display Variable",
       Georgia,
       serif;
     color: #5c3a21;
