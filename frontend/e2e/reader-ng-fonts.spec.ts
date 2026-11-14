@@ -40,13 +40,14 @@ const typeface = (page: Page) =>
 test("a typeface is chosen in the settings, set from the app's own files, and kept", async ({
   page,
   request,
+  baseURL,
 }) => {
   const bookId = await seedFixture(request, NINE_CHAPTERS_BOOK);
   await resetProgress(request, bookId);
   const elsewhere = new Set<string>();
   page.on("request", (r) => {
     const url = new URL(r.url());
-    if (/\.woff2?$/.test(url.pathname) && url.host !== new URL(page.url()).host)
+    if (/\.woff2?$/.test(url.pathname) && url.host !== new URL(baseURL!).host)
       elsewhere.add(url.host);
   });
   // (No `font` in the query: the reader's own choice.)
@@ -115,4 +116,51 @@ test("what an older version stored is the served face of its kind", async ({
     "aria-pressed",
     "true",
   );
+});
+
+test("a book that asks for an old Ming font by name is set in the app's Ming, from the app's own files; one that does not is given nothing", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const bookId = await seedFixture(request, NINE_CHAPTERS_BOOK);
+  await resetProgress(request, bookId);
+  const elsewhere = new Set<string>();
+  page.on("request", (r) => {
+    const url = new URL(r.url());
+    if (url.protocol.startsWith("http") && url.host !== new URL(baseURL!).host)
+      elsewhere.add(url.host);
+  });
+  const legacy = () =>
+    page.evaluate(async () => {
+      const doc: Document = window.__beepubReaderNG.core.getContents()[0].doc;
+      await doc.fonts.ready;
+      return {
+        linked: !!doc.querySelector('link[href*="legacy-ming"]'),
+        loaded: [...doc.fonts]
+          .filter((f) => f.status === "loaded")
+          .map((f) => f.family.replace(/['"]/g, "")),
+      };
+    });
+
+  // As the book is: no old name in it.
+  await openBook(page, bookId, { turn: "fade" }, NINE_CHAPTERS_BOOK);
+  expect((await legacy()).linked).toBe(false);
+
+  // The same book, its chapters asking for 細明體 as an old export does.
+  await page.route("**/api/books/*/content/**", async (route) => {
+    if (!/\.xhtml$/.test(new URL(route.request().url()).pathname))
+      return route.continue();
+    const response = await route.fetch();
+    const body = (await response.text()).replace(
+      "</head>",
+      '<style>p { font-family: "細明體", serif; }</style></head>',
+    );
+    await route.fulfill({ response, body });
+  });
+  await openBook(page, bookId, { turn: "fade" }, NINE_CHAPTERS_BOOK);
+  await expect.poll(async () => (await legacy()).linked).toBe(true);
+  await expect.poll(async () => (await legacy()).loaded).toContain("細明體");
+
+  expect([...elsewhere]).toEqual([]);
 });

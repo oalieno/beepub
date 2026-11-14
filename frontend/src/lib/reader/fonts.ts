@@ -13,6 +13,8 @@
 import minchoSheet from "@fontsource-variable/noto-serif-tc/wght.css?url";
 import gothicSheet from "@fontsource-variable/noto-sans-tc/wght.css?url";
 import kaiSheet from "./fonts/lxgw-wenkai-tc.css?url";
+import legacyMingSheet from "./fonts/legacy-ming.css?url";
+import legacyMingNames from "./fonts/legacy-ming.json";
 
 /** "system-serif" is the device's own serif: offered by no setting, and
  *  reached only by `?font=serif` — the tests' fixed ground, as
@@ -73,4 +75,42 @@ export function readerFont(value: string | null | undefined): ReaderFont {
   if (value === "serif") return "mincho";
   if (value === "sans-serif") return "gothic";
   return value && value in FACES ? (value as ReaderFont) : DEFAULT_READER_FONT;
+}
+
+/*
+ * Old Ming and Song fonts — 細明體, PMingLiU, Apple LiSung… — that a
+ * book's own CSS asks for by name are drawn badly on a dense screen where
+ * the device has them, and are not there at all elsewhere. Such a book is
+ * given a stylesheet in which each of those names is the Ming served with
+ * the app; a book that names none of them is given nothing.
+ */
+
+const LEGACY_MING = new RegExp(
+  legacyMingNames.map((n) => n.replace(/ /g, "\\s+")).join("|"),
+  "i",
+);
+const LEGACY_MING_INLINE = legacyMingNames
+  .map((n) => `[style*="${n}" i]`)
+  .join(",");
+
+function namesLegacyMing(doc: Document): boolean {
+  for (const sheet of Array.from(doc.styleSheets)) {
+    try {
+      for (const rule of Array.from(sheet.cssRules))
+        if (LEGACY_MING.test(rule.cssText)) return true;
+    } catch {
+      // A stylesheet that cannot be read is not one of the book's own.
+    }
+  }
+  return !!doc.querySelector(LEGACY_MING_INLINE);
+}
+
+/** For a chapter's document, once it has loaded: its old Ming font
+ *  names, if it has any, are set in the app's Ming. */
+export function routeLegacyMing(doc: Document) {
+  if (!doc.head || !namesLegacyMing(doc)) return;
+  const link = doc.createElement("link");
+  link.rel = "stylesheet";
+  link.href = new URL(legacyMingSheet, window.location.href).href;
+  doc.head.append(link);
 }

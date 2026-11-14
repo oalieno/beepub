@@ -73,6 +73,7 @@
   import {
     DEFAULT_READER_FONT,
     faceOf,
+    routeLegacyMing,
     type ReaderFont,
   } from "$lib/reader/fonts";
   import { isIOSDevice, setupSwipeNavigation } from "./touch-navigation";
@@ -270,28 +271,6 @@
     ].join(", ");
   }
 
-  // Legacy Ming/Song fonts (細明體, PMingLiU, Apple LiSung …) that book CSS
-  // names by hand render with bad aliasing on hi-dpi screens; re-routing
-  // the names through @font-face to 源流明體 GenRyuMin TC (jsDelivr,
-  // ButTaiwan/genryu-font; ~15MB OTFs the HTTP cache shares across
-  // sections) leaves books that pick other fonts untouched. Same aliases
-  // as the legacy reader (a881266).
-  const MING_ALIASES = [
-    "細明體",
-    "新細明體",
-    "PMingLiU",
-    "MingLiU",
-    "Apple LiSung Light",
-    "蘋果儷細宋",
-  ];
-  const MING_CDN =
-    "https://cdn.jsdelivr.net/gh/ButTaiwan/genryu-font@master/otf/TC";
-  const MING_WEIGHTS: [number, string][] = [
-    [400, "R"],
-    [500, "M"],
-    [700, "B"],
-  ];
-
   function fontFaceCss(): string {
     // Absolute URLs: section documents are blob: URLs, so a relative path
     // would resolve against nothing.
@@ -302,17 +281,6 @@
     const typeface = sheet
       ? `@import url("${new URL(sheet, window.location.href).href}");\n`
       : "";
-    const mingFaces = MING_ALIASES.flatMap((name) =>
-      MING_WEIGHTS.map(
-        ([weight, suffix]) => `@font-face {
-  font-family: "${name}";
-  font-weight: ${weight};
-  font-style: normal;
-  src: url("${MING_CDN}/GenRyuMin2TC-${suffix}.otf") format("opentype");
-  font-display: swap;
-}`,
-      ),
-    );
     return `${typeface}@font-face {
   font-family: "${VPUNCT_SERIF}";
   src: url("${fonts}/beepub-vpunct-serif.woff2") format("woff2");
@@ -322,8 +290,7 @@
   font-family: "${VPUNCT_SANS}";
   src: url("${fonts}/beepub-vpunct-sans.woff2") format("woff2");
   unicode-range: ${VPUNCT_RANGE};
-}
-${mingFaces.join("\n")}`;
+}`;
   }
 
   // The page's own colours (the themed body below; the slide's two
@@ -2260,6 +2227,7 @@ ${darkOverrides}
     vertical = !!core?.vertical;
     pushLayout();
     if (core?.vertical) pinVerticalPunctuation(doc);
+    routeLegacyMing(doc);
     ondirection?.(!!core?.advancesLeftward(), vertical);
     onwritingmodeoffer?.(!!core?.offersWritingMode());
     onfixedlayout?.(core?.book?.rendition?.layout === "pre-paginated");
@@ -2279,6 +2247,7 @@ ${darkOverrides}
   }) {
     core?.setGhostLayout(layoutFor);
     if (isVertical) pinVerticalPunctuation(doc);
+    routeLegacyMing(doc);
     // The live document gets this from the gesture layer.
     if (isIOSDevice()) blockScripts(doc);
   }
