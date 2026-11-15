@@ -7,6 +7,9 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm run build
+# What runs needs only the runtime dependencies — plain JavaScript, the
+# same on every platform — not the tools that built it.
+RUN pnpm prune --prod --ignore-scripts
 
 FROM node:22-alpine
 WORKDIR /app
