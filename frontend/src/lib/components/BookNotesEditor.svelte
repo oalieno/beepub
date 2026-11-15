@@ -38,6 +38,12 @@
 
   let heading = $derived(title ?? m.notes_title());
 
+  // The book this editor was opened for. The page under it can move on to
+  // another book while a save is still owed (the detail page is reused
+  // between books): what was typed here belongs to this one.
+  // svelte-ignore state_referenced_locally
+  const ownBookId = bookId;
+
   // Seeded once from the prop; thereafter notes is locally editable.
   // svelte-ignore state_referenced_locally
   let notes = $state(initialNotes ?? "");
@@ -111,11 +117,12 @@
       if (saveFn) {
         await saveFn(value);
       } else {
-        await booksApi.updateNotes(bookId, value);
+        await booksApi.updateNotes(ownBookId, value);
       }
       lastSaved = snapshot;
       saveState = "saved";
-      onchange?.(value);
+      // (Gone: the page may be showing another book by now.)
+      if (!gone) onchange?.(value);
       return true;
     } catch (e) {
       saveState = "error";
@@ -173,7 +180,9 @@
     });
   }
 
+  let gone = false;
   onDestroy(() => {
+    gone = true;
     if (debounceTimer) {
       clearTimeout(debounceTimer);
       // best-effort fire-and-forget; the page is going away

@@ -176,66 +176,67 @@
   let notFound = $state(false);
 
   async function loadData() {
+    // The page is reused from one book to the next (similar books, series
+    // neighbours): an answer that comes back after the reader has moved on
+    // is for a book no longer shown, and is dropped.
+    const id = bookId;
+    const current = () => id === bookId;
+    const keep =
+      <T,>(set: (v: T) => void) =>
+      (v: T) => {
+        if (current()) set(v);
+      };
     loading = true;
     notFound = false;
     try {
       const [b, ext] = await Promise.all([
-        booksApi.get(bookId),
-        booksApi.getExternal(bookId).catch(() => [] as ExternalMetadataOut[]),
+        booksApi.get(id),
+        booksApi.getExternal(id).catch(() => [] as ExternalMetadataOut[]),
       ]);
+      if (!current()) return;
       book = b;
       externalMeta = ext;
       const secondaryFetches: Promise<void>[] = [
         booksApi
-          .getInteraction(bookId)
-          .then((v) => {
-            interaction = v;
-          })
+          .getInteraction(id)
+          .then(keep((v) => (interaction = v)))
           .catch(() => {}),
         beepubSync
-          .listHighlights(bookId)
-          .then((v) => {
-            bookHighlights = v;
-          })
+          .listHighlights(id)
+          .then(keep((v) => (bookHighlights = v)))
           .catch(() => {}),
         booksApi
-          .getSimilar(bookId, 10)
-          .then((v) => {
-            similarBooks = v;
-          })
-          .catch(() => {
-            similarBooks = [];
-          }),
+          .getSimilar(id, 10)
+          .catch(() => [] as BookOut[])
+          .then(keep((v) => (similarBooks = v))),
         booksApi
-          .getSeriesNeighbors(bookId)
-          .then((v) => {
-            seriesNeighbors = v;
-          })
-          .catch(() => {
-            seriesNeighbors = null;
-          }),
+          .getSeriesNeighbors(id)
+          .catch(() => null)
+          .then(keep((v) => (seriesNeighbors = v))),
         booksApi
-          .getEditions(bookId)
-          .then((v) => {
-            editions = v.editions;
-            primaryBookId = v.primary_book_id;
-          })
-          .catch(() => {
-            editions = [];
-            primaryBookId = null;
-          }),
+          .getEditions(id)
+          .catch(() => ({ editions: [] as Edition[], primary_book_id: null }))
+          .then(
+            keep((v) => {
+              editions = v.editions;
+              primaryBookId = v.primary_book_id;
+            }),
+          ),
       ];
       if (isNative()) secondaryFetches.push(refreshLinkedBookIds());
       await Promise.all(secondaryFetches);
     } catch (e) {
+      if (!current()) return;
       // Gone (deleted) or out of reach is a page state, not a toast;
       // anything else — a network hiccup, a 5xx — keeps the toast.
       const status = (e as { status?: number }).status;
       if (status === 404 || status === 403) notFound = true;
       else toastStore.error((e as Error).message);
     } finally {
-      loading = false;
+      // (The newer load owns the skeleton now.)
+      if (current()) loading = false;
     }
+    if (!current()) return;
     // Come from the library table's ⋯ menu: the notes, open to write in.
     if (book && page.url.hash === "#notes") {
       await tick();
@@ -617,12 +618,14 @@
     <!-- Notes -->
     <div class="border-t border-border my-8"></div>
     <div bind:this={notesSectionEl}>
-      <BookNotesEditor
-        {bookId}
-        initialNotes={interaction?.notes ?? ""}
-        bind:startEditing={notesStartEditing}
-        onchange={handleNotesSaved}
-      />
+      {#key bookId}
+        <BookNotesEditor
+          {bookId}
+          initialNotes={interaction?.notes ?? ""}
+          bind:startEditing={notesStartEditing}
+          onchange={handleNotesSaved}
+        />
+      {/key}
     </div>
 
     <!-- Highlights -->

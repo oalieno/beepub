@@ -29,8 +29,17 @@ export function resolveDark(pref: ThemePreference): boolean {
   return pref === "dark";
 }
 
+// The browser's own bar (and the installed web app's title bar) follows
+// the theme in use — which the reader may have set against the system's.
+// (app.html holds the same two colours for the first paint.)
+const BAR_COLOR = { light: "#b8860b", dark: "#171310" };
+
 function apply(pref: ThemePreference) {
-  document.documentElement.classList.toggle("dark", resolveDark(pref));
+  const dark = resolveDark(pref);
+  document.documentElement.classList.toggle("dark", dark);
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+    meta.setAttribute("content", dark ? BAR_COLOR.dark : BAR_COLOR.light);
+  });
 }
 
 if (browser) {

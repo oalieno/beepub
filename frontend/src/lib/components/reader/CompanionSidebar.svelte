@@ -237,13 +237,6 @@
         conversation_id: activeConversationId,
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(
-          (err as { detail?: string }).detail || `HTTP ${res.status}`,
-        );
-      }
-
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No response body");
       activeReader = reader;

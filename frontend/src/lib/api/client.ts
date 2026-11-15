@@ -215,7 +215,7 @@ export async function refreshAccessToken(): Promise<boolean> {
 async function doFetch(
   method: string,
   path: string,
-  bodyContent: string | URLSearchParams | undefined,
+  bodyContent: string | URLSearchParams | FormData | undefined,
   baseHeaders: Record<string, string>,
   signal?: AbortSignal,
 ): Promise<Response> {
@@ -242,17 +242,22 @@ async function doFetch(
   return res;
 }
 
-async function request(
+/** One request, answered: signed, retried once after a silent token
+ *  refresh, and with a failure turned into an Error that carries the
+ *  server's reason in the reader's language and the status. Every call
+ *  goes through here — a JSON body, a form with a file, a stream. */
+async function send(
   method: string,
   path: string,
   body?: unknown,
   extraHeaders?: Record<string, string>,
   signal?: AbortSignal,
-): Promise<unknown> {
+): Promise<Response> {
   const baseHeaders: Record<string, string> = { ...extraHeaders };
 
-  let bodyContent: string | URLSearchParams | undefined;
-  if (body instanceof URLSearchParams) {
+  let bodyContent: string | URLSearchParams | FormData | undefined;
+  if (body instanceof URLSearchParams || body instanceof FormData) {
+    // (The browser writes the Content-Type, boundary included.)
     bodyContent = body;
   } else if (body !== undefined) {
     baseHeaders["Content-Type"] = "application/json";
@@ -301,6 +306,17 @@ async function request(
     error.status = res.status;
     throw error;
   }
+  return res;
+}
+
+async function request(
+  method: string,
+  path: string,
+  body?: unknown,
+  extraHeaders?: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<unknown> {
+  const res = await send(method, path, body, extraHeaders, signal);
 
   if (res.status === 204) {
     return null;
@@ -327,6 +343,12 @@ export function post(
   extraHeaders?: Record<string, string>,
 ): Promise<unknown> {
   return request("POST", path, body, extraHeaders);
+}
+
+/** POST whose answer is read as it arrives (a stream): the Response
+ *  itself, already known to be a success. */
+export function postForStream(path: string, body?: unknown): Promise<Response> {
+  return send("POST", path, body);
 }
 
 export function put(path: string, body?: unknown): Promise<unknown> {

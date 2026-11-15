@@ -1,4 +1,4 @@
-import { get, post, put, patch, del, apiBase, getAuthHeader } from "./client";
+import { get, post, postForStream, put, patch, del, apiBase } from "./client";
 import { noteBookEdited } from "$lib/stores/editedBooks";
 import type {
   ZhConversion,
@@ -69,17 +69,7 @@ export const booksApi = {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("library_id", libraryId);
-    return fetch(`${apiBase()}/books`, {
-      method: "POST",
-      headers: getAuthHeader(),
-      body: formData,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      return res.json() as Promise<BookOut>;
-    });
+    return post("/books", formData) as Promise<BookOut>;
   },
 
   get: (bookId: string) => get(`/books/${bookId}`) as Promise<BookOut>,
@@ -157,17 +147,9 @@ export const booksApi = {
   uploadCover: (bookId: string, file: File) => {
     const formData = new FormData();
     formData.append("file", file);
-    return fetch(`${apiBase()}/books/${bookId}/cover`, {
-      method: "POST",
-      headers: getAuthHeader(),
-      body: formData,
-    }).then(async (res) => {
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(err.detail || `HTTP ${res.status}`);
-      }
-      return noteBookEdited((await res.json()) as BookOut);
-    });
+    return (post(`/books/${bookId}/cover`, formData) as Promise<BookOut>).then(
+      noteBookEdited,
+    );
   },
 
   delete: (bookId: string) => del(`/books/${bookId}`),
@@ -489,12 +471,7 @@ export const booksApi = {
       current_cfi?: string | null;
       conversation_id?: string | null;
     },
-  ) =>
-    fetch(`${apiBase()}/books/${bookId}/companion`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...getAuthHeader() },
-      body: JSON.stringify(data),
-    }),
+  ) => postForStream(`/books/${bookId}/companion`, data),
 
   renameCompanionConversation: (
     bookId: string,

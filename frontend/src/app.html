@@ -26,6 +26,14 @@
             ((t === null || t === "system") &&
               window.matchMedia("(prefers-color-scheme: dark)").matches);
           if (dark) document.documentElement.classList.add("dark");
+          // A theme set against the system's: the browser bar follows it
+          // from the first paint (stores/theme.ts keeps it so after).
+          if (t === "dark" || t === "light") {
+            var bars = document.querySelectorAll('meta[name="theme-color"]');
+            for (var i = 0; i < bars.length; i++) {
+              bars[i].setAttribute("content", dark ? "#171310" : "#b8860b");
+            }
+          }
         } catch (e) {}
       })();
     </script>

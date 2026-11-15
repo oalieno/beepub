@@ -16,8 +16,18 @@ export function authedSrc(
   src: string,
 ): { update: (src: string) => void; destroy: () => void } {
   let objectUrl: string | null = null;
+  // The fetch in flight. A newer src (or the element going away) aborts
+  // it, so an older answer can never land on top of a newer one and no
+  // object URL is made for an image nobody will show.
+  let pending: AbortController | null = null;
+
+  // Decoding off the main thread: a page of covers must not hold up a
+  // scroll or a tap.
+  img.decoding = "async";
 
   function cleanup() {
+    pending?.abort();
+    pending = null;
     if (objectUrl) {
       URL.revokeObjectURL(objectUrl);
       objectUrl = null;
@@ -42,17 +52,24 @@ export function authedSrc(
 
     // A failure fires the element's own error event, as a plain src would
     // on the web, so an onerror fallback works the same on both.
+    const mine = new AbortController();
+    pending = mine;
     try {
-      const res = await fetch(url, { headers: getAuthHeader() });
+      const res = await fetch(url, {
+        headers: getAuthHeader(),
+        signal: mine.signal,
+      });
       if (!res.ok) {
-        img.dispatchEvent(new Event("error"));
+        if (pending === mine) img.dispatchEvent(new Event("error"));
         return;
       }
       const blob = await res.blob();
+      if (pending !== mine) return;
+      pending = null;
       objectUrl = URL.createObjectURL(blob);
       img.src = objectUrl;
     } catch {
-      img.dispatchEvent(new Event("error"));
+      if (pending === mine) img.dispatchEvent(new Event("error"));
     }
   }
 
