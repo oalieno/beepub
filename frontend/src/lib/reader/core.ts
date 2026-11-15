@@ -692,6 +692,11 @@ export class ReaderCore {
   #nativeVertical = false;
   #handlers: ReaderCoreHandlers;
   #language: ReturnType<typeof languageInfo> = {};
+
+  /** The language the book says it is in ("zh-TW", "en"…), or null. */
+  get language(): string | null {
+    return this.#language.canonical ?? null;
+  }
   #pristineDocs = new Map<number, Promise<Document | null>>();
   /** Warms the images of the sections around the one on screen. */
   #prefetch: ImagePrefetcher | null = null;

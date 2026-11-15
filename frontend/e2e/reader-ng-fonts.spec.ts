@@ -2,6 +2,7 @@ import { test, expect, type Page } from "@playwright/test";
 import { ADMIN_STATE } from "./helpers";
 import {
   NINE_CHAPTERS_BOOK,
+  NOTES_BOOK,
   openBook,
   resetProgress,
   seedFixture,
@@ -116,6 +117,24 @@ test("what an older version stored is the served face of its kind", async ({
     "aria-pressed",
     "true",
   );
+  // In English the two served faces are named for what they are to a
+  // reader of English. The Kai — a Chinese hand — is offered because
+  // this book is in Chinese…
+  await expect(page.getByTestId("reader-font-gothic")).toHaveText("Sans");
+  await expect(page.getByTestId("reader-font-mincho")).toHaveText("Serif");
+  await expect(page.getByTestId("reader-font-kai")).toBeVisible();
+});
+
+test("a book that is not in Chinese is not offered the Kai", async ({
+  page,
+  request,
+}) => {
+  const bookId = await seedFixture(request, NOTES_BOOK);
+  await resetProgress(request, bookId);
+  await openBook(page, bookId, { font: "", turn: "fade" }, NOTES_BOOK);
+  await page.getByRole("button", { name: "Reader settings" }).click();
+  await expect(page.getByTestId("reader-font-mincho")).toBeVisible();
+  await expect(page.getByTestId("reader-font-kai")).toHaveCount(0);
 });
 
 test("a book that asks for an old Ming font by name is set in the app's Ming, from the app's own files; one that does not is given nothing", async ({

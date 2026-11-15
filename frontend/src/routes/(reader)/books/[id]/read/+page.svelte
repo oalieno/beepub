@@ -503,6 +503,8 @@
   let writingModeOffered = $state(false);
   /** A fixed-layout book in the text reader: it only fades. */
   let fixedLayout = $state(false);
+  // What the book says it is written in (the typefaces offered follow it).
+  let bookLanguage = $state<string | null>(null);
 
   function handleFontChange(font: ReaderFont) {
     fontFamily = font;
@@ -1388,6 +1390,7 @@
             onscrolled={(on) => (scrolled = on)}
             onwritingmodeoffer={(offered) => (writingModeOffered = offered)}
             onfixedlayout={(fixed) => (fixedLayout = fixed)}
+            onlanguage={(language) => (bookLanguage = language)}
             onkosyncposition={handleKosyncPosition}
             onrestorefallback={(pct) =>
               toastStore.info(
@@ -1652,6 +1655,7 @@
   <ReaderSettingsSheet
     bind:open={showSettings}
     {fontFamily}
+    {bookLanguage}
     {fontSize}
     {lineHeight}
     {letterSpacing}

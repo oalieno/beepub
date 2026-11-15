@@ -30,6 +30,7 @@
     kai: m.reader_font_kai,
     system: m.reader_font_system,
   };
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import type { WritingMode } from "$lib/reader/core";
   import type { PagerDirection, PagerMode, PagerTurn } from "$lib/reader/pages";
   import { canCurl } from "$lib/platform";
@@ -42,6 +43,7 @@
   let {
     open = $bindable(false),
     fontFamily = DEFAULT_READER_FONT,
+    bookLanguage = null,
     fontSize = 16,
     fontSizeMax = 32,
     lineHeight = 1.8,
@@ -82,6 +84,8 @@
   }: {
     open?: boolean;
     fontFamily?: ReaderFont;
+    /** The language the book says it is in, when it says. */
+    bookLanguage?: string | null;
     fontSize?: number;
     lineHeight?: number;
     /** px; row shown when `onletterSpacingChange` is given. */
@@ -134,6 +138,14 @@
     onsyncpull?: () => void;
     onsyncpush?: () => void;
   } = $props();
+
+  // The Kai is a Chinese hand: offered for a book in Chinese — by the
+  // interface's language where the book does not say what it is in —
+  // and to whoever already reads in it.
+  let chinese = $derived((bookLanguage ?? getLocale()).startsWith("zh"));
+  let fonts = $derived(
+    READER_FONTS.filter((f) => f !== "kai" || fontFamily === "kai" || chinese),
+  );
 
   let sheetEl = $state<HTMLElement | null>(null);
 
@@ -344,7 +356,7 @@
         <div class="flex items-center justify-between gap-3">
           <span class="text-sm {labelClass}">{m.reader_font()}</span>
           <div class="flex flex-wrap justify-end gap-1">
-            {#each READER_FONTS as font (font)}
+            {#each fonts as font (font)}
               <button
                 class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
                 font

@@ -120,6 +120,7 @@
     onscrolled,
     onwritingmodeoffer,
     onfixedlayout,
+    onlanguage,
     onkosyncposition,
     onrestorefallback,
     onpeekchange,
@@ -209,6 +210,8 @@
      *  by a fade, never a slide, a curl or the scroll. Fires on every
      *  section load. */
     onfixedlayout?: (fixed: boolean) => void;
+    /** The language the book says it is in, once it is open. */
+    onlanguage?: (language: string | null) => void;
     /** A newer position bridged from an e-reader: adopted outright when
      *  the book was never read here (autoJumped), otherwise offered. */
     onkosyncposition?: (detail: {
@@ -2226,6 +2229,7 @@ ${darkOverrides}
     ondirection?.(!!core?.advancesLeftward(), vertical);
     onwritingmodeoffer?.(!!core?.offersWritingMode());
     onfixedlayout?.(core?.book?.rendition?.layout === "pre-paginated");
+    onlanguage?.(core?.language ?? null);
     attachGestures(doc);
   }
 
