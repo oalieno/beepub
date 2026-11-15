@@ -39,6 +39,7 @@ from app.schemas.reading import (
     ReadingStatusUpdate,
 )
 from app.services.access import get_accessible_book
+from app.services.background import enqueue_after_commit
 from app.services.settings import today_in_app_timezone
 from app.tasks.text_extract import extract_book_text
 
@@ -283,8 +284,8 @@ async def update_progress(
     if entered_section:
         from app.tasks.summarize import summarize_chunks
 
-        extract_book_text.delay(str(book_id))
-        summarize_chunks.delay(str(book_id), body.section_index)
+        enqueue_after_commit(extract_book_text, str(book_id))
+        enqueue_after_commit(summarize_chunks, str(book_id), body.section_index)
 
     return {"status": "updated"}
 

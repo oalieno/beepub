@@ -37,6 +37,7 @@ from app.services.access import (
     get_accessible_book,
     get_books,
 )
+from app.services.background import enqueue_after_commit
 from app.services.book_files import (
     book_files,
 )
@@ -154,7 +155,7 @@ async def create_physical_book(
 
     # External ratings/reviews and auto-tagging work from metadata alone;
     # text extraction is meaningless without a file and is not queued.
-    fetch_book_metadata.delay(str(book.id))
+    enqueue_after_commit(fetch_book_metadata, str(book.id))
     return book
 
 

@@ -46,6 +46,7 @@ from app.schemas.book import (
 from app.services.access import (
     get_accessible_book,
 )
+from app.services.background import enqueue_after_commit
 from app.services.book_files import (
     invalidate_derived_text,
     require_book_file,
@@ -210,7 +211,7 @@ async def convert_book_zh(
     await invalidate_derived_text(db, book)
     await db.commit()
     await db.refresh(book)
-    extract_book_text.delay(str(book.id))
+    enqueue_after_commit(extract_book_text, str(book.id))
     return book
 
 

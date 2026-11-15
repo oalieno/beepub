@@ -11,6 +11,22 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
+    # Healthy while the server answers and can reach its database and
+    # queue (`docker compose ps` shows which containers are not).
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/app/.venv/bin/python",
+          "-c",
+          "import urllib.request as u; u.urlopen('http://localhost:8000/api/health/ready', timeout=5)",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     volumes:
       # Everything BeePub stores: app/ (the auto SECRET_KEY), books/,
       # covers/, illustrations/. Back this up with postgres_data. Set
@@ -35,6 +51,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
     volumes:
       - ${BEEPUB_DATA_PATH:-data}:/data
       # Calibre mount, same as the backend service:
@@ -63,6 +80,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
+      LOG_FORMAT: ${LOG_FORMAT:-console}
     volumes:
       - ${BEEPUB_DATA_PATH:-data}:/data
     depends_on:

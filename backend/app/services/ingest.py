@@ -28,6 +28,7 @@ from app.models.book import Book
 from app.models.library import LibraryBook
 from app.models.user import User, UserRole
 from app.services.access import get_accessible_library
+from app.services.background import enqueue_after_commit
 from app.services.book_files import book_files
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_parser import extract_cover, parse_epub_metadata
@@ -255,5 +256,5 @@ async def commit_ingested(db: AsyncSession, books: list[Book]) -> None:
         raise
     for book in books:
         await db.refresh(book)
-        extract_book_text.delay(str(book.id))
-        fetch_book_metadata.delay(str(book.id))
+        enqueue_after_commit(extract_book_text, str(book.id))
+        enqueue_after_commit(fetch_book_metadata, str(book.id))

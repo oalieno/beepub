@@ -13889,6 +13889,7 @@
     },
     "/api/health": {
       "get": {
+        "description": "The server answers. (Clients use this to tell \"offline\" from\n\"online\" — it stays cheap and says nothing about what is behind it.)",
         "operationId": "health_api_health_get",
         "responses": {
           "200": {
@@ -13901,6 +13902,23 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/health/ready": {
+      "get": {
+        "description": "The server and what it depends on: the database and the queue.\n503 when either cannot be reached — what a container health check or\na monitor should ask.",
+        "operationId": "ready_api_health_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
       }
     },
     "/api/highlights": {

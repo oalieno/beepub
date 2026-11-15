@@ -1771,8 +1771,34 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Health */
+        /**
+         * Health
+         * @description The server answers. (Clients use this to tell "offline" from
+         *     "online" — it stays cheap and says nothing about what is behind it.)
+         */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ready
+         * @description The server and what it depends on: the database and the queue.
+         *     503 when either cannot be reached — what a container health check or
+         *     a monitor should ask.
+         */
+        get: operations["ready_api_health_ready_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8483,6 +8509,26 @@ export interface operations {
         };
     };
     health_api_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    ready_api_health_ready_get: {
         parameters: {
             query?: never;
             header?: never;

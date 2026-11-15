@@ -53,6 +53,7 @@ from app.schemas.reading import (
     SyncProgressIn,
 )
 from app.services.access import accessible_book_ids_select, get_accessible_book
+from app.services.background import enqueue_after_commit
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["device-sync"])
@@ -318,8 +319,10 @@ async def sync_reading_state(
     if client_won and entered_section and body.progress is not None:
         from app.tasks.summarize import summarize_chunks
 
-        extract_book_text.delay(str(book_id))
-        summarize_chunks.delay(str(book_id), body.progress.section_index)
+        enqueue_after_commit(extract_book_text, str(book_id))
+        enqueue_after_commit(
+            summarize_chunks, str(book_id), body.progress.section_index
+        )
 
     result = await db.execute(
         select(Highlight)

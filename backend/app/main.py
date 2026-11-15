@@ -1,6 +1,8 @@
+import asyncio
 import os
 import uuid
 
+import redis.asyncio as aioredis
 import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -8,10 +10,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.extension import _rate_limit_exceeded_handler
+from sqlalchemy import text
 from starlette.middleware.base import BaseHTTPMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import settings
+from app.database import AsyncSessionLocal
 from app.errors import ApiError, api_error_handler
 from app.logging import setup_logging
 from app.mcp.auth import MCPAuthGate, MCPPathNormalizer
@@ -170,4 +174,40 @@ app.add_middleware(MCPPathNormalizer)
 
 @app.get("/api/health")
 async def health():
+    """The server answers. (Clients use this to tell "offline" from
+    "online" — it stays cheap and says nothing about what is behind it.)"""
     return {"status": "ok", "version": settings.app_version}
+
+
+@app.get("/api/health/ready")
+async def ready(response: Response):
+    """The server and what it depends on: the database and the queue.
+    503 when either cannot be reached — what a container health check or
+    a monitor should ask."""
+
+    async def database() -> bool:
+        async with AsyncSessionLocal() as db:
+            await db.execute(text("SELECT 1"))
+        return True
+
+    async def queue() -> bool:
+        client = aioredis.from_url(settings.redis_url)
+        try:
+            return bool(await client.ping())
+        finally:
+            await client.aclose()
+
+    async def reachable(check) -> bool:
+        try:
+            return await asyncio.wait_for(check(), timeout=3)
+        except Exception:
+            return False
+
+    ok_database, ok_queue = await asyncio.gather(reachable(database), reachable(queue))
+    if not (ok_database and ok_queue):
+        response.status_code = 503
+    return {
+        "status": "ok" if ok_database and ok_queue else "unavailable",
+        "database": ok_database,
+        "queue": ok_queue,
+    }
