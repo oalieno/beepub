@@ -84,3 +84,30 @@ export function authedSrc(
     },
   };
 }
+
+/**
+ * The same, for an image that is never put in the page (drawn to a
+ * canvas, used as a texture): resolves once it has loaded, rejects when
+ * it cannot be had. In the app it is fetched with the token — a bare
+ * `new Image().src` there is refused by the server.
+ */
+export async function loadAuthedImage(url: string): Promise<HTMLImageElement> {
+  let objectUrl: string | null = null;
+  if (isNativeRuntime()) {
+    const res = await fetch(url, { headers: getAuthHeader() });
+    if (!res.ok) throw new Error(`image ${res.status}`);
+    objectUrl = URL.createObjectURL(await res.blob());
+  }
+  const img = new Image();
+  try {
+    await new Promise<void>((loaded, failed) => {
+      img.onload = () => loaded();
+      img.onerror = () => failed(new Error("image failed to load"));
+      img.src = objectUrl ?? url;
+    });
+  } finally {
+    // Loaded, the image holds its own pixels.
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+  return img;
+}

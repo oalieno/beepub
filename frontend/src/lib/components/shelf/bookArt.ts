@@ -2,6 +2,7 @@
 // the face of its spine (drawn once per book), and a cover for a book
 // that has none.
 import * as THREE from "three";
+import { loadAuthedImage } from "$lib/actions/authedSrc";
 import type { Part, ShelfBook } from "./engine";
 
 export type RGB = [number, number, number];
@@ -73,14 +74,12 @@ export function lookOf(b: ShelfBook): Promise<Look> {
   const known = looks.get(b.cover);
   if (known) return known;
   const made = new Promise<Look>((done) => {
-    const img = new Image();
     const give = (l: Look) => {
       clearTimeout(timer);
       done(l);
     };
     const timer = setTimeout(() => give(plain), 6000);
-    img.onerror = () => give(plain);
-    img.onload = () => {
+    const read = (img: HTMLImageElement) => {
       try {
         const cv = document.createElement("canvas");
         cv.width = 6;
@@ -131,7 +130,7 @@ export function lookOf(b: ShelfBook): Promise<Look> {
         give(plain);
       }
     };
-    img.src = b.cover!;
+    loadAuthedImage(b.cover!).then(read, () => give(plain));
   });
   looks.set(b.cover, made);
   return made;

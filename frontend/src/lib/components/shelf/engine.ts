@@ -10,6 +10,7 @@
 // same lamp — onto a canvas that covers the screen, whose camera stands
 // exactly where the shelf's does. Nothing is swapped for a stand-in.
 import * as THREE from "three";
+import { loadAuthedImage } from "$lib/actions/authedSrc";
 import {
   DIVE_MS,
   SURFACE_MS,
@@ -762,10 +763,7 @@ export function createShelf(els: ShelfEls, hooks: ShelfHooks) {
       tx.needsUpdate = true;
     };
     if (!p.b.cover) return set(plainCover(p));
-    const img = new Image();
-    img.onload = () => set(img);
-    img.onerror = () => set(plainCover(p));
-    img.src = p.b.cover;
+    loadAuthedImage(p.b.cover).then(set, () => set(plainCover(p)));
   }
 
   function build(i: number): Held {
