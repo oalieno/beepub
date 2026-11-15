@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { recallProgress, rememberProgress } from "$lib/reader/progress-cache";
   /**
    * ImagePager — the renderer for pre-paginated image books (comics packed
    * from a CBZ, bought image-only manga EPUBs). It never lays the wrapper
@@ -1396,6 +1397,9 @@
   }
 
   function debouncedSave() {
+    // Kept here as well: the server may not be there to ask next time.
+    const page = pageAt(pageIndex);
+    if (page) rememberProgress(bookId, page.cfi, percentage);
     if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
     saveDebounceTimer = setTimeout(() => void saveProgress(), SAVE_DEBOUNCE_MS);
   }
@@ -1425,7 +1429,16 @@
         devicePosition: state.devicePosition,
       };
     } catch {
-      return null;
+      // The server could not be asked (opened without a connection): the
+      // copy kept on this device, as the text reader does.
+      const kept = recallProgress(bookId);
+      return (
+        kept && {
+          cfi: kept.cfi,
+          percentage: kept.percentage,
+          devicePosition: null,
+        }
+      );
     }
   }
 

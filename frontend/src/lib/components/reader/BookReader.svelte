@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { recallProgress, rememberProgress } from "$lib/reader/progress-cache";
   /**
    * BookReader — the thinnest Svelte container around ReaderCore. Mounts
    * the paginator into a full-size div, feeds it theme CSS and layout
@@ -682,9 +683,6 @@ ${darkOverrides}
   const SAVE_DEBOUNCE_MS = 2000;
   // Backup save without activity credit — the debounce covers moves.
   const PROGRESS_SAVE_INTERVAL_MS = 30_000;
-  // Shared with the current reader: either one resumes from the other's
-  // last position when the API is unreachable.
-  const progressCacheKey = () => `reader-progress-${bookId}`;
 
   /** Dense weights sized to the spine; uniform fallback when the source
    *  ships none (extraction pending, sideloads, image-only books). */
@@ -837,23 +835,14 @@ ${darkOverrides}
     if (restoringProgress || peekSaveHold) return;
     debouncedSave();
     if (userMove) onactivity?.();
-    try {
-      localStorage.setItem(
-        progressCacheKey(),
-        JSON.stringify({
-          cfi: currentCfi,
-          percentage: currentPercentage,
-          currentPage,
-          totalPages,
-          sectionIndex: currentIndex,
-          sectionPage: currentSectionPage,
-          sectionPageCounts: densePageCounts(sectionPageCounts),
-          fontSize,
-        }),
-      );
-    } catch {
-      // storage full or unavailable
-    }
+    rememberProgress(bookId, currentCfi, currentPercentage, {
+      currentPage,
+      totalPages,
+      sectionIndex: currentIndex,
+      sectionPage: currentSectionPage,
+      sectionPageCounts: densePageCounts(sectionPageCounts),
+      fontSize,
+    });
   }
 
   function debouncedSave() {
@@ -928,22 +917,20 @@ ${darkOverrides}
         devicePosition: state.devicePosition,
       };
     } catch {
-      // API unreachable (an iOS PWA resumed offline): the local cache.
-      try {
-        const cached = localStorage.getItem(progressCacheKey());
-        if (cached) {
-          const p = JSON.parse(cached);
-          return {
-            cfi: typeof p.cfi === "string" ? p.cfi : null,
-            percentage: typeof p.percentage === "number" ? p.percentage : null,
-            sectionPageCounts: densePageCounts(p.sectionPageCounts),
-            devicePosition: null,
-          };
+      // API unreachable (an iOS PWA resumed offline): the copy kept here.
+      const kept = recallProgress(bookId);
+      return (
+        kept && {
+          cfi: kept.cfi,
+          percentage: kept.percentage,
+          sectionPageCounts: densePageCounts(
+            kept.extra.sectionPageCounts as Parameters<
+              typeof densePageCounts
+            >[0],
+          ),
+          devicePosition: null,
         }
-      } catch {
-        // unreadable cache
-      }
-      return null;
+      );
     }
   }
 

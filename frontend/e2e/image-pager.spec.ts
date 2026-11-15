@@ -7,6 +7,7 @@ import {
   openBook,
   openComic,
   pagerState,
+  resetProgress,
   seedFixture,
   setPagerSetting,
   stepPagerSetting,
@@ -140,6 +141,24 @@ test("the page is the position: it restores where it was left", async ({
 
   await openComic(page, bookId);
   expect((await pagerState(page)).page).toBe(3);
+});
+
+test("opened when the server cannot be asked, it resumes from the copy kept on the device", async ({
+  page,
+}) => {
+  const bookId = await seedFixture(page.request, CBZ_BOOK);
+  await openComic(page, bookId);
+  await page.evaluate(() => window.__beepubReaderNG.pager.goTo(4));
+  await expect.poll(async () => (await pagerState(page)).page).toBe(4);
+
+  // The server forgets the position and then stops answering for it:
+  // only what the device kept can put the reader back on the page.
+  await resetProgress(page.request, bookId);
+  await page.route(`**/api/books/${bookId}/progress`, (route) =>
+    route.request().method() === "GET" ? route.abort() : route.continue(),
+  );
+  await openComic(page, bookId);
+  expect((await pagerState(page)).page).toBe(4);
 });
 
 test("a fixed-layout book of text pages goes to the text reader", async ({
