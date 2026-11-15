@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserRole
+from app.services.access import accessible_book_ids_select
 
 
 def normalize_series_name(name: str | None) -> str | None:
@@ -419,7 +420,6 @@ async def _search_matches(
     from app.models.book import Book
     from app.models.library import LibraryBook
     from app.models.tag import BookTag
-    from app.routers.libraries import accessible_book_ids_select
     from app.services.book_search import relevance_score, tiered_book_search
 
     if library_id is not None:

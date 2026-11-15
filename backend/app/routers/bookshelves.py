@@ -11,8 +11,6 @@ from app.deps import get_current_user
 from app.models.book import Book
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.user import User
-from app.routers.books import _get_book_with_access
-from app.routers.libraries import get_accessible_library
 from app.schemas.bookshelf import (
     BookshelfBookAdd,
     BookshelfCreate,
@@ -23,6 +21,7 @@ from app.schemas.bookshelf import (
     BookshelfUpdate,
 )
 from app.schemas.series import GroupedItem
+from app.services.access import get_accessible_book, get_accessible_library
 from app.services.series import (
     _hydrate_grouped_books,
     build_series_out,
@@ -246,7 +245,7 @@ async def add_book_to_shelf(
     # The book must exist and be accessible to this user — otherwise a
     # nonexistent id 500s on the FK, and excluded users could pin books
     # from libraries they can't see.
-    await _get_book_with_access(body.book_id, current_user, db)
+    await get_accessible_book(body.book_id, current_user, db)
     existing = await db.execute(
         select(BookshelfBook).where(
             BookshelfBook.bookshelf_id == shelf_id,

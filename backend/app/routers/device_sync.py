@@ -40,12 +40,10 @@ from app.models.reading import (
     UserBookInteraction,
 )
 from app.models.user import User
-from app.routers.books import _get_book_with_access
 from app.routers.interactions import (
     _get_or_create_interaction,
     _sync_sibling_interactions,
 )
-from app.routers.libraries import accessible_book_ids_select
 from app.schemas.reading import (
     BookSyncRequest,
     BookSyncResponse,
@@ -54,6 +52,7 @@ from app.schemas.reading import (
     SyncInteractionOut,
     SyncProgressIn,
 )
+from app.services.access import accessible_book_ids_select, get_accessible_book
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["device-sync"])
@@ -279,7 +278,7 @@ async def sync_reading_state(
     favorite/notes): per-group LWW by their own stamps. Synced progress never
     records reading activity — streaks stay a live-reading signal.
     """
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
 
     if body.highlights:
         await _merge_highlights(db, current_user.id, book_id, body.highlights)

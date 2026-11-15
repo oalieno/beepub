@@ -18,7 +18,6 @@ from app.deps import get_current_user
 from app.models.book_text import BookTextChunk
 from app.models.companion import CompanionConversation, CompanionMessage
 from app.models.user import User
-from app.routers.books import _get_book_with_access
 from app.schemas.companion import (
     CompanionConversationOut,
     CompanionConversationSummary,
@@ -27,6 +26,7 @@ from app.schemas.companion import (
     RecapOut,
     RecapSection,
 )
+from app.services.access import get_accessible_book
 from app.services.companion import (
     _parse_cfi,
     get_or_create_conversation,
@@ -120,7 +120,7 @@ async def send_companion_message(
     # Verify book exists and the user's library access allows it — without
     # this, a user excluded from a library could still chat about (and thus
     # read content from) its books.
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
 
     # Get or create conversation
     conversation = await get_or_create_conversation(
@@ -282,7 +282,7 @@ async def get_book_recap(
     enqueue a position-bounded summarize run (opening the recap is the
     event; only the chapters it needs are generated, never the whole
     book) — `generating` tells the UI to poll."""
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     current_spine, _ = _parse_cfi(cfi)
 
     result = await db.execute(

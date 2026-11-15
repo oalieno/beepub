@@ -136,7 +136,7 @@ async def test_recap_shows_only_read_chapters(admin_client, user_client, library
     resp = await admin_client.get(f"/api/books/{book_id}/recap")
     assert resp.json() == {"sections": [], "has_any": True, "generating": False}
 
-    # Access control rides _get_book_with_access: a user excluded from
+    # Access control rides get_accessible_book: a user excluded from
     # the library can't read summaries.
     users = (await admin_client.get("/api/admin/users")).json()
     user_id = next(u["id"] for u in users if u["role"] != "admin")

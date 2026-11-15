@@ -39,8 +39,8 @@ from app.models.book import Book
 from app.models.kosync import KosyncProgress
 from app.models.reading import UserBookInteraction
 from app.models.user import User
-from app.routers.libraries import accessible_book_ids_select
 from app.services import login_throttle
+from app.services.access import accessible_book_ids_select
 from app.services.auth import verify_password
 from app.services.credential_cache import CredentialCache
 from app.services.kosync_bridge import (

@@ -15,7 +15,7 @@ class TestAccessibleLibrariesCondition:
 
     def test_admin_returns_true(self):
         """Admin user should bypass all access checks."""
-        from app.routers.libraries import accessible_libraries_condition
+        from app.services.access import accessible_libraries_condition
 
         admin = User(
             id=uuid.uuid4(),
@@ -28,7 +28,7 @@ class TestAccessibleLibrariesCondition:
 
     def test_regular_user_returns_sqlalchemy_condition(self):
         """Regular user should get a NOT EXISTS condition, not True."""
-        from app.routers.libraries import accessible_libraries_condition
+        from app.services.access import accessible_libraries_condition
 
         user = User(
             id=uuid.uuid4(),

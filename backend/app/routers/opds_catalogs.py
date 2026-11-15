@@ -32,8 +32,8 @@ from app.routers.books import (
     _require_upload_permission,
     _validate_upload_library,
 )
-from app.routers.libraries import accessible_book_ids_select
 from app.schemas.book import BookOut
+from app.services.access import accessible_book_ids_select
 from app.services.opds_fetch import (
     FEED_MAX_BYTES,
     IMAGE_MAX_BYTES,

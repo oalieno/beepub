@@ -11,8 +11,8 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.illustration import Illustration
 from app.models.user import User
-from app.routers.books import _get_book_with_access
 from app.schemas.illustration import IllustrationCreate, IllustrationOut, StylePromptOut
+from app.services.access import get_accessible_book
 from app.services.gemini import get_style_prompts
 from app.services.storage import delete_file, get_illustration_path
 from app.tasks.illustration import generate_illustration
@@ -26,7 +26,7 @@ async def list_illustrations(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(Illustration)
         .where(Illustration.user_id == current_user.id, Illustration.book_id == book_id)
@@ -46,7 +46,7 @@ async def create_illustration(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
 
     # Prevent duplicate illustrations for the same text range
     existing = await db.execute(
@@ -139,7 +139,7 @@ async def list_styles(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     return get_style_prompts()
 
 
@@ -152,7 +152,7 @@ async def get_illustration(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(Illustration).where(
             Illustration.id == illustration_id,
@@ -173,7 +173,7 @@ async def get_illustration_image(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(Illustration).where(
             Illustration.id == illustration_id,

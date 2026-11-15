@@ -2,13 +2,13 @@ import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import exists, func, select, true
+from sqlalchemy import func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
-from app.models.library import Library, LibraryBook, UserLibraryExclusion
+from app.models.library import Library, LibraryBook
 from app.models.user import User, UserRole
 from app.schemas.library import (
     LibraryCreate,
@@ -16,35 +16,9 @@ from app.schemas.library import (
     LibraryOut,
     LibraryUpdate,
 )
+from app.services.access import accessible_libraries_condition, get_accessible_library
 
 router = APIRouter(prefix="/api/libraries", tags=["libraries"])
-
-
-def accessible_book_ids_select(user: User):
-    """SELECT of book ids in libraries the user can access.
-
-    The single source of truth for "which books can this user see" —
-    every list/search endpoint should build on this instead of
-    re-implementing the exclusion filter.
-    """
-    stmt = select(LibraryBook.book_id).join(
-        Library, Library.id == LibraryBook.library_id
-    )
-    cond = accessible_libraries_condition(user)
-    if cond is not True:
-        stmt = stmt.where(cond)
-    return stmt
-
-
-def accessible_libraries_condition(user: User):
-    if user.role == UserRole.admin:
-        return True  # no filter
-    return ~exists(
-        select(UserLibraryExclusion.library_id).where(
-            UserLibraryExclusion.user_id == user.id,
-            UserLibraryExclusion.library_id == Library.id,
-        )
-    )
 
 
 @router.get("", response_model=list[LibraryListOut])
@@ -186,24 +160,3 @@ async def delete_library(
     await db.commit()
     for path in paths:
         delete_file(path)
-
-
-async def get_accessible_library(
-    library_id: uuid.UUID, user: User, db: AsyncSession
-) -> Library:
-    result = await db.execute(select(Library).where(Library.id == library_id))
-    library = result.scalar_one_or_none()
-    if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
-    if user.role == UserRole.admin:
-        return library
-    # Check if user is excluded from this library
-    exclusion = await db.execute(
-        select(UserLibraryExclusion).where(
-            UserLibraryExclusion.library_id == library_id,
-            UserLibraryExclusion.user_id == user.id,
-        )
-    )
-    if exclusion.scalar_one_or_none():
-        raise HTTPException(status_code=403, detail="Access denied")
-    return library

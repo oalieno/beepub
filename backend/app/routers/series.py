@@ -9,8 +9,8 @@ from app.database import get_db
 from app.deps import get_current_user
 from app.models.reading import UserSeriesInteraction
 from app.models.user import User
-from app.routers.libraries import get_accessible_library
 from app.schemas.series import SeriesNotesUpdate, SeriesOut, SeriesRatingUpdate
+from app.services.access import get_accessible_library
 from app.services.series import (
     build_series_out,
     list_series,

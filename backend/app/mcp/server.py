@@ -30,7 +30,7 @@ from app.models.book import Book, ExternalMetadata
 from app.models.book_text import BookTextChunk
 from app.models.reading import Highlight, UserBookInteraction
 from app.models.user import User, UserRole
-from app.routers.libraries import accessible_book_ids_select
+from app.services.access import accessible_book_ids_select
 from app.services.book_search import normalized_title, tiered_book_search
 
 INSTRUCTIONS = """\

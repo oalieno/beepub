@@ -24,11 +24,11 @@ from app.database import get_db
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
 from app.models.user import User, UserRole
-from app.routers.libraries import (
+from app.services import login_throttle
+from app.services.access import (
     accessible_book_ids_select,
     accessible_libraries_condition,
 )
-from app.services import login_throttle
 from app.services.auth import verify_password
 from app.services.book_search import tiered_book_search
 from app.services.credential_cache import CredentialCache

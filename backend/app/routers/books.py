@@ -71,6 +71,12 @@ from app.schemas.reading import (
     ReadingStatsOut,
 )
 from app.schemas.series import PaginatedGrouped
+from app.services.access import (
+    accessible_book_ids_select,
+    accessible_libraries_condition,
+    get_accessible_book,
+    get_accessible_library,
+)
 from app.services.book_files import book_files, invalidate_derived_text
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.cbz2epub import CbzError, convert_cbz_to_epub
@@ -115,40 +121,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/books", tags=["books"])
 
 
-async def _user_can_access_book(
-    book_id: uuid.UUID, user: User, db: AsyncSession
-) -> bool:
-    if user.role == UserRole.admin:
-        return True
-    # Check if book is in any non-excluded library
-    result = await db.execute(
-        select(LibraryBook)
-        .join(Library, Library.id == LibraryBook.library_id)
-        .where(
-            LibraryBook.book_id == book_id,
-            ~exists(
-                select(UserLibraryExclusion.library_id).where(
-                    UserLibraryExclusion.user_id == user.id,
-                    UserLibraryExclusion.library_id == Library.id,
-                )
-            ),
-        )
-    )
-    return result.scalar_one_or_none() is not None
-
-
-async def _get_book_with_access(
-    book_id: uuid.UUID, user: User, db: AsyncSession
-) -> Book:
-    result = await db.execute(select(Book).where(Book.id == book_id))
-    book = result.scalar_one_or_none()
-    if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
-    if not await _user_can_access_book(book_id, user, db):
-        raise HTTPException(status_code=403, detail="Access denied")
-    return book
-
-
 async def _today_in_app_timezone(db: AsyncSession) -> date:
     """Today's date in the configured timezone; a bad setting must never 500
     (it would break every progress save), so fall back to UTC."""
@@ -176,7 +148,6 @@ async def _validate_upload_library(
     library_id: str | None, user: User, db: AsyncSession
 ) -> uuid.UUID:
     """Parse and authorize the target library BEFORE any file hits disk."""
-    from app.routers.libraries import get_accessible_library
 
     # Every book must belong to a library: every listing (flat/grouped/search/
     # random) reaches books through library membership, so a library-less
@@ -726,7 +697,6 @@ async def list_my_books(
     offset: int = Query(0, ge=0),
 ):
     from app.models.work import Work
-    from app.routers.libraries import accessible_libraries_condition
 
     if sort not in {"last_read_at", "updated_at", "display_title"}:
         sort = "last_read_at"
@@ -915,7 +885,6 @@ async def get_random_books(
     db: Annotated[AsyncSession, Depends(get_db)],
     count: int = Query(8, ge=1, le=20),
 ):
-    from app.routers.libraries import accessible_libraries_condition
 
     accessible_books = select(LibraryBook.book_id).join(
         Library, Library.id == LibraryBook.library_id
@@ -1251,11 +1220,6 @@ async def list_all_books(
     response's ``around_index`` says which happened.
     """
 
-    from app.routers.libraries import (
-        accessible_book_ids_select,
-        get_accessible_library,
-    )
-
     if library is not None:
         await get_accessible_library(library, current_user, db)
 
@@ -1434,7 +1398,6 @@ async def list_books_grouped(
     403 when the user is excluded from it); without it the list spans every
     accessible library.
     """
-    from app.routers.libraries import get_accessible_library
     from app.services.series import list_grouped_books
 
     # The service does not apply the exclusion filter when scoped to one
@@ -1659,7 +1622,7 @@ async def get_book(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     # Find libraries this book belongs to
     lb_result = await db.execute(
         select(Library.id, Library.name)
@@ -1694,7 +1657,7 @@ async def get_book_editions(
 
     Returns {primary_book_id: null, editions: []} if the book has no Work.
     """
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     if not book.work_id:
         return {"primary_book_id": None, "editions": []}
 
@@ -2016,7 +1979,7 @@ async def get_book_file(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Download permission required",
         )
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -2032,7 +1995,7 @@ async def get_book_file(
 
 async def _convertible_book(book_id: uuid.UUID, user: User, db: AsyncSession) -> Book:
     _require_upload_permission(user)
-    book = await _get_book_with_access(book_id, user, db)
+    book = await get_accessible_book(book_id, user, db)
     if book.is_image_book or not book.file_path or not os.path.exists(book.file_path):
         raise HTTPException(status_code=409, detail="This book has no text to convert")
     # A Calibre library's files are Calibre's: never rewritten here.
@@ -2166,7 +2129,7 @@ async def get_book_original(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Download permission required",
         )
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     if not book.original_path or not os.path.exists(book.original_path):
         raise HTTPException(status_code=404, detail="Original file not found")
     suffix = Path(book.original_path).suffix
@@ -2189,7 +2152,7 @@ async def get_book_content(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Serve individual files from within the EPUB zip (the reader streams a book through it)."""
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -2272,7 +2235,7 @@ async def list_epub_images(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """List all images embedded in the EPUB file."""
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -2300,7 +2263,7 @@ async def get_book_pages(
     shows, its pixel size and spread hint, in reading order with the
     book's page-progression direction. Image pagers read this instead of
     laying the XHTML out; /images is sorted by file name and is not it."""
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     _require_book_file(book)
     if not os.path.exists(book.file_path):
         raise HTTPException(status_code=404, detail="File not found")
@@ -2332,7 +2295,7 @@ async def get_book_cover(
     """The cover, for clients that cannot use the static path (the app
     sends a token, not a cookie). ``size=thumb`` is the small one the
     lists show — the full cover where a book has none yet."""
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     if not book.cover_path or not os.path.exists(book.cover_path):
         raise HTTPException(status_code=404, detail="Cover not found")
     if size == "thumb":
@@ -2406,7 +2369,7 @@ async def refresh_book_metadata(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     fetch_book_metadata.delay(str(book_id))
     return {"status": "queued"}
 
@@ -2421,7 +2384,7 @@ async def get_similar_books_endpoint(
     """Get books similar to this one, with similarity scores."""
     from app.services.recommendations import get_similar_books
 
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     similar = await get_similar_books(
         db,
         book_id,
@@ -2474,7 +2437,7 @@ async def get_series_neighbors(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Get next/previous books in the same series, with series progress."""
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
 
     series_name = book.display_series
     current_index = book.display_series_index
@@ -2636,7 +2599,7 @@ async def retag_book(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Re-run AI tagging for a book (admin only)."""
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     auto_tag_book.delay(str(book_id))
     return {"status": "queued"}
 
@@ -2647,7 +2610,7 @@ async def get_book_external_metadata(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(ExternalMetadata).where(ExternalMetadata.book_id == book_id)
     )

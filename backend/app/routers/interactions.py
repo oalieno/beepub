@@ -24,7 +24,7 @@ from app.models.reading import (
     UserBookInteraction,
 )
 from app.models.user import User
-from app.routers.books import _get_book_with_access, _today_in_app_timezone
+from app.routers.books import _today_in_app_timezone
 from app.schemas.book import BookReportCreate, BookReportOut
 from app.schemas.reading import (
     FavoriteUpdate,
@@ -38,6 +38,7 @@ from app.schemas.reading import (
     RatingUpdate,
     ReadingStatusUpdate,
 )
+from app.services.access import get_accessible_book
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["interactions"])
@@ -49,7 +50,7 @@ async def get_interaction(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(UserBookInteraction).where(
             UserBookInteraction.user_id == current_user.id,
@@ -79,7 +80,7 @@ async def update_rating(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     if body.rating is not None and not (
         0.5 <= body.rating <= 5 and (body.rating * 2).is_integer()
     ):
@@ -98,7 +99,7 @@ async def update_favorite(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.is_favorite = body.is_favorite
     interaction.favorite_updated_at = datetime.now(UTC)
@@ -129,7 +130,7 @@ async def update_reading_status(
 ):
     from app.models.reading import ReadingStatus
 
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     if body.reading_status is not None:
         valid = {s.value for s in ReadingStatus}
         if body.reading_status not in valid:
@@ -169,7 +170,7 @@ async def update_notes(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.notes = body.notes
     interaction.notes_updated_at = datetime.now(UTC)
@@ -183,7 +184,7 @@ async def get_progress(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(UserBookInteraction).where(
             UserBookInteraction.user_id == current_user.id,
@@ -203,7 +204,7 @@ async def update_progress(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
 
     now = datetime.now(UTC)
@@ -293,7 +294,7 @@ async def get_highlights(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(Highlight)
         .where(
@@ -317,7 +318,7 @@ async def create_highlight(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     # id=None must not reach Highlight(**...) — an explicit None overrides
     # the uuid4 column default and inserts a null PK.
     content = body.model_dump(exclude={"id"})
@@ -474,7 +475,7 @@ async def create_book_report(
 ):
     from app.models.book_report import ISSUE_TYPES, BookReport
 
-    book = await _get_book_with_access(book_id, current_user, db)
+    book = await get_accessible_book(book_id, current_user, db)
     if body.issue_type not in ISSUE_TYPES:
         raise HTTPException(
             status_code=422,
@@ -507,7 +508,7 @@ async def get_book_reports(
 ):
     from app.models.book_report import BookReport
 
-    await _get_book_with_access(book_id, current_user, db)
+    await get_accessible_book(book_id, current_user, db)
     result = await db.execute(
         select(BookReport)
         .where(BookReport.book_id == book_id)
