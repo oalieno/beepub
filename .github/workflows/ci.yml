@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Run by the Docker workflow before it publishes a release.
+  workflow_call:
 
 jobs:
   backend:
