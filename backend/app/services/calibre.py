@@ -566,6 +566,31 @@ async def sync_calibre_library(
                 )
                 orphans = []
             if orphans:
+                # A book Calibre no longer lists whose file is still where
+                # we last saw it: the list and the folder disagree, and
+                # the list is the one that can be wrong (a metadata.db
+                # restored from a backup, or read mid-write). Removing a
+                # book takes every reader's progress and highlights with
+                # it, so it is kept, and said. A book really deleted in
+                # Calibre, or one whose EPUB was removed, has no file.
+                still_there = [
+                    b
+                    for b in orphans
+                    if b.file_path
+                    and await asyncio.to_thread(os.path.exists, b.file_path)
+                ]
+                if still_there:
+                    kept = {b.id for b in still_there}
+                    orphans = [b for b in orphans if b.id not in kept]
+                    result.errors.append(
+                        f"{len(still_there)} not in Calibre's list but still "
+                        "on disk; kept"
+                    )
+                    logger.warning(
+                        f"Calibre library {library_id}: {len(still_there)} books "
+                        "missing from metadata.db whose files still exist; kept"
+                    )
+            if orphans:
                 for book in orphans:
                     # Remove library association
                     orphan_lb = await db.execute(

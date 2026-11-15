@@ -1,6 +1,7 @@
 """Syncing a linked Calibre library: what one bad book, and a Calibre
 that suddenly lists nothing, may and may not do to the rest."""
 
+import shutil
 import sqlite3
 import uuid
 from pathlib import Path
@@ -58,6 +59,28 @@ async def test_a_book_gone_from_calibre_is_removed(admin_client, tmp_path, stora
     library_id, books = await _linked(admin_client, root)
     assert _titles(books) == sorted(TITLES)
 
+    # As Calibre does it: the row and the book's folder both go.
+    db = sqlite3.connect(root / "metadata.db")
+    db.execute("DELETE FROM data WHERE book = 3")
+    db.execute("DELETE FROM books WHERE id = 3")
+    db.commit()
+    db.close()
+    shutil.rmtree(root / f"Misaki/{TITLES[2]} (3)")
+
+    status = await _sync(admin_client, root, library_id)
+    assert status["removed"] == 1
+    assert _titles(await _books(admin_client, library_id)) == sorted(TITLES[:2])
+
+
+async def test_a_book_missing_from_the_list_but_still_on_disk_is_kept(
+    admin_client,
+    tmp_path,
+    storage,  # noqa: F811
+):
+    root = _calibre_library(tmp_path / "calibre")
+    library_id, books = await _linked(admin_client, root)
+
+    # The list loses a book the folder still has: they disagree.
     db = sqlite3.connect(root / "metadata.db")
     db.execute("DELETE FROM data WHERE book = 3")
     db.execute("DELETE FROM books WHERE id = 3")
@@ -65,8 +88,9 @@ async def test_a_book_gone_from_calibre_is_removed(admin_client, tmp_path, stora
     db.close()
 
     status = await _sync(admin_client, root, library_id)
-    assert status["removed"] == 1
-    assert _titles(await _books(admin_client, library_id)) == sorted(TITLES[:2])
+    assert status["removed"] == 0
+    assert any("still on disk" in e for e in status["errors"])
+    assert _titles(await _books(admin_client, library_id)) == sorted(TITLES)
 
 
 async def test_a_calibre_that_lists_nothing_removes_nothing(
