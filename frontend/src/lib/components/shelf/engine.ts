@@ -773,7 +773,10 @@ export function createShelf(els: ShelfEls, hooks: ShelfHooks) {
     const strong: RGB = lum(c) < 0.5 ? c : [44, 36, 27];
     const vw = innerWidth;
     const vh = innerHeight;
-    const narrow = vw < 760;
+    // Stacked — the book above its caption — on a phone and on anything
+    // held upright: side by side needs more width than a tablet in
+    // portrait has, and the book ran off its edge.
+    const narrow = vw < 760 || vw < vh;
     const box = view.getBoundingClientRect();
     // The shelf's eye, on the screen.
     const ex = box.left + box.width / 2;
@@ -811,7 +814,13 @@ export function createShelf(els: ShelfEls, hooks: ShelfHooks) {
     let capCss: string;
     if (narrow) {
       const k = Math.min((vh * 0.46) / p.h, (vw * 0.6) / coverW);
-      const top = Math.max(56, vh * 0.09);
+      // The book and its caption, as one block, midway between the
+      // status bar and the bar at the foot.
+      const HEAD = 56;
+      const FOOT = 120;
+      const CAPTION = 28 + 170;
+      const top =
+        HEAD + Math.max(0, (vh - HEAD - FOOT - p.h * k - CAPTION) / 2);
       hand = place(vw / 2 - (coverW * k) / 2 + (p.w * k) / 4, top + p.h * k, k);
       capCss = `left:24px;right:24px;top:${top + p.h * k + 28}px`;
     } else {
