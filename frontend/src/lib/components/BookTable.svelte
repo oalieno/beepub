@@ -87,20 +87,22 @@
     savedId?: string | null;
   } = $props();
 
-  let columns = $derived(compact ? 6 : 7);
-  // The title takes what the other columns leave, so on a screen too
-  // narrow for all of them it is the title that vanishes. The date gives
-  // way first, then the size (the sort menu above still orders by date;
-  // the panel shows both) — sooner beside the side panel, which takes
-  // its width from the table.
-  const narrowHidden = (display: "table-cell" | "table-column") =>
-    display === "table-cell"
-      ? compact
-        ? "hidden 2xl:table-cell"
-        : "hidden xl:table-cell"
-      : compact
-        ? "hidden 2xl:table-column"
-        : "hidden xl:table-column";
+  // The title takes what the other columns leave, so in a table too
+  // narrow for all of them it is the title that vanishes. Columns give
+  // way by the table's own measured width — beside the side panel it is
+  // far narrower than the screen: the date first, then the size, then
+  // the status (the sort menu still orders by date; the panel shows all
+  // three). A column that is out is not rendered at all: Safari keeps
+  // the width of a <col> hidden with display: none.
+  let width = $state(0);
+  let room = $derived(width || Infinity); // all of them until measured
+  let showDate = $derived(room >= (compact ? 750 : 900));
+  let showSize = $derived(!compact && room >= 670);
+  // A row being edited keeps its status field.
+  let showStatus = $derived(room >= 460 || editingId != null);
+  let columns = $derived(
+    4 + Number(showStatus) + Number(showSize) + Number(showDate),
+  );
 
   // A list restored on back predates an edit made on the book page.
   let rows = $derived(books.map((b) => withEdit(b, $editedBooks)));
@@ -242,14 +244,14 @@
 <!-- Fixed layout, one line per cell: every row the same height, long
      values cut with an ellipsis (the whole value on hover). The title takes
      what the other columns leave. -->
-<table class="w-full text-sm table-fixed">
+<table class="w-full text-sm table-fixed" bind:clientWidth={width}>
   <colgroup>
     <col />
     <col class="w-[22%]" />
     <col class="w-[18%]" />
-    <col class="w-24" />
-    {#if !compact}<col class="w-24 hidden lg:table-column" />{/if}
-    <col class="w-36 {narrowHidden('table-column')}" />
+    {#if showStatus}<col class="w-24" />{/if}
+    {#if showSize}<col class="w-24" />{/if}
+    {#if showDate}<col class="w-36" />{/if}
     <col class="w-12" />
   </colgroup>
   <thead class="sticky top-0 z-10">
@@ -267,21 +269,21 @@
       <th class="p-0 font-medium whitespace-nowrap">
         {@render sortableHeader("series_index", m.browser_col_series())}
       </th>
-      <th class="px-3 py-2.5 font-medium whitespace-nowrap"
-        >{m.browser_col_status()}</th
-      >
-      {#if !compact}
-        <th
-          class="px-3 py-2.5 font-medium whitespace-nowrap hidden lg:table-cell"
+      {#if showStatus}
+        <th class="px-3 py-2.5 font-medium whitespace-nowrap"
+          >{m.browser_col_status()}</th
         >
+      {/if}
+      {#if showSize}
+        <th class="px-3 py-2.5 font-medium whitespace-nowrap">
           {m.browser_col_size()}
         </th>
       {/if}
-      <th
-        class="p-0 font-medium whitespace-nowrap {narrowHidden('table-cell')}"
-      >
-        {@render sortableHeader("added_at", m.browser_col_added())}
-      </th>
+      {#if showDate}
+        <th class="p-0 font-medium whitespace-nowrap">
+          {@render sortableHeader("added_at", m.browser_col_added())}
+        </th>
+      {/if}
       <th><span class="sr-only">{m.book_more_actions()}</span></th>
     </tr>
   </thead>
@@ -427,81 +429,81 @@
             </span>
           {/if}
         </td>
-        <td class="px-3 py-2.5 truncate">
-          {#if editing}
-            <Select.Root
-              type="single"
-              value={draft.status}
-              onValueChange={(v) =>
-                (draft.status = (v ?? "") as ReadingStatus | "")}
-            >
-              <Select.Trigger
-                class="box-content h-5 data-[size=default]:h-5 w-full gap-1 rounded-none border-0 border-b border-border -mb-px bg-transparent dark:bg-transparent dark:hover:bg-transparent px-0 py-0 text-sm shadow-none hover:border-muted-foreground/60 focus-visible:ring-0 focus-visible:border-b-2 focus-visible:border-primary focus-visible:-mb-[2px]"
-                aria-label={m.browser_col_status()}
-                onkeydown={(e) => {
-                  // Closed, Escape backs out of the row as in its fields.
-                  if (
-                    e.key === "Escape" &&
-                    e.currentTarget.getAttribute("aria-expanded") !== "true"
-                  ) {
-                    e.preventDefault();
-                    onEditDone?.(book.id, null);
-                  }
-                }}
+        {#if showStatus}<td class="px-3 py-2.5 truncate">
+            {#if editing}
+              <Select.Root
+                type="single"
+                value={draft.status}
+                onValueChange={(v) =>
+                  (draft.status = (v ?? "") as ReadingStatus | "")}
               >
-                <span
-                  class="truncate {draft.status ? '' : 'text-muted-foreground'}"
-                  >{STATUSES.find((o) => o.value === draft.status)?.label() ??
-                    m.row_status_none()}</span
+                <Select.Trigger
+                  class="box-content h-5 data-[size=default]:h-5 w-full gap-1 rounded-none border-0 border-b border-border -mb-px bg-transparent dark:bg-transparent dark:hover:bg-transparent px-0 py-0 text-sm shadow-none hover:border-muted-foreground/60 focus-visible:ring-0 focus-visible:border-b-2 focus-visible:border-primary focus-visible:-mb-[2px]"
+                  aria-label={m.browser_col_status()}
+                  onkeydown={(e) => {
+                    // Closed, Escape backs out of the row as in its fields.
+                    if (
+                      e.key === "Escape" &&
+                      e.currentTarget.getAttribute("aria-expanded") !== "true"
+                    ) {
+                      e.preventDefault();
+                      onEditDone?.(book.id, null);
+                    }
+                  }}
                 >
-              </Select.Trigger>
-              <Select.Content>
-                {#each STATUSES as option (option.value)}
-                  <Select.Item value={option.value}
-                    >{option.label()}</Select.Item
+                  <span
+                    class="truncate {draft.status
+                      ? ''
+                      : 'text-muted-foreground'}"
+                    >{STATUSES.find((o) => o.value === draft.status)?.label() ??
+                      m.row_status_none()}</span
                   >
-                {/each}
-                <Select.Item value="">{m.row_status_clear()}</Select.Item>
-              </Select.Content>
-            </Select.Root>
-          {:else if book.reading_status === "read"}
-            <span
-              class="inline-flex items-center gap-1 text-primary font-medium"
-            >
-              <Check size={12} strokeWidth={3} />{m.mybooks_tab_read()}
-            </span>
-          {:else if book.reading_status === "currently_reading"}
-            <span class="text-muted-foreground">
-              {#if book.reading_percentage != null && book.reading_percentage > 0}
-                {Math.round(book.reading_percentage)}%
-              {:else}
-                {m.mybooks_tab_reading()}
-              {/if}
-            </span>
-          {:else if book.reading_status === "want_to_read"}
-            <span class="inline-flex items-center gap-1 text-muted-foreground">
-              <Bookmark size={12} />{m.mybooks_tab_want_to_read()}
-            </span>
-          {:else if book.reading_status === "did_not_finish"}
-            <span class="text-muted-foreground">
-              {m.mybooks_tab_did_not_finish()}
-            </span>
-          {/if}
-        </td>
-        {#if !compact}
-          <td
-            class="px-3 py-2.5 text-muted-foreground truncate hidden lg:table-cell"
-          >
+                </Select.Trigger>
+                <Select.Content>
+                  {#each STATUSES as option (option.value)}
+                    <Select.Item value={option.value}
+                      >{option.label()}</Select.Item
+                    >
+                  {/each}
+                  <Select.Item value="">{m.row_status_clear()}</Select.Item>
+                </Select.Content>
+              </Select.Root>
+            {:else if book.reading_status === "read"}
+              <span
+                class="inline-flex items-center gap-1 text-primary font-medium"
+              >
+                <Check size={12} strokeWidth={3} />{m.mybooks_tab_read()}
+              </span>
+            {:else if book.reading_status === "currently_reading"}
+              <span class="text-muted-foreground">
+                {#if book.reading_percentage != null && book.reading_percentage > 0}
+                  {Math.round(book.reading_percentage)}%
+                {:else}
+                  {m.mybooks_tab_reading()}
+                {/if}
+              </span>
+            {:else if book.reading_status === "want_to_read"}
+              <span
+                class="inline-flex items-center gap-1 text-muted-foreground"
+              >
+                <Bookmark size={12} />{m.mybooks_tab_want_to_read()}
+              </span>
+            {:else if book.reading_status === "did_not_finish"}
+              <span class="text-muted-foreground">
+                {m.mybooks_tab_did_not_finish()}
+              </span>
+            {/if}
+          </td>{/if}
+        {#if showSize}
+          <td class="px-3 py-2.5 text-muted-foreground truncate">
             {book.file_size != null ? formatSize(book.file_size) : "—"}
           </td>
         {/if}
-        <td
-          class="px-3 py-2.5 text-muted-foreground truncate {narrowHidden(
-            'table-cell',
-          )}"
-        >
-          {formatAdded(book)}
-        </td>
+        {#if showDate}
+          <td class="px-3 py-2.5 text-muted-foreground truncate">
+            {formatAdded(book)}
+          </td>
+        {/if}
         <!-- Spotify-like: the row's actions, shown on hover or when picked. -->
         <td class="pr-2 text-right" data-row-menu>
           <DropdownMenu.Root
