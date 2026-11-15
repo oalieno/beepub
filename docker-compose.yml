@@ -7,6 +7,9 @@ services:
     build: ./backend
     pull_policy: missing
     restart: unless-stopped
+    # A ceiling, far above normal use: a runaway request is stopped here
+    # instead of taking the rest of the machine with it.
+    mem_limit: 4g
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}

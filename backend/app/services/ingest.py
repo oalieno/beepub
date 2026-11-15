@@ -15,6 +15,7 @@ import asyncio
 import logging
 import os
 import uuid
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -141,6 +142,35 @@ def _is_simplified(file_path: str) -> bool:
         return False
 
 
+# What an uploaded archive may unpack to. An upload is at most 500 MB, so
+# an honest book stays far below this; a file built to expand without
+# end (a few kilobytes that unpack to gigabytes) does not.
+MAX_UNPACKED_SIZE = 4 * 1024**3
+MAX_UNPACKED_ENTRY = 1024**3
+MAX_ARCHIVE_ENTRIES = 100_000
+
+
+class ArchiveTooLargeError(Exception):
+    pass
+
+
+def _refuse_oversized_archive(path: str) -> None:
+    """Refuse an archive (EPUB and CBZ are zip files) by the sizes its
+    directory declares, before anything in it is unpacked. Reading an
+    entry never yields more than it declared, so the declaration is a
+    true bound."""
+    if not zipfile.is_zipfile(path):
+        return
+    with zipfile.ZipFile(path) as archive:
+        entries = archive.infolist()
+    if (
+        len(entries) > MAX_ARCHIVE_ENTRIES
+        or any(e.file_size > MAX_UNPACKED_ENTRY for e in entries)
+        or sum(e.file_size for e in entries) > MAX_UNPACKED_SIZE
+    ):
+        raise ArchiveTooLargeError(path)
+
+
 def _rejection(exc: Exception, recipe: _Recipe) -> HTTPException | None:
     """What the uploader is told, when the reason is one we know how to
     say. ``None`` otherwise: they hear only "not a file of this kind" and
@@ -151,6 +181,10 @@ def _rejection(exc: Exception, recipe: _Recipe) -> HTTPException | None:
         return errors.UPLOAD_DRM()
     if isinstance(exc, CbzError):
         return HTTPException(status_code=400, detail=str(exc))
+    if isinstance(exc, ArchiveTooLargeError):
+        return HTTPException(
+            status_code=413, detail="The file is too large once unpacked"
+        )
     return None
 
 
@@ -181,6 +215,7 @@ async def ingest_upload(
     try:
         # Conversion and parsing are blocking zip/XML work — kept off the
         # event loop (a bulk upload would otherwise stall every request).
+        await asyncio.to_thread(_refuse_oversized_archive, original_path or file_path)
         if recipe.convert:
             await asyncio.to_thread(
                 recipe.convert,
