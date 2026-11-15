@@ -111,6 +111,7 @@ jobs:
       # svelte-check needs it to exist before the build runs.
       - run: pnpm exec paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy localStorage cookie baseLocale
       - run: pnpm run check
+      - run: pnpm test:unit
       - run: >-
           pnpm exec prettier --plugin prettier-plugin-svelte
           --ignore-path .prettierignore --check
