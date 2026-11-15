@@ -71,6 +71,9 @@ To pin a release instead of tracking `latest`, set `BEEPUB_VERSION=0.1.0` in
 docker compose pull && docker compose up -d
 ```
 
+Database migrations run by themselves on start and only go forward, so
+[take a backup first](#data-and-backups) — see "Upgrading" there.
+
 ### Building From Source
 
 Clone the repository and add `--build` — every service also carries a build
@@ -214,8 +217,54 @@ Docker Compose keeps runtime data in three named volumes:
 - `postgres_data`: the database
 - `redis_data`: Redis state (disposable)
 
-Back up `data` and `postgres_data` before upgrading or rebuilding a
-production deployment.
+### Backing Up
+
+A backup is two things: a dump of the database and a copy of `data`. Both
+can be taken while BeePub is running.
+
+```bash
+# The database, as one consistent snapshot
+docker compose exec -T postgres pg_dump -U beepub -Fc beepub > beepub-db.dump
+
+# Books, covers, illustrations and the secret
+docker compose exec -T backend tar -C /data -cf - . > beepub-data.tar
+```
+
+(`beepub` is the default database name and user; use your own if you set
+`POSTGRES_DB` / `POSTGRES_USER`. With `BEEPUB_DATA_PATH` set you can copy
+that directory instead of the second command.)
+
+Do not back up the database by copying the `postgres_data` volume, or the
+`BEEPUB_POSTGRES_PATH` directory, while PostgreSQL is running: files copied
+at different moments do not add up to a database that starts. Use `pg_dump`
+as above, or stop the stack first.
+
+### Restoring
+
+Onto a fresh install (or an existing one, whose contents are replaced):
+
+```bash
+docker compose up -d postgres
+docker compose exec -T postgres pg_restore -U beepub -d beepub \
+    --clean --if-exists --no-owner < beepub-db.dump
+docker compose run --rm -T --no-deps backend tar -C /data -xf - < beepub-data.tar
+docker compose up -d
+```
+
+Restore both from the same backup: the database says which files exist.
+
+### Upgrading
+
+Each start runs the database migrations for the version being started.
+They only go forward — an older version cannot run on a database a newer
+one has migrated. So:
+
+- Back up before upgrading.
+- Set `BEEPUB_VERSION` to a release in `.env` rather than leaving it at
+  `latest`, so that an upgrade happens when you choose and not whenever
+  the images are pulled again.
+- To go back to an older version, restore the backup taken before the
+  upgrade and start that version.
 
 To keep the data in directories of your own instead (a NAS share, say),
 set absolute host paths in `.env`:
