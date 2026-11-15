@@ -1,4 +1,17 @@
 <script lang="ts">
+  import {
+    DEFAULT_SETTINGS,
+    FONT_SIZE_MAX,
+    FONT_SIZE_MIN,
+    KEY,
+    readSettings,
+    store,
+    storePagerShift,
+    storeWritingMode,
+    storedPagerShift,
+    storedWritingMode,
+    type ReaderSettings,
+  } from "$lib/reader/settings";
   /**
    * The reader route. Loads a book through BookReader (the foliate-based
    * engine in $lib/reader) and wraps it in the product chrome: the desktop
@@ -19,11 +32,7 @@
    * &turn=fade|slide|curl|scroll|instant (instant — a bare jump — exists only
    * here).
    */
-  import {
-    DEFAULT_READER_FONT,
-    readerFont,
-    type ReaderFont,
-  } from "$lib/reader/fonts";
+  import type { ReaderFont } from "$lib/reader/fonts";
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { browser } from "$app/environment";
@@ -454,189 +463,39 @@
 
   // ------------------------------------------------------------ settings
 
-  const KEY = {
-    font: "reader-font",
-    size: "reader-size",
-    lineHeight: "reader-lineheight",
-    letterSpacing: "reader-letter-spacing",
-    marginX: "reader-margin-x",
-    marginY: "reader-margin-y",
-    /** The epub.js reader's single inline-padding preset; seeds both
-     *  gutters when the split keys are absent. */
-    legacyMargin: "reader-margin",
-    pageTurn: "reader-page-turn",
-    fullPage: "reader-full-page",
-    dark: "reader-dark",
-    pagerMode: "reader-pager-mode",
-    pagerDirection: "reader-pager-direction",
-    /** The image pager's own page turn (instant / curl): a comic's turn
-     *  is chosen apart from a text book's. */
-    pagerTurn: "reader-pager-turn",
-    pagerPadding: "reader-pager-padding",
-    /** Per book (suffixed with the id): whether its pairs are staggered
-     *  is a fact about the file, not a preference. */
-    pagerShift: "reader-pager-shift",
-    /** Per book (suffixed with the id): horizontal or vertical is chosen
-     *  for one book, not for every book the reader opens. */
-    writingMode: "reader-writing-mode",
-  } as const;
+  // Read synchronously (never after mount): the reader loads its first
+  // section with these, and a dark-mode reader gets no white flash.
+  const initial: ReaderSettings = browser
+    ? readSettings(page.url.searchParams, {
+        canCurl: canCurl(),
+        appDark: document.documentElement.classList.contains("dark"),
+      })
+    : DEFAULT_SETTINGS;
 
-  function stored(key: string): string | null {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null; // private browsing
-    }
-  }
-  function store(key: string, value: string) {
-    try {
-      localStorage.setItem(key, value);
-    } catch {
-      /* private browsing — the setting holds for this session */
-    }
-  }
+  let fontFamily = $state<ReaderFont>(initial.font);
+  let fontSize = $state(initial.fontSize);
+  let lineHeight = $state(initial.lineHeight);
+  let letterSpacing = $state(initial.letterSpacing);
+  let marginX = $state(initial.marginX);
+  let marginY = $state(initial.marginY);
+  let fullPage = $state(initial.fullPage);
+  let pageTurn = $state<PageTurnMode>(initial.pageTurn);
+  let darkMode = $state(initial.dark);
+  let pagerMode = $state<PagerMode>(initial.pagerMode);
+  let pagerTurn = $state<PagerTurn>(initial.pagerTurn);
+  let pagerDirection = $state<PagerDirection>(initial.pagerDirection);
+  let pagerPadding = $state(initial.pagerPadding);
 
-  const q = page.url.searchParams;
-  function queryNum(key: string): number | null {
-    if (!q.has(key)) return null;
-    const v = Number(q.get(key));
-    return Number.isFinite(v) ? v : null;
-  }
-  function storedNum(key: string): number | null {
-    const raw = stored(key);
-    if (raw == null) return null;
-    const v = Number(raw);
-    return Number.isFinite(v) ? v : null;
-  }
-  function pick(queryKey: string, keys: string[], fallback: number): number {
-    const fromQuery = queryNum(queryKey);
-    if (fromQuery != null) return fromQuery;
-    for (const key of keys) {
-      const v = storedNum(key);
-      if (v != null) return v;
-    }
-    return fallback;
-  }
-
-  function initialFont(): ReaderFont {
-    // (The query's two are the device's own fonts: a test's fixed
-    // ground, whatever typeface the app serves.)
-    const fromQuery = q.get("font");
-    if (fromQuery === "sans") return "system";
-    if (fromQuery === "serif") return "system-serif";
-    return readerFont(fromQuery || stored(KEY.font));
-  }
-  /** What a stored or query value means today: before 2026-10 the modes
-   *  were instant / animated (a slide without the finger) / follow. */
-  function parsePageTurn(
-    raw: string | null,
-  ): "fade" | "slide" | "curl" | "scroll" {
-    if (raw === "scroll") return "scroll";
-    if (raw === "curl") return "curl";
-    return raw === "slide" || raw === "animated" || raw === "follow"
-      ? "slide"
-      : "fade";
-  }
-  function curlHere<T extends string>(mode: T): T | "slide" {
-    return mode === "curl" && !canCurl() ? "slide" : mode;
-  }
-  function initialPageTurn(): PageTurnMode {
-    const fromQuery = q.get("turn");
-    if (fromQuery === "instant") return "instant";
-    if (fromQuery) return curlHere(parsePageTurn(fromQuery));
-    // Values from before there were two modes are read as today's and
-    // rewritten, so the key holds one vocabulary. (A curl chosen on a
-    // phone is kept, though a desktop slides instead.)
-    const raw = stored(KEY.pageTurn);
-    if (raw === "curl") return curlHere("curl");
-    const mode = parsePageTurn(raw);
-    if (raw != null && raw !== mode) store(KEY.pageTurn, mode);
-    return mode;
-  }
-  // Synchronous (fall back to the app theme) so dark-mode readers don't
-  // get a white flash before onMount runs.
-  function initialDark(): boolean {
-    if (!browser) return false;
-    if (q.has("dark")) return q.get("dark") === "1";
-    const saved = stored(KEY.dark);
-    if (saved !== null) return saved === "1";
-    return document.documentElement.classList.contains("dark");
-  }
-
-  let fontFamily = $state<ReaderFont>(
-    browser ? initialFont() : DEFAULT_READER_FONT,
-  );
-  let fontSize = $state(browser ? pick("size", [KEY.size], 16) : 16);
-  let lineHeight = $state(browser ? pick("lh", [KEY.lineHeight], 1.8) : 1.8);
-  let letterSpacing = $state(browser ? pick("ls", [KEY.letterSpacing], 0) : 0);
-  let marginX = $state(
-    browser ? pick("mx", [KEY.marginX, KEY.legacyMargin], 32) : 32,
-  );
-  let marginY = $state(
-    browser ? pick("my", [KEY.marginY, KEY.legacyMargin], 32) : 32,
-  );
-  const FONT_SIZE_MAX = 48;
-  let fullPage = $state(browser ? stored(KEY.fullPage) === "1" : false);
-  let pageTurn = $state<PageTurnMode>(browser ? initialPageTurn() : "fade");
-  function initialPagerMode(): PagerMode {
-    const v = stored(KEY.pagerMode);
-    return v === "double" ||
-      v === "vertical" ||
-      v === "horizontal" ||
-      v === "webtoon"
-      ? v
-      : "single";
-  }
-  function initialPagerDirection(): PagerDirection {
-    const v = stored(KEY.pagerDirection);
-    return v === "ltr" || v === "rtl" ? v : "auto";
-  }
-  let pagerMode = $state<PagerMode>(browser ? initialPagerMode() : "single");
-  let pagerTurn = $state<PagerTurn>(
-    browser && stored(KEY.pagerTurn) === "curl" && canCurl()
-      ? "curl"
-      : "instant",
-  );
-  function handlePagerTurnChange(value: PagerTurn) {
-    pagerTurn = value;
-    store(KEY.pagerTurn, value);
-  }
-  let pagerDirection = $state<PagerDirection>(
-    browser ? initialPagerDirection() : "auto",
-  );
-  function handlePagerModeChange(value: PagerMode) {
-    pagerMode = value;
-    store(KEY.pagerMode, value);
-  }
-  function handlePagerDirectionChange(value: PagerDirection) {
-    pagerDirection = value;
-    store(KEY.pagerDirection, value);
-  }
-  const pagerShiftKey = $derived(`${KEY.pagerShift}:${bookId}`);
+  // Two are kept per book, and follow the book on screen.
   let pagerShift = $state(false);
   $effect(() => {
-    pagerShift = stored(pagerShiftKey) === "1";
+    pagerShift = storedPagerShift(bookId);
   });
-  function handlePagerShiftChange(value: boolean) {
-    pagerShift = value;
-    store(pagerShiftKey, value ? "1" : "0");
-  }
-  // Writing direction, per book and on this device — where the reader's
-  // other display settings live. "auto" (the book's own) is the absence
-  // of a stored value.
-  function storedWritingMode(key: string): WritingMode {
-    const v = stored(key);
-    return v === "horizontal" || v === "vertical" ? v : "auto";
-  }
-  const writingModeKey = $derived(`${KEY.writingMode}:${bookId}`);
-  // Read synchronously: the reader loads its first section in this mode.
   let writingMode = $state<WritingMode>(
-    browser
-      ? storedWritingMode(`${KEY.writingMode}:${page.params.id}`)
-      : "auto",
+    browser ? storedWritingMode(page.params.id as string) : "auto",
   );
   $effect(() => {
-    writingMode = storedWritingMode(writingModeKey);
+    writingMode = storedWritingMode(bookId);
   });
   // Whether the choice makes sense for the book on screen (the reader
   // says: a CJK text book). A book already forced keeps the row, so the
@@ -644,23 +503,6 @@
   let writingModeOffered = $state(false);
   /** A fixed-layout book in the text reader: it only fades. */
   let fixedLayout = $state(false);
-  function handleWritingModeChange(value: WritingMode) {
-    writingMode = value;
-    try {
-      if (value === "auto") localStorage.removeItem(writingModeKey);
-      else localStorage.setItem(writingModeKey, value);
-    } catch {
-      /* private browsing — the setting holds for this session */
-    }
-  }
-  let pagerPadding = $state(
-    browser ? Math.max(0, storedNum(KEY.pagerPadding) ?? 0) : 0,
-  );
-  function handlePagerPaddingChange(value: number) {
-    pagerPadding = value;
-    store(KEY.pagerPadding, String(value));
-  }
-  let darkMode = $state(initialDark());
 
   function handleFontChange(font: ReaderFont) {
     fontFamily = font;
@@ -672,7 +514,7 @@
     store(KEY.size, String(fontSize));
   }
   function handleFontDecrease() {
-    if (fontSize <= 10) return;
+    if (fontSize <= FONT_SIZE_MIN) return;
     fontSize -= 2;
     store(KEY.size, String(fontSize));
   }
@@ -703,6 +545,30 @@
   function handleThemeToggle() {
     darkMode = !darkMode;
     store(KEY.dark, darkMode ? "1" : "0");
+  }
+  function handlePagerModeChange(value: PagerMode) {
+    pagerMode = value;
+    store(KEY.pagerMode, value);
+  }
+  function handlePagerTurnChange(value: PagerTurn) {
+    pagerTurn = value;
+    store(KEY.pagerTurn, value);
+  }
+  function handlePagerDirectionChange(value: PagerDirection) {
+    pagerDirection = value;
+    store(KEY.pagerDirection, value);
+  }
+  function handlePagerPaddingChange(value: number) {
+    pagerPadding = value;
+    store(KEY.pagerPadding, String(value));
+  }
+  function handlePagerShiftChange(value: boolean) {
+    pagerShift = value;
+    storePagerShift(bookId, value);
+  }
+  function handleWritingModeChange(value: WritingMode) {
+    writingMode = value;
+    storeWritingMode(bookId, value);
   }
 
   // ------------------------------------------------------------ kosync
