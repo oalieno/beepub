@@ -1,10 +1,11 @@
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
@@ -113,7 +114,7 @@ async def update_library(
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(library, field, value)
     await db.commit()
@@ -130,7 +131,7 @@ async def delete_library(
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
 
     # Delete all books in this library (and their files). Files are removed
     # AFTER the commit — a failed commit must not leave rows pointing at

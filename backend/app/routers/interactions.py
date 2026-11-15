@@ -14,6 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.book import Book
@@ -84,7 +85,7 @@ async def update_rating(
     if body.rating is not None and not (
         0.5 <= body.rating <= 5 and (body.rating * 2).is_integer()
     ):
-        raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
+        raise errors.RATING_OUT_OF_RANGE()
     interaction = await _get_or_create_interaction(current_user.id, book_id, db)
     interaction.rating = body.rating
     interaction.rating_updated_at = datetime.now(UTC)
@@ -377,7 +378,7 @@ async def update_highlight(
     )
     highlight = result.scalar_one_or_none()
     if not highlight:
-        raise HTTPException(status_code=404, detail="Highlight not found")
+        raise errors.HIGHLIGHT_NOT_FOUND()
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(highlight, field, value)
     await db.commit()
@@ -403,7 +404,7 @@ async def delete_highlight(
     )
     highlight = result.scalar_one_or_none()
     if not highlight:
-        raise HTTPException(status_code=404, detail="Highlight not found")
+        raise errors.HIGHLIGHT_NOT_FOUND()
     # Soft delete: the tombstone must survive so sync can propagate the
     # deletion to offline devices. Re-deleting is an idempotent no-op that
     # keeps the original tombstone time.
@@ -482,9 +483,7 @@ async def create_book_report(
             detail=f"Invalid issue_type. Must be one of: {', '.join(sorted(ISSUE_TYPES))}",
         )
     if body.description and len(body.description) > 2000:
-        raise HTTPException(
-            status_code=422, detail="Description must be 2000 characters or less"
-        )
+        raise errors.DESCRIPTION_TOO_LONG()
     report = BookReport(
         book_id=book.id,
         reported_by=current_user.id,

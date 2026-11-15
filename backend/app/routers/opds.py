@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.models.book import Book
 from app.models.library import Library, LibraryBook
@@ -323,7 +324,7 @@ async def opds_library(
         query = query.where(cond)
     library = (await db.execute(query)).scalar_one_or_none()
     if library is None:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
 
     books = _accessible_books_query(current_user).where(
         Book.id.in_(
@@ -377,7 +378,7 @@ async def _opds_book_with_access(
     result = await db.execute(_accessible_books_query(user).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if book is None:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     return book
 
 
@@ -388,13 +389,10 @@ async def opds_book_file(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     if current_user.role != UserRole.admin and not current_user.can_download:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Download permission required",
-        )
+        raise errors.DOWNLOAD_PERMISSION_REQUIRED()
     book = await _opds_book_with_access(book_id, current_user, db)
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise errors.FILE_NOT_FOUND()
     title = book.title or book.epub_title or "book"
     return FileResponse(
         book.file_path,
@@ -411,5 +409,5 @@ async def opds_book_cover(
 ):
     book = await _opds_book_with_access(book_id, current_user, db)
     if not book.cover_path or not os.path.exists(book.cover_path):
-        raise HTTPException(status_code=404, detail="Cover not found")
+        raise errors.COVER_NOT_FOUND()
     return FileResponse(book.cover_path, media_type="image/jpeg")

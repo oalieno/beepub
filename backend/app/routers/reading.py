@@ -13,7 +13,6 @@ from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
-    HTTPException,
     Query,
 )
 from sqlalchemy import and_, func, or_, select
@@ -21,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.functions import coalesce
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.book import Book
@@ -164,10 +164,7 @@ async def update_reading_goal(
     if body.goal_seconds is not None and (
         body.goal_seconds < 60 or body.goal_seconds > 86400
     ):
-        raise HTTPException(
-            status_code=422,
-            detail="Goal must be between 60 and 86400 seconds (1 min to 24 hrs)",
-        )
+        raise errors.GOAL_OUT_OF_RANGE()
 
     current_user.daily_reading_goal_seconds = body.goal_seconds
     await db.commit()

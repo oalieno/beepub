@@ -18,6 +18,7 @@ from sqlalchemy import and_, exists, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.functions import coalesce
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book, ExternalMetadata
@@ -61,7 +62,6 @@ from app.services.book_files import (
 )
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.ingest import (
-    UNSUPPORTED_UPLOAD,
     commit_ingested,
     discard_ingested,
     ingest_upload,
@@ -98,7 +98,7 @@ async def upload_book(
 ):
     require_upload_permission(current_user)
     if upload_suffix(file) is None:
-        raise HTTPException(status_code=400, detail=UNSUPPORTED_UPLOAD)
+        raise errors.UPLOAD_FORMAT(status_code=400)
 
     lib_id = await validate_upload_library(library_id, current_user, db)
     book = await ingest_upload(file, current_user, lib_id, db)
@@ -196,16 +196,14 @@ async def move_book_to_library(
     """Set the library a book belongs to (a book lives in exactly one)."""
     book_result = await db.execute(select(Book).where(Book.id == book_id))
     if not book_result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
 
     lib_result = await db.execute(select(Library).where(Library.id == body.library_id))
     target = lib_result.scalar_one_or_none()
     if not target:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     if target.calibre_path:
-        raise HTTPException(
-            status_code=403, detail="Cannot move books into a Calibre library"
-        )
+        raise errors.MOVE_INTO_CALIBRE()
 
     membership_result = await db.execute(
         select(LibraryBook).where(LibraryBook.book_id == book_id)
@@ -219,13 +217,7 @@ async def move_book_to_library(
     if await book_is_in_work(book_id, db):
         # A Work's editions must live in one library — move them together
         # or not at all.
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                "Book is part of a Work. Dissolve the Work first, "
-                "or move all its editions together."
-            ),
-        )
+        raise errors.MOVE_BOOK_IN_WORK()
 
     if membership is None:
         # Legacy orphan (pre-invariant data) — adopt it into the target.
@@ -239,10 +231,7 @@ async def move_book_to_library(
     else:
         source = await db.get(Library, membership.library_id)
         if source is not None and source.calibre_path:
-            raise HTTPException(
-                status_code=403,
-                detail="Cannot move books out of a Calibre library",
-            )
+            raise errors.MOVE_OUT_OF_CALIBRE()
         membership.library_id = body.library_id
         membership.added_by = current_user.id
     await db.commit()
@@ -893,7 +882,7 @@ async def update_book_metadata(
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     data = body.model_dump()
     series_will_change = (
         "series" in body.model_fields_set and data["series"] != book.series
@@ -1101,7 +1090,7 @@ async def delete_book(
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     # Files are removed AFTER the commit — if the commit fails, a row
     # pointing at a deleted file would be unrecoverable.
     paths = book_files(book)
@@ -1413,7 +1402,7 @@ async def update_external_metadata_url(
     # Check book exists
     result = await db.execute(select(Book).where(Book.id == book_id))
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
 
     if body.source_url is None:
         # Mark as "not found" — clear data but keep the row as empty marker
@@ -1479,7 +1468,7 @@ async def delete_external_metadata(
 ):
     """Unlink a source completely — removes the row so it can be re-searched."""
     if metadata_registry.get_plugin_class(source) is None:
-        raise HTTPException(status_code=400, detail="Invalid source")
+        raise errors.INVALID_SOURCE()
     validated_source = source
 
     result = await db.execute(
@@ -1490,7 +1479,7 @@ async def delete_external_metadata(
     )
     meta = result.scalar_one_or_none()
     if not meta:
-        raise HTTPException(status_code=404, detail="External metadata not found")
+        raise errors.METADATA_NOT_FOUND()
     await db.delete(meta)
     await db.commit()
 

@@ -1,4 +1,5 @@
 import * as m from "$lib/paraglide/messages.js";
+import { errorMessage } from "./errors";
 import {
   getIsOnline,
   reportServerReachable,
@@ -7,63 +8,6 @@ import {
 
 const SERVER_URL_KEY = "serverUrl";
 const LOCAL_MODE_KEY = "localMode";
-
-const ERROR_MAP: Record<string, () => string> = {
-  "Access denied": () => m.error_access_denied(),
-  "Account is disabled": () => m.error_account_disabled(),
-  "An illustration already exists for this text selection": () =>
-    m.error_illustration_exists(),
-  "A token with this name already exists": () =>
-    m.profile_api_token_name_taken(),
-  "Book already in shelf": () => m.error_book_in_shelf(),
-  "Book is part of a Work. Dissolve the Work first, or move all its editions together.":
-    () => m.error_move_book_in_work(),
-  "Book not found": () => m.error_book_not_found(),
-  "Book not in shelf": () => m.error_book_not_in_shelf(),
-  "Cannot move books into a Calibre library": () => m.error_move_into_calibre(),
-  "Cannot move books out of a Calibre library": () =>
-    m.error_move_out_calibre(),
-  "Bookshelf not found": () => m.error_bookshelf_not_found(),
-  "Calibre library already linked": () => m.error_calibre_already_linked(),
-  "Cannot delete yourself": () => m.error_cannot_delete_self(),
-  "Cannot demote the last admin": () => m.error_cannot_demote_last_admin(),
-  "Cannot upload to a Calibre library": () => m.error_calibre_no_upload(),
-  "Conversation not found": () => m.error_conversation_not_found(),
-  "Cover not found": () => m.error_cover_not_found(),
-  "Current password is incorrect": () => m.error_wrong_password(),
-  "Description must be 2000 characters or less": () =>
-    m.error_description_too_long(),
-  "Download permission required": () => m.error_download_permission(),
-  "External metadata not found": () => m.error_metadata_not_found(),
-  "File not found": () => m.error_file_not_found(),
-  "Gemini API key not configured": () => m.error_gemini_not_configured(),
-  "Goal must be between 60 and 86400 seconds (1 min to 24 hrs)": () =>
-    m.error_goal_range(),
-  "Highlight not found": () => m.error_highlight_not_found(),
-  "Illustration not found": () => m.error_illustration_not_found(),
-  "Image file not found": () => m.error_image_not_found(),
-  "Image not ready": () => m.error_image_not_ready(),
-  "Invalid credentials": () => m.error_invalid_credentials(),
-  "Invalid source": () => m.error_invalid_source(),
-  "Library not found": () => m.error_library_not_found(),
-  "No metadata.db found at path": () => m.error_no_metadata_db(),
-  "Not a Calibre library": () => m.error_not_calibre(),
-  "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported": () =>
-    m.error_upload_format(),
-  "The book is DRM-protected": () => m.error_upload_drm(),
-  "The TXT file has no text": () => m.error_txt_empty(),
-  "OpenAI base URL not configured": () => m.error_openai_not_configured(),
-  "Path not found in EPUB": () => m.error_path_not_in_epub(),
-  "Rating must be 0.5-5 in 0.5 steps": () => m.error_rating_range(),
-  "Registration is currently closed": () => m.error_registration_closed(),
-  "Report not found": () => m.error_report_not_found(),
-  "Semantic search is not configured": () => m.error_search_not_configured(),
-  "Sync already in progress": () => m.error_sync_in_progress(),
-  "User not found": () => m.error_user_not_found(),
-  "Username already exists": () => m.error_username_exists(),
-  "Too many failed attempts. Try again later.": () =>
-    m.error_too_many_attempts(),
-};
 
 export function getServerUrl(): string {
   if (typeof window !== "undefined") {
@@ -278,12 +222,7 @@ async function send(
   if (!res.ok) {
     let message = `HTTP ${res.status}`;
     try {
-      const err = (await res.json()) as { detail?: string };
-      if (err.detail) {
-        const detail = String(err.detail);
-        const translated = ERROR_MAP[detail];
-        message = translated ? translated() : detail;
-      }
+      message = errorMessage(await res.json()) ?? message;
     } catch {
       // ignore
     }

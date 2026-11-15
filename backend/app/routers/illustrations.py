@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.illustration import Illustration
@@ -58,10 +59,7 @@ async def create_illustration(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409,
-            detail="An illustration already exists for this text selection",
-        )
+        raise errors.ILLUSTRATION_EXISTS()
 
     illustration_id = uuid.uuid4()
     image_path = get_illustration_path(illustration_id)
@@ -162,7 +160,7 @@ async def get_illustration(
     )
     illustration = result.scalar_one_or_none()
     if not illustration:
-        raise HTTPException(status_code=404, detail="Illustration not found")
+        raise errors.ILLUSTRATION_NOT_FOUND()
     return illustration
 
 
@@ -183,11 +181,11 @@ async def get_illustration_image(
     )
     illustration = result.scalar_one_or_none()
     if not illustration:
-        raise HTTPException(status_code=404, detail="Illustration not found")
+        raise errors.ILLUSTRATION_NOT_FOUND()
     if illustration.status != "completed":
-        raise HTTPException(status_code=404, detail="Image not ready")
+        raise errors.IMAGE_NOT_READY()
     if not os.path.exists(illustration.image_path):
-        raise HTTPException(status_code=404, detail="Image file not found")
+        raise errors.IMAGE_NOT_FOUND()
     return FileResponse(illustration.image_path, media_type="image/png")
 
 
@@ -209,7 +207,7 @@ async def delete_illustration(
     )
     illustration = result.scalar_one_or_none()
     if not illustration:
-        raise HTTPException(status_code=404, detail="Illustration not found")
+        raise errors.ILLUSTRATION_NOT_FOUND()
     delete_file(illustration.image_path)
     await db.delete(illustration)
     await db.commit()

@@ -12,6 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from app.config import settings
+from app.errors import ApiError, api_error_handler
 from app.logging import setup_logging
 from app.mcp.auth import MCPAuthGate, MCPPathNormalizer
 from app.mcp.endpoint import MCPEndpoint
@@ -50,6 +51,7 @@ app = FastAPI(title="BeePub API", version="1.0.0")
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(ApiError, api_error_handler)
 
 
 @app.exception_handler(RequestValidationError)

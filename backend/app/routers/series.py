@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.reading import UserSeriesInteraction
@@ -105,7 +106,7 @@ async def update_series_rating(
     if body.rating is not None and not (
         0.5 <= body.rating <= 5 and (body.rating * 2).is_integer()
     ):
-        raise HTTPException(status_code=400, detail="Rating must be 0.5-5 in 0.5 steps")
+        raise errors.RATING_OUT_OF_RANGE()
     key = _resolve_key(body.series_name)
     await get_accessible_library(body.library_id, current_user, db)
     row = await _get_or_create_series(

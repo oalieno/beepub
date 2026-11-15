@@ -6,6 +6,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.book import Book
@@ -253,7 +254,7 @@ async def add_book_to_shelf(
         )
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Book already in shelf")
+        raise errors.BOOK_IN_SHELF()
     # Get max sort order
     result = await db.execute(
         select(BookshelfBook)
@@ -271,7 +272,7 @@ async def add_book_to_shelf(
     except IntegrityError:
         # Concurrent double-add racing past the existence check above.
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Book already in shelf") from None
+        raise errors.BOOK_IN_SHELF() from None
     return {"status": "added"}
 
 
@@ -291,7 +292,7 @@ async def remove_book_from_shelf(
     )
     bb = result.scalar_one_or_none()
     if not bb:
-        raise HTTPException(status_code=404, detail="Book not in shelf")
+        raise errors.BOOK_NOT_IN_SHELF()
     await db.delete(bb)
     await db.commit()
 
@@ -390,5 +391,5 @@ async def _get_owned_shelf(
     )
     shelf = result.scalar_one_or_none()
     if not shelf:
-        raise HTTPException(status_code=404, detail="Bookshelf not found")
+        raise errors.BOOKSHELF_NOT_FOUND()
     return shelf

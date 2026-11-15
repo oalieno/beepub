@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user
 from app.models.api_token import ApiToken
@@ -122,9 +123,7 @@ async def create_token(
         )
     )
     if existing is not None:
-        raise HTTPException(
-            status_code=409, detail="A token with this name already exists"
-        )
+        raise errors.TOKEN_NAME_TAKEN()
 
     token = TOKEN_PREFIX + secrets.token_urlsafe(TOKEN_BYTES)
     row = ApiToken(

@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.config import settings
 from app.database import get_db
 from app.deps import get_current_user
@@ -119,7 +120,7 @@ async def register(
     # Check username uniqueness
     existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise errors.USERNAME_EXISTS(status_code=400)
 
     # First user becomes admin
     count_result = await db.execute(select(func.count(User.id)))
@@ -130,9 +131,7 @@ async def register(
     if user_count > 0:
         reg_enabled = await get_setting(db, "registration_enabled")
         if reg_enabled != "true":
-            raise HTTPException(
-                status_code=403, detail="Registration is currently closed"
-            )
+            raise errors.REGISTRATION_CLOSED()
 
     user = User(
         username=body.username,
@@ -155,14 +154,8 @@ async def login(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     if login_throttle.locked(form_data.username):
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many failed attempts. Try again later.",
-        )
-    invalid = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid credentials",
-    )
+        raise errors.TOO_MANY_ATTEMPTS()
+    invalid = errors.INVALID_CREDENTIALS()
     if login_throttle.refused(form_data.username, form_data.password):
         raise invalid
     result = await db.execute(select(User).where(User.username == form_data.username))
@@ -172,7 +165,7 @@ async def login(
         raise invalid
     login_throttle.record_right(form_data.username)
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Account is disabled")
+        raise errors.ACCOUNT_DISABLED()
 
     # Accounts that predate kosync support get their sync key on first
     # login — the only later moment the plaintext is available.
@@ -268,14 +261,14 @@ async def update_username(
 
     existing = await db.execute(select(User).where(User.username == body.new_username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username already exists")
+        raise errors.USERNAME_EXISTS(status_code=400)
 
     current_user.username = body.new_username
     try:
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=400, detail="Username already exists") from None
+        raise errors.USERNAME_EXISTS(status_code=400) from None
     await db.refresh(current_user)
     return current_user
 
@@ -293,7 +286,7 @@ async def change_password(
             status_code=403, detail="The demo account's password cannot be changed"
         )
     if not verify_password(body.current_password, current_user.password_hash):
-        raise HTTPException(status_code=400, detail="Current password is incorrect")
+        raise errors.WRONG_PASSWORD()
     current_user.password_hash = hash_password(body.new_password)
     current_user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
     await db.commit()

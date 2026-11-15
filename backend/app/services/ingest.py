@@ -23,6 +23,7 @@ from typing import Any
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.models.book import Book
 from app.models.library import LibraryBook
 from app.models.user import User, UserRole
@@ -46,9 +47,6 @@ from app.services.txt2epub import (
 from app.services.zh_epub import sample_text
 
 logger = logging.getLogger(__name__)
-
-UNSUPPORTED_UPLOAD = "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported"
-DRM_UPLOAD = "The book is DRM-protected"
 
 
 @dataclass(frozen=True)
@@ -126,9 +124,7 @@ async def validate_upload_library(
         raise HTTPException(status_code=422, detail="Invalid library id") from None
     library = await get_accessible_library(lib_id, user, db)
     if library.calibre_path:
-        raise HTTPException(
-            status_code=403, detail="Cannot upload to a Calibre library"
-        )
+        raise errors.CALIBRE_NO_UPLOAD()
     return lib_id
 
 
@@ -144,17 +140,17 @@ def _is_simplified(file_path: str) -> bool:
         return False
 
 
-def _rejection(exc: Exception, recipe: _Recipe) -> str:
-    """What the uploader is told. A reason we know how to say is said;
-    anything else is only "not a file of this kind" — the rest is in the
-    log."""
+def _rejection(exc: Exception, recipe: _Recipe) -> HTTPException | None:
+    """What the uploader is told, when the reason is one we know how to
+    say. ``None`` otherwise: they hear only "not a file of this kind" and
+    the rest goes to the log."""
     if isinstance(exc, EmptyTextError):
-        return "The TXT file has no text"
+        return errors.TXT_EMPTY()
     if isinstance(exc, DrmProtectedError):
-        return DRM_UPLOAD
+        return errors.UPLOAD_DRM()
     if isinstance(exc, CbzError):
-        return str(exc)
-    return recipe.invalid
+        return HTTPException(status_code=400, detail=str(exc))
+    return None
 
 
 async def ingest_upload(
@@ -203,11 +199,12 @@ async def ingest_upload(
         digest = await asyncio.to_thread(compute_partial_md5, file_path)
         size = os.path.getsize(file_path)
     except Exception as exc:
-        detail = _rejection(exc, recipe)
-        if detail == recipe.invalid:
-            logger.exception("Upload rejected (%s): %s", detail, file.filename)
+        rejection = _rejection(exc, recipe)
+        if rejection is None:
+            logger.exception("Upload rejected (%s): %s", recipe.invalid, file.filename)
+            rejection = HTTPException(status_code=400, detail=recipe.invalid)
         discard()
-        raise HTTPException(status_code=400, detail=detail) from exc
+        raise rejection from exc
 
     book = Book(
         id=book_id,

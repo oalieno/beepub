@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
@@ -369,10 +370,7 @@ async def import_book(
         name = _filename(result.content_disposition)
         suffix = _suffix(body.type, result.content_type, name, result.url)
         if suffix is None:
-            raise HTTPException(
-                status_code=415,
-                detail="Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported",
-            )
+            raise errors.UPLOAD_FORMAT()
 
         if suffix == ".epub":
             digest = await asyncio.to_thread(compute_partial_md5, tmp)

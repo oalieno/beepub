@@ -13,6 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app import errors
 from app.database import AsyncSessionLocal, get_db
 from app.deps import get_current_user
 from app.models.book_text import BookTextChunk
@@ -207,9 +208,7 @@ async def get_companion_conversation(
     )
     conversation = result.scalar_one_or_none()
     if conversation is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
-        )
+        raise errors.CONVERSATION_NOT_FOUND()
     return CompanionConversationOut.model_validate(conversation)
 
 
@@ -231,9 +230,7 @@ async def rename_companion_conversation(
     )
     conversation = result.scalar_one_or_none()
     if conversation is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found"
-        )
+        raise errors.CONVERSATION_NOT_FOUND()
     conversation.title = body.title
     await db.commit()
     await db.refresh(conversation)

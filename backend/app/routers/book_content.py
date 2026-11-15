@@ -25,12 +25,12 @@ from fastapi import (
     Query,
     Request,
     UploadFile,
-    status,
 )
 from fastapi.responses import FileResponse, JSONResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
@@ -88,14 +88,11 @@ async def get_book_file(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     if current_user.role != UserRole.admin and not current_user.can_download:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Download permission required",
-        )
+        raise errors.DOWNLOAD_PERMISSION_REQUIRED()
     book = await get_accessible_book(book_id, current_user, db)
     require_book_file(book)
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise errors.FILE_NOT_FOUND()
     # Set filename for browser download
     title = book.title or book.epub_title or "book"
     filename = f"{title}.epub"
@@ -238,10 +235,7 @@ async def get_book_original(
     """The file as it was uploaded, for books converted at ingest
     (format txt/mobi/azw3/cbz). /file stays the EPUB everything else reads."""
     if current_user.role != UserRole.admin and not current_user.can_download:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Download permission required",
-        )
+        raise errors.DOWNLOAD_PERMISSION_REQUIRED()
     book = await get_accessible_book(book_id, current_user, db)
     if not book.original_path or not os.path.exists(book.original_path):
         raise HTTPException(status_code=404, detail="Original file not found")
@@ -268,7 +262,7 @@ async def get_book_content(
     book = await get_accessible_book(book_id, current_user, db)
     require_book_file(book)
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise errors.FILE_NOT_FOUND()
 
     # ETag based on EPUB mtime + path. When Calibre rewrites the EPUB
     # (cover/xhtml edits), mtime advances and the ETag changes, so the
@@ -299,7 +293,7 @@ async def get_book_content(
         # loop so concurrent readers don't serialize behind each other.
         data = await asyncio.to_thread(_read_epub_entry, book.file_path, path)
     except KeyError:
-        raise HTTPException(status_code=404, detail="Path not found in EPUB") from None
+        raise errors.PATH_NOT_IN_EPUB() from None
     content_type, _ = mimetypes.guess_type(path)
     # A chapter is not sent as a page at all (the reader goes by the
     # book's own manifest, not by this header).
@@ -351,7 +345,7 @@ async def list_epub_images(
     book = await get_accessible_book(book_id, current_user, db)
     require_book_file(book)
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise errors.FILE_NOT_FOUND()
     image_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 
     def scan() -> list[dict]:
@@ -379,7 +373,7 @@ async def get_book_pages(
     book = await get_accessible_book(book_id, current_user, db)
     require_book_file(book)
     if not os.path.exists(book.file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise errors.FILE_NOT_FOUND()
 
     epub_mtime = int(os.path.getmtime(book.file_path))
     etag = f'"{epub_mtime:x}-pages"'
@@ -410,7 +404,7 @@ async def get_book_cover(
     lists show — the full cover where a book has none yet."""
     book = await get_accessible_book(book_id, current_user, db)
     if not book.cover_path or not os.path.exists(book.cover_path):
-        raise HTTPException(status_code=404, detail="Cover not found")
+        raise errors.COVER_NOT_FOUND()
     if size == "thumb":
         thumbnail = cover_thumbnail_path(book.cover_path)
         if os.path.exists(thumbnail):
@@ -431,7 +425,7 @@ async def update_book_cover(
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     if not cover_url_allowed(body.url):
         raise HTTPException(status_code=422, detail="cover url host is not allowed")
     dest = get_cover_path(book_id)
@@ -458,7 +452,7 @@ async def upload_book_cover(
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     data = await file.read()
     if len(data) > MAX_COVER_DOWNLOAD_SIZE:
         raise HTTPException(status_code=413, detail="Cover image too large")

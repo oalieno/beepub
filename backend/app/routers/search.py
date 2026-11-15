@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
@@ -89,10 +90,7 @@ async def semantic_search(
     api_key = settings.get("embedding_api_key", "")
 
     if not api_url or not model:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Semantic search is not configured",
-        )
+        raise errors.SEARCH_NOT_CONFIGURED()
 
     # Embed the query
     query_vector, embed_usage = await embed_text(

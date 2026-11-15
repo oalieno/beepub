@@ -17,6 +17,24 @@ test("rejects a wrong password", async ({ page }) => {
   await expect(page).toHaveURL(/\/login/);
 });
 
+// The server names the error by a code and the page says it in the
+// reader's language — not the server's English sentence.
+test("a wrong password is refused in the reader's language", async ({
+  browser,
+}) => {
+  const context = await browser.newContext({
+    locale: "zh-TW",
+    storageState: { cookies: [], origins: [] },
+  });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await page.locator("#username").fill(ADMIN.username);
+  await page.locator("#password").fill("definitely-wrong");
+  await page.locator("#password").press("Enter");
+  await expect(page.getByText("帳號或密碼錯誤")).toBeVisible();
+  await context.close();
+});
+
 // A user-less server can't be produced on the seeded e2e stack, so the
 // first-run status is mocked; the register/first-admin backend behavior
 // itself is covered by global-setup registering the admin.

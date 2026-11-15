@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app import errors
 from app.database import get_db
 from app.deps import require_admin
 from app.models.book import Book
@@ -300,7 +301,7 @@ async def add_book_to_work(
     result = await db.execute(select(Book).where(Book.id == book_id))
     book = result.scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
 
     if book.work_id is not None:
         raise HTTPException(

@@ -11,10 +11,10 @@ when it is in at least one such library.
 
 import uuid
 
-from fastapi import HTTPException
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.models.book import Book
 from app.models.library import Library, LibraryBook, UserLibraryExclusion
 from app.models.user import User, UserRole
@@ -57,7 +57,7 @@ async def get_accessible_library(
         await db.execute(select(Library).where(Library.id == library_id))
     ).scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     if user.role == UserRole.admin:
         return library
     excluded = await db.scalar(
@@ -69,7 +69,7 @@ async def get_accessible_library(
         )
     )
     if excluded:
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise errors.ACCESS_DENIED()
     return library
 
 
@@ -95,7 +95,7 @@ async def get_accessible_book(book_id: uuid.UUID, user: User, db: AsyncSession) 
         await db.execute(select(Book).where(Book.id == book_id))
     ).scalar_one_or_none()
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise errors.BOOK_NOT_FOUND()
     if not await can_access_book(book_id, user, db):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise errors.ACCESS_DENIED()
     return book

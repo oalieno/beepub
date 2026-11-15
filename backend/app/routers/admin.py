@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app import errors
 from app.database import get_db
 from app.deps import get_current_user, require_admin
 from app.models.book import Book
@@ -69,7 +70,7 @@ async def create_user(
 ):
     existing = await db.execute(select(User).where(User.username == body.username))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise errors.USERNAME_EXISTS()
     user = User(
         username=body.username,
         password_hash=hash_password(body.password),
@@ -82,7 +83,7 @@ async def create_user(
     except IntegrityError:
         # Concurrent create racing past the existence check above
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Username already exists") from None
+        raise errors.USERNAME_EXISTS() from None
     await db.refresh(user)
     return user
 
@@ -97,7 +98,7 @@ async def update_user_role(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
 
     # Prevent demoting the last admin
     if user.role == UserRole.admin and body.role != UserRole.admin:
@@ -109,7 +110,7 @@ async def update_user_role(
             )
         ).scalar()
         if admin_count <= 1:
-            raise HTTPException(status_code=400, detail="Cannot demote the last admin")
+            raise errors.CANNOT_DEMOTE_LAST_ADMIN()
 
     user.role = body.role
     await db.commit()
@@ -127,7 +128,7 @@ async def reset_user_password(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
     user.password_hash = hash_password(body.new_password)
     user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
     await db.commit()
@@ -141,11 +142,11 @@ async def delete_user(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     if user_id == current_user.id:
-        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+        raise errors.CANNOT_DELETE_SELF()
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
     await db.delete(user)
     await db.commit()
 
@@ -160,7 +161,7 @@ async def update_user_permissions(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
     if body.can_download is not None:
         user.can_download = body.can_download
     if body.can_upload is not None:
@@ -183,7 +184,7 @@ async def get_user_library_access(
     # Verify user exists
     result = await db.execute(select(User).where(User.id == user_id))
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
 
     # Get all libraries
     libs = await db.execute(select(Library).order_by(Library.name))
@@ -219,7 +220,7 @@ async def update_user_library_access(
     # Verify user exists
     result = await db.execute(select(User).where(User.id == user_id))
     if not result.scalar_one_or_none():
-        raise HTTPException(status_code=404, detail="User not found")
+        raise errors.USER_NOT_FOUND()
 
     # Reject stale/unknown library ids up front — otherwise the insert
     # below fails the FK and surfaces as a 500.
@@ -327,12 +328,12 @@ async def link_calibre_library(
         select(Library).where(Library.calibre_path == body.calibre_path)
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=409, detail="Calibre library already linked")
+        raise errors.CALIBRE_ALREADY_LINKED()
 
     # Verify path exists
     db_path = os.path.join(body.calibre_path, "metadata.db")
     if not os.path.isfile(db_path):
-        raise HTTPException(status_code=400, detail="No metadata.db found at path")
+        raise errors.NO_METADATA_DB()
 
     # Create library
     lib_name = body.name or os.path.basename(body.calibre_path)
@@ -388,9 +389,9 @@ async def _calibre_library(library_id: uuid.UUID, db: AsyncSession) -> Library:
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     if not library.calibre_path:
-        raise HTTPException(status_code=400, detail="Not a Calibre library")
+        raise errors.NOT_CALIBRE()
     return library
 
 
@@ -420,7 +421,7 @@ async def copy_calibre_library_in(
     if await copy_in_progress(library_id) or _sync_running(
         await get_sync_status(library_id)
     ):
-        raise HTTPException(status_code=409, detail="Sync already in progress")
+        raise errors.SYNC_IN_PROGRESS()
     from app.tasks.calibre_sync import copy_calibre_library
 
     await mark_queued(library_id, "copy")
@@ -440,12 +441,12 @@ async def trigger_calibre_sync(
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     if not library.calibre_path:
-        raise HTTPException(status_code=400, detail="Not a Calibre library")
+        raise errors.NOT_CALIBRE()
 
     if await copy_in_progress(library_id):
-        raise HTTPException(status_code=409, detail="Sync already in progress")
+        raise errors.SYNC_IN_PROGRESS()
 
     # Check if sync is already running (with stale detection)
     sync_status = await get_sync_status(library_id)
@@ -459,15 +460,13 @@ async def trigger_calibre_sync(
                 started = datetime.fromisoformat(started_at)
                 elapsed = (datetime.now(UTC) - started).total_seconds()
                 if elapsed < 1800:  # 30 minutes
-                    raise HTTPException(
-                        status_code=409, detail="Sync already in progress"
-                    )
+                    raise errors.SYNC_IN_PROGRESS()
                 # Stale — fall through to re-trigger
             except (ValueError, TypeError):
                 pass  # Bad timestamp — allow re-trigger
         else:
             # No started_at (old format) — block to be safe
-            raise HTTPException(status_code=409, detail="Sync already in progress")
+            raise errors.SYNC_IN_PROGRESS()
 
     task = asyncio.create_task(
         sync_calibre_library(library.calibre_path, library.id, current_user.id)
@@ -492,9 +491,9 @@ async def update_calibre_library(
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     if not library.calibre_path:
-        raise HTTPException(status_code=400, detail="Not a Calibre library")
+        raise errors.NOT_CALIBRE()
     library.auto_sync = body.auto_sync
     await db.commit()
     return {"id": str(library.id), "auto_sync": library.auto_sync}
@@ -510,7 +509,7 @@ async def get_calibre_library_status(
     result = await db.execute(select(Library).where(Library.id == library_id))
     library = result.scalar_one_or_none()
     if not library:
-        raise HTTPException(status_code=404, detail="Library not found")
+        raise errors.LIBRARY_NOT_FOUND()
     sync = await get_sync_status(library_id)
     if not library.calibre_path:
         # Copied in a moment ago: no longer Calibre's, but the page that
@@ -526,7 +525,7 @@ async def get_calibre_library_status(
                 "last_synced_at": None,
                 "sync": sync,
             }
-        raise HTTPException(status_code=400, detail="Not a Calibre library")
+        raise errors.NOT_CALIBRE()
 
     # Count imported books
     imported_count = (
@@ -652,7 +651,7 @@ async def _fetch_provider_models(
 
     if provider == "gemini":
         if not api_key:
-            raise HTTPException(status_code=400, detail="Gemini API key not configured")
+            raise errors.GEMINI_NOT_CONFIGURED()
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
                 "https://generativelanguage.googleapis.com/v1beta/models",
@@ -667,9 +666,7 @@ async def _fetch_provider_models(
                     )
     elif provider == "openai":
         if not base_url or not base_url.startswith(("http://", "https://")):
-            raise HTTPException(
-                status_code=400, detail="OpenAI base URL not configured"
-            )
+            raise errors.OPENAI_NOT_CONFIGURED()
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -955,7 +952,7 @@ async def resolve_report(
     result = await db.execute(select(BookReport).where(BookReport.id == report_id))
     report = result.scalar_one_or_none()
     if not report:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise errors.REPORT_NOT_FOUND()
 
     if not report.resolved:
         report.resolved = True
