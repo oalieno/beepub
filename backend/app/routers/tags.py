@@ -8,8 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.deps import get_current_user
+from app.models.library import LibraryBook, UserLibraryExclusion
 from app.models.tag import BookTag
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.tag import TagWithCount
 from app.services.tags import CURATED_TAGS_WITH_LABELS, TAG_LABELS, TAG_LABELS_HANS
 
@@ -35,6 +36,21 @@ async def list_tags(
     )
     if category:
         query = query.where(BookTag.category == category)
+    # A user kept out of some libraries counts only the books they can
+    # open. (Asked only then: for everyone else the plain count is the
+    # answer, and much the cheaper query.)
+    if current_user.role != UserRole.admin:
+        excluded = select(UserLibraryExclusion.library_id).where(
+            UserLibraryExclusion.user_id == current_user.id
+        )
+        if (await db.execute(excluded.limit(1))).first() is not None:
+            query = query.where(
+                BookTag.book_id.in_(
+                    select(LibraryBook.book_id).where(
+                        LibraryBook.library_id.not_in(excluded)
+                    )
+                )
+            )
 
     result = await db.execute(query)
     return [

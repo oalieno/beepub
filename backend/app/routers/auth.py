@@ -117,21 +117,22 @@ async def register(
     body: RegisterRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    # Check username uniqueness
-    existing = await db.execute(select(User).where(User.username == body.username))
-    if existing.scalar_one_or_none():
-        raise errors.USERNAME_EXISTS(status_code=400)
-
     # First user becomes admin
     count_result = await db.execute(select(func.count(User.id)))
     user_count = count_result.scalar()
     role = UserRole.admin if user_count == 0 else UserRole.user
 
-    # If not the first user, check if registration is enabled
+    # If not the first user, check if registration is enabled — before
+    # anything is said about the name: with registration closed, this
+    # must not tell a stranger which usernames exist.
     if user_count > 0:
         reg_enabled = await get_setting(db, "registration_enabled")
         if reg_enabled != "true":
             raise errors.REGISTRATION_CLOSED()
+
+    existing = await db.execute(select(User).where(User.username == body.username))
+    if existing.scalar_one_or_none():
+        raise errors.USERNAME_EXISTS(status_code=400)
 
     user = User(
         username=body.username,

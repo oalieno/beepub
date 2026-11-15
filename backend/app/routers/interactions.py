@@ -24,7 +24,7 @@ from app.models.reading import (
     ReadingActivity,
     UserBookInteraction,
 )
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.book import BookReportCreate, BookReportOut
 from app.schemas.reading import (
     FavoriteUpdate,
@@ -514,5 +514,12 @@ async def get_book_reports(
         .where(BookReport.book_id == book_id)
         .order_by(BookReport.created_at.desc())
     )
-    reports = result.scalars().all()
-    return [BookReportOut.model_validate(r) for r in reports]
+    reports = [BookReportOut.model_validate(r) for r in result.scalars().all()]
+    if current_user.role != UserRole.admin:
+        # A reader sees what was reported about the book — and who
+        # reported it only for their own.
+        for report in reports:
+            if report.reported_by != current_user.id:
+                report.reported_by = None
+            report.resolved_by = None
+    return reports
