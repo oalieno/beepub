@@ -1,4 +1,5 @@
 import * as m from "$lib/paraglide/messages.js";
+import { storeAccessToken } from "$lib/auth/tokens";
 import { errorMessage } from "./errors";
 import {
   getIsOnline,
@@ -133,9 +134,7 @@ export async function refreshAccessToken(): Promise<boolean> {
       if (!res.ok) return false;
       if (isNativePlatform()) {
         const body = (await res.json()) as { access_token?: string };
-        if (body.access_token) {
-          localStorage.setItem("token", body.access_token);
-        }
+        if (body.access_token) await storeAccessToken(body.access_token);
       }
       return true;
     } catch {

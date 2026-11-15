@@ -5209,10 +5209,15 @@
           "access_token": {
             "title": "Access Token",
             "type": "string"
+          },
+          "expires_in": {
+            "title": "Expires In",
+            "type": "integer"
           }
         },
         "required": [
-          "access_token"
+          "access_token",
+          "expires_in"
         ],
         "title": "RefreshResponse",
         "type": "object"
@@ -8283,6 +8288,7 @@
     },
     "/api/auth/change-password": {
       "put": {
+        "description": "Change the password and end every login made with the old one —\nexcept the one doing the changing.",
         "operationId": "change_password_api_auth_change_password_put",
         "parameters": [
           {
@@ -8381,6 +8387,7 @@
     },
     "/api/auth/logout": {
       "post": {
+        "description": "End this login — on the server, not only on the device: its tokens\nstop working at once, wherever a copy of them may be.",
         "operationId": "logout_api_auth_logout_post",
         "responses": {
           "200": {

@@ -21,6 +21,7 @@ export const authApi = {
       demo: { username: string; password: string } | null;
     }>,
 
+  /** Changes the password, which ends every login but this one. */
   changePassword: (currentPassword: string, newPassword: string) =>
     put("/auth/change-password", {
       current_password: currentPassword,

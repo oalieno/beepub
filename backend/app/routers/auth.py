@@ -20,13 +20,13 @@ from app.schemas.auth import (
     UpdateUsernameRequest,
 )
 from app.schemas.user import UserOut
-from app.services import login_throttle
+from app.services import login_throttle, sessions
 from app.services.auth import (
     create_access_token,
-    create_refresh_token,
     decode_token,
     derive_kosync_key_hash,
     hash_password,
+    issue_tokens,
     verify_password,
 )
 from app.services.settings import get_setting
@@ -35,9 +35,15 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 ACCESS_COOKIE_NAME = "token"
 REFRESH_COOKIE_NAME = "refresh_token"
-# Refresh cookie is scoped to /api/auth so it's only sent to refresh/logout —
-# this is a CSRF defence in depth (it's never attached to normal API calls).
-REFRESH_COOKIE_PATH = "/api/auth"
+# The refresh cookie goes with every request, pages included: the page
+# server is what notices an access token has run out and asks for a new
+# one. (It used to be scoped to /api/auth, so the page server never saw
+# it — and a browser was signed out whenever its access cookie expired.)
+REFRESH_COOKIE_PATH = "/"
+# Where older versions set it; cleared alongside, or it would linger.
+LEGACY_REFRESH_COOKIE_PATH = "/api/auth"
+# As long as a browser will keep a cookie. Each refresh sets it again.
+REFRESH_COOKIE_MAX_AGE = 400 * 24 * 60 * 60
 
 
 def _cookie_secure(request: Request) -> bool:
@@ -69,7 +75,7 @@ def _set_refresh_cookie(response: Response, token: str, secure: bool) -> None:
         httponly=True,
         secure=secure,
         samesite="lax",
-        max_age=settings.refresh_token_expire_days * 24 * 60 * 60,
+        max_age=REFRESH_COOKIE_MAX_AGE,
         path=REFRESH_COOKIE_PATH,
     )
 
@@ -80,13 +86,14 @@ def _clear_auth_cookies(response: Response, secure: bool) -> None:
     response.delete_cookie(
         key=ACCESS_COOKIE_NAME, httponly=True, secure=secure, samesite="lax", path="/"
     )
-    response.delete_cookie(
-        key=REFRESH_COOKIE_NAME,
-        httponly=True,
-        secure=secure,
-        samesite="lax",
-        path=REFRESH_COOKIE_PATH,
-    )
+    for path in (REFRESH_COOKIE_PATH, LEGACY_REFRESH_COOKIE_PATH):
+        response.delete_cookie(
+            key=REFRESH_COOKIE_NAME,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+            path=path,
+        )
 
 
 @router.get("/registration-status")
@@ -174,8 +181,11 @@ async def login(
         user.kosync_key_hash = derive_kosync_key_hash(form_data.password)
         await db.commit()
 
-    access_token = create_access_token({"sub": str(user.id)})
-    refresh_token = create_refresh_token({"sub": str(user.id)})
+    session = await sessions.open_session(
+        db, user.id, request.headers.get("User-Agent")
+    )
+    await db.commit()
+    access_token, refresh_token = issue_tokens(user.id, session.id)
     secure = _cookie_secure(request)
     _set_access_cookie(response, access_token, secure)
     _set_refresh_cookie(response, refresh_token, secure)
@@ -227,17 +237,50 @@ async def refresh(
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
-    if user is None or not user.is_active:
+    session = (
+        await sessions.find_session(db, payload.get("sid"), user_id)
+        if user is not None and user.is_active
+        else None
+    )
+    if session is None:
         _clear_auth_cookies(response, _cookie_secure(request))
         raise invalid
 
-    new_access = create_access_token({"sub": str(user.id)})
-    _set_access_cookie(response, new_access, _cookie_secure(request))
-    return RefreshResponse(access_token=new_access)
+    # Asking for a new access token is using the login: it now runs out a
+    # full idle period from here.
+    await sessions.touch(db, session, force=True)
+    new_access = create_access_token({"sub": str(user.id), "sid": str(session.id)})
+    secure = _cookie_secure(request)
+    _set_access_cookie(response, new_access, secure)
+    # (The same refresh token, set again so the browser keeps it longer.)
+    _set_refresh_cookie(response, raw, secure)
+    return RefreshResponse(
+        access_token=new_access,
+        expires_in=settings.access_token_expire_minutes * 60,
+    )
 
 
 @router.post("/logout")
-async def logout(request: Request, response: Response):
+async def logout(
+    request: Request,
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """End this login — on the server, not only on the device: its tokens
+    stop working at once, wherever a copy of them may be."""
+    auth_header = request.headers.get("Authorization", "")
+    candidates = [
+        auth_header[7:] if auth_header.startswith("Bearer ") else None,
+        request.cookies.get(ACCESS_COOKIE_NAME),
+        request.headers.get("X-Refresh-Token"),
+        request.cookies.get(REFRESH_COOKIE_NAME),
+    ]
+    for raw in candidates:
+        payload = decode_token(raw) if raw else None
+        if payload and payload.get("sid"):
+            await sessions.end_session(db, payload["sid"])
+            await db.commit()
+            break
     _clear_auth_cookies(response, _cookie_secure(request))
     return {"ok": True}
 
@@ -276,10 +319,13 @@ async def update_username(
 
 @router.put("/change-password")
 async def change_password(
+    request: Request,
     body: ChangePasswordRequest,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
+    """Change the password and end every login made with the old one —
+    except the one doing the changing."""
     # Visitors share the demo account; letting one change the password
     # would lock everyone else out until the next data reset.
     if settings.demo_mode and current_user.username == settings.demo_username:
@@ -290,6 +336,9 @@ async def change_password(
         raise errors.WRONG_PASSWORD()
     current_user.password_hash = hash_password(body.new_password)
     current_user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
+    await sessions.end_other_sessions(
+        db, current_user.id, keep=request.state.session_id
+    )
     await db.commit()
     return {"ok": True}
 

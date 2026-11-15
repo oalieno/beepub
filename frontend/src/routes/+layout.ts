@@ -17,6 +17,10 @@ export const load: LayoutLoad = async ({ data }) => {
     // Local mode makes zero server traffic — the dormant session (if
     // any) stays untouched until the user switches back.
     if (isLocalMode()) return { user: null };
+    // (Before the login is looked for: the system may have cleared the
+    // web view's storage since the app was last open.)
+    const { restoreTokens } = await import("$lib/auth/tokens");
+    await restoreTokens();
     const token = localStorage.getItem("token");
     if (!token) return { user: null };
     try {

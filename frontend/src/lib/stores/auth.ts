@@ -2,6 +2,7 @@ import { writable } from "svelte/store";
 import { invalidateAll } from "$app/navigation";
 import { isNative } from "$lib/platform";
 import { apiBase } from "$lib/api/client";
+import { accessToken, clearTokens, storeTokens } from "$lib/auth/tokens";
 import type { LoginResponse, UserOut } from "$lib/types";
 
 const CACHED_USER_KEY = "cached-user";
@@ -43,10 +44,7 @@ function createAuthStore() {
   return {
     subscribe,
     login: (loginResponse: LoginResponse) => {
-      if (isNative()) {
-        localStorage.setItem("token", loginResponse.access_token);
-        localStorage.setItem("refresh_token", loginResponse.refresh_token);
-      }
+      void storeTokens(loginResponse.access_token, loginResponse.refresh_token);
       const { access_token: _a, refresh_token: _r, ...user } = loginResponse;
       void _a;
       void _r;
@@ -55,9 +53,12 @@ function createAuthStore() {
     },
     logout: async () => {
       set({ user: null });
+      // The server ends this login — it has to be told which one, so the
+      // app's token goes with the request before it is forgotten here.
+      // (The browser's cookies go by themselves.)
+      const bearer = isNative() ? accessToken() : null;
       if (isNative()) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("refresh_token");
+        await clearTokens();
         try {
           const { Preferences } = await import("@capacitor/preferences");
           await Preferences.remove({ key: CACHED_USER_KEY });
@@ -66,7 +67,10 @@ function createAuthStore() {
         }
       }
       try {
-        await fetch(`${apiBase()}/auth/logout`, { method: "POST" });
+        await fetch(`${apiBase()}/auth/logout`, {
+          method: "POST",
+          headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
+        });
       } catch {
         // Cookie will be cleaned up by hooks.server.ts on next request
       }

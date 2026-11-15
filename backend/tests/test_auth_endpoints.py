@@ -119,6 +119,38 @@ def _mock_db_session(users: list[User] | None = None, user_count: int = 1):
     return session
 
 
+@pytest.fixture(autouse=True)
+def _every_login_exists(monkeypatch):
+    """These tests run on a stand-in database that knows only users.
+    Logins (rows of their own — tests/integration/test_sessions.py) are
+    stood in for here: any token names one that exists."""
+    from datetime import timedelta
+    from types import SimpleNamespace
+
+    from app.services import sessions
+
+    def a_login():
+        now = datetime.now(UTC)
+        return SimpleNamespace(
+            id=uuid.uuid4(), last_used_at=now, expires_at=now + timedelta(days=30)
+        )
+
+    async def open_session(db, user_id, user_agent):
+        return a_login()
+
+    async def find_session(db, session_id, user_id):
+        return a_login()
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(sessions, "open_session", open_session)
+    monkeypatch.setattr(sessions, "find_session", find_session)
+    monkeypatch.setattr(sessions, "touch", nothing)
+    monkeypatch.setattr(sessions, "end_session", nothing)
+    monkeypatch.setattr(sessions, "end_other_sessions", nothing)
+
+
 @pytest.fixture
 def test_user():
     return _make_user()
@@ -177,9 +209,13 @@ class TestLogin:
             assert "refresh_token=" in cookie_header
             assert "httponly" in cookie_header
             assert "samesite=lax" in cookie_header
-            # Refresh cookie is scoped to /api/auth
+            # The refresh cookie goes with every request: the page server
+            # has to see it to renew an access token that has run out.
             assert any(
-                "refresh_token=" in c.lower() and "path=/api/auth" in c.lower()
+                "refresh_token=" in c.lower()
+                and c.lower().endswith("path=/")
+                or "refresh_token=" in c.lower()
+                and "path=/;" in c.lower()
                 for c in set_cookies
             )
 

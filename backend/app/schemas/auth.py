@@ -56,3 +56,5 @@ class LoginResponse(BaseModel):
 
 class RefreshResponse(BaseModel):
     access_token: str
+    # Seconds the access token is good for (what to give its cookie).
+    expires_in: int

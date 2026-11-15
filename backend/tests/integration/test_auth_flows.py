@@ -85,7 +85,9 @@ async def test_logout_clears_cookies_the_way_they_were_set():
         ) as c:
             response = await c.post("/api/auth/logout")
         cookies = response.headers.get_list("set-cookie")
-        assert len(cookies) == 2
+        # The access cookie, the refresh cookie, and the refresh cookie
+        # where older versions put it.
+        assert len(cookies) == 3
         assert all(("secure" in c.lower()) is marked for c in cookies), scheme
 
 

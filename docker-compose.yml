@@ -14,6 +14,7 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-beepub}:${POSTGRES_PASSWORD:-beepub}@postgres/${POSTGRES_DB:-beepub}
       SECRET_KEY: ${SECRET_KEY:-}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-10080}
+      SESSION_IDLE_DAYS: ${SESSION_IDLE_DAYS:-30}
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       LOG_FORMAT: ${LOG_FORMAT:-console}
     # Healthy while the server answers and can reach its database and

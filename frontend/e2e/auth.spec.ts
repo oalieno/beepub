@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Browser } from "@playwright/test";
 import { ADMIN } from "./helpers";
 
 test("logs in through the form and lands on home", async ({ page }) => {
@@ -56,4 +56,54 @@ test("a fresh server shows the admin setup instead of a login form", async ({
   await expect(
     page.getByRole("button", { name: "Login", exact: true }),
   ).toHaveCount(0);
+});
+
+async function signIn(browser: Browser) {
+  const context = await browser.newContext({
+    storageState: { cookies: [], origins: [] },
+  });
+  const page = await context.newPage();
+  await page.goto("/login");
+  await page.locator("#username").fill(ADMIN.username);
+  await page.locator("#password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Login", exact: true }).click();
+  await expect(page).toHaveURL("/");
+  return { context, page };
+}
+
+// A browser drops the access cookie when it runs out (a week). The
+// refresh cookie is still there: the next page renews the login instead
+// of sending the reader to sign in again.
+test("a browser whose access cookie has run out stays signed in", async ({
+  browser,
+}) => {
+  const { context, page } = await signIn(browser);
+  await context.clearCookies({ name: "token" });
+
+  await page.goto("/profile");
+
+  await expect(page).toHaveURL("/profile");
+  const names = (await context.cookies()).map((c) => c.name);
+  expect(names).toContain("token");
+  await context.close();
+});
+
+// Logging out ends the login itself: a copy of its cookies, taken
+// before, opens nothing afterwards.
+test("logging out ends the login for a copy of its cookies too", async ({
+  browser,
+}) => {
+  const { context, page } = await signIn(browser);
+  const copied = await context.cookies();
+  const response = await page.request.post("/api/auth/logout");
+  expect(response.ok()).toBe(true);
+  await context.close();
+
+  const thief = await browser.newContext({
+    storageState: { cookies: copied, origins: [] },
+  });
+  const theirs = await thief.newPage();
+  await theirs.goto("/profile");
+  await expect(theirs).toHaveURL(/\/login/);
+  await thief.close();
 });

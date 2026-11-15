@@ -41,23 +41,31 @@ const i18nHandle: Handle = ({ event, resolve }) =>
     },
   );
 
-const REFRESH_COOKIE_PATH = "/api/auth";
-const ACCESS_MAX_AGE = 30 * 60; // must match backend access_token_expire_minutes
+// The refresh cookie is sent with every request — it has to reach this
+// hook, which is what renews an access token that has run out. Older
+// versions scoped it to /api/auth; that one is cleared when found dead.
+const REFRESH_COOKIE_PATH = "/";
+const LEGACY_REFRESH_COOKIE_PATH = "/api/auth";
+// As long as a browser keeps a cookie; set again on every renewal.
+const REFRESH_MAX_AGE = 400 * 24 * 60 * 60;
 
 async function tryRefresh(
   refreshToken: string,
-): Promise<{ accessToken: string; setCookie: string | null } | null> {
+): Promise<{ accessToken: string; maxAge: number } | null> {
   try {
     const res = await fetch(`${BACKEND_URL}/api/auth/refresh`, {
       method: "POST",
       headers: { Cookie: `refresh_token=${refreshToken}` },
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { access_token?: string };
+    const body = (await res.json()) as {
+      access_token?: string;
+      expires_in?: number;
+    };
     if (!body.access_token) return null;
     return {
       accessToken: body.access_token,
-      setCookie: res.headers.get("set-cookie"),
+      maxAge: body.expires_in ?? 30 * 60,
     };
   } catch {
     return null;
@@ -92,63 +100,52 @@ const authHandle: Handle = async ({ event, resolve }) => {
       headers: { Authorization: `Bearer ${bearer}` },
     });
 
-  if (token) {
-    try {
-      let res = await fetchMe(token);
-      if ((res.status === 401 || res.status === 403) && refreshToken) {
-        // Access token rejected — try refreshing it transparently before
-        // bouncing the user to /login.
-        const refreshed = await tryRefresh(refreshToken);
-        if (refreshed) {
-          token = refreshed.accessToken;
-          event.locals.token = token;
-          event.cookies.set("token", token, {
-            path: "/",
-            httpOnly: true,
-            secure: overHttps(event),
-            sameSite: "lax",
-            maxAge: ACCESS_MAX_AGE,
-          });
-          res = await fetchMe(token);
-        }
-      }
-      if (res.ok) {
-        event.locals.user = await res.json();
-      } else if (res.status === 401 || res.status === 403) {
-        event.cookies.delete("token", { path: "/" });
-        event.cookies.delete("refresh_token", { path: REFRESH_COOKIE_PATH });
-        event.locals.token = null;
-      }
-    } catch {
-      // Keep existing token on transient backend/network errors.
-      // We only clear cookie when backend explicitly says the token is invalid.
-    }
-  } else if (refreshToken) {
-    // Access cookie missing (expired and pruned by browser) but refresh
-    // cookie still valid — mint a new access token from refresh.
+  const signedOut = () => {
+    event.cookies.delete("token", { path: "/" });
+    event.cookies.delete("refresh_token", { path: REFRESH_COOKIE_PATH });
+    event.cookies.delete("refresh_token", { path: LEGACY_REFRESH_COOKIE_PATH });
+    event.locals.token = null;
+  };
+
+  /** A new access token from the refresh token, its cookie set. The
+   *  refresh cookie is set again too, so the browser keeps it longer. */
+  const renew = async (): Promise<boolean> => {
+    if (!refreshToken) return false;
     const refreshed = await tryRefresh(refreshToken);
-    if (refreshed) {
-      token = refreshed.accessToken;
-      event.locals.token = token;
-      event.cookies.set("token", token, {
-        path: "/",
-        httpOnly: true,
-        secure: overHttps(event),
-        sameSite: "lax",
-        maxAge: ACCESS_MAX_AGE,
-      });
-      try {
-        const res = await fetchMe(token);
-        if (res.ok) {
-          event.locals.user = await res.json();
-        }
-      } catch {
-        // Network glitch — let the page render unauthenticated and let
-        // the client retry on its own.
-      }
-    } else {
-      event.cookies.delete("refresh_token", { path: REFRESH_COOKIE_PATH });
+    if (!refreshed) return false;
+    token = refreshed.accessToken;
+    event.locals.token = token;
+    const cookie = {
+      path: "/",
+      httpOnly: true,
+      secure: overHttps(event),
+      sameSite: "lax" as const,
+    };
+    event.cookies.set("token", token, { ...cookie, maxAge: refreshed.maxAge });
+    event.cookies.set("refresh_token", refreshToken, {
+      ...cookie,
+      path: REFRESH_COOKIE_PATH,
+      maxAge: REFRESH_MAX_AGE,
+    });
+    return true;
+  };
+
+  try {
+    // No access cookie (it ran out and the browser dropped it), or one
+    // the backend refuses: renew it before sending anyone to /login.
+    let res = token ? await fetchMe(token) : null;
+    if ((!res || res.status === 401 || res.status === 403) && (await renew())) {
+      res = await fetchMe(token!);
     }
+    if (res?.ok) {
+      event.locals.user = await res.json();
+    } else if (!res || res.status === 401 || res.status === 403) {
+      // The backend said no (or there was nothing to ask with).
+      signedOut();
+    }
+  } catch {
+    // Keep the cookies on a transient backend/network error: they are
+    // cleared only when the backend says the login is no longer good.
   }
 
   const path = event.url.pathname;

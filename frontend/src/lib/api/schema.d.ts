@@ -448,7 +448,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Change Password */
+        /**
+         * Change Password
+         * @description Change the password and end every login made with the old one —
+         *     except the one doing the changing.
+         */
         put: operations["change_password_api_auth_change_password_put"];
         post?: never;
         delete?: never;
@@ -483,7 +487,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Logout */
+        /**
+         * Logout
+         * @description End this login — on the server, not only on the device: its tokens
+         *     stop working at once, wherever a copy of them may be.
+         */
         post: operations["logout_api_auth_logout_post"];
         delete?: never;
         options?: never;
@@ -4244,6 +4252,8 @@ export interface components {
         RefreshResponse: {
             /** Access Token */
             access_token: string;
+            /** Expires In */
+            expires_in: number;
         };
         /** RegisterRequest */
         RegisterRequest: {

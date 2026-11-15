@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     secret_key: str = ""
     secret_key_file: str = "/data/app/secret_key"
     access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 30
+    # A login ends after going unused this long; using it starts the
+    # count again.
+    session_idle_days: int = 30
     books_dir: str = "/data/books"
     covers_dir: str = "/data/covers"
     illustrations_dir: str = "/data/illustrations"

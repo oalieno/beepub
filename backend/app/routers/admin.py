@@ -24,7 +24,11 @@ from app.schemas.user import (
     UserUpdatePermissions,
     UserUpdateRole,
 )
-from app.services.auth import derive_kosync_key_hash, hash_password
+from app.services import sessions
+from app.services.auth import (
+    derive_kosync_key_hash,
+    hash_password,
+)
 from app.services.calibre import (
     _count_calibre_epubs,
     copy_in_progress,
@@ -131,6 +135,9 @@ async def reset_user_password(
         raise errors.USER_NOT_FOUND()
     user.password_hash = hash_password(body.new_password)
     user.kosync_key_hash = derive_kosync_key_hash(body.new_password)
+    # A reset is what an admin does for a lost or stolen password: the
+    # logins made with the old one end with it.
+    await sessions.end_other_sessions(db, user.id)
     await db.commit()
     return {"ok": True}
 

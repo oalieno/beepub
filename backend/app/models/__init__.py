@@ -16,6 +16,7 @@ from app.models.reading import (
     UserBookInteraction,
     UserSeriesInteraction,
 )
+from app.models.session import UserSession
 from app.models.settings import AppSetting
 from app.models.tag import BookTag, TagCategory, TagSource
 from app.models.user import User, UserRole
@@ -25,6 +26,7 @@ __all__ = [
     "ApiToken",
     "User",
     "UserRole",
+    "UserSession",
     "Library",
     "LibraryBook",
     "UserLibraryExclusion",

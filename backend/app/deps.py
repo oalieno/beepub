@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User, UserRole
+from app.services import sessions
 from app.services.auth import decode_token
 
 
@@ -48,6 +49,12 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise credentials_exception
+    # The token only names a login; the login has to still be there.
+    session = await sessions.find_session(db, payload.get("sid"), user_id)
+    if session is None:
+        raise credentials_exception
+    await sessions.touch(db, session)
+    request.state.session_id = str(session.id)
     return user
 
 

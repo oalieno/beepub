@@ -42,13 +42,22 @@ def create_access_token(data: dict[str, Any]) -> str:
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
 
 
+# The refresh token itself is good for years: what ends a login is its
+# row (services/sessions.py), not a date printed in the token.
+REFRESH_TOKEN_DAYS = 3650
+
+
 def create_refresh_token(data: dict[str, Any]) -> str:
     to_encode = data.copy()
     to_encode["type"] = "refresh"
-    to_encode["exp"] = datetime.now(UTC) + timedelta(
-        days=settings.refresh_token_expire_days
-    )
+    to_encode["exp"] = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_DAYS)
     return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
+
+
+def issue_tokens(user_id, session_id) -> tuple[str, str]:
+    """An access and a refresh token naming this user's login."""
+    claims = {"sub": str(user_id), "sid": str(session_id)}
+    return create_access_token(claims), create_refresh_token(claims)
 
 
 def decode_token(token: str) -> dict[str, Any] | None:
