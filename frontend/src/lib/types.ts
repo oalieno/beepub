@@ -51,10 +51,13 @@ export interface LibraryOut {
   description: string | null;
   cover_image: string | null;
   calibre_path: string | null;
-  created_by: string;
+  // (null once the account that made it is gone)
+  created_by: string | null;
   created_at: string;
-  book_count: number;
-  preview_book_ids: string[];
+  // Sent with the list of libraries; one library fetched alone has
+  // neither.
+  book_count?: number;
+  preview_book_ids?: string[];
 }
 
 export interface BookTag {
@@ -234,8 +237,9 @@ export interface BookshelfOut {
   name: string;
   description: string | null;
   created_at: string;
-  book_count: number;
-  preview_book_ids: string[];
+  // Sent with the list of shelves; one shelf fetched alone has neither.
+  book_count?: number;
+  preview_book_ids?: string[];
 }
 
 export interface ExternalMetadataOut {

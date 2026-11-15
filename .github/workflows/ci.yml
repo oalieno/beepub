@@ -112,6 +112,9 @@ jobs:
       - run: pnpm exec paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide --strategy localStorage cookie baseLocale
       - run: pnpm run check
       - run: pnpm test:unit
+      # The API types are generated from openapi.json (which a backend test
+      # keeps current): what is committed must be what the generator gives.
+      - run: pnpm gen:api && git diff --exit-code -- src/lib/api/schema.d.ts
       - run: >-
           pnpm exec prettier --plugin prettier-plugin-svelte
           --ignore-path .prettierignore --check

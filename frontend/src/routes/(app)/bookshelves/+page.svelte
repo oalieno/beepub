@@ -247,7 +247,7 @@
           href="/bookshelves/{shelf.id}"
           name={shelf.name}
           previewBookIds={shelf.preview_book_ids}
-          bookCount={shelf.book_count}
+          bookCount={shelf.book_count ?? 0}
         >
           {#snippet icon()}
             <ShelvingUnit class="text-muted-foreground/50 shrink-0" size={16} />

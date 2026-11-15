@@ -11,6 +11,7 @@
     "cap:sync": "pnpm build:app && npx cap sync",
     "ios:run": "./scripts/ios-run.sh",
     "ios:testflight": "./scripts/ios-testflight.sh",
+    "gen:api": "openapi-typescript openapi.json -o src/lib/api/schema.d.ts",
     "test:unit": "vitest run",
     "test:e2e": "./e2e/stack.sh up && playwright test",
     "format": "prettier --plugin prettier-plugin-svelte --ignore-path .prettierignore --write \"src/**/*.{svelte,ts,js,css}\" \"*.{js,ts,json}\""
@@ -30,6 +31,7 @@
     "@types/three": "^0.187.0",
     "bits-ui": "^2.16.2",
     "clsx": "^2.1.1",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.1",
     "prettier-plugin-svelte": "^3.5.1",
     "svelte": "^5.1.0",

@@ -639,7 +639,9 @@
             <Check size={16} class="shrink-0 text-primary" />
           {:else}
             <span class="shrink-0 text-xs text-muted-foreground tabular-nums"
-              >{m.collection_book_count({ count: library.book_count })}</span
+              >{m.collection_book_count({
+                count: library.book_count ?? 0,
+              })}</span
             >
           {/if}
         </button>

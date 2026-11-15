@@ -1,3 +1,6 @@
 src/lib/paraglide/
 src/lib/reader/vendor/
 src/lib/reader/fonts/
+# generated (pnpm gen:api, from the backend's snapshot test)
+src/lib/api/schema.d.ts
+openapi.json
