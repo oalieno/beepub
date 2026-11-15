@@ -77,6 +77,7 @@ from app.services.access import (
     get_accessible_book,
     get_accessible_library,
 )
+from app.services.book_cards import book_cards
 from app.services.book_files import book_files, invalidate_derived_text
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
 from app.services.epub_pages import read_page_manifest
@@ -602,22 +603,12 @@ async def list_my_books(
     books_result = await db.execute(select(Book).where(Book.id.in_(book_ids_list)))
     books_map = {b.id: b for b in books_result.scalars().all()}
 
-    from app.services.work_propagation import get_edition_count_map
-
-    edition_counts = await get_edition_count_map(db, book_ids_list)
-    items = []
-    for row in rows:
-        book = books_map.get(row.display_book_id)
-        if not book:
-            continue
-        item = BookWithInteractionOut.model_validate(book)
-        item.reading_status = row.best_status
-        item.is_favorite = row.any_favorite
-        own_progress = row.own_progress or {}
-        item.reading_percentage = own_progress.get("percentage")
-        item.last_read_at = own_progress.get("last_read_at")
-        item.edition_count = edition_counts.get(row.display_book_id)
-        items.append(item)
+    # (In the order of the rows: a book can have gone since they were read.)
+    items = await book_cards(
+        db,
+        current_user.id,
+        [books_map[bid] for bid in book_ids_list if bid in books_map],
+    )
 
     return PaginatedBooksWithInteraction(items=items, total=total)
 
@@ -682,15 +673,6 @@ async def get_discover_recommendations(
     result = await db.execute(select(Book).where(Book.id.in_(book_ids)))
     books = {b.id: b for b in result.scalars().all()}
 
-    # Get interactions
-    interaction_result = await db.execute(
-        select(UserBookInteraction).where(
-            UserBookInteraction.user_id == current_user.id,
-            UserBookInteraction.book_id.in_(book_ids),
-        )
-    )
-    interactions = {i.book_id: i for i in interaction_result.scalars().all()}
-
     # Build seed_book_id map for "Because you read X" attribution
     seed_map = {r["book_id"]: r.get("seed_book_id") for r in recs}
 
@@ -704,38 +686,14 @@ async def get_discover_recommendations(
         for row in seed_result.all():
             seed_titles[row[0]] = row[1] or row[2] or ""
 
-    # Work-level propagation
-    from app.services.work_propagation import (
-        get_edition_count_map,
-        get_work_propagated_interactions,
+    items = await book_cards(
+        db, current_user.id, [books[bid] for bid in book_ids if bid in books]
     )
-
-    propagated = await get_work_propagated_interactions(db, book_ids, current_user.id)
-    edition_counts = await get_edition_count_map(db, book_ids)
-    items = []
-    for bid in book_ids:
-        book = books.get(bid)
-        if not book:
-            continue
-        item = BookWithInteractionOut.model_validate(book)
-        interaction = interactions.get(bid)
-        prop = propagated.get(bid)
-        if interaction:
-            item.reading_status = interaction.reading_status
-            item.is_favorite = interaction.is_favorite
-            progress = interaction.reading_progress or {}
-            item.reading_percentage = progress.get("percentage")
-            item.last_read_at = progress.get("last_read_at")
-        elif prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        item.edition_count = edition_counts.get(bid)
-        seed_id = seed_map.get(bid)
+    for item in items:
+        seed_id = seed_map.get(item.id)
         item.seed_book_id = seed_id
         if seed_id:
             item.seed_book_title = seed_titles.get(seed_id)
-        items.append(item)
-
     return items
 
 
@@ -768,25 +726,16 @@ async def get_discover_browse(
     else:
         book_map = {}
 
-    from app.services.work_propagation import get_work_propagated_interactions
-
-    propagated = await get_work_propagated_interactions(
-        db, list(all_ids), current_user.id
-    )
-
-    def _to_item(b: Book) -> BookWithInteractionOut:
-        item = BookWithInteractionOut.model_validate(b)
-        prop = propagated.get(b.id)
-        if prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        return item
+    cards = {
+        card.id: card
+        for card in await book_cards(db, current_user.id, list(book_map.values()))
+    }
 
     sections = []
     for section in sections_data:
         if not section["book_ids"]:
             continue
-        books = [book_map[bid] for bid in section["book_ids"] if bid in book_map]
+        books = [cards[bid] for bid in section["book_ids"] if bid in cards]
         sections.append(
             TagBrowseSection(
                 tag=section["tag"],
@@ -794,7 +743,7 @@ async def get_discover_browse(
                 label_hans=TAG_LABELS_HANS.get(section["tag"], section["tag"]),
                 category=section["category"],
                 book_count=section["book_count"],
-                books=[_to_item(b) for b in books],
+                books=books,
             )
         )
 
@@ -1074,47 +1023,7 @@ async def list_all_books(
             )
             books = result.scalars().all()
 
-    # Enrich with edition_count + work-propagated reading status. The page is
-    # bounded by `limit` (<=200), so propagation runs only over the current page.
-    from app.services.work_propagation import (
-        get_edition_count_map,
-        get_work_propagated_interactions,
-    )
-
-    book_ids_list = [b.id for b in books]
-    edition_counts = await get_edition_count_map(db, book_ids_list)
-    propagated = await get_work_propagated_interactions(
-        db, book_ids_list, current_user.id
-    )
-    # Direct (non-propagated) user interaction for this page of books —
-    # rating, plus progress for the grid's "n%" status line (progress stays
-    # per-edition, so it deliberately does not propagate across works).
-    own_result = await db.execute(
-        select(
-            UserBookInteraction.book_id,
-            UserBookInteraction.rating,
-            UserBookInteraction.reading_progress,
-        ).where(
-            UserBookInteraction.user_id == current_user.id,
-            UserBookInteraction.book_id.in_(book_ids_list),
-        )
-    )
-    own_map = {row[0]: row for row in own_result.all()}
-    items = []
-    for b in books:
-        item = BookWithInteractionOut.model_validate(b)
-        item.edition_count = edition_counts.get(b.id)
-        prop = propagated.get(b.id)
-        if prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        own = own_map.get(b.id)
-        if own:
-            item.user_rating = own.rating
-            own_progress = own.reading_progress or {}
-            item.reading_percentage = own_progress.get("percentage")
-            item.last_read_at = own_progress.get("last_read_at")
-        items.append(item)
+    items = await book_cards(db, current_user.id, books)
 
     return PaginatedBooksWithInteraction(
         items=items, total=total, offset=offset, around_index=around_index

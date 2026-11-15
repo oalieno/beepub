@@ -451,51 +451,14 @@ async def _search_matches(
 
 
 async def _hydrate_grouped_books(db: AsyncSession, user: User, book_ids: list) -> dict:
-    """Load standalone grouped-list books into BookWithInteractionOut keyed by id, with
-    the same edition-count + work-propagated interaction enrichment the book
-    listing endpoints apply."""
+    """The grouped list's standalone books as cards, keyed by id — the same
+    card every other list shows (``book_cards``)."""
     from app.models.book import Book
-    from app.models.reading import UserBookInteraction
-    from app.schemas.book import BookWithInteractionOut
-    from app.services.work_propagation import (
-        get_edition_count_map,
-        get_work_propagated_interactions,
-    )
+    from app.services.book_cards import book_cards
 
     if not book_ids:
         return {}
-
     books = (
         (await db.execute(select(Book).where(Book.id.in_(book_ids)))).scalars().all()
     )
-    edition_counts = await get_edition_count_map(db, book_ids)
-    propagated = await get_work_propagated_interactions(db, book_ids, user.id)
-    own_result = await db.execute(
-        select(
-            UserBookInteraction.book_id,
-            UserBookInteraction.rating,
-            UserBookInteraction.reading_progress,
-        ).where(
-            UserBookInteraction.user_id == user.id,
-            UserBookInteraction.book_id.in_(book_ids),
-        )
-    )
-    own_map = {row[0]: row for row in own_result.all()}
-
-    result: dict = {}
-    for b in books:
-        item = BookWithInteractionOut.model_validate(b)
-        item.edition_count = edition_counts.get(b.id)
-        prop = propagated.get(b.id)
-        if prop:
-            item.reading_status = prop["reading_status"]
-            item.is_favorite = prop["is_favorite"]
-        own = own_map.get(b.id)
-        if own:
-            item.user_rating = own.rating
-            # Progress stays per-edition — own interaction, not propagation.
-            own_progress = own.reading_progress or {}
-            item.reading_percentage = own_progress.get("percentage")
-            item.last_read_at = own_progress.get("last_read_at")
-        result[b.id] = item
-    return result
+    return {card.id: card for card in await book_cards(db, user.id, books)}
