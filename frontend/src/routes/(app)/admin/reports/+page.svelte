@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
   import { coverUrl } from "$lib/api/client";
@@ -150,7 +151,7 @@
                     {m.admin_reports_system()}
                   {/if}
                   &middot;
-                  {new Date(report.created_at).toLocaleDateString()}
+                  {formatDate(report.created_at, "numeric")}
                 </span>
               </div>
               {#if report.description}

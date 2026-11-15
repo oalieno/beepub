@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatSize } from "$lib/format";
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
@@ -148,11 +149,6 @@
     }
   }
 
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(0)} MB`;
-    return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  }
-
   // What the server leaves free after a copy (calibre.COPY_FREE_MARGIN).
   const FREE_MARGIN = 256 * 1024 * 1024;
   let copyFits = $derived(
@@ -208,8 +204,8 @@
   function copyFailure(sync: CalibreSyncStatus): string {
     if (sync.reason === "space")
       return m.admin_calibre_copy_no_space({
-        size: formatBytes(sync.bytes_needed ?? 0),
-        free: formatBytes(sync.bytes_free ?? 0),
+        size: formatSize(sync.bytes_needed ?? 0),
+        free: formatSize(sync.bytes_free ?? 0),
       });
     if (sync.reason === "unreadable")
       return m.admin_calibre_unreadable_title({
@@ -669,15 +665,15 @@
       <p class="text-foreground leading-relaxed">
         {m.admin_calibre_copy_body({
           count: String(preview.book_count),
-          size: formatBytes(preview.bytes_needed),
-          free: formatBytes(preview.bytes_free),
+          size: formatSize(preview.bytes_needed),
+          free: formatSize(preview.bytes_free),
         })}
       </p>
       {#if !copyFits}
         <p class="text-destructive" role="alert">
           {m.admin_calibre_copy_no_space({
-            size: formatBytes(preview.bytes_needed),
-            free: formatBytes(preview.bytes_free),
+            size: formatSize(preview.bytes_needed),
+            free: formatSize(preview.bytes_free),
           })}
         </p>
       {/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
   import { toastStore } from "$lib/stores/toast";
@@ -139,7 +140,7 @@
                 </span>
               </td>
               <td class="px-5 py-3.5 text-muted-foreground text-sm"
-                >{new Date(user.created_at).toLocaleDateString()}</td
+                >{formatDate(user.created_at, "numeric")}</td
               >
               <td class="px-5 py-3.5 text-muted-foreground">
                 <ChevronRight size={16} />

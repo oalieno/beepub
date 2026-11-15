@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { ChevronRight, Copy, Check, KeySquare, Trash2 } from "@lucide/svelte";
   import * as Dialog from "$lib/components/ui/dialog";
   import { Input } from "$lib/components/ui/input";
@@ -108,10 +109,6 @@
       toastStore.error((e as Error).message);
     }
   }
-
-  function shortDate(iso: string): string {
-    return new Date(iso).toLocaleDateString();
-  }
 </script>
 
 <button
@@ -174,9 +171,9 @@
                 >
               </div>
               <p class="text-xs text-muted-foreground mt-0.5">
-                {shortDate(token.created_at)} · {token.last_used_at
+                {formatDate(token.created_at, "numeric")} · {token.last_used_at
                   ? m.profile_api_token_last_used({
-                      date: shortDate(token.last_used_at),
+                      date: formatDate(token.last_used_at, "numeric"),
                     })
                   : m.profile_api_token_never_used()}
               </p>

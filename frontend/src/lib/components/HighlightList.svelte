@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { Trash2, Share2, TriangleAlert } from "@lucide/svelte";
   import type { HighlightOut } from "$lib/types";
   import * as m from "$lib/paraglide/messages.js";
@@ -22,18 +23,6 @@
     ondelete?: (highlight: HighlightOut) => void;
     onshare?: (highlight: HighlightOut) => void;
   } = $props();
-
-  function formatDate(iso: string): string {
-    try {
-      return new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  }
 
   function truncate(text: string, max = 120): string {
     if (text.length <= max) return text;

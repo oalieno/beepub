@@ -15,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import { formatSize } from "$lib/format";
   import { goto } from "$app/navigation";
   import {
     Bookmark,
@@ -39,11 +40,6 @@
     /** Share the EPUB file via the OS share sheet (native only). */
     onexport?: (entry: LocalShelfEntry) => void;
   } = $props();
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
 </script>
 
 <div

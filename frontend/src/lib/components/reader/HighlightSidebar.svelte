@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import {
     X,
     Trash2,
@@ -63,18 +64,6 @@
   function truncate(text: string, max = 100): string {
     if (text.length <= max) return text;
     return text.slice(0, max).trimEnd() + "…";
-  }
-
-  function formatDate(iso: string): string {
-    try {
-      return new Date(iso).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      });
-    } catch {
-      return "";
-    }
   }
 
   function getStyleLabel(ill: IllustrationOut): string {

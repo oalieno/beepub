@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatSize } from "$lib/format";
   import { onMount, untrack } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
@@ -87,11 +88,6 @@
   let importing = $state(false);
   let fileInput = $state<HTMLInputElement | null>(null);
   let addSheetOpen = $state(false);
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  }
 
   async function loadEntries() {
     if (!isNative()) {

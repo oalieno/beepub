@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { isNative } from "$lib/platform";
@@ -8,19 +9,7 @@
   import type { HighlightOut } from "$lib/types";
   import { Highlighter, Share2, Trash2 } from "@lucide/svelte";
   import { HighlightListSkeleton } from "$lib/components/skeletons";
-  import { getLocale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
-
-  function formatDate(iso: string): string {
-    try {
-      return new Date(iso).toLocaleDateString(getLocale(), {
-        month: "short",
-        day: "numeric",
-      });
-    } catch {
-      return "";
-    }
-  }
 
   let highlights = $state<HighlightOut[]>([]);
   let bookData = $state<Record<string, { title: string; authors: string[] }>>(
@@ -172,7 +161,7 @@
                 </p>
               {/if}
               <p class="mt-1.5 text-xs text-muted-foreground/70">
-                {formatDate(hl.created_at)}
+                {formatDate(hl.created_at, "day")}
               </p>
 
               <!-- Actions: always shown on touch, hover-revealed on desktop -->

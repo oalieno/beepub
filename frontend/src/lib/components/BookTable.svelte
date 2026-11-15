@@ -15,6 +15,7 @@
 </script>
 
 <script lang="ts">
+  import { formatSize } from "$lib/format";
   import type { Snippet } from "svelte";
   import type { BookWithInteractionOut } from "$lib/types";
   import {
@@ -186,11 +187,6 @@
     const raw = book.calibre_added_at ?? book.created_at;
     const d = new Date(raw);
     return isNaN(d.getTime()) ? "" : dateFormat.format(d);
-  }
-
-  function formatSize(bytes: number): string {
-    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
   // A row being edited still reads as the table: the same text in the same

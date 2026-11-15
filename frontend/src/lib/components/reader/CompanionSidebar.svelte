@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import {
     X,
     ArrowUp,
@@ -367,13 +368,7 @@
 
   function conversationLabel(conv: CompanionConversationSummary): string {
     if (conv.title) return conv.title;
-    const d = new Date(conv.created_at);
-    return d.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
+    return formatDate(conv.created_at, "minute");
   }
 
   // Swipe handlers
@@ -690,7 +685,7 @@
                         ? 'text-ink-500'
                         : 'text-muted-foreground'}"
                     >
-                      {new Date(conv.updated_at).toLocaleDateString()}
+                      {formatDate(conv.updated_at, "numeric")}
                     </p>
                   </button>
                   <!-- Always-visible actions -->

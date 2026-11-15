@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { formatDate } from "$lib/format";
   import { page } from "$app/state";
   import { onMount } from "svelte";
   import { adminApi } from "$lib/api/admin";
@@ -227,7 +228,7 @@
             {user.role}
           </span>
           <span class="text-sm text-muted-foreground">
-            Joined {new Date(user.created_at).toLocaleDateString()}
+            Joined {formatDate(user.created_at, "numeric")}
           </span>
         </div>
       </div>
