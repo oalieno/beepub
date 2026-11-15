@@ -186,7 +186,7 @@ async def _validate_upload_library(
     try:
         lib_id = uuid.UUID(library_id)
     except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid library id")
+        raise HTTPException(status_code=422, detail="Invalid library id") from None
     library = await get_accessible_library(lib_id, user, db)
     if library.calibre_path:
         raise HTTPException(
@@ -232,7 +232,7 @@ async def _ingest_epub(
         logger.exception("EPUB upload rejected: %s", file.filename)
         delete_file(file_path)
         delete_file(cover_path)
-        raise HTTPException(status_code=400, detail="Invalid EPUB file")
+        raise HTTPException(status_code=400, detail="Invalid EPUB file") from None
 
     book = Book(
         id=book_id,
@@ -277,11 +277,13 @@ async def _ingest_txt(
     except EmptyTextError:
         delete_file(original_path)
         delete_file(file_path)
-        raise HTTPException(status_code=400, detail="The TXT file has no text")
+        raise HTTPException(
+            status_code=400, detail="The TXT file has no text"
+        ) from None
     except Exception:
         delete_file(original_path)
         delete_file(file_path)
-        raise HTTPException(status_code=400, detail="Invalid TXT file")
+        raise HTTPException(status_code=400, detail="Invalid TXT file") from None
 
     book = Book(
         id=book_id,
@@ -323,11 +325,11 @@ async def _ingest_mobi(
     except DrmProtectedError:
         for path in (original_path, file_path, cover_path):
             delete_file(path)
-        raise HTTPException(status_code=400, detail=DRM_UPLOAD)
+        raise HTTPException(status_code=400, detail=DRM_UPLOAD) from None
     except Exception:
         for path in (original_path, file_path, cover_path):
             delete_file(path)
-        raise HTTPException(status_code=400, detail="Invalid MOBI file")
+        raise HTTPException(status_code=400, detail="Invalid MOBI file") from None
 
     book = Book(
         id=book_id,
@@ -368,11 +370,11 @@ async def _ingest_cbz(
     except CbzError as exc:
         for path in (original_path, file_path, cover_path):
             delete_file(path)
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception:
         for path in (original_path, file_path, cover_path):
             delete_file(path)
-        raise HTTPException(status_code=400, detail="Invalid CBZ file")
+        raise HTTPException(status_code=400, detail="Invalid CBZ file") from None
 
     book = Book(
         id=book_id,
@@ -2094,7 +2096,9 @@ async def convert_book_zh(
     except Exception:
         logger.exception("Conversion failed: %s", book.id)
         delete_file(tmp_path)
-        raise HTTPException(status_code=400, detail="The book could not be converted")
+        raise HTTPException(
+            status_code=400, detail="The book could not be converted"
+        ) from None
     if not result.changed:
         delete_file(tmp_path)
         return book
@@ -2219,7 +2223,7 @@ async def get_book_content(
         # loop so concurrent readers don't serialize behind each other.
         data = await asyncio.to_thread(_read_epub_entry, book.file_path, path)
     except KeyError:
-        raise HTTPException(status_code=404, detail="Path not found in EPUB")
+        raise HTTPException(status_code=404, detail="Path not found in EPUB") from None
     content_type, _ = mimetypes.guess_type(path)
     # A chapter is not sent as a page at all (the reader goes by the
     # book's own manifest, not by this header).
@@ -2312,7 +2316,9 @@ async def get_book_pages(
     try:
         manifest = await asyncio.to_thread(read_page_manifest, book.file_path)
     except Exception:
-        raise HTTPException(status_code=422, detail="Could not read the EPUB spine")
+        raise HTTPException(
+            status_code=422, detail="Could not read the EPUB spine"
+        ) from None
     return JSONResponse(content=manifest.to_dict(), headers=headers)
 
 

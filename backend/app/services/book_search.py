@@ -222,7 +222,7 @@ async def tiered_book_search(db: AsyncSession, q: str, scope: Select) -> TieredS
         ).one()
         per_token = [
             or_(*_substring_conditions(token, _usable_fold(token, n)))
-            for token, n in zip(tokens, norm_row)
+            for token, n in zip(tokens, norm_row, strict=True)
         ]
 
         narrowed = [and_(*per_token)]

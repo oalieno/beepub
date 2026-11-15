@@ -290,7 +290,7 @@ async def search_books(
             b, i = row[0], row[1]
             card = _card(b, i)
             if token_hits is not None:
-                matched = [t for t, hit in zip(token_hits, row[2:]) if hit]
+                matched = [t for t, hit in zip(token_hits, row[2:], strict=True) if hit]
                 card["match_reason"] = (
                     f"matched {len(matched)}/{len(token_hits)} keywords: "
                     + ", ".join(matched)

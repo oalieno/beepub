@@ -82,7 +82,7 @@ async def _check_host(url: str, block_private: bool) -> None:
             host, None, type=socket.SOCK_STREAM
         )
     except OSError:
-        raise OpdsFetchError("network")
+        raise OpdsFetchError("network") from None
     if not infos or any(_blocked_address(info[4][0]) for info in infos):
         raise OpdsFetchError("blocked")
 
@@ -129,7 +129,7 @@ class OpdsFetcher:
             try:
                 response = await client.send(request, auth=auth, stream=True)
             except httpx.HTTPError:
-                raise OpdsFetchError("network")
+                raise OpdsFetchError("network") from None
             if response.is_redirect:
                 location = response.headers.get("location", "")
                 await response.aclose()
@@ -168,7 +168,7 @@ class OpdsFetcher:
                         raise OpdsFetchError("too_large")
                     chunks.append(chunk)
             except httpx.HTTPError:
-                raise OpdsFetchError("network")
+                raise OpdsFetchError("network") from None
             finally:
                 await response.aclose()
             return FetchResult(
@@ -197,7 +197,7 @@ class OpdsFetcher:
                 except FileNotFoundError:
                     pass
                 if isinstance(exc, httpx.HTTPError):
-                    raise OpdsFetchError("network")
+                    raise OpdsFetchError("network") from exc
                 raise
             finally:
                 await response.aclose()

@@ -82,7 +82,7 @@ async def create_user(
     except IntegrityError:
         # Concurrent create racing past the existence check above
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Username already exists")
+        raise HTTPException(status_code=409, detail="Username already exists") from None
     await db.refresh(user)
     return user
 
@@ -634,9 +634,11 @@ async def list_ai_models(
         raise HTTPException(
             status_code=502,
             detail=f"{provider} returned HTTP {exc.response.status_code}",
-        )
+        ) from exc
     except httpx.RequestError as exc:
-        raise HTTPException(status_code=502, detail=f"Cannot reach {provider}: {exc}")
+        raise HTTPException(
+            status_code=502, detail=f"Cannot reach {provider}: {exc}"
+        ) from exc
 
     return models
 

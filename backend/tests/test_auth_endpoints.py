@@ -104,7 +104,7 @@ def _mock_db_session(users: list[User] | None = None, user_count: int = 1):
             return result
 
         # Fallback: if no identifiable param, try matching by id from all params
-        for key, val in params.items():
+        for val in params.values():
             str_val = str(val) if val else ""
             if str_val in user_by_id:
                 result.scalar_one_or_none.return_value = user_by_id[str_val]

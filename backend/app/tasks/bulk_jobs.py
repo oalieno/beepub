@@ -110,7 +110,9 @@ def run_book_job(self, job_type: str, book_id: str, generation: int) -> None:
     except Exception as exc:
         if self.request.retries < self.max_retries:
             # Don't decr pending — the retry will handle it
-            raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+            raise self.retry(
+                exc=exc, countdown=30 * (self.request.retries + 1)
+            ) from exc
         logger.exception(
             f"run_book_job {job_type} failed for book {book_id} after retries"
         )

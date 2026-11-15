@@ -33,7 +33,8 @@ class BookReport(Base):
     )
     issue_type: Mapped[str] = mapped_column(String(30))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    resolved: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    # (Migration 025 indexes the unresolved ones.)
+    resolved: Mapped[bool] = mapped_column(Boolean, default=False)
     resolved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -2,6 +2,7 @@ from app.models.api_token import ApiToken
 from app.models.book import Book, ExternalMetadata
 from app.models.book_embedding import BookEmbeddingChunk
 from app.models.book_embedding_unified import BookEmbedding
+from app.models.book_report import BookReport
 from app.models.book_text import BookTextChunk
 from app.models.bookshelf import Bookshelf, BookshelfBook
 from app.models.companion import CompanionConversation, CompanionMessage
@@ -29,6 +30,7 @@ __all__ = [
     "UserLibraryExclusion",
     "Book",
     "ExternalMetadata",
+    "BookReport",
     "Bookshelf",
     "BookshelfBook",
     "UserBookInteraction",

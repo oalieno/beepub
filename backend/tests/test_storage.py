@@ -287,7 +287,8 @@ class TestEncodeCover:
         assert img.width == COVER_MAX_WIDTH
 
     def test_garbage_raises(self):
-        with pytest.raises(Exception):
+        # (Pillow's "cannot identify image file".)
+        with pytest.raises(OSError):
             encode_cover(b"not an image")
 
 

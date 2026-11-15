@@ -159,7 +159,7 @@ async def test_copy_keeps_the_rows_and_frees_them(admin_client, storage):
     assert [b["id"] for b in after] == [b["id"] for b in before]
     # The same bytes: KOReader's key for the book has not moved.
     assert await _digests([b["id"] for b in after]) == digests
-    for was, now in zip(before, after):
+    for was, now in zip(before, after, strict=True):
         assert now["calibre_id"] is None
         assert now["display_title"] == was["display_title"]
     assert after[0]["publisher"] == "汐風社"

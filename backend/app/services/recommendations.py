@@ -347,7 +347,7 @@ async def get_personalized_recommendations(
     # Aggregate scores in seed order so tie-breaking is identical to before.
     # Track (total_score, best_seed_id, best_seed_contribution) per candidate.
     all_scores: dict[uuid.UUID, tuple[float, uuid.UUID, float]] = {}
-    for sid, similar in zip(seed_uuids, similar_lists):
+    for sid, similar in zip(seed_uuids, similar_lists, strict=True):
         for item in similar:
             bid = item["book_id"]
             score = item["score"]

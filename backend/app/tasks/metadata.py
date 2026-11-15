@@ -297,7 +297,7 @@ def fetch_book_metadata(self, book_id: str) -> None:
         run_async(_run_fetch_book_metadata(book_id))
     except Exception as exc:
         logger.exception(f"fetch_book_metadata failed for book {book_id}")
-        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1)) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -397,7 +397,7 @@ def fetch_metadata_source(self, book_id: str, source_name: str) -> None:
         logger.exception(
             f"fetch_metadata_source failed for book {book_id} source {source_name}"
         )
-        raise self.retry(exc=exc, countdown=30)
+        raise self.retry(exc=exc, countdown=30) from exc
 
 
 # ---------------------------------------------------------------------------

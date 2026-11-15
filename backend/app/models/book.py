@@ -142,13 +142,14 @@ class Book(Base, TimestampMixin):
     metadata_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )
+    # (Indexed by migration 037, descending.)
     popularity_score: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default="0", index=True
+        Integer, nullable=False, server_default="0"
     )
 
     # Work grouping (editions of the same logical work)
     work_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("works.id", ondelete="SET NULL"), nullable=True, index=True
+        ForeignKey("works.id", ondelete="SET NULL"), nullable=True
     )
 
     calibre_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)

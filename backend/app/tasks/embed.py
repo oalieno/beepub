@@ -89,13 +89,13 @@ async def _run_embed_book(book_id: str) -> None:
                     cleaned = [(sc, t) for sc, t in cleaned if t]
                     if not cleaned:
                         continue
-                    batch, texts = zip(*cleaned)  # type: ignore[assignment]
+                    batch, texts = zip(*cleaned, strict=True)  # type: ignore[assignment]
 
                     vectors, usage = await embed_texts(
                         texts, api_url=api_url, model=model, api_key=api_key
                     )
 
-                    for sc, vector in zip(batch, vectors):
+                    for sc, vector in zip(batch, vectors, strict=True):
                         stmt = insert(BookEmbeddingChunk).values(
                             book_id=bid,
                             book_text_chunk_id=text_chunk.id,
@@ -160,7 +160,7 @@ def embed_book(self, book_id: str) -> None:
             countdown = 60 * (2**self.request.retries)
         else:
             countdown = 30 * (2**self.request.retries)
-        raise self.retry(exc=exc, countdown=countdown)
+        raise self.retry(exc=exc, countdown=countdown) from exc
 
 
 async def _upsert_chunk_avg_embedding(db, bid: uuid.UUID, model: str) -> None:
@@ -400,4 +400,4 @@ def embed_book_summary(self, book_id: str) -> None:
             countdown = 60 * (2**self.request.retries)
         else:
             countdown = 30 * (2**self.request.retries)
-        raise self.retry(exc=exc, countdown=countdown)
+        raise self.retry(exc=exc, countdown=countdown) from exc

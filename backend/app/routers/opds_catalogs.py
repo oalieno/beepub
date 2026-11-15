@@ -243,7 +243,7 @@ async def fetch_feed(
     try:
         result = await fetcher.fetch(url or catalog.url, FEED_MAX_BYTES, FEED_ACCEPT)
     except OpdsFetchError as exc:
-        raise _fetch_failed(exc)
+        raise _fetch_failed(exc) from exc
     # Only feeds go back to the client: the catalog's credentials may open
     # more of its host than the catalog (an admin page served as HTML).
     # "opds:parse" is what an HTML answer is to the client — a bare origin
@@ -276,7 +276,7 @@ async def fetch_image(
     try:
         result = await fetcher.fetch(url, IMAGE_MAX_BYTES, "image/*")
     except OpdsFetchError as exc:
-        raise _fetch_failed(exc)
+        raise _fetch_failed(exc) from exc
     content_type = result.content_type.split(";")[0].strip().lower()
     if not content_type.startswith("image/") or content_type == "image/svg+xml":
         raise HTTPException(status_code=415, detail="Not an image")
@@ -366,7 +366,7 @@ async def import_book(
         try:
             result = await fetcher.download(body.url, tmp, MAX_UPLOAD_SIZE)
         except OpdsFetchError as exc:
-            raise _fetch_failed(exc)
+            raise _fetch_failed(exc) from exc
         name = _filename(result.content_disposition)
         suffix = _suffix(body.type, result.content_type, name, result.url)
         if suffix is None:

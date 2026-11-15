@@ -191,4 +191,4 @@ def extract_book_text(self, book_id: str) -> None:
         run_async(_run_extract_book_text(book_id))
     except Exception as exc:
         logger.exception(f"extract_book_text failed for book {book_id}")
-        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1)) from exc

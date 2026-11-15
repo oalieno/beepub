@@ -172,4 +172,4 @@ def generate_illustration(
         logger.warning(
             f"generate_illustration retrying for {illustration_id} (attempt {self.request.retries + 1}/{self.max_retries + 1}): {exc_msg}"
         )
-        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=30 * (self.request.retries + 1)) from exc

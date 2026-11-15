@@ -286,4 +286,4 @@ def summarize_chunks(self, book_id: str, up_to_spine_index: int | None = None) -
         embed_book_summary.delay(book_id)
     except Exception as exc:
         logger.exception(f"summarize_chunks failed for book {book_id}")
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1)) from exc

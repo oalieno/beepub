@@ -272,7 +272,7 @@ async def add_book_to_shelf(
     except IntegrityError:
         # Concurrent double-add racing past the existence check above.
         await db.rollback()
-        raise HTTPException(status_code=409, detail="Book already in shelf")
+        raise HTTPException(status_code=409, detail="Book already in shelf") from None
     return {"status": "added"}
 
 

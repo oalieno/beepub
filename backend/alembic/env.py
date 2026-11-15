@@ -20,11 +20,29 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def include_object(obj, name, type_, reflected, compare_to) -> bool:
+    """What a comparison of the models with the database looks at.
+
+    Tables and columns: all of them, both ways — a model without its
+    migration, or a migration without its model, is a mistake.
+
+    Indexes and unique constraints are written in the migrations, where
+    their operator classes, expressions and sort orders can be said; the
+    models do not repeat them. One the database has and the models do not
+    is therefore expected, and is not offered for removal. (One a model
+    declares is still compared.)
+    """
+    if type_ in ("index", "unique_constraint") and reflected and compare_to is None:
+        return False
+    return True
+
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
+        include_object=include_object,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
@@ -33,7 +51,11 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
+    context.configure(
+        connection=connection,
+        target_metadata=target_metadata,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 

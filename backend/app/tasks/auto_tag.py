@@ -94,4 +94,4 @@ def auto_tag_book(self, book_id: str) -> None:
         run_async(_run_auto_tag_book(book_id))
     except Exception as exc:
         logger.exception(f"auto_tag_book failed for book {book_id}")
-        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=60 * (self.request.retries + 1)) from exc
