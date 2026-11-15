@@ -47,6 +47,41 @@
     browser && portal.origin?.href === location.pathname + location.search,
   );
   $effect(() => oninside?.(inside));
+
+  // The door's height in the stylesheet is a guess at what the page's
+  // head and the bars around it take. Here it is corrected by what is
+  // measured: whatever the page still overflows by is taken off the
+  // door, so the page has nothing to scroll.
+  let door = $state<HTMLElement>(null!);
+  function scrollerOf(el: HTMLElement): HTMLElement {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const o = getComputedStyle(p).overflowY;
+      if (o === "auto" || o === "scroll") return p;
+    }
+    return (document.scrollingElement as HTMLElement) ?? document.body;
+  }
+  $effect(() => {
+    if (!door) return;
+    void books.length; // the list arriving can change what is above
+    const scroller = scrollerOf(door);
+    let frame = 0;
+    const fit = () => {
+      door.style.minHeight = "";
+      const over = scroller.scrollHeight - scroller.clientHeight;
+      if (over > 0)
+        door.style.minHeight = `${Math.max(0, door.offsetHeight - over)}px`;
+    };
+    const later = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(fit);
+    };
+    later();
+    addEventListener("resize", later);
+    return () => {
+      cancelAnimationFrame(frame);
+      removeEventListener("resize", later);
+    };
+  });
 </script>
 
 <!-- The door. Everything on it is the bee's: its brown line, its honey,
@@ -56,6 +91,7 @@
      the page does not scroll: on a phone that head, the status bar and the
      tab bar at the foot take more of it. -->
 <div
+  bind:this={door}
   class="door flex flex-col items-center justify-center pt-3 pb-7 text-center"
   inert={inside}
   data-testid="bookshelf-door"
