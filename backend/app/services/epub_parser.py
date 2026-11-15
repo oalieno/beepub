@@ -1,3 +1,4 @@
+import logging
 import posixpath
 import re
 from typing import Any
@@ -7,6 +8,8 @@ from app.vendor import ebooklib
 from app.vendor.ebooklib import epub
 
 _HANT_REGIONS = {"TW", "HK", "MO"}
+
+logger = logging.getLogger(__name__)
 
 
 def _script_of(code: str) -> str | None:
@@ -137,7 +140,9 @@ def parse_epub_metadata(file_path: str) -> dict[str, Any]:
                     pass
 
     except Exception:
-        pass
+        # The book is still taken, with whatever was read before this —
+        # but not without a trace of why the rest is missing.
+        logger.exception("Could not read all metadata from %s", file_path)
     return result
 
 

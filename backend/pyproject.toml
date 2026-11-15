@@ -51,9 +51,14 @@ target-version = "py312"
 extend-exclude = ["app/vendor/ebooklib"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
 ignore = [
     "E501",
+    # ASYNC is on for what stalls every request at once: a blocking HTTP
+    # call, a sleep or a subprocess inside async code. Not for a stat or a
+    # short local read (230/240), which would each need a thread hop.
+    "ASYNC230",
+    "ASYNC240",
     # FastAPI declares dependencies as default arguments (Depends(...)).
     "B008",
 ]
