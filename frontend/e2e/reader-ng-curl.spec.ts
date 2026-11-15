@@ -105,7 +105,7 @@ function settled(page: Page): Promise<boolean> {
     const { core, paginator } = window.__beepubReaderNG;
     if (core.curlFold) return false;
     if (paginator.style.clipPath) return false;
-    if (getComputedStyle(paginator).pointerEvents === "none") return false;
+    if (paginator.style.pointerEvents === "none") return false;
     return (core.ghosts as HTMLElement[]).every((g) => !g.style.clipPath);
   });
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderPanel from "./ReaderPanel.svelte";
   import { formatDate } from "$lib/format";
   import {
     X,
@@ -82,25 +83,11 @@
   }
 </script>
 
-<!-- Backdrop -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="fixed inset-0 z-40 bg-black/20"
-  onclick={() => onclose?.()}
-  onkeydown={(e) => {
-    if (e.key === "Escape") onclose?.();
-  }}
-></div>
-
-<!-- Sidebar -->
-<div
-  class="fixed right-0 top-0 bottom-0 z-50 w-80 max-w-[85vw] shadow-2xl flex flex-col {darkMode
-    ? 'bg-ink-900 border-l border-ink-800'
-    : 'bg-card border-l border-border'}"
-  style="padding-top: env(safe-area-inset-top, 0px);"
-  role="dialog"
-  aria-modal="true"
-  aria-label={m.reader_highlight_illustrations()}
+<ReaderPanel
+  side="right"
+  label={m.reader_highlight_illustrations()}
+  {darkMode}
+  {onclose}
 >
   <!-- Header with tabs -->
   <div
@@ -348,4 +335,4 @@
       </div>
     {/if}
   </div>
-</div>
+</ReaderPanel>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderDialog from "./ReaderDialog.svelte";
   import { X, ChevronDown, ChevronUp } from "@lucide/svelte";
   import type { IllustrationOut } from "$lib/types";
   import { booksApi } from "$lib/api/books";
@@ -36,97 +37,78 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="fixed inset-0 z-[70] flex items-center justify-center p-4"
-  onclick={() => onclose?.()}
-  onkeydown={(e) => {
-    if (e.key === "Escape") onclose?.();
-  }}
+<ReaderDialog
+  label={m.reader_highlight_illustrations()}
+  {onclose}
+  overlayClass="bg-black/70"
+  class="max-w-[calc(100%-2rem)] sm:max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl {darkMode
+    ? 'bg-ink-900'
+    : 'bg-card'}"
 >
-  <div class="absolute inset-0 bg-black/70"></div>
-
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="relative max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
-      ? 'bg-ink-900'
-      : 'bg-card'}"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => {
-      // Handle Escape here: stopPropagation keeps reader shortcuts out
-      // of the panel but would also hide Escape from the page handler.
-      if (e.key === "Escape") onclose?.();
-      e.stopPropagation();
-    }}
+  <!-- Close button -->
+  <button
+    aria-label={m.common_close()}
+    class="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-colors {darkMode
+      ? 'bg-ink-800/80 text-ink-400 hover:text-ink-200'
+      : 'bg-white/80 text-muted-foreground hover:text-foreground'}"
+    onclick={() => onclose?.()}
   >
-    <!-- Close button -->
-    <button
-      aria-label={m.common_close()}
-      class="absolute top-3 right-3 z-10 p-1.5 rounded-full transition-colors {darkMode
-        ? 'bg-ink-800/80 text-ink-400 hover:text-ink-200'
-        : 'bg-white/80 text-muted-foreground hover:text-foreground'}"
-      onclick={() => onclose?.()}
-    >
-      <X size={18} />
-    </button>
+    <X size={18} />
+  </button>
 
-    <!-- Image -->
-    <div class="w-full aspect-square bg-black/10 rounded-t-xl overflow-hidden">
-      <img
-        use:authedSrc={booksApi.getIllustrationImageUrl(
-          bookId,
-          illustration.id,
-        )}
-        alt={m.illustration_alt()}
-        class="w-full h-full object-contain"
-      />
-    </div>
-
-    <!-- Info -->
-    <div class="px-5 py-4 space-y-2">
-      <div class="flex items-center gap-2">
-        <span
-          class="text-[11px] px-2 py-0.5 rounded-full font-medium bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-pink-500/20 {darkMode
-            ? 'text-purple-300'
-            : 'text-purple-600'}"
-        >
-          {getStyleLabel(illustration)}
-        </span>
-        <div class="flex-1"></div>
-        <button
-          class="flex items-center gap-1 text-xs transition-colors {darkMode
-            ? 'text-ink-500 hover:text-ink-300'
-            : 'text-muted-foreground hover:text-foreground'}"
-          onclick={() => (showText = !showText)}
-        >
-          {#if showText}
-            <ChevronUp size={14} />
-            {m.illustration_hide_source()}
-          {:else}
-            <ChevronDown size={14} />
-            {m.illustration_show_source()}
-          {/if}
-        </button>
-      </div>
-
-      {#if showText}
-        <p
-          class="text-sm leading-relaxed {darkMode
-            ? 'text-ink-300'
-            : 'text-foreground'}"
-        >
-          {illustration.text}
-        </p>
-        {#if illustration.custom_prompt}
-          <p
-            class="text-xs italic {darkMode
-              ? 'text-ink-500'
-              : 'text-muted-foreground'}"
-          >
-            Prompt: {illustration.custom_prompt}
-          </p>
-        {/if}
-      {/if}
-    </div>
+  <!-- Image -->
+  <div class="w-full aspect-square bg-black/10 rounded-t-xl overflow-hidden">
+    <img
+      use:authedSrc={booksApi.getIllustrationImageUrl(bookId, illustration.id)}
+      alt={m.illustration_alt()}
+      class="w-full h-full object-contain"
+    />
   </div>
-</div>
+
+  <!-- Info -->
+  <div class="px-5 py-4 space-y-2">
+    <div class="flex items-center gap-2">
+      <span
+        class="text-[11px] px-2 py-0.5 rounded-full font-medium bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-pink-500/20 {darkMode
+          ? 'text-purple-300'
+          : 'text-purple-600'}"
+      >
+        {getStyleLabel(illustration)}
+      </span>
+      <div class="flex-1"></div>
+      <button
+        class="flex items-center gap-1 text-xs transition-colors {darkMode
+          ? 'text-ink-500 hover:text-ink-300'
+          : 'text-muted-foreground hover:text-foreground'}"
+        onclick={() => (showText = !showText)}
+      >
+        {#if showText}
+          <ChevronUp size={14} />
+          {m.illustration_hide_source()}
+        {:else}
+          <ChevronDown size={14} />
+          {m.illustration_show_source()}
+        {/if}
+      </button>
+    </div>
+
+    {#if showText}
+      <p
+        class="text-sm leading-relaxed {darkMode
+          ? 'text-ink-300'
+          : 'text-foreground'}"
+      >
+        {illustration.text}
+      </p>
+      {#if illustration.custom_prompt}
+        <p
+          class="text-xs italic {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'}"
+        >
+          Prompt: {illustration.custom_prompt}
+        </p>
+      {/if}
+    {/if}
+  </div>
+</ReaderDialog>

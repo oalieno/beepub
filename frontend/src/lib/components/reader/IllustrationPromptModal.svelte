@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderDialog from "./ReaderDialog.svelte";
   import {
     X,
     Sparkles,
@@ -122,376 +123,358 @@
   );
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="fixed inset-0 z-[60] flex items-center justify-center p-4"
-  onclick={() => onclose?.()}
-  onkeydown={(e) => {
-    if (e.key === "Escape") onclose?.();
-  }}
+<ReaderDialog
+  label={m.reader_highlight_illustrations()}
+  {onclose}
+  overlayClass="bg-black/50"
+  class="max-w-[calc(100%-2rem)] sm:max-w-lg max-h-[85vh] overflow-y-auto rounded-xl border! {darkMode
+    ? 'bg-ink-900 border-ink-700'
+    : 'bg-card border-border'}"
 >
-  <!-- Backdrop -->
-  <div class="absolute inset-0 bg-black/50"></div>
-
-  <!-- Modal -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- Header -->
   <div
-    class="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-xl shadow-2xl {darkMode
-      ? 'bg-ink-900 border border-ink-700'
-      : 'bg-card border border-border'}"
-    onclick={(e) => e.stopPropagation()}
-    onkeydown={(e) => {
-      // Handle Escape here: stopPropagation keeps reader shortcuts out
-      // of the panel but would also hide Escape from the page handler.
-      if (e.key === "Escape") onclose?.();
-      e.stopPropagation();
-    }}
+    class="flex items-center justify-between px-5 py-4 border-b {darkMode
+      ? 'border-ink-800'
+      : 'border-border'}"
   >
-    <!-- Header -->
-    <div
-      class="flex items-center justify-between px-5 py-4 border-b {darkMode
-        ? 'border-ink-800'
-        : 'border-border'}"
+    <div class="flex items-center gap-2">
+      <Sparkles
+        size={18}
+        class={darkMode ? "text-purple-400" : "text-purple-500"}
+      />
+      <h2
+        class="text-sm font-semibold {darkMode
+          ? 'text-ink-200'
+          : 'text-foreground'}"
+      >
+        {m.illustration_title()}
+      </h2>
+    </div>
+    <button
+      aria-label={m.common_close()}
+      class="p-1 rounded-md transition-colors {darkMode
+        ? 'text-ink-400 hover:bg-ink-800'
+        : 'text-muted-foreground hover:bg-accent'}"
+      onclick={() => onclose?.()}
     >
-      <div class="flex items-center gap-2">
+      <X size={16} />
+    </button>
+  </div>
+
+  {#if !aiStatus.image}
+    <!-- Not configured overlay -->
+    <div
+      class="flex flex-col items-center justify-center px-6 py-12 text-center gap-4"
+    >
+      <div
+        class="w-12 h-12 rounded-full flex items-center justify-center {darkMode
+          ? 'bg-ink-800'
+          : 'bg-muted'}"
+      >
         <Sparkles
-          size={18}
-          class={darkMode ? "text-purple-400" : "text-purple-500"}
+          size={24}
+          class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
         />
-        <h2
-          class="text-sm font-semibold {darkMode
-            ? 'text-ink-200'
+      </div>
+      <div class="space-y-2">
+        <p
+          class="text-sm font-medium {darkMode
+            ? 'text-ink-300'
             : 'text-foreground'}"
         >
-          {m.illustration_title()}
-        </h2>
-      </div>
-      <button
-        aria-label={m.common_close()}
-        class="p-1 rounded-md transition-colors {darkMode
-          ? 'text-ink-400 hover:bg-ink-800'
-          : 'text-muted-foreground hover:bg-accent'}"
-        onclick={() => onclose?.()}
-      >
-        <X size={16} />
-      </button>
-    </div>
-
-    {#if !aiStatus.image}
-      <!-- Not configured overlay -->
-      <div
-        class="flex flex-col items-center justify-center px-6 py-12 text-center gap-4"
-      >
-        <div
-          class="w-12 h-12 rounded-full flex items-center justify-center {darkMode
-            ? 'bg-ink-800'
-            : 'bg-muted'}"
-        >
-          <Sparkles
-            size={24}
-            class={darkMode ? "text-ink-500" : "text-muted-foreground/50"}
-          />
-        </div>
-        <div class="space-y-2">
+          {m.illustration_not_configured()}
+        </p>
+        {#if isAdmin}
           <p
-            class="text-sm font-medium {darkMode
-              ? 'text-ink-300'
-              : 'text-foreground'}"
-          >
-            {m.illustration_not_configured()}
-          </p>
-          {#if isAdmin}
-            <p
-              class="text-xs {darkMode
-                ? 'text-ink-500'
-                : 'text-muted-foreground'}"
-            >
-              {m.companion_admin_setup()}
-            </p>
-            <a
-              href="/admin/settings"
-              class="inline-flex items-center gap-1.5 text-xs font-medium mt-1 {darkMode
-                ? 'text-blue-400 hover:text-blue-300'
-                : 'text-primary hover:text-primary/80'}"
-            >
-              <Settings size={12} />
-              {m.companion_go_to_settings()}
-            </a>
-          {:else}
-            <p
-              class="text-xs {darkMode
-                ? 'text-ink-500'
-                : 'text-muted-foreground'}"
-            >
-              {m.companion_user_msg()}
-            </p>
-          {/if}
-        </div>
-      </div>
-    {:else}
-      <div class="px-5 py-4 space-y-4">
-        <!-- Selected text preview -->
-        <div class="rounded-lg p-3 {darkMode ? 'bg-ink-800' : 'bg-muted'}">
-          <p
-            class="text-[10px] uppercase tracking-wider mb-1 {darkMode
+            class="text-xs {darkMode
               ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
-            {m.illustration_selected_text()}
+            {m.companion_admin_setup()}
           </p>
-          <p
-            class="text-sm leading-relaxed {darkMode
-              ? 'text-ink-300'
-              : 'text-foreground'} line-clamp-4"
+          <a
+            href="/admin/settings"
+            class="inline-flex items-center gap-1.5 text-xs font-medium mt-1 {darkMode
+              ? 'text-blue-400 hover:text-blue-300'
+              : 'text-primary hover:text-primary/80'}"
           >
-            {text}
-          </p>
-        </div>
-
-        <!-- Style presets -->
-        <div>
+            <Settings size={12} />
+            {m.companion_go_to_settings()}
+          </a>
+        {:else}
           <p
-            class="text-xs font-medium mb-2 {darkMode
-              ? 'text-ink-400'
+            class="text-xs {darkMode
+              ? 'text-ink-500'
               : 'text-muted-foreground'}"
           >
-            {m.illustration_choose_style()}
+            {m.companion_user_msg()}
           </p>
-          <div class="grid grid-cols-2 gap-2">
-            {#each styles as style}
-              <button
-                class="text-left px-3 py-2.5 rounded-lg border transition-all text-sm {selectedStyle ===
-                  style.key && !useCustom
-                  ? darkMode
-                    ? 'border-purple-500 bg-purple-500/10 text-purple-300'
-                    : 'border-purple-500 bg-purple-50 text-purple-700'
-                  : darkMode
-                    ? 'border-ink-700 hover:border-ink-600 text-ink-300'
-                    : 'border-border hover:border-foreground/20 text-foreground'}"
-                onclick={() => selectStyle(style.key)}
-              >
-                <span class="font-medium">{style.label}</span>
-                <span class="block text-[11px] mt-0.5 opacity-60"
-                  >{style.description}</span
-                >
-              </button>
-            {/each}
-          </div>
-        </div>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <div class="px-5 py-4 space-y-4">
+      <!-- Selected text preview -->
+      <div class="rounded-lg p-3 {darkMode ? 'bg-ink-800' : 'bg-muted'}">
+        <p
+          class="text-[10px] uppercase tracking-wider mb-1 {darkMode
+            ? 'text-ink-500'
+            : 'text-muted-foreground'}"
+        >
+          {m.illustration_selected_text()}
+        </p>
+        <p
+          class="text-sm leading-relaxed {darkMode
+            ? 'text-ink-300'
+            : 'text-foreground'} line-clamp-4"
+        >
+          {text}
+        </p>
+      </div>
 
-        <!-- Reference images -->
-        <div>
-          <button
-            class="text-xs font-medium mb-2 transition-colors flex items-center gap-1 {showRefs
-              ? darkMode
-                ? 'text-purple-400'
-                : 'text-purple-600'
-              : darkMode
-                ? 'text-ink-500 hover:text-ink-400'
-                : 'text-muted-foreground hover:text-foreground'}"
-            onclick={toggleRefs}
-          >
-            <ImageIcon size={12} />
-            {showRefs
-              ? m.illustration_ref_images_hide()
-              : m.illustration_ref_images_add()}
-            {#if selectedRefs.length > 0}
-              <span
-                class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold {darkMode
-                  ? 'bg-purple-500/20 text-purple-300'
-                  : 'bg-purple-100 text-purple-700'}"
-              >
-                {selectedRefs.length}/{MAX_REFS}
-              </span>
-            {/if}
-          </button>
-
-          {#if showRefs}
-            <div
-              class="space-y-3 rounded-lg border p-3 {darkMode
-                ? 'border-ink-700 bg-ink-800/50'
-                : 'border-border bg-muted/50'}"
+      <!-- Style presets -->
+      <div>
+        <p
+          class="text-xs font-medium mb-2 {darkMode
+            ? 'text-ink-400'
+            : 'text-muted-foreground'}"
+        >
+          {m.illustration_choose_style()}
+        </p>
+        <div class="grid grid-cols-2 gap-2">
+          {#each styles as style}
+            <button
+              class="text-left px-3 py-2.5 rounded-lg border transition-all text-sm {selectedStyle ===
+                style.key && !useCustom
+                ? darkMode
+                  ? 'border-purple-500 bg-purple-500/10 text-purple-300'
+                  : 'border-purple-500 bg-purple-50 text-purple-700'
+                : darkMode
+                  ? 'border-ink-700 hover:border-ink-600 text-ink-300'
+                  : 'border-border hover:border-foreground/20 text-foreground'}"
+              onclick={() => selectStyle(style.key)}
             >
-              <!-- Book images -->
+              <span class="font-medium">{style.label}</span>
+              <span class="block text-[11px] mt-0.5 opacity-60"
+                >{style.description}</span
+              >
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <!-- Reference images -->
+      <div>
+        <button
+          class="text-xs font-medium mb-2 transition-colors flex items-center gap-1 {showRefs
+            ? darkMode
+              ? 'text-purple-400'
+              : 'text-purple-600'
+            : darkMode
+              ? 'text-ink-500 hover:text-ink-400'
+              : 'text-muted-foreground hover:text-foreground'}"
+          onclick={toggleRefs}
+        >
+          <ImageIcon size={12} />
+          {showRefs
+            ? m.illustration_ref_images_hide()
+            : m.illustration_ref_images_add()}
+          {#if selectedRefs.length > 0}
+            <span
+              class="ml-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold {darkMode
+                ? 'bg-purple-500/20 text-purple-300'
+                : 'bg-purple-100 text-purple-700'}"
+            >
+              {selectedRefs.length}/{MAX_REFS}
+            </span>
+          {/if}
+        </button>
+
+        {#if showRefs}
+          <div
+            class="space-y-3 rounded-lg border p-3 {darkMode
+              ? 'border-ink-700 bg-ink-800/50'
+              : 'border-border bg-muted/50'}"
+          >
+            <!-- Book images -->
+            <div>
+              <p
+                class="text-[10px] uppercase tracking-wider mb-2 {darkMode
+                  ? 'text-ink-500'
+                  : 'text-muted-foreground'}"
+              >
+                {m.illustration_book_images()}
+              </p>
+              {#if loadingEpubImages}
+                <div
+                  class="flex items-center gap-2 py-4 justify-center {darkMode
+                    ? 'text-ink-500'
+                    : 'text-muted-foreground'}"
+                >
+                  <LoaderCircle size={14} class="animate-spin" />
+                  <span class="text-xs">{m.common_loading()}</span>
+                </div>
+              {:else if epubImages.length === 0}
+                <p
+                  class="text-xs py-2 {darkMode
+                    ? 'text-ink-600'
+                    : 'text-muted-foreground'}"
+                >
+                  {m.illustration_no_book_images()}
+                </p>
+              {:else}
+                <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                  {#each epubImages as img}
+                    {@const selected = isSelected("epub", img.path)}
+                    <button
+                      class="relative aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
+                        ? 'border-purple-500 ring-2 ring-purple-500/30'
+                        : selectedRefs.length >= MAX_REFS
+                          ? darkMode
+                            ? 'border-ink-700 opacity-40 cursor-not-allowed'
+                            : 'border-border opacity-40 cursor-not-allowed'
+                          : darkMode
+                            ? 'border-ink-700 hover:border-ink-500'
+                            : 'border-border hover:border-foreground/30'}"
+                      onclick={() =>
+                        toggleRef({ source: "epub", path: img.path })}
+                      disabled={!selected && selectedRefs.length >= MAX_REFS}
+                      title={img.name}
+                    >
+                      <img
+                        use:authedSrc={`${apiBase()}/books/${bookId}/content/${img.path}`}
+                        alt={img.name}
+                        class="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      {#if selected}
+                        <div
+                          class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
+                        >
+                          <div class="bg-purple-500 rounded-full p-0.5">
+                            <Check size={10} class="text-white" />
+                          </div>
+                        </div>
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+
+            <!-- Generated illustrations -->
+            {#if completedIllustrations.length > 0}
               <div>
                 <p
                   class="text-[10px] uppercase tracking-wider mb-2 {darkMode
                     ? 'text-ink-500'
                     : 'text-muted-foreground'}"
                 >
-                  {m.illustration_book_images()}
+                  {m.illustration_generated()}
                 </p>
-                {#if loadingEpubImages}
-                  <div
-                    class="flex items-center gap-2 py-4 justify-center {darkMode
-                      ? 'text-ink-500'
-                      : 'text-muted-foreground'}"
-                  >
-                    <LoaderCircle size={14} class="animate-spin" />
-                    <span class="text-xs">{m.common_loading()}</span>
-                  </div>
-                {:else if epubImages.length === 0}
-                  <p
-                    class="text-xs py-2 {darkMode
-                      ? 'text-ink-600'
-                      : 'text-muted-foreground'}"
-                  >
-                    {m.illustration_no_book_images()}
-                  </p>
-                {:else}
-                  <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                    {#each epubImages as img}
-                      {@const selected = isSelected("epub", img.path)}
-                      <button
-                        class="relative aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
-                          ? 'border-purple-500 ring-2 ring-purple-500/30'
-                          : selectedRefs.length >= MAX_REFS
-                            ? darkMode
-                              ? 'border-ink-700 opacity-40 cursor-not-allowed'
-                              : 'border-border opacity-40 cursor-not-allowed'
-                            : darkMode
-                              ? 'border-ink-700 hover:border-ink-500'
-                              : 'border-border hover:border-foreground/30'}"
-                        onclick={() =>
-                          toggleRef({ source: "epub", path: img.path })}
-                        disabled={!selected && selectedRefs.length >= MAX_REFS}
-                        title={img.name}
-                      >
-                        <img
-                          use:authedSrc={`${apiBase()}/books/${bookId}/content/${img.path}`}
-                          alt={img.name}
-                          class="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                        {#if selected}
-                          <div
-                            class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
-                          >
-                            <div class="bg-purple-500 rounded-full p-0.5">
-                              <Check size={10} class="text-white" />
-                            </div>
+                <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
+                  {#each completedIllustrations as ill}
+                    {@const selected = isSelected("illustration", ill.id)}
+                    <button
+                      class="relative w-full aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
+                        ? 'border-purple-500 ring-2 ring-purple-500/30'
+                        : selectedRefs.length >= MAX_REFS
+                          ? darkMode
+                            ? 'border-ink-700 opacity-40 cursor-not-allowed'
+                            : 'border-border opacity-40 cursor-not-allowed'
+                          : darkMode
+                            ? 'border-ink-700 hover:border-ink-500'
+                            : 'border-border hover:border-foreground/30'}"
+                      onclick={() =>
+                        toggleRef({
+                          source: "illustration",
+                          path: ill.id,
+                        })}
+                      disabled={!selected && selectedRefs.length >= MAX_REFS}
+                      title={ill.text.slice(0, 60)}
+                    >
+                      <img
+                        use:authedSrc={booksApi.getIllustrationImageUrl(
+                          bookId,
+                          ill.id,
+                        )}
+                        alt="illustration"
+                        class="w-full h-full object-cover"
+                        loading="lazy"
+                      />
+                      {#if selected}
+                        <div
+                          class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
+                        >
+                          <div class="bg-purple-500 rounded-full p-0.5">
+                            <Check size={10} class="text-white" />
                           </div>
-                        {/if}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <!-- Generated illustrations -->
-              {#if completedIllustrations.length > 0}
-                <div>
-                  <p
-                    class="text-[10px] uppercase tracking-wider mb-2 {darkMode
-                      ? 'text-ink-500'
-                      : 'text-muted-foreground'}"
-                  >
-                    {m.illustration_generated()}
-                  </p>
-                  <div class="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto">
-                    {#each completedIllustrations as ill}
-                      {@const selected = isSelected("illustration", ill.id)}
-                      <button
-                        class="relative w-full aspect-square rounded-lg overflow-hidden border-2 transition-all {selected
-                          ? 'border-purple-500 ring-2 ring-purple-500/30'
-                          : selectedRefs.length >= MAX_REFS
-                            ? darkMode
-                              ? 'border-ink-700 opacity-40 cursor-not-allowed'
-                              : 'border-border opacity-40 cursor-not-allowed'
-                            : darkMode
-                              ? 'border-ink-700 hover:border-ink-500'
-                              : 'border-border hover:border-foreground/30'}"
-                        onclick={() =>
-                          toggleRef({
-                            source: "illustration",
-                            path: ill.id,
-                          })}
-                        disabled={!selected && selectedRefs.length >= MAX_REFS}
-                        title={ill.text.slice(0, 60)}
-                      >
-                        <img
-                          use:authedSrc={booksApi.getIllustrationImageUrl(
-                            bookId,
-                            ill.id,
-                          )}
-                          alt="illustration"
-                          class="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                        {#if selected}
-                          <div
-                            class="absolute inset-0 bg-purple-500/20 flex items-center justify-center"
-                          >
-                            <div class="bg-purple-500 rounded-full p-0.5">
-                              <Check size={10} class="text-white" />
-                            </div>
-                          </div>
-                        {/if}
-                      </button>
-                    {/each}
-                  </div>
+                        </div>
+                      {/if}
+                    </button>
+                  {/each}
                 </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-
-        <!-- Custom prompt -->
-        <div>
-          <button
-            class="text-xs font-medium mb-2 transition-colors {useCustom
-              ? darkMode
-                ? 'text-purple-400'
-                : 'text-purple-600'
-              : darkMode
-                ? 'text-ink-500 hover:text-ink-400'
-                : 'text-muted-foreground hover:text-foreground'}"
-            onclick={toggleCustom}
-          >
-            {useCustom
-              ? m.illustration_custom_prompt_hide()
-              : m.illustration_custom_prompt_add()}
-          </button>
-          {#if useCustom}
-            <textarea
-              bind:value={customPrompt}
-              placeholder={m.illustration_custom_placeholder()}
-              rows={3}
-              class="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 {darkMode
-                ? 'bg-ink-800 border-ink-700 text-ink-200 placeholder-ink-600'
-                : 'bg-background border-border text-foreground placeholder-muted-foreground'}"
-            ></textarea>
-          {/if}
-        </div>
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
 
-      <!-- Footer -->
-      <div
-        class="px-5 py-4 border-t flex justify-end gap-2 {darkMode
-          ? 'border-ink-800'
-          : 'border-border'}"
-      >
+      <!-- Custom prompt -->
+      <div>
         <button
-          class="px-4 py-2 text-sm rounded-lg transition-colors {darkMode
-            ? 'text-ink-400 hover:bg-ink-800'
-            : 'text-muted-foreground hover:bg-accent'}"
-          onclick={() => onclose?.()}
-        >
-          {m.common_cancel()}
-        </button>
-        <button
-          class="px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 {canGenerate
-            ? 'bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:opacity-90 shadow-md'
+          class="text-xs font-medium mb-2 transition-colors {useCustom
+            ? darkMode
+              ? 'text-purple-400'
+              : 'text-purple-600'
             : darkMode
-              ? 'bg-ink-800 text-ink-600 cursor-not-allowed'
-              : 'bg-muted text-muted-foreground cursor-not-allowed'}"
-          disabled={!canGenerate}
-          onclick={handleGenerate}
+              ? 'text-ink-500 hover:text-ink-400'
+              : 'text-muted-foreground hover:text-foreground'}"
+          onclick={toggleCustom}
         >
-          <Sparkles size={14} />
-          {m.illustration_generate()}
+          {useCustom
+            ? m.illustration_custom_prompt_hide()
+            : m.illustration_custom_prompt_add()}
         </button>
+        {#if useCustom}
+          <textarea
+            bind:value={customPrompt}
+            placeholder={m.illustration_custom_placeholder()}
+            rows={3}
+            class="w-full rounded-lg border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-purple-500/50 {darkMode
+              ? 'bg-ink-800 border-ink-700 text-ink-200 placeholder-ink-600'
+              : 'bg-background border-border text-foreground placeholder-muted-foreground'}"
+          ></textarea>
+        {/if}
       </div>
-    {/if}
-  </div>
-</div>
+    </div>
+
+    <!-- Footer -->
+    <div
+      class="px-5 py-4 border-t flex justify-end gap-2 {darkMode
+        ? 'border-ink-800'
+        : 'border-border'}"
+    >
+      <button
+        class="px-4 py-2 text-sm rounded-lg transition-colors {darkMode
+          ? 'text-ink-400 hover:bg-ink-800'
+          : 'text-muted-foreground hover:bg-accent'}"
+        onclick={() => onclose?.()}
+      >
+        {m.common_cancel()}
+      </button>
+      <button
+        class="px-4 py-2 text-sm rounded-lg font-medium transition-all flex items-center gap-1.5 {canGenerate
+          ? 'bg-gradient-to-r from-purple-500 via-blue-500 to-pink-500 text-white hover:opacity-90 shadow-md'
+          : darkMode
+            ? 'bg-ink-800 text-ink-600 cursor-not-allowed'
+            : 'bg-muted text-muted-foreground cursor-not-allowed'}"
+        disabled={!canGenerate}
+        onclick={handleGenerate}
+      >
+        <Sparkles size={14} />
+        {m.illustration_generate()}
+      </button>
+    </div>
+  {/if}
+</ReaderDialog>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderDialog from "./ReaderDialog.svelte";
   import { X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
 
@@ -164,15 +165,6 @@
     isPanning = false;
   }
 
-  function handleKeydown(e: KeyboardEvent) {
-    // preventDefault marks the Escape as consumed so the reader page's
-    // global handler doesn't also react to it.
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onclose?.();
-    }
-  }
-
   // Use pointerup instead of click for backdrop close.
   // Synthetic mouse events from cross-iframe touch (Capacitor iOS) don't generate
   // pointer events, so phantom clicks never reach this handler.
@@ -187,12 +179,14 @@
   }
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed inset-0 z-[70] flex items-center justify-center">
-  <div class="absolute inset-0 bg-black/85"></div>
-
+<!-- The whole screen. (Escape, and keeping the keys from the page
+     under it, are the dialog's.) -->
+<ReaderDialog
+  label={m.illustration_book_images()}
+  {onclose}
+  overlayClass="bg-black/85"
+  class="inset-0! translate-x-0! translate-y-0! flex! h-full w-full max-w-none! max-h-none! items-center justify-center overflow-hidden rounded-none bg-transparent shadow-none"
+>
   <!-- Close button -->
   <button
     aria-label={m.common_close()}
@@ -232,4 +226,4 @@
       draggable="false"
     />
   </div>
-</div>
+</ReaderDialog>

@@ -576,81 +576,66 @@
 </div>
 
 <!-- Link dialog -->
-{#if linkingPath}
-  <div
-    class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-    role="dialog"
-    tabindex="-1"
-    aria-modal="true"
-    onclick={(e) => {
-      if (e.target === e.currentTarget) {
-        linkingPath = null;
-        linkName = "";
-      }
-    }}
-    onkeydown={(e) => {
-      if (e.key === "Escape") {
-        linkingPath = null;
-        linkName = "";
-      }
-    }}
-  >
-    <div class="bg-card rounded-2xl p-6 w-full max-w-md shadow-xl">
-      <h2 class="text-lg font-semibold text-foreground mb-4">
-        {m.admin_calibre_link_title()}
-      </h2>
-      <p class="text-sm text-muted-foreground mb-4">{linkingPath}</p>
-      <div class="space-y-3">
-        <div class="space-y-1">
-          <label
-            class="block text-sm font-medium text-foreground"
-            for="lib-name">{m.admin_calibre_link_name()}</label
+<Modal
+  title={m.admin_calibre_link_title()}
+  open={linkingPath != null}
+  contentClass="sm:max-w-md"
+  onclose={() => {
+    linkingPath = null;
+    linkName = "";
+  }}
+>
+  {#if linkingPath}
+    <p class="text-sm text-muted-foreground mb-4">{linkingPath}</p>
+    <div class="space-y-3">
+      <div class="space-y-1">
+        <label class="block text-sm font-medium text-foreground" for="lib-name"
+          >{m.admin_calibre_link_name()}</label
+        >
+        <Input id="lib-name" bind:value={linkName} class="rounded-xl" />
+      </div>
+      <div class="space-y-2" role="radiogroup">
+        {#each [["sync", m.admin_calibre_mode_sync, m.admin_calibre_mode_sync_hint], ["copy", m.admin_calibre_mode_copy, m.admin_calibre_mode_copy_hint]] as const as [mode, label, hint] (mode)}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={linkMode === mode}
+            class="w-full text-left rounded-xl border px-3.5 py-2.5 transition-colors {linkMode ===
+            mode
+              ? 'border-primary bg-primary/5'
+              : 'border-border hover:bg-secondary/60'}"
+            onclick={() => (linkMode = mode)}
           >
-          <Input id="lib-name" bind:value={linkName} class="rounded-xl" />
-        </div>
-        <div class="space-y-2" role="radiogroup">
-          {#each [["sync", m.admin_calibre_mode_sync, m.admin_calibre_mode_sync_hint], ["copy", m.admin_calibre_mode_copy, m.admin_calibre_mode_copy_hint]] as const as [mode, label, hint] (mode)}
-            <button
-              type="button"
-              role="radio"
-              aria-checked={linkMode === mode}
-              class="w-full text-left rounded-xl border px-3.5 py-2.5 transition-colors {linkMode ===
-              mode
-                ? 'border-primary bg-primary/5'
-                : 'border-border hover:bg-secondary/60'}"
-              onclick={() => (linkMode = mode)}
+            <span class="block text-sm font-medium text-foreground"
+              >{label()}</span
             >
-              <span class="block text-sm font-medium text-foreground"
-                >{label()}</span
-              >
-              <span class="block text-xs text-muted-foreground mt-0.5"
-                >{hint()}</span
-              >
-            </button>
-          {/each}
-        </div>
-        <div class="flex justify-end gap-2 pt-2">
-          <Button
-            variant="ghost"
-            class="rounded-xl"
-            onclick={() => {
-              linkingPath = null;
-              linkName = "";
-            }}>{m.common_cancel()}</Button
-          >
-          <Button
-            class="rounded-xl"
-            disabled={!linkName}
-            onclick={() => handleLink(linkingPath!)}
-            >{linkMode === "copy"
-              ? m.admin_calibre_link_copy()
-              : m.admin_calibre_link_sync()}</Button
-          >
-        </div>
+            <span class="block text-xs text-muted-foreground mt-0.5"
+              >{hint()}</span
+            >
+          </button>
+        {/each}
+      </div>
+      <div class="flex justify-end gap-2 pt-2">
+        <Button
+          variant="ghost"
+          class="rounded-xl"
+          onclick={() => {
+            linkingPath = null;
+            linkName = "";
+          }}>{m.common_cancel()}</Button
+        >
+        <Button
+          class="rounded-xl"
+          disabled={!linkName}
+          onclick={() => handleLink(linkingPath!)}
+          >{linkMode === "copy"
+            ? m.admin_calibre_link_copy()
+            : m.admin_calibre_link_sync()}</Button
+        >
       </div>
     </div>
-  </div>
-{/if}
+  {/if}
+</Modal>
 
 <Modal
   title={copyTarget

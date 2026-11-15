@@ -133,7 +133,10 @@ function settled(page: Page): Promise<boolean> {
     const style = getComputedStyle(paginator);
     if (paginator.getBoundingClientRect().left !== 0) return false;
     if (paginator.getAnimations().length) return false;
-    if (style.pointerEvents === "none" || style.opacity !== "1") return false;
+    // (Its own lock, as the reader sets it — not the computed value: a
+    // settings sheet open over the page makes the whole page inert.)
+    if (paginator.style.pointerEvents === "none" || style.opacity !== "1")
+      return false;
     return (core.ghosts as HTMLElement[]).every(
       (ghost) =>
         ghost.getBoundingClientRect().left === 0 &&

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderDialog from "$lib/components/reader/ReaderDialog.svelte";
   import { X, Download, Share2, LoaderCircle } from "@lucide/svelte";
   import ShareHighlightCard from "./ShareHighlightCard.svelte";
   import type { HighlightOut } from "$lib/types";
@@ -40,15 +41,6 @@
 
   function close() {
     onclose?.();
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    // preventDefault marks the Escape as consumed so the reader page's
-    // global handler doesn't also close the overlay under this modal.
-    if (e.key === "Escape" && open) {
-      e.preventDefault();
-      close();
-    }
   }
 
   async function captureCard(): Promise<Blob | null> {
@@ -129,49 +121,40 @@
   );
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
-
 {#if open && highlight}
-  <div
-    class="fixed inset-0 z-50 flex items-center justify-center p-4"
-    role="dialog"
-    aria-modal="true"
+  <!-- (The reader's dialog shell: in place, Escape and a tap outside ask
+       to close, and keys stay inside — under it may be the reader, which
+       turns on them.) -->
+  <ReaderDialog
+    label={m.share_highlight_title()}
+    onclose={close}
+    overlayClass="bg-black/40 backdrop-blur-sm!"
+    class="flex! flex-col rounded-2xl bg-card w-[min(calc((90vh_-_120px)_*_4_/_5_+_40px),560px)] max-w-[calc(100%-2rem)] sm:max-w-[calc(100%-2rem)] max-h-[90vh] overflow-hidden"
   >
-    <button
-      class="absolute inset-0 bg-black/40 backdrop-blur-sm"
-      aria-label={m.common_close()}
-      onclick={close}
-    ></button>
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-3 flex-shrink-0">
+      <h2 class="text-base font-bold text-foreground">
+        {m.share_highlight_title()}
+      </h2>
+      <button
+        class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
+        onclick={close}
+        aria-label={m.common_close()}
+      >
+        <X size={16} />
+      </button>
+    </div>
 
-    <div
-      class="relative bg-card rounded-2xl shadow-2xl flex flex-col"
-      style="max-height: 90vh; width: min(calc((90vh - 120px) * 4 / 5 + 40px), 560px);"
-      role="document"
-    >
-      <!-- Header -->
-      <div class="flex items-center justify-between px-5 py-3 flex-shrink-0">
-        <h2 class="text-base font-bold text-foreground">
-          {m.share_highlight_title()}
-        </h2>
-        <button
-          class="w-8 h-8 rounded-full bg-secondary flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary/80 transition-colors"
-          onclick={close}
-          aria-label={m.common_close()}
-        >
-          <X size={16} />
-        </button>
-      </div>
-
-      <!-- Card preview (scaled down) -->
-      <div class="px-5 pb-3 overflow-hidden min-h-0 flex-1">
+    <!-- Card preview (scaled down) -->
+    <div class="px-5 pb-3 overflow-hidden min-h-0 flex-1">
+      <div
+        bind:this={previewWrapper}
+        class="rounded-xl overflow-hidden shadow-lg relative h-full"
+        style="aspect-ratio: 4/5;"
+      >
         <div
-          bind:this={previewWrapper}
-          class="rounded-xl overflow-hidden shadow-lg relative h-full"
-          style="aspect-ratio: 4/5;"
-        >
-          <div
-            bind:this={cardContainer}
-            style="
+          bind:this={cardContainer}
+          style="
               width: 1080px;
               height: 1350px;
               transform-origin: top left;
@@ -180,46 +163,45 @@
               top: 0;
               left: 0;
             "
-          >
-            <ShareHighlightCard
-              text={highlight.text}
-              {bookTitle}
-              authors={bookAuthors}
-              note={highlight.note}
-            />
-          </div>
+        >
+          <ShareHighlightCard
+            text={highlight.text}
+            {bookTitle}
+            authors={bookAuthors}
+            note={highlight.note}
+          />
         </div>
       </div>
+    </div>
 
-      <!-- Action buttons -->
-      <div class="px-5 pb-4 pt-1 flex gap-3 flex-shrink-0">
+    <!-- Action buttons -->
+    <div class="px-5 pb-4 pt-1 flex gap-3 flex-shrink-0">
+      <button
+        class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm font-medium disabled:opacity-50"
+        onclick={handleDownload}
+        disabled={downloading || sharing}
+      >
+        {#if downloading}
+          <LoaderCircle size={16} class="animate-spin" />
+        {:else}
+          <Download size={16} />
+        {/if}
+        {m.common_save()}
+      </button>
+      {#if canShare}
         <button
-          class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors text-sm font-medium disabled:opacity-50"
-          onclick={handleDownload}
+          class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50"
+          onclick={handleShare}
           disabled={downloading || sharing}
         >
-          {#if downloading}
+          {#if sharing}
             <LoaderCircle size={16} class="animate-spin" />
           {:else}
-            <Download size={16} />
+            <Share2 size={16} />
           {/if}
-          {m.common_save()}
+          {m.common_share()}
         </button>
-        {#if canShare}
-          <button
-            class="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50"
-            onclick={handleShare}
-            disabled={downloading || sharing}
-          >
-            {#if sharing}
-              <LoaderCircle size={16} class="animate-spin" />
-            {:else}
-              <Share2 size={16} />
-            {/if}
-            {m.common_share()}
-          </button>
-        {/if}
-      </div>
+      {/if}
     </div>
-  </div>
+  </ReaderDialog>
 {/if}

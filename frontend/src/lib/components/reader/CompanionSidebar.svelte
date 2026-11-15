@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ReaderPanel from "./ReaderPanel.svelte";
   import { formatDate } from "$lib/format";
   import {
     X,
@@ -414,31 +415,21 @@
   let visibleConversations = $derived(conversations);
 </script>
 
-<!-- Backdrop -->
-<div
-  class="fixed inset-0 z-40 bg-black/20 transition-opacity duration-200 {backdropVisible
+<!-- A side panel on a wide screen, the whole screen on a phone. It
+     slides and fades itself in and out (`visible`), so its closing can
+     be seen before it is gone. -->
+<ReaderPanel
+  side="right"
+  label={m.companion_title()}
+  {darkMode}
+  onclose={close}
+  width="w-full! max-w-none! sm:w-[28rem]!"
+  overlayClass="transition-opacity duration-200 {backdropVisible
     ? 'opacity-100'
     : 'opacity-0'}"
-  role="presentation"
-  onclick={() => close()}
-  onkeydown={(e) => {
-    if (e.key === "Escape") close();
-  }}
-></div>
-
-<!-- Sidebar / Full-screen sheet -->
-<div
-  class="fixed z-50 flex flex-col touch-manipulation
-    inset-0 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-[28rem]
-    shadow-2xl transition-transform duration-200 ease-out
-    {visible ? 'translate-x-0' : 'translate-x-full'}
-    {darkMode
-    ? 'bg-ink-900 sm:border-l sm:border-ink-800'
-    : 'bg-card sm:border-l sm:border-border'}"
-  style="padding-top: env(safe-area-inset-top, 0px);"
-  role="dialog"
-  aria-modal="true"
-  aria-label={m.companion_title()}
+  class="touch-manipulation border-l-0! sm:border-l! transition-transform duration-200 ease-out {visible
+    ? 'translate-x-0'
+    : 'translate-x-full'}"
 >
   <!-- Header -->
   <div
@@ -939,4 +930,4 @@
       </div>
     </div>
   {/if}
-</div>
+</ReaderPanel>

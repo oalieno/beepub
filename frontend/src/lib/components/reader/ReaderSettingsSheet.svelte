@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as Sheet from "$lib/components/ui/sheet";
   import {
     Minus,
     Plus,
@@ -134,12 +135,10 @@
     onsyncpush?: () => void;
   } = $props();
 
+  let sheetEl = $state<HTMLElement | null>(null);
+
   function close() {
     open = false;
-  }
-
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") close();
   }
 
   const labelClass = $derived(
@@ -242,8 +241,6 @@
   const showGutters = $derived(!!onmarginXChange || !!onmarginYChange);
 </script>
 
-<svelte:window onkeydown={open ? handleKeydown : undefined} />
-
 {#snippet stepper(opts: {
   name: string;
   testid: string;
@@ -282,418 +279,404 @@
   </div>
 {/snippet}
 
-{#if open}
-  <div
-    class="fixed inset-0 z-50"
-    role="dialog"
-    aria-modal="true"
+<!-- Up from the bottom edge on a phone; a card above it on a wide
+     screen. In place, not at the end of the page: the reader's theme is
+     set on the reader. Nothing is focused inside on opening (the first
+     control is a stepper, and a caret there means nothing). It comes in
+     and is simply gone: a way out that plays for a moment would sit over
+     the page and take the tap that turns it. -->
+<Sheet.Root bind:open>
+  <Sheet.Content
+    bind:ref={sheetEl}
+    side="bottom"
+    showCloseButton={false}
+    portalProps={{ disabled: true }}
+    overlayClass="bg-black/40 backdrop-blur-none! data-[state=closed]:animate-none!"
     aria-label={m.reader_settings_title()}
+    onOpenAutoFocus={(e) => {
+      e.preventDefault();
+      sheetEl?.focus();
+    }}
+    class="gap-0 text-base border-0! rounded-t-2xl shadow-2xl outline-none data-[state=closed]:animate-none! md:bottom-8! md:left-1/2! md:right-auto! md:w-[400px] md:-translate-x-1/2 md:rounded-2xl {darkMode
+      ? 'bg-ink-900'
+      : 'bg-card'}"
+    style="padding-bottom: env(safe-area-inset-bottom, 0px);"
   >
-    <button
-      class="absolute inset-0 bg-black/40"
-      aria-label={m.common_close()}
-      onclick={close}
-    ></button>
+    <!-- Drag handle -->
+    <div class="flex justify-center pt-3 pb-2 md:hidden">
+      <div
+        class="w-9 h-1 rounded-full {darkMode
+          ? 'bg-ink-700'
+          : 'bg-muted-foreground/20'}"
+      ></div>
+    </div>
 
-    <div
-      class="absolute bottom-0 left-0 right-0 rounded-t-2xl shadow-2xl animate-slide-up md:bottom-8 md:left-1/2 md:right-auto md:w-[400px] md:-translate-x-1/2 md:rounded-2xl {darkMode
-        ? 'bg-ink-900'
-        : 'bg-card'}"
-      style="padding-bottom: env(safe-area-inset-bottom, 0px);"
-    >
-      <!-- Drag handle -->
-      <div class="flex justify-center pt-3 pb-2 md:hidden">
-        <div
-          class="w-9 h-1 rounded-full {darkMode
-            ? 'bg-ink-700'
-            : 'bg-muted-foreground/20'}"
-        ></div>
-      </div>
-
-      <div class="px-6 pb-6 md:pt-6 space-y-5">
-        {#if !isImageBook}
-          <!-- Font size -->
-          <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">{m.reader_font_size()}</span>
-            <div class="flex items-center gap-3">
-              <button
-                class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
-                onclick={() => onfontDecrease?.()}
-                disabled={fontSize <= 10}
-                aria-label={m.reader_decrease_font()}
-              >
-                <Minus size={14} />
-              </button>
-              <span
-                class="text-sm font-medium w-12 text-center tabular-nums {textClass}"
-                data-testid="setting-font-size">{fontSize}px</span
-              >
-              <button
-                class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
-                onclick={() => onfontIncrease?.()}
-                disabled={fontSize >= fontSizeMax}
-                aria-label={m.reader_increase_font()}
-              >
-                <Plus size={14} />
-              </button>
-            </div>
-          </div>
-
-          <!-- Typeface -->
-          <div class="flex items-center justify-between gap-3">
-            <span class="text-sm {labelClass}">{m.reader_font()}</span>
-            <div class="flex flex-wrap justify-end gap-1">
-              {#each READER_FONTS as font (font)}
-                <button
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
-                  font
-                    ? activeBtnClass
-                    : inactiveBtnClass}"
-                  aria-pressed={fontFamily === font}
-                  data-testid="reader-font-{font}"
-                  onclick={() => {
-                    if (fontFamily !== font) onfontChange?.(font);
-                  }}
-                >
-                  {fontLabel[font]()}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          {#if onletterSpacingChange}
-            {@render stepper({
-              name: m.reader_letter_spacing(),
-              testid: "setting-letter-spacing",
-              value: letterSpacing,
-              display: `${letterSpacing}px`,
-              step: LETTER_STEP,
-              max: LETTER_MAX,
-              onchange: onletterSpacingChange,
-            })}
-          {/if}
-
-          <!-- Line spacing -->
-          <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">{m.reader_line_height()}</span>
-            <div class="flex gap-1">
-              {#each lineHeightOptions as option}
-                <button
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {lineHeight ===
-                  option.value
-                    ? activeBtnClass
-                    : inactiveBtnClass}"
-                  onclick={() => onlineHeightChange?.(option.value)}
-                >
-                  {option.label()}
-                </button>
-              {/each}
-            </div>
-          </div>
-
-          {#if showGutters}
-            {#if onmarginYChange}
-              {@render stepper({
-                name: m.reader_margin_y(),
-                testid: "setting-margin-y",
-                value: marginY,
-                display: `${marginY}px`,
-                step: MARGIN_STEP,
-                max: MARGIN_MAX,
-                onchange: onmarginYChange,
-              })}
-            {/if}
-            {#if onmarginXChange}
-              {@render stepper({
-                name: m.reader_margin_x(),
-                testid: "setting-margin-x",
-                value: marginX,
-                display: `${marginX}px`,
-                step: MARGIN_STEP,
-                max: MARGIN_MAX,
-                onchange: onmarginXChange,
-              })}
-            {/if}
-          {/if}
-
-          {#if onfullPageChange}
-            <!-- The text block: a comfortable measure, or the whole
-                 window. A phone is all text either way. -->
-            <div class="hidden md:flex items-center justify-between">
-              <span class="text-sm {labelClass}">{m.reader_measure()}</span>
-              <div class="flex gap-1" data-testid="setting-measure">
-                {#each [{ value: false, label: m.reader_measure_fit }, { value: true, label: m.reader_measure_full }] as option}
-                  <button
-                    class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fullPage ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    aria-pressed={fullPage === option.value}
-                    onclick={() => onfullPageChange?.(option.value)}
-                  >
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-
-          {#if onwritingModeChange}
-            <!-- This book's writing direction (CJK books): its own, or
-                 forced. Wraps under the label like the pager's chips. -->
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="shrink-0 text-sm {labelClass}"
-                >{m.reader_writing_mode()}</span
-              >
-              <div
-                class="ml-auto flex gap-1"
-                data-testid="setting-writing-mode"
-              >
-                {#each writingModeOptions as option}
-                  <button
-                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {writingMode ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    aria-pressed={writingMode === option.value}
-                    onclick={() => onwritingModeChange?.(option.value)}
-                  >
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-        {/if}
-
-        {#if onpageTurnChange}
-          <div
-            class="flex items-center justify-between"
-            data-testid="setting-page-turn"
-          >
-            <span class="text-sm {labelClass}">{m.reader_page_turn()}</span>
-            <div class="flex gap-1">
-              {#each pageTurnOptions as option}
-                <button
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageTurn ===
-                  option.value
-                    ? activeBtnClass
-                    : inactiveBtnClass}"
-                  onclick={() => onpageTurnChange?.(option.value)}
-                >
-                  {option.label()}
-                </button>
-              {/each}
-            </div>
-          </div>
-        {/if}
-
-        {#if onpagerModeChange}
-          <!-- Image pager: reading mode. Label left, choices right like
-               every other row; five choices fit only as icons, so the
-               selected one alone shows its name. -->
-          <div class="flex flex-wrap items-center justify-between gap-2">
-            <span class="shrink-0 text-sm {labelClass}"
-              >{m.reader_pager_mode()}</span
-            >
-            <div class="ml-auto flex gap-1" data-testid="setting-pager-mode">
-              {#each pagerModeOptions as option}
-                {@const active = pagerMode === option.value}
-                <button
-                  class="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors {active
-                    ? `px-3 ${activeBtnClass}`
-                    : `w-9 justify-center ${inactiveBtnClass}`}"
-                  aria-label={option.label()}
-                  title={option.label()}
-                  onclick={() => onpagerModeChange?.(option.value)}
-                >
-                  <option.icon size={16} />
-                  {#if active}
-                    {option.label()}
-                  {/if}
-                </button>
-              {/each}
-            </div>
-          </div>
-          {#if onpagerDirectionChange}
-            <!-- The three chips outgrow a phone-width row in English:
-                 they drop under the label, right-aligned, rather than
-                 wrapping their words. -->
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <span class="shrink-0 text-sm {labelClass}"
-                >{m.reader_pager_direction()}</span
-              >
-              <div
-                class="ml-auto flex gap-1"
-                data-testid="setting-pager-direction"
-              >
-                {#each pagerDirectionOptions as option}
-                  <button
-                    class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    onclick={() => onpagerDirectionChange?.(option.value)}
-                  >
-                    {#if option.icon}
-                      <option.icon size={14} />
-                    {/if}
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-          {#if onpagerTurnChange && curlable && (pagerMode === "single" || pagerMode === "double")}
-            <!-- Only a paged comic turns: a strip scrolls. Without the curl
-                 (a desktop) there is only the one way, and no row. -->
-            <div
-              class="flex items-center justify-between gap-3"
-              data-testid="setting-pager-turn"
-            >
-              <span class="shrink-0 text-sm {labelClass}"
-                >{m.reader_page_turn()}</span
-              >
-              <div class="flex gap-1">
-                {#each pagerTurnOptions as option}
-                  <button
-                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerTurn ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    onclick={() => onpagerTurnChange?.(option.value)}
-                  >
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-          {#if onpagerShiftChange && pagerMode === "double"}
-            <!-- Which pages sit together: cover alone (1 | 2–3) or shifted
-                 by one (1–2 | 3–4), for a file without its cover. -->
-            <div class="flex items-center justify-between gap-3">
-              <span class="shrink-0 text-sm {labelClass}"
-                >{m.reader_pager_pairing()}</span
-              >
-              <div class="flex gap-1" data-testid="setting-pager-shift">
-                {#each pagerShiftOptions as option}
-                  <button
-                    class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerShift ===
-                    option.value
-                      ? activeBtnClass
-                      : inactiveBtnClass}"
-                    onclick={() => onpagerShiftChange?.(option.value)}
-                  >
-                    {option.label()}
-                  </button>
-                {/each}
-              </div>
-            </div>
-          {/if}
-          {#if onpagerPaddingChange}
-            {@render stepper({
-              name: m.reader_pager_padding(),
-              testid: "setting-pager-padding",
-              value: pagerPadding,
-              display: `${pagerPadding}px`,
-              step: MARGIN_STEP,
-              max: MARGIN_MAX,
-              onchange: onpagerPaddingChange,
-            })}
-          {/if}
-        {/if}
-
-        <!-- Theme -->
+    <div class="px-6 pb-6 md:pt-6 space-y-5">
+      {#if !isImageBook}
+        <!-- Font size -->
         <div class="flex items-center justify-between">
-          <span class="text-sm {labelClass}">{m.reader_theme()}</span>
-          <div class="flex gap-1">
+          <span class="text-sm {labelClass}">{m.reader_font_size()}</span>
+          <div class="flex items-center gap-3">
             <button
-              class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {!darkMode
-                ? activeBtnClass
-                : inactiveBtnClass}"
-              onclick={() => {
-                if (darkMode) onthemeToggle?.();
-              }}
+              class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
+              onclick={() => onfontDecrease?.()}
+              disabled={fontSize <= 10}
+              aria-label={m.reader_decrease_font()}
             >
-              <Sun size={14} />
-              {m.reader_theme_light()}
+              <Minus size={14} />
             </button>
-            <button
-              class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {darkMode
-                ? activeBtnClass
-                : inactiveBtnClass}"
-              onclick={() => {
-                if (!darkMode) onthemeToggle?.();
-              }}
+            <span
+              class="text-sm font-medium w-12 text-center tabular-nums {textClass}"
+              data-testid="setting-font-size">{fontSize}px</span
             >
-              <Moon size={14} />
-              {m.reader_theme_dark()}
+            <button
+              class="w-8 h-8 flex items-center justify-center rounded-lg border transition-colors {btnClass}"
+              onclick={() => onfontIncrease?.()}
+              disabled={fontSize >= fontSizeMax}
+              aria-label={m.reader_increase_font()}
+            >
+              <Plus size={14} />
             </button>
           </div>
         </div>
 
-        {#if showSync}
-          <!-- Manual kosync sync -->
-          <div class="flex items-center justify-between">
-            <span class="text-sm {labelClass}">{m.kosync_title()}</span>
-            <div class="flex gap-1">
+        <!-- Typeface -->
+        <div class="flex items-center justify-between gap-3">
+          <span class="text-sm {labelClass}">{m.reader_font()}</span>
+          <div class="flex flex-wrap justify-end gap-1">
+            {#each READER_FONTS as font (font)}
               <button
-                class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
-                disabled={syncBusy !== null}
-                onclick={() => onsyncpull?.()}
+                class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fontFamily ===
+                font
+                  ? activeBtnClass
+                  : inactiveBtnClass}"
+                aria-pressed={fontFamily === font}
+                data-testid="reader-font-{font}"
+                onclick={() => {
+                  if (fontFamily !== font) onfontChange?.(font);
+                }}
               >
-                {#if syncBusy === "pull"}
-                  <Loader2 size={14} class="animate-spin" />
-                {:else}
-                  <CloudDownload size={14} />
-                {/if}
-                {m.kosync_pull()}
+                {fontLabel[font]()}
               </button>
+            {/each}
+          </div>
+        </div>
+
+        {#if onletterSpacingChange}
+          {@render stepper({
+            name: m.reader_letter_spacing(),
+            testid: "setting-letter-spacing",
+            value: letterSpacing,
+            display: `${letterSpacing}px`,
+            step: LETTER_STEP,
+            max: LETTER_MAX,
+            onchange: onletterSpacingChange,
+          })}
+        {/if}
+
+        <!-- Line spacing -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm {labelClass}">{m.reader_line_height()}</span>
+          <div class="flex gap-1">
+            {#each lineHeightOptions as option}
               <button
-                class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
-                disabled={syncBusy !== null}
-                onclick={() => onsyncpush?.()}
+                class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {lineHeight ===
+                option.value
+                  ? activeBtnClass
+                  : inactiveBtnClass}"
+                onclick={() => onlineHeightChange?.(option.value)}
               >
-                {#if syncBusy === "push"}
-                  <Loader2 size={14} class="animate-spin" />
-                {:else}
-                  <CloudUpload size={14} />
-                {/if}
-                {m.kosync_push()}
+                {option.label()}
               </button>
+            {/each}
+          </div>
+        </div>
+
+        {#if showGutters}
+          {#if onmarginYChange}
+            {@render stepper({
+              name: m.reader_margin_y(),
+              testid: "setting-margin-y",
+              value: marginY,
+              display: `${marginY}px`,
+              step: MARGIN_STEP,
+              max: MARGIN_MAX,
+              onchange: onmarginYChange,
+            })}
+          {/if}
+          {#if onmarginXChange}
+            {@render stepper({
+              name: m.reader_margin_x(),
+              testid: "setting-margin-x",
+              value: marginX,
+              display: `${marginX}px`,
+              step: MARGIN_STEP,
+              max: MARGIN_MAX,
+              onchange: onmarginXChange,
+            })}
+          {/if}
+        {/if}
+
+        {#if onfullPageChange}
+          <!-- The text block: a comfortable measure, or the whole
+                 window. A phone is all text either way. -->
+          <div class="hidden md:flex items-center justify-between">
+            <span class="text-sm {labelClass}">{m.reader_measure()}</span>
+            <div class="flex gap-1" data-testid="setting-measure">
+              {#each [{ value: false, label: m.reader_measure_fit }, { value: true, label: m.reader_measure_full }] as option}
+                <button
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {fullPage ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  aria-pressed={fullPage === option.value}
+                  onclick={() => onfullPageChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
             </div>
           </div>
         {/if}
 
-        <!-- Gesture help -->
-        {#if onhelp}
+        {#if onwritingModeChange}
+          <!-- This book's writing direction (CJK books): its own, or
+                 forced. Wraps under the label like the pager's chips. -->
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="shrink-0 text-sm {labelClass}"
+              >{m.reader_writing_mode()}</span
+            >
+            <div class="ml-auto flex gap-1" data-testid="setting-writing-mode">
+              {#each writingModeOptions as option}
+                <button
+                  class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {writingMode ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  aria-pressed={writingMode === option.value}
+                  onclick={() => onwritingModeChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+      {/if}
+
+      {#if onpageTurnChange}
+        <div
+          class="flex items-center justify-between"
+          data-testid="setting-page-turn"
+        >
+          <span class="text-sm {labelClass}">{m.reader_page_turn()}</span>
+          <div class="flex gap-1">
+            {#each pageTurnOptions as option}
+              <button
+                class="px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pageTurn ===
+                option.value
+                  ? activeBtnClass
+                  : inactiveBtnClass}"
+                onclick={() => onpageTurnChange?.(option.value)}
+              >
+                {option.label()}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if onpagerModeChange}
+        <!-- Image pager: reading mode. Label left, choices right like
+               every other row; five choices fit only as icons, so the
+               selected one alone shows its name. -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <span class="shrink-0 text-sm {labelClass}"
+            >{m.reader_pager_mode()}</span
+          >
+          <div class="ml-auto flex gap-1" data-testid="setting-pager-mode">
+            {#each pagerModeOptions as option}
+              {@const active = pagerMode === option.value}
+              <button
+                class="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg border text-sm font-medium transition-colors {active
+                  ? `px-3 ${activeBtnClass}`
+                  : `w-9 justify-center ${inactiveBtnClass}`}"
+                aria-label={option.label()}
+                title={option.label()}
+                onclick={() => onpagerModeChange?.(option.value)}
+              >
+                <option.icon size={16} />
+                {#if active}
+                  {option.label()}
+                {/if}
+              </button>
+            {/each}
+          </div>
+        </div>
+        {#if onpagerDirectionChange}
+          <!-- The three chips outgrow a phone-width row in English:
+                 they drop under the label, right-aligned, rather than
+                 wrapping their words. -->
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <span class="shrink-0 text-sm {labelClass}"
+              >{m.reader_pager_direction()}</span
+            >
+            <div
+              class="ml-auto flex gap-1"
+              data-testid="setting-pager-direction"
+            >
+              {#each pagerDirectionOptions as option}
+                <button
+                  class="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerDirection ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onpagerDirectionChange?.(option.value)}
+                >
+                  {#if option.icon}
+                    <option.icon size={14} />
+                  {/if}
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if onpagerTurnChange && curlable && (pagerMode === "single" || pagerMode === "double")}
+          <!-- Only a paged comic turns: a strip scrolls. Without the curl
+                 (a desktop) there is only the one way, and no row. -->
+          <div
+            class="flex items-center justify-between gap-3"
+            data-testid="setting-pager-turn"
+          >
+            <span class="shrink-0 text-sm {labelClass}"
+              >{m.reader_page_turn()}</span
+            >
+            <div class="flex gap-1">
+              {#each pagerTurnOptions as option}
+                <button
+                  class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerTurn ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onpagerTurnChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if onpagerShiftChange && pagerMode === "double"}
+          <!-- Which pages sit together: cover alone (1 | 2–3) or shifted
+                 by one (1–2 | 3–4), for a file without its cover. -->
+          <div class="flex items-center justify-between gap-3">
+            <span class="shrink-0 text-sm {labelClass}"
+              >{m.reader_pager_pairing()}</span
+            >
+            <div class="flex gap-1" data-testid="setting-pager-shift">
+              {#each pagerShiftOptions as option}
+                <button
+                  class="whitespace-nowrap px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {pagerShift ===
+                  option.value
+                    ? activeBtnClass
+                    : inactiveBtnClass}"
+                  onclick={() => onpagerShiftChange?.(option.value)}
+                >
+                  {option.label()}
+                </button>
+              {/each}
+            </div>
+          </div>
+        {/if}
+        {#if onpagerPaddingChange}
+          {@render stepper({
+            name: m.reader_pager_padding(),
+            testid: "setting-pager-padding",
+            value: pagerPadding,
+            display: `${pagerPadding}px`,
+            step: MARGIN_STEP,
+            max: MARGIN_MAX,
+            onchange: onpagerPaddingChange,
+          })}
+        {/if}
+      {/if}
+
+      <!-- Theme -->
+      <div class="flex items-center justify-between">
+        <span class="text-sm {labelClass}">{m.reader_theme()}</span>
+        <div class="flex gap-1">
           <button
-            class="flex items-center gap-2 text-sm {labelClass}"
+            class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {!darkMode
+              ? activeBtnClass
+              : inactiveBtnClass}"
             onclick={() => {
-              close();
-              onhelp?.();
+              if (darkMode) onthemeToggle?.();
             }}
           >
-            <CircleHelp size={16} />
-            {m.reader_gesture_help()}
+            <Sun size={14} />
+            {m.reader_theme_light()}
           </button>
-        {/if}
+          <button
+            class="flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium rounded-lg border transition-colors {darkMode
+              ? activeBtnClass
+              : inactiveBtnClass}"
+            onclick={() => {
+              if (!darkMode) onthemeToggle?.();
+            }}
+          >
+            <Moon size={14} />
+            {m.reader_theme_dark()}
+          </button>
+        </div>
       </div>
-    </div>
-  </div>
-{/if}
 
-<style>
-  @keyframes slide-up {
-    from {
-      transform: translateY(100%);
-    }
-    to {
-      transform: translateY(0);
-    }
-  }
-  .animate-slide-up {
-    animation: slide-up 0.2s ease-out;
-  }
-</style>
+      {#if showSync}
+        <!-- Manual kosync sync -->
+        <div class="flex items-center justify-between">
+          <span class="text-sm {labelClass}">{m.kosync_title()}</span>
+          <div class="flex gap-1">
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
+              disabled={syncBusy !== null}
+              onclick={() => onsyncpull?.()}
+            >
+              {#if syncBusy === "pull"}
+                <Loader2 size={14} class="animate-spin" />
+              {:else}
+                <CloudDownload size={14} />
+              {/if}
+              {m.kosync_pull()}
+            </button>
+            <button
+              class="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors {btnClass}"
+              disabled={syncBusy !== null}
+              onclick={() => onsyncpush?.()}
+            >
+              {#if syncBusy === "push"}
+                <Loader2 size={14} class="animate-spin" />
+              {:else}
+                <CloudUpload size={14} />
+              {/if}
+              {m.kosync_push()}
+            </button>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Gesture help -->
+      {#if onhelp}
+        <button
+          class="flex items-center gap-2 text-sm {labelClass}"
+          onclick={() => {
+            close();
+            onhelp?.();
+          }}
+        >
+          <CircleHelp size={16} />
+          {m.reader_gesture_help()}
+        </button>
+      {/if}
+    </div>
+  </Sheet.Content>
+</Sheet.Root>
