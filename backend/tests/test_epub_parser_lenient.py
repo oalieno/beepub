@@ -7,7 +7,7 @@ import zipfile
 
 from PIL import Image
 
-from app.routers.books import _read_epub_entry
+from app.routers.book_content import _read_epub_entry
 from app.services.epub_parser import extract_cover, parse_epub_metadata
 from app.services.epub_text import extract_full_text
 

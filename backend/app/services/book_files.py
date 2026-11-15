@@ -1,5 +1,6 @@
 """What a book's row owns on disk and in the tables derived from its file."""
 
+from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
@@ -34,3 +35,12 @@ async def invalidate_derived_text(db: AsyncSession, book: Book) -> None:
     book.has_embedding = False
     book.word_count = None
     book.is_image_book = None
+
+
+def require_book_file(book: Book) -> None:
+    """A physical book (format="physical") has no file behind it: asking
+    for one is a 409, not a missing file."""
+    if book.file_path is None:
+        raise HTTPException(
+            status_code=409, detail="This is a physical book — it has no file"
+        )

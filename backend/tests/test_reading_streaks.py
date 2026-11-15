@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from app.routers.books import _compute_longest_streak, _compute_streak
+from app.routers.reading import _compute_longest_streak, _compute_streak
 
 # ---------------------------------------------------------------------------
 # _compute_streak

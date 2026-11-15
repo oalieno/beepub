@@ -86,7 +86,7 @@ async def test_cover_replace_from_url(admin_client, monkeypatch, tmp_path):
     async def fake_download(url, dest_path):
         return storage.save_cover_bytes(_png_bytes(), dest_path)
 
-    monkeypatch.setattr("app.routers.books.download_cover", fake_download)
+    monkeypatch.setattr("app.routers.book_content.download_cover", fake_download)
 
     book = await _create_book(admin_client)
     response = await admin_client.put(

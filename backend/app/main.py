@@ -20,10 +20,12 @@ from app.rate_limit import limiter
 from app.routers import (
     admin,
     auth,
+    book_content,
     books,
     bookshelves,
     companion,
     device_sync,
+    discover,
     highlights,
     illustrations,
     interactions,
@@ -33,6 +35,7 @@ from app.routers import (
     metadata,
     opds,
     opds_catalogs,
+    reading,
     search,
     series,
     tags,
@@ -121,7 +124,13 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(libraries.router)
+# These three share the /api/books prefix. The first two go ahead of
+# books.router: their paths are fixed words ("/me", "/random") where it
+# has "/{book_id}".
+app.include_router(reading.router)
+app.include_router(discover.router)
 app.include_router(books.router)
+app.include_router(book_content.router)
 app.include_router(metadata.router)
 # /opds is the e-reader convention (nginx routes it to the backend);
 # /api/opds is kept as an alias and hidden from the OpenAPI schema to

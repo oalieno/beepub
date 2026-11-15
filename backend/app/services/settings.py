@@ -1,3 +1,6 @@
+from datetime import UTC, date, datetime
+from zoneinfo import ZoneInfo
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -100,3 +103,13 @@ async def update_settings(db: AsyncSession, updates: dict[str, str]) -> dict[str
             db.add(AppSetting(key=key, value=value))
     await db.commit()
     return await get_all_settings(db)
+
+
+async def today_in_app_timezone(db: AsyncSession) -> date:
+    """Today's date in the configured timezone; a bad setting must never 500
+    (it would break every progress save), so fall back to UTC."""
+    tz_name = await get_setting(db, "timezone")
+    try:
+        return datetime.now(ZoneInfo(tz_name)).date()
+    except Exception:
+        return datetime.now(UTC).date()

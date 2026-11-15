@@ -24,7 +24,6 @@ from app.models.reading import (
     UserBookInteraction,
 )
 from app.models.user import User
-from app.routers.books import _today_in_app_timezone
 from app.schemas.book import BookReportCreate, BookReportOut
 from app.schemas.reading import (
     FavoriteUpdate,
@@ -39,6 +38,7 @@ from app.schemas.reading import (
     ReadingStatusUpdate,
 )
 from app.services.access import get_accessible_book
+from app.services.settings import today_in_app_timezone
 from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/books", tags=["interactions"])
@@ -225,7 +225,7 @@ async def update_progress(
             MAX_READING_SESSION_GAP = 300  # 5 minutes
             if 0 < delta < MAX_READING_SESSION_GAP:
                 delta_seconds = int(delta)
-                today = await _today_in_app_timezone(db)
+                today = await today_in_app_timezone(db)
                 # One statement, the adding done by the database: two
                 # saves at once (two tabs; a save and the page's last
                 # beacon) neither collide on the day's row nor lose
