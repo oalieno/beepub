@@ -26,14 +26,15 @@ from app.deps import get_current_user, require_admin
 from app.models.book import Book
 from app.models.opds_catalog import OpdsCatalog
 from app.models.user import User, UserRole
-from app.routers.books import (
-    UPLOAD_SUFFIXES,
-    _ingest_upload,
-    _require_upload_permission,
-    _validate_upload_library,
-)
 from app.schemas.book import BookOut
 from app.services.access import accessible_book_ids_select
+from app.services.ingest import (
+    UPLOAD_SUFFIXES,
+    commit_ingested,
+    ingest_upload,
+    require_upload_permission,
+    validate_upload_library,
+)
 from app.services.opds_fetch import (
     FEED_MAX_BYTES,
     IMAGE_MAX_BYTES,
@@ -45,8 +46,6 @@ from app.services.opds_fetch import (
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_setting
 from app.services.storage import COVER_MAX_WIDTH, MAX_UPLOAD_SIZE, get_book_path
-from app.tasks.metadata import fetch_book_metadata
-from app.tasks.text_extract import extract_book_text
 
 router = APIRouter(prefix="/api/opds-catalogs", tags=["opds-catalogs"])
 
@@ -356,9 +355,9 @@ async def import_book(
 ):
     """Download one acquisition link into a library. An EPUB the server
     already has (same digest, visible to this user) isn't added twice."""
-    _require_upload_permission(current_user)
+    require_upload_permission(current_user)
     catalog = await _get(db, catalog_id)
-    lib_id = await _validate_upload_library(str(body.library_id), current_user, db)
+    lib_id = await validate_upload_library(str(body.library_id), current_user, db)
     fetcher = await _fetcher(db, catalog)
 
     tmp = get_book_path(uuid.uuid4(), "opds.download")
@@ -395,15 +394,12 @@ async def import_book(
         filename = f"{_safe_stem(body.title or Path(name or '').stem)}{suffix}"
         with open(tmp, "rb") as f:
             upload = UploadFile(file=f, filename=filename)
-            book = await _ingest_upload(upload, current_user, lib_id, db)
-        await db.commit()
-        await db.refresh(book)
+            book = await ingest_upload(upload, current_user, lib_id, db)
+        await commit_ingested(db, [book])
     finally:
         try:
             os.remove(tmp)
         except FileNotFoundError:
             pass
 
-    extract_book_text.delay(str(book.id))
-    fetch_book_metadata.delay(str(book.id))
     return ImportOut(status="imported", book=book)

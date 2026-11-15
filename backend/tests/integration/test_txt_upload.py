@@ -2,6 +2,7 @@
 
 import zipfile
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
@@ -170,3 +171,48 @@ async def test_existing_txt_book_can_be_rebuilt_as_traditional(
     # The TXT stays the source.
     response = await admin_client.get(f"/api/books/{book['id']}/original")
     assert response.content == SIMPLIFIED
+
+
+def _files_on_disk() -> set[str]:
+    from app.config import settings
+
+    root = Path(settings.books_dir)
+    return {str(p) for p in root.rglob("*") if p.is_file()}
+
+
+async def test_a_bulk_upload_that_is_refused_leaves_no_files(admin_client, library_id):
+    before = _files_on_disk()
+    response = await admin_client.post(
+        "/api/books/bulk",
+        files=[
+            ("files", ("a.epub", build_epub(title="A"), "application/epub+zip")),
+            ("files", ("b.txt", TXT, "text/plain")),
+            # Read after the two good ones: refuses the whole request.
+            ("files", ("blank.txt", b"\n\n", "text/plain")),
+        ],
+        data={"library_id": library_id},
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "The TXT file has no text"
+    assert _files_on_disk() == before
+    assert (await admin_client.get("/api/books")).json()["total"] == 0
+
+
+async def test_an_upload_whose_commit_fails_leaves_no_files(
+    admin_client, library_id, monkeypatch
+):
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    async def refuse(self):
+        raise RuntimeError("the database went away")
+
+    before = _files_on_disk()
+    monkeypatch.setattr(AsyncSession, "commit", refuse)
+    with pytest.raises(RuntimeError):
+        await admin_client.post(
+            "/api/books",
+            files={"file": ("novel.txt", TXT, "text/plain")},
+            data={"library_id": library_id},
+        )
+    monkeypatch.undo()
+    assert _files_on_disk() == before

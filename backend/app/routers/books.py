@@ -79,11 +79,18 @@ from app.services.access import (
 )
 from app.services.book_files import book_files, invalidate_derived_text
 from app.services.book_search import relevance_ranked_ids, tiered_book_search
-from app.services.cbz2epub import CbzError, convert_cbz_to_epub
 from app.services.epub_pages import read_page_manifest
-from app.services.epub_parser import extract_cover, parse_epub_metadata
+from app.services.epub_parser import parse_epub_metadata
+from app.services.ingest import (
+    UNSUPPORTED_UPLOAD,
+    commit_ingested,
+    discard_ingested,
+    ingest_upload,
+    require_upload_permission,
+    upload_suffix,
+    validate_upload_library,
+)
 from app.services.metadata_fetch import cached_resolve
-from app.services.mobi2epub import DrmProtectedError, convert_mobi_to_epub
 from app.services.partial_md5 import compute_partial_md5
 from app.services.settings import get_all_settings, get_setting
 from app.services.storage import (
@@ -92,24 +99,16 @@ from app.services.storage import (
     cover_url_allowed,
     delete_file,
     download_cover,
-    get_book_path,
     get_cover_path,
     get_kept_epub_path,
     place_cover,
     save_cover_bytes,
-    save_upload_file,
-)
-from app.services.txt2epub import (
-    EmptyTextError,
-    convert_txt_to_epub,
-    detect_language,
 )
 from app.services.zh_epub import (
     Quote,
     convert_epub,
     convert_highlight,
     preview,
-    sample_text,
     section_of,
 )
 from app.tasks.auto_tag import auto_tag_book
@@ -139,258 +138,6 @@ def _require_book_file(book: Book) -> None:
         )
 
 
-def _require_upload_permission(user: User) -> None:
-    if user.role != UserRole.admin and not user.can_upload:
-        raise HTTPException(status_code=403, detail="Upload permission required")
-
-
-async def _validate_upload_library(
-    library_id: str | None, user: User, db: AsyncSession
-) -> uuid.UUID:
-    """Parse and authorize the target library BEFORE any file hits disk."""
-
-    # Every book must belong to a library: every listing (flat/grouped/search/
-    # random) reaches books through library membership, so a library-less
-    # book would be invisible to everyone — including its uploader.
-    if not library_id:
-        raise HTTPException(status_code=422, detail="library_id is required")
-    try:
-        lib_id = uuid.UUID(library_id)
-    except ValueError:
-        raise HTTPException(status_code=422, detail="Invalid library id") from None
-    library = await get_accessible_library(lib_id, user, db)
-    if library.calibre_path:
-        raise HTTPException(
-            status_code=403, detail="Cannot upload to a Calibre library"
-        )
-    return lib_id
-
-
-def _is_simplified(file_path: str) -> bool:
-    """Whether the book's text reads as Simplified Chinese — by its
-    characters, not its declared language, which is often wrong. Such a
-    book is reported in the upload response and the uploader is asked
-    whether to convert it: never converted unasked."""
-    try:
-        return detect_language(sample_text(file_path), "utf-8") == "zh-CN"
-    except Exception:
-        logger.exception("Could not sample %s for its script", file_path)
-        return False
-
-
-async def _ingest_epub(
-    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
-) -> Book:
-    """Save one EPUB to disk and stage its Book row (no commit).
-
-    Cleans up the on-disk files if parsing fails, so a corrupt upload
-    doesn't leave orphans behind.
-    """
-    book_id = uuid.uuid4()
-    file_path = get_book_path(book_id, file.filename or "book.epub")
-    cover_path = get_cover_path(book_id)
-
-    file_size = await save_upload_file(file, file_path)
-    try:
-        # EPUB parsing is blocking zip/XML work — keep it off the event loop
-        # (a bulk upload would otherwise stall every other request).
-        simplified = await asyncio.to_thread(_is_simplified, file_path)
-        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
-        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
-    except Exception:
-        # The reason stays in the log: the reader is told only that the
-        # file is not a book we can read.
-        logger.exception("EPUB upload rejected: %s", file.filename)
-        delete_file(file_path)
-        delete_file(cover_path)
-        raise HTTPException(status_code=400, detail="Invalid EPUB file") from None
-
-    book = Book(
-        id=book_id,
-        file_path=file_path,
-        file_size=file_size,
-        format="epub",
-        cover_path=cover_path if cover_ok else None,
-        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
-        added_by=user.id,
-        **metadata,
-    )
-    book.zh_simplified = simplified
-    db.add(book)
-    await db.flush()
-    if lib_id:
-        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
-    return book
-
-
-async def _ingest_txt(
-    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
-) -> Book:
-    """Save one TXT, convert it to the EPUB the rest of the app reads, and
-    stage its Book row (no commit).
-
-    The EPUB is the book's file_path — reader, text extraction, digest,
-    OPDS and app downloads never see the TXT. The source stays at
-    original_path for download.
-    """
-    book_id = uuid.uuid4()
-    original_path = get_book_path(book_id, "book.txt")
-    file_path = get_book_path(book_id, "book.epub")
-    title_hint = Path(file.filename or "").stem
-
-    await save_upload_file(file, original_path)
-    try:
-        await asyncio.to_thread(
-            convert_txt_to_epub, original_path, file_path, title_hint
-        )
-        simplified = await asyncio.to_thread(_is_simplified, file_path)
-        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
-    except EmptyTextError:
-        delete_file(original_path)
-        delete_file(file_path)
-        raise HTTPException(
-            status_code=400, detail="The TXT file has no text"
-        ) from None
-    except Exception:
-        delete_file(original_path)
-        delete_file(file_path)
-        raise HTTPException(status_code=400, detail="Invalid TXT file") from None
-
-    book = Book(
-        id=book_id,
-        file_path=file_path,
-        file_size=os.path.getsize(file_path),
-        format="txt",
-        original_path=original_path,
-        cover_path=None,
-        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
-        added_by=user.id,
-        **metadata,
-    )
-    book.zh_simplified = simplified
-    db.add(book)
-    await db.flush()
-    if lib_id:
-        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
-    return book
-
-
-async def _ingest_mobi(
-    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
-) -> Book:
-    """Save one MOBI/AZW3, convert it to the EPUB the rest of the app reads,
-    and stage its Book row (no commit). Same layout as TXT: the EPUB is
-    file_path, the upload stays at original_path for download."""
-    suffix = _upload_suffix(file) or ".mobi"
-    book_id = uuid.uuid4()
-    original_path = get_book_path(book_id, f"book{suffix}")
-    file_path = get_book_path(book_id, "book.epub")
-    cover_path = get_cover_path(book_id)
-
-    await save_upload_file(file, original_path)
-    try:
-        await asyncio.to_thread(convert_mobi_to_epub, original_path, file_path)
-        simplified = await asyncio.to_thread(_is_simplified, file_path)
-        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
-        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
-    except DrmProtectedError:
-        for path in (original_path, file_path, cover_path):
-            delete_file(path)
-        raise HTTPException(status_code=400, detail=DRM_UPLOAD) from None
-    except Exception:
-        for path in (original_path, file_path, cover_path):
-            delete_file(path)
-        raise HTTPException(status_code=400, detail="Invalid MOBI file") from None
-
-    book = Book(
-        id=book_id,
-        file_path=file_path,
-        file_size=os.path.getsize(file_path),
-        format=suffix[1:],
-        original_path=original_path,
-        cover_path=cover_path if cover_ok else None,
-        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
-        added_by=user.id,
-        **metadata,
-    )
-    book.zh_simplified = simplified
-    db.add(book)
-    await db.flush()
-    if lib_id:
-        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
-    return book
-
-
-async def _ingest_cbz(
-    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
-) -> Book:
-    """Save one CBZ, pack it into the pre-paginated EPUB the rest of the app
-    reads, and stage its Book row (no commit). Same layout as TXT and MOBI.
-    A comic has no text: it is classified an image book here so the text
-    pipeline never picks it up."""
-    book_id = uuid.uuid4()
-    original_path = get_book_path(book_id, "book.cbz")
-    file_path = get_book_path(book_id, "book.epub")
-    cover_path = get_cover_path(book_id)
-
-    await save_upload_file(file, original_path)
-    try:
-        await asyncio.to_thread(convert_cbz_to_epub, original_path, file_path)
-        metadata = await asyncio.to_thread(parse_epub_metadata, file_path)
-        cover_ok = await asyncio.to_thread(extract_cover, file_path, cover_path)
-    except CbzError as exc:
-        for path in (original_path, file_path, cover_path):
-            delete_file(path)
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception:
-        for path in (original_path, file_path, cover_path):
-            delete_file(path)
-        raise HTTPException(status_code=400, detail="Invalid CBZ file") from None
-
-    book = Book(
-        id=book_id,
-        file_path=file_path,
-        file_size=os.path.getsize(file_path),
-        format="cbz",
-        original_path=original_path,
-        cover_path=cover_path if cover_ok else None,
-        partial_md5=await asyncio.to_thread(compute_partial_md5, file_path),
-        added_by=user.id,
-        word_count=0,
-        is_image_book=True,
-        **metadata,
-    )
-    db.add(book)
-    await db.flush()
-    if lib_id:
-        db.add(LibraryBook(library_id=lib_id, book_id=book_id, added_by=user.id))
-    return book
-
-
-UPLOAD_SUFFIXES = (".epub", ".txt", ".mobi", ".azw3", ".cbz")
-UNSUPPORTED_UPLOAD = "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported"
-DRM_UPLOAD = "The book is DRM-protected"
-
-
-def _upload_suffix(file: UploadFile) -> str | None:
-    """The upload's extension when it is one we ingest, else None."""
-    suffix = Path(file.filename or "").suffix.lower()
-    return suffix if suffix in UPLOAD_SUFFIXES else None
-
-
-async def _ingest_upload(
-    file: UploadFile, user: User, lib_id: uuid.UUID | None, db: AsyncSession
-) -> Book:
-    suffix = _upload_suffix(file)
-    if suffix == ".txt":
-        return await _ingest_txt(file, user, lib_id, db)
-    if suffix in (".mobi", ".azw3"):
-        return await _ingest_mobi(file, user, lib_id, db)
-    if suffix == ".cbz":
-        return await _ingest_cbz(file, user, lib_id, db)
-    return await _ingest_epub(file, user, lib_id, db)
-
-
 @router.post("", response_model=BookOut, status_code=status.HTTP_201_CREATED)
 async def upload_book(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -398,18 +145,13 @@ async def upload_book(
     file: UploadFile = File(...),
     library_id: str = Form(...),
 ):
-    _require_upload_permission(current_user)
-    if _upload_suffix(file) is None:
+    require_upload_permission(current_user)
+    if upload_suffix(file) is None:
         raise HTTPException(status_code=400, detail=UNSUPPORTED_UPLOAD)
 
-    lib_id = await _validate_upload_library(library_id, current_user, db)
-    book = await _ingest_upload(file, current_user, lib_id, db)
-
-    await db.commit()
-    await db.refresh(book)
-
-    extract_book_text.delay(str(book.id))
-    fetch_book_metadata.delay(str(book.id))
+    lib_id = await validate_upload_library(library_id, current_user, db)
+    book = await ingest_upload(file, current_user, lib_id, db)
+    await commit_ingested(db, [book])
     return book
 
 
@@ -420,20 +162,21 @@ async def upload_books_bulk(
     files: list[UploadFile] = File(...),
     library_id: str = Form(...),
 ):
-    _require_upload_permission(current_user)
-    lib_id = await _validate_upload_library(library_id, current_user, db)
+    require_upload_permission(current_user)
+    lib_id = await validate_upload_library(library_id, current_user, db)
 
-    books = []
-    for file in files:
-        if _upload_suffix(file) is None:
-            continue
-        books.append(await _ingest_upload(file, current_user, lib_id, db))
-
-    await db.commit()
-    for book in books:
-        await db.refresh(book)
-        extract_book_text.delay(str(book.id))
-        fetch_book_metadata.delay(str(book.id))
+    # All or none: one file that cannot be read refuses the request, and
+    # the ones staged before it go with it.
+    books: list[Book] = []
+    try:
+        for file in files:
+            if upload_suffix(file) is None:
+                continue
+            books.append(await ingest_upload(file, current_user, lib_id, db))
+    except Exception:
+        discard_ingested(books)
+        raise
+    await commit_ingested(db, books)
     return books
 
 
@@ -444,8 +187,8 @@ async def create_physical_book(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """Track a paper copy: a Book row with no file behind it."""
-    _require_upload_permission(current_user)
-    lib_id = await _validate_upload_library(str(body.library_id), current_user, db)
+    require_upload_permission(current_user)
+    lib_id = await validate_upload_library(str(body.library_id), current_user, db)
 
     book_id = uuid.uuid4()
     cover_path = None
@@ -1455,7 +1198,7 @@ async def metadata_lookup(
     on its owning plugin only. It can't ride the `url` param because
     some refs are bare source-side IDs (google volume ids) that no
     url_prefix can dispatch."""
-    _require_upload_permission(current_user)
+    require_upload_permission(current_user)
     app_settings = await get_all_settings(db)
 
     if source or ref:
@@ -1553,7 +1296,7 @@ async def metadata_search(
     hits, no fuzzy judgment — the user picks the right book and the
     frontend calls metadata-lookup with (source, ref) to fetch its full
     record. Always 200; empty means no source had candidates."""
-    _require_upload_permission(current_user)
+    require_upload_permission(current_user)
     app_settings = await get_all_settings(db)
     query = BookQuery(title=title, authors=[author] if author else [])
 
@@ -1994,7 +1737,7 @@ async def get_book_file(
 
 
 async def _convertible_book(book_id: uuid.UUID, user: User, db: AsyncSession) -> Book:
-    _require_upload_permission(user)
+    require_upload_permission(user)
     book = await get_accessible_book(book_id, user, db)
     if book.is_image_book or not book.file_path or not os.path.exists(book.file_path):
         raise HTTPException(status_code=409, detail="This book has no text to convert")
