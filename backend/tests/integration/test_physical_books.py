@@ -166,7 +166,7 @@ async def test_isbn_lookup_returns_per_source_results(admin_client, monkeypatch)
             ),
         ]
 
-    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+    monkeypatch.setattr("app.routers.book_metadata.lookup_all", fake_lookup_all)
     response = await admin_client.get("/api/books/metadata-lookup?isbn=9789571234567")
     assert response.status_code == 200, response.text
     data = response.json()
@@ -185,7 +185,7 @@ async def test_lookup_empty_is_still_200_and_no_clues_is_422(admin_client, monke
     async def fake_lookup_all(query, settings: dict, *, resolver=None):
         return []
 
-    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+    monkeypatch.setattr("app.routers.book_metadata.lookup_all", fake_lookup_all)
     response = await admin_client.get("/api/books/metadata-lookup?isbn=0000000000")
     assert response.status_code == 200
     assert response.json() == {"results": [], "covers": []}
@@ -203,7 +203,7 @@ async def test_lookup_accepts_title_and_url_clues(admin_client, monkeypatch):
         seen_queries.append(query)
         return [("readmoo", BookRecord(title="神", description="全文"))]
 
-    monkeypatch.setattr("app.routers.books.lookup_all", fake_lookup_all)
+    monkeypatch.setattr("app.routers.book_metadata.lookup_all", fake_lookup_all)
 
     response = await admin_client.get(
         "/api/books/metadata-lookup?title=%E7%A5%9E&author=%E8%91%A3%E5%95%9F%E7%AB%A0"
@@ -241,7 +241,7 @@ async def test_metadata_search_lists_per_source_candidates(admin_client, monkeyp
             ("google_books", [SearchCandidate(url="o5zjzwEACAAJ", title="神")]),
         ]
 
-    monkeypatch.setattr("app.routers.books.search_all", fake_search_all)
+    monkeypatch.setattr("app.routers.book_metadata.search_all", fake_search_all)
     response = await admin_client.get(
         "/api/books/metadata-search?title=%E7%A5%9E&author=%E8%91%A3%E5%95%9F%E7%AB%A0"
     )
@@ -275,8 +275,8 @@ async def test_lookup_pick_resolves_on_the_owning_plugin_only(
     async def fail_lookup_all(query, settings: dict, *, resolver=None):
         raise AssertionError("a pick must not fan out")
 
-    monkeypatch.setattr("app.routers.books.resolve_one", fake_resolve_one)
-    monkeypatch.setattr("app.routers.books.lookup_all", fail_lookup_all)
+    monkeypatch.setattr("app.routers.book_metadata.resolve_one", fake_resolve_one)
+    monkeypatch.setattr("app.routers.book_metadata.lookup_all", fail_lookup_all)
 
     # A full-URL ref (readmoo) and a bare-id ref (google) both pass the
     # plugin's own shape validation; the original clues ride along.
@@ -303,7 +303,7 @@ async def test_lookup_pick_rejects_bad_source_and_foreign_ref(
     async def fake_resolve_one(plugin, query, *, resolver=None):
         raise AssertionError("invalid picks must not resolve")
 
-    monkeypatch.setattr("app.routers.books.resolve_one", fake_resolve_one)
+    monkeypatch.setattr("app.routers.book_metadata.resolve_one", fake_resolve_one)
 
     # source and ref go together.
     response = await admin_client.get("/api/books/metadata-lookup?source=readmoo")

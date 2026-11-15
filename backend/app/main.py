@@ -22,6 +22,8 @@ from app.routers import (
     admin,
     auth,
     book_content,
+    book_lists,
+    book_metadata,
     books,
     bookshelves,
     companion,
@@ -126,11 +128,13 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(libraries.router)
-# These three share the /api/books prefix. The first two go ahead of
-# books.router: their paths are fixed words ("/me", "/random") where it
-# has "/{book_id}".
+# These share the /api/books prefix. The first four go ahead of
+# books.router: they have paths that are fixed words ("/me", "/random",
+# "/grouped", "/metadata-search") where it has "/{book_id}".
 app.include_router(reading.router)
 app.include_router(discover.router)
+app.include_router(book_lists.router)
+app.include_router(book_metadata.router)
 app.include_router(books.router)
 app.include_router(book_content.router)
 app.include_router(metadata.router)

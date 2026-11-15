@@ -11,6 +11,7 @@ when it is in at least one such library.
 
 import uuid
 
+from fastapi import HTTPException
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -99,3 +100,15 @@ async def get_accessible_book(book_id: uuid.UUID, user: User, db: AsyncSession) 
     if not await can_access_book(book_id, user, db):
         raise errors.ACCESS_DENIED()
     return book
+
+
+async def get_books(db: AsyncSession, ids: list[uuid.UUID]) -> list[Book]:
+    """The books, in the order asked; 404 naming any that do not exist.
+    No access check: for the admin's bulk actions."""
+    found = {b.id: b for b in await db.scalars(select(Book).where(Book.id.in_(ids)))}
+    missing = [str(i) for i in ids if i not in found]
+    if missing:
+        raise HTTPException(
+            status_code=404, detail=f"Books not found: {', '.join(missing)}"
+        )
+    return [found[i] for i in ids]
