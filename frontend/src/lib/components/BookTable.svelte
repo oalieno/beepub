@@ -88,15 +88,19 @@
   } = $props();
 
   let columns = $derived(compact ? 6 : 7);
-  // Beside the side panel the title is what gets squeezed: on anything
-  // but a wide screen the date column gives it its room (the sort menu
-  // above still orders by date; the panel shows the book's).
+  // The title takes what the other columns leave, so on a screen too
+  // narrow for all of them it is the title that vanishes. The date gives
+  // way first, then the size (the sort menu above still orders by date;
+  // the panel shows both) — sooner beside the side panel, which takes
+  // its width from the table.
   const narrowHidden = (display: "table-cell" | "table-column") =>
-    compact
-      ? display === "table-cell"
+    display === "table-cell"
+      ? compact
         ? "hidden 2xl:table-cell"
-        : "hidden 2xl:table-column"
-      : "";
+        : "hidden xl:table-cell"
+      : compact
+        ? "hidden 2xl:table-column"
+        : "hidden xl:table-column";
 
   // A list restored on back predates an edit made on the book page.
   let rows = $derived(books.map((b) => withEdit(b, $editedBooks)));
@@ -244,7 +248,7 @@
     <col class="w-[22%]" />
     <col class="w-[18%]" />
     <col class="w-24" />
-    {#if !compact}<col class="w-24" />{/if}
+    {#if !compact}<col class="w-24 hidden lg:table-column" />{/if}
     <col class="w-36 {narrowHidden('table-column')}" />
     <col class="w-12" />
   </colgroup>
@@ -267,7 +271,9 @@
         >{m.browser_col_status()}</th
       >
       {#if !compact}
-        <th class="px-3 py-2.5 font-medium whitespace-nowrap">
+        <th
+          class="px-3 py-2.5 font-medium whitespace-nowrap hidden lg:table-cell"
+        >
           {m.browser_col_size()}
         </th>
       {/if}
@@ -483,7 +489,9 @@
           {/if}
         </td>
         {#if !compact}
-          <td class="px-3 py-2.5 text-muted-foreground truncate">
+          <td
+            class="px-3 py-2.5 text-muted-foreground truncate hidden lg:table-cell"
+          >
             {book.file_size != null ? formatSize(book.file_size) : "—"}
           </td>
         {/if}
