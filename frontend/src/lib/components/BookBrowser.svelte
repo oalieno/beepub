@@ -593,12 +593,17 @@
   }
 
   function onRowClick(id: string, e: MouseEvent) {
-    selection = applyClick(
+    // The second click of a double-click is the edit's, and a click in a
+    // row being edited is on one of its fields: neither picks or lets go.
+    if (e.detail > 1 || editingId === id) return;
+    const next = applyClick(
       selection,
       id,
       { shift: e.shiftKey, toggle: e.metaKey || e.ctrlKey },
       books.map((b) => b.id),
     );
+    if (next.selected.size) selection = next;
+    else clearSelection();
   }
 
   function applied(updated: BookOut[]) {

@@ -1,6 +1,7 @@
 /**
- * Selection in the library table, Finder-style: a click picks one row,
- * ⌘/Ctrl+click adds or drops one, Shift+click takes the run from the
+ * Selection in the library table, Finder-style: a click picks one row
+ * (a click on the one row already picked lets it go), ⌘/Ctrl+click adds
+ * or drops one, Shift+click takes the run from the
  * anchor to the row in the order the list shows. `focus` is the book the
  * side panel shows and the one the list opens on when its order changes.
  */
@@ -49,6 +50,9 @@ export function applyClick(
     selected.add(id);
     return { selected, anchor: id, focus: id };
   }
+  // The one row picked, clicked again: let go. (Among several it becomes
+  // the only one, as in Finder.)
+  if (state.selected.size === 1 && state.selected.has(id)) return NO_SELECTION;
   return only(id);
 }
 
