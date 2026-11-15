@@ -18,11 +18,22 @@ from app.services.access import accessible_book_ids_select
 
 
 def normalize_series_name(name: str | None) -> str | None:
-    """Match the SQL key: lower(btrim(coalesce(series, epub_series))) or NULL."""
+    """A series name as its key — what ``books.series_key`` holds for a
+    book of that series (migration 068): trimmed of whitespace, the
+    full-width space included, and lower-cased; None when nothing is left.
+
+    For a name that comes from outside a book's row (a request, a value
+    about to be written). In SQL, read the column."""
     if not name:
         return None
     key = name.strip().lower()
     return key or None
+
+
+def series_key_of(series: str | None, epub_series: str | None) -> str | None:
+    """The key a book with these two columns has: the series set in
+    BeePub when there is one, else the file's own."""
+    return normalize_series_name(series if series is not None else epub_series)
 
 
 async def list_series(
@@ -107,7 +118,7 @@ async def list_series(
                 SELECT
                     b.id AS book_id,
                     a.library_id AS library_id,
-                    lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
+                    b.series_key AS series_key,
                     coalesce(b.series, b.epub_series) AS series_name,
                     coalesce(b.series_index, b.epub_series_index) AS idx,
                     b.created_at AS created_at,
@@ -116,7 +127,7 @@ async def list_series(
                 JOIN accessible a ON a.book_id = b.id
                 LEFT JOIN user_book_interactions ubi
                     ON ubi.book_id = b.id AND ubi.user_id = :uid
-                WHERE nullif(btrim(coalesce(b.series, b.epub_series)), '') IS NOT NULL
+                WHERE b.series_key IS NOT NULL
             ),
             agg AS (
                 SELECT
@@ -313,7 +324,7 @@ async def list_grouped_books(
                 SELECT
                     b.id AS book_id,
                     a.library_id AS library_id,
-                    lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
+                    b.series_key AS series_key,
                     b.work_id AS work_id,
                     (w.primary_book_id = b.id) AS is_primary,
                     coalesce(b.title, b.epub_title) AS display_title,

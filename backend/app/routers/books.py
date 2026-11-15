@@ -70,6 +70,7 @@ from app.services.ingest import (
     validate_upload_library,
 )
 from app.services.metadata_fetch import cached_resolve
+from app.services.series import series_key_of
 from app.services.settings import (
     get_all_settings,
     get_setting,
@@ -840,7 +841,9 @@ async def get_book_editions(
 
 
 def _series_key(book: Book) -> str | None:
-    return (book.series or book.epub_series or "").strip().lower() or None
+    # (Worked out here, not read from the column: the row may have been
+    # changed in this session and not yet written.)
+    return series_key_of(book.series, book.epub_series)
 
 
 async def _series_neighbours(
@@ -864,7 +867,7 @@ async def _series_neighbours(
     }:
         query = select(Book.id).where(
             Book.id.not_in(leaving),
-            func.lower(func.btrim(func.coalesce(Book.series, Book.epub_series))) == key,
+            Book.series_key == key,
         )
         if library_id is not None:
             query = query.where(
@@ -982,12 +985,7 @@ async def update_books_metadata(
     # Books whose shown series changes: their old series and new are both
     # recomputed for popularity.
     leaving = (
-        [
-            b
-            for b in books
-            if _series_key(b)
-            != ((series or b.epub_series or "").strip().lower() or None)
-        ]
+        [b for b in books if _series_key(b) != series_key_of(series, b.epub_series)]
         if "series" in fields
         else []
     )

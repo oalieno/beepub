@@ -65,7 +65,7 @@ async def get_similar_books(
                 COALESCE(publisher, epub_publisher) AS t_publisher,
                 epub_language AS t_language,
                 COALESCE(tags, epub_tags, '{}') AS t_tags,
-                LOWER(NULLIF(BTRIM(COALESCE(series, epub_series)), '')) AS t_series_key
+                series_key AS t_series_key
             FROM books WHERE id = :book_id
         ),
         accessible_libs AS (
@@ -214,7 +214,7 @@ async def get_similar_books(
             SELECT
                 aggregated.book_id,
                 aggregated.total_score,
-                LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key,
+                b.series_key AS series_key,
                 (
                     SELECT MIN(lb.library_id::text)
                     FROM library_books lb WHERE lb.book_id = aggregated.book_id
@@ -224,7 +224,7 @@ async def get_similar_books(
             CROSS JOIN target t
             WHERE NOT (
                 t.t_series_key IS NOT NULL
-                AND LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) = t.t_series_key
+                AND b.series_key = t.t_series_key
                 AND EXISTS (
                     SELECT 1 FROM library_books la
                     JOIN library_books lt ON lt.library_id = la.library_id

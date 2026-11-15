@@ -94,11 +94,11 @@ async def list_bookshelves(
                 SELECT library_id, series_key, cover_book_id FROM (
                     SELECT
                         lb.library_id AS library_id,
-                        lower(btrim(coalesce(b.series, b.epub_series))) AS series_key,
+                        b.series_key AS series_key,
                         b.id AS cover_book_id,
                         row_number() OVER (
                             PARTITION BY lb.library_id,
-                                lower(btrim(coalesce(b.series, b.epub_series)))
+                                b.series_key
                             ORDER BY coalesce(b.series_index, b.epub_series_index)
                                 ASC NULLS LAST, b.created_at ASC
                         ) AS rn
@@ -106,7 +106,7 @@ async def list_bookshelves(
                     JOIN library_books lb ON lb.book_id = b.id
                     WHERE b.cover_path IS NOT NULL
                       AND (lb.library_id::text,
-                           lower(btrim(coalesce(b.series, b.epub_series))))
+                           b.series_key)
                           IN (SELECT lid, k
                               FROM unnest(CAST(:lib_ids AS text[]),
                                           CAST(:keys AS text[]))

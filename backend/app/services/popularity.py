@@ -30,7 +30,7 @@ _RECOMPUTE_SQL = text("""
         SELECT
             b.id,
             b.work_id,
-            LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key,
+            b.series_key AS series_key,
             lb.library_id
         FROM books b
         LEFT JOIN library_books lb ON lb.book_id = b.id
@@ -40,14 +40,14 @@ _RECOMPUTE_SQL = text("""
         SELECT DISTINCT
             b.id,
             b.work_id,
-            LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) AS series_key
+            b.series_key AS series_key
         FROM books b
         JOIN input_keys ik ON
             b.id = ik.id
             OR (ik.work_id IS NOT NULL AND b.work_id = ik.work_id)
             OR (
                 ik.series_key IS NOT NULL
-                AND LOWER(NULLIF(BTRIM(COALESCE(b.series, b.epub_series)), '')) = ik.series_key
+                AND b.series_key = ik.series_key
                 AND EXISTS (
                     SELECT 1 FROM library_books lbb
                     WHERE lbb.book_id = b.id AND lbb.library_id = ik.library_id

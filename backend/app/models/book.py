@@ -104,6 +104,18 @@ class Book(Base, TimestampMixin):
     epub_tags_norm: Mapped[str | None] = _search_fold(
         "beepub_norm(beepub_join_authors(epub_tags))"
     )
+    # What identifies the book's series within a library: the name shown,
+    # trimmed (of the full-width space too) and lower-cased; NULL for a
+    # book in no series. Stored and indexed (migration 068, which defines
+    # it) so every query reads one definition. For SQL only, hence
+    # deferred: in Python use services.series.series_key_of.
+    series_key: Mapped[str | None] = mapped_column(
+        Text,
+        Computed(
+            "nullif(lower(btrim(coalesce(series, epub_series))), '')", persisted=True
+        ),
+        deferred=True,
+    )
     # All eight, newline-separated — one column for the substring tiers to
     # read. A folded string never contains whitespace, so a pattern
     # cannot match across two fields.
