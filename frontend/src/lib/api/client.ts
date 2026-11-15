@@ -25,7 +25,6 @@ const ERROR_MAP: Record<string, () => string> = {
     m.error_move_out_calibre(),
   "Bookshelf not found": () => m.error_bookshelf_not_found(),
   "Calibre library already linked": () => m.error_calibre_already_linked(),
-  "Cannot add books to a Calibre library": () => m.error_calibre_no_add(),
   "Cannot delete yourself": () => m.error_cannot_delete_self(),
   "Cannot demote the last admin": () => m.error_cannot_demote_last_admin(),
   "Cannot upload to a Calibre library": () => m.error_calibre_no_upload(),
@@ -47,15 +46,12 @@ const ERROR_MAP: Record<string, () => string> = {
   "Invalid credentials": () => m.error_invalid_credentials(),
   "Invalid source": () => m.error_invalid_source(),
   "Library not found": () => m.error_library_not_found(),
-  "No accessible books found": () => m.error_no_books_found(),
   "No metadata.db found at path": () => m.error_no_metadata_db(),
   "Not a Calibre library": () => m.error_not_calibre(),
   "Only EPUB, TXT, MOBI, AZW3 or CBZ files are supported": () =>
     m.error_upload_format(),
   "The book is DRM-protected": () => m.error_upload_drm(),
   "The TXT file has no text": () => m.error_txt_empty(),
-  "Only books imported from TXT can be converted": () =>
-    m.error_zh_convert_not_txt(),
   "OpenAI base URL not configured": () => m.error_openai_not_configured(),
   "Path not found in EPUB": () => m.error_path_not_in_epub(),
   "Rating must be 0.5-5 in 0.5 steps": () => m.error_rating_range(),
