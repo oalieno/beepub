@@ -1276,8 +1276,14 @@
   </div>
 
   <!-- md:pb reserves a sliver for the collapsed progress line so book text
-       can never sit on it, even with the gutters at their minimum. -->
-  <div class="relative min-h-0 flex-1 md:pb-2.5">
+       can never sit on it, even with the gutters at their minimum. The
+       sliver is paper, as the page above it is — not the app's backdrop,
+       which showed as a band under a white page. -->
+  <div
+    class="relative min-h-0 flex-1 md:pb-2.5 {darkMode
+      ? 'bg-ink-900'
+      : 'bg-white'}"
+  >
     {#if ready && source && sync && !loadError}
       {#key readerKey}
         {#if claimed}
