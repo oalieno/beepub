@@ -52,13 +52,16 @@
 <!-- The door. Everything on it is the bee's: its brown line, its honey,
      and nothing drawn that it did not do — the dashes are where it flew.
      What moves is the bee, not the ornament. -->
+<!-- Its height is what the screen has left under the page's own head, so
+     the page does not scroll: on a phone that head, the status bar and the
+     tab bar at the foot take more of it. -->
 <div
-  class="door flex min-h-[max(420px,calc(100dvh-300px))] flex-col items-center justify-center pt-3 pb-7 text-center"
+  class="door flex flex-col items-center justify-center pt-3 pb-7 text-center"
   inert={inside}
   data-testid="bookshelf-door"
 >
   <h2
-    class="font-book text-[clamp(30px,5.6vw,50px)] leading-[1.15] font-black tracking-[0.08em] text-balance"
+    class="font-book text-[clamp(24px,5.6vw,50px)] leading-[1.15] font-black tracking-[0.08em] text-balance"
   >
     {m.shelf_enter()}
   </h2>
@@ -143,13 +146,27 @@
       1
     );
   }
+  .door {
+    min-height: max(
+      260px,
+      calc(
+        100dvh - 320px - env(safe-area-inset-top, 0px) -
+          env(safe-area-inset-bottom, 0px)
+      )
+    );
+  }
+  @media (min-width: 768px) {
+    .door {
+      min-height: max(420px, calc(100dvh - 300px));
+    }
+  }
   :global(.dark) .door {
     --line: var(--honey);
     --pool: color-mix(in srgb, var(--honey) 16%, var(--background));
   }
   /* All of it is measured by the bee. */
   .plate {
-    --bee: min(44vw, 176px);
+    --bee: min(34vw, 176px);
     position: relative;
     margin: calc(var(--bee) * 0.12) 0 calc(var(--bee) * 0.2);
   }
@@ -216,7 +233,7 @@
   }
   .tap span {
     font-weight: 900;
-    font-size: clamp(17px, 2.6vw, 22px);
+    font-size: clamp(15px, 2.6vw, 22px);
     letter-spacing: 0.08em;
     white-space: nowrap;
     rotate: -8deg;
