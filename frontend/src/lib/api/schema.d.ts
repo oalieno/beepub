@@ -2919,8 +2919,7 @@ export interface components {
         };
         /** BookTagNested */
         BookTagNested: {
-            /** Category */
-            category: string;
+            category: components["schemas"]["TagCategory"];
             /** Confidence */
             confidence: number;
             /**
@@ -3052,8 +3051,7 @@ export interface components {
             publisher: string | null;
             /** Reading Percentage */
             reading_percentage?: number | null;
-            /** Reading Status */
-            reading_status?: string | null;
+            reading_status?: components["schemas"]["ReadingStatus"] | null;
             /** Section Weights */
             section_weights?: number[] | null;
             /** Seed Book Id */
@@ -3299,8 +3297,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Role */
-            role: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
             /** Selected Text */
             selected_text: string | null;
         };
@@ -3412,18 +3413,23 @@ export interface components {
             /** Url */
             url: string;
         };
-        /**
-         * GroupedItem
-         * @description One unit in the collapsed library view: a whole series or a lone book.
-         */
-        GroupedItem: {
-            book?: components["schemas"]["BookWithInteractionOut"] | null;
-            series?: components["schemas"]["SeriesOut"] | null;
+        /** GroupedBook */
+        GroupedBook: {
+            book: components["schemas"]["BookWithInteractionOut"];
             /**
-             * Type
+             * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            type: "series" | "book";
+            type: "book";
+        };
+        /** GroupedSeries */
+        GroupedSeries: {
+            series: components["schemas"]["SeriesOut"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "series";
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -3585,8 +3591,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
-            /** Status */
-            status: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pending" | "generating" | "completed" | "failed";
             /** Style Prompt */
             style_prompt: string | null;
             /** Text */
@@ -3635,12 +3644,8 @@ export interface components {
             notes: string | null;
             /** Rating */
             rating: number | null;
-            /** Reading Progress */
-            reading_progress: {
-                [key: string]: unknown;
-            } | null;
-            /** Reading Status */
-            reading_status: string | null;
+            reading_progress: components["schemas"]["ProgressOut"] | null;
+            reading_status: components["schemas"]["ReadingStatus"] | null;
             /** Started At */
             started_at: string | null;
             /**
@@ -3868,8 +3873,7 @@ export interface components {
             is_demo: boolean;
             /** Refresh Token */
             refresh_token: string;
-            /** Role */
-            role: string;
+            role: components["schemas"]["UserRole"];
             /** Username */
             username: string;
         };
@@ -4018,7 +4022,7 @@ export interface components {
         /** PaginatedGrouped */
         PaginatedGrouped: {
             /** Items */
-            items: components["schemas"]["GroupedItem"][];
+            items: (components["schemas"]["GroupedSeries"] | components["schemas"]["GroupedBook"])[];
             /** Total */
             total: number;
         };
@@ -4157,6 +4161,11 @@ export interface components {
             /** Today Seconds */
             today_seconds: number;
         };
+        /**
+         * ReadingStatus
+         * @enum {string}
+         */
+        ReadingStatus: "want_to_read" | "currently_reading" | "read" | "did_not_finish";
         /** ReadingStatusUpdate */
         ReadingStatusUpdate: {
             /** Finished At */
@@ -4395,8 +4404,7 @@ export interface components {
             rating?: number | null;
             /** Rating Updated At */
             rating_updated_at?: string | null;
-            /** Reading Status */
-            reading_status?: string | null;
+            reading_status?: components["schemas"]["ReadingStatus"] | null;
             /** Started At */
             started_at?: string | null;
             /** Status Updated At */
@@ -4418,8 +4426,7 @@ export interface components {
             rating: number | null;
             /** Rating Updated At */
             rating_updated_at: string | null;
-            /** Reading Status */
-            reading_status: string | null;
+            reading_status: components["schemas"]["ReadingStatus"] | null;
             /** Started At */
             started_at: string | null;
             /** Status Updated At */
@@ -4455,6 +4462,11 @@ export interface components {
             /** Xpointer */
             xpointer?: string | null;
         };
+        /**
+         * TagCategory
+         * @enum {string}
+         */
+        TagCategory: "genre" | "subgenre" | "mood" | "theme" | "trope";
         /** TagWithCount */
         TagWithCount: {
             /** Book Count */
@@ -8385,7 +8397,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GroupedItem"][];
+                    "application/json": (components["schemas"]["GroupedSeries"] | components["schemas"]["GroupedBook"])[];
                 };
             };
             /** @description Validation Error */

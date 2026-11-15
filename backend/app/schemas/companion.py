@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -18,7 +19,7 @@ class CompanionRenameRequest(BaseModel):
 
 class CompanionMessageOut(BaseModel):
     id: uuid.UUID
-    role: str
+    role: Literal["user", "assistant"]
     content: str
     selected_text: str | None
     cfi_range: str | None

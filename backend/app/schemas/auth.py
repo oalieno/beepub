@@ -2,6 +2,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.user import UserRole
+
 
 class RegisterRequest(BaseModel):
     username: str = Field(min_length=1, max_length=50)
@@ -40,7 +42,7 @@ class UpdateUsernameRequest(BaseModel):
 class LoginResponse(BaseModel):
     id: str
     username: str
-    role: str
+    role: UserRole
     is_active: bool
     # Native clients build their whole user object from this response (and
     # cache it for offline starts) — keep it a superset of what the UI

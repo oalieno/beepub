@@ -1365,8 +1365,7 @@
       "BookTagNested": {
         "properties": {
           "category": {
-            "title": "Category",
-            "type": "string"
+            "$ref": "#/components/schemas/TagCategory"
           },
           "confidence": {
             "title": "Confidence",
@@ -1812,13 +1811,12 @@
           "reading_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ReadingStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reading Status"
+            ]
           },
           "section_weights": {
             "anyOf": [
@@ -2455,6 +2453,10 @@
             "type": "string"
           },
           "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
             "title": "Role",
             "type": "string"
           },
@@ -2800,42 +2802,40 @@
         "title": "FeedOut",
         "type": "object"
       },
-      "GroupedItem": {
-        "description": "One unit in the collapsed library view: a whole series or a lone book.",
+      "GroupedBook": {
         "properties": {
           "book": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/BookWithInteractionOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "series": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SeriesOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/BookWithInteractionOut"
           },
           "type": {
-            "enum": [
-              "series",
-              "book"
-            ],
+            "const": "book",
+            "default": "book",
             "title": "Type",
             "type": "string"
           }
         },
         "required": [
-          "type"
+          "book"
         ],
-        "title": "GroupedItem",
+        "title": "GroupedBook",
+        "type": "object"
+      },
+      "GroupedSeries": {
+        "properties": {
+          "series": {
+            "$ref": "#/components/schemas/SeriesOut"
+          },
+          "type": {
+            "const": "series",
+            "default": "series",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "series"
+        ],
+        "title": "GroupedSeries",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -3291,6 +3291,12 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "pending",
+              "generating",
+              "completed",
+              "failed"
+            ],
             "title": "Status",
             "type": "string"
           },
@@ -3443,25 +3449,22 @@
           "reading_progress": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/ProgressOut"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reading Progress"
+            ]
           },
           "reading_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ReadingStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reading Status"
+            ]
           },
           "started_at": {
             "anyOf": [
@@ -4096,8 +4099,7 @@
             "type": "string"
           },
           "role": {
-            "title": "Role",
-            "type": "string"
+            "$ref": "#/components/schemas/UserRole"
           },
           "username": {
             "title": "Username",
@@ -4515,7 +4517,21 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/GroupedItem"
+              "discriminator": {
+                "mapping": {
+                  "book": "#/components/schemas/GroupedBook",
+                  "series": "#/components/schemas/GroupedSeries"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/GroupedSeries"
+                },
+                {
+                  "$ref": "#/components/schemas/GroupedBook"
+                }
+              ]
             },
             "title": "Items",
             "type": "array"
@@ -5057,6 +5073,16 @@
         ],
         "title": "ReadingStatsOut",
         "type": "object"
+      },
+      "ReadingStatus": {
+        "enum": [
+          "want_to_read",
+          "currently_reading",
+          "read",
+          "did_not_finish"
+        ],
+        "title": "ReadingStatus",
+        "type": "string"
       },
       "ReadingStatusUpdate": {
         "properties": {
@@ -5789,13 +5815,12 @@
           "reading_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ReadingStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reading Status"
+            ]
           },
           "started_at": {
             "anyOf": [
@@ -5904,13 +5929,12 @@
           "reading_status": {
             "anyOf": [
               {
-                "type": "string"
+                "$ref": "#/components/schemas/ReadingStatus"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Reading Status"
+            ]
           },
           "started_at": {
             "anyOf": [
@@ -6063,6 +6087,17 @@
         ],
         "title": "SyncProgressIn",
         "type": "object"
+      },
+      "TagCategory": {
+        "enum": [
+          "genre",
+          "subgenre",
+          "mood",
+          "theme",
+          "trope"
+        ],
+        "title": "TagCategory",
+        "type": "string"
       },
       "TagWithCount": {
         "properties": {
@@ -13676,7 +13711,21 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/GroupedItem"
+                    "discriminator": {
+                      "mapping": {
+                        "book": "#/components/schemas/GroupedBook",
+                        "series": "#/components/schemas/GroupedSeries"
+                      },
+                      "propertyName": "type"
+                    },
+                    "oneOf": [
+                      {
+                        "$ref": "#/components/schemas/GroupedSeries"
+                      },
+                      {
+                        "$ref": "#/components/schemas/GroupedBook"
+                      }
+                    ]
                   },
                   "title": "Response List Shelf Items Api Bookshelves  Shelf Id  Items Get",
                   "type": "array"

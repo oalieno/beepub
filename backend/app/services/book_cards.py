@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.book import Book
-from app.models.reading import UserBookInteraction
+from app.models.reading import ReadingStatus, UserBookInteraction
 from app.schemas.book import BookWithInteractionOut
 from app.services.work_propagation import (
     get_edition_count_map,
@@ -61,7 +61,8 @@ async def book_cards(
         card.edition_count = edition_counts.get(book.id)
         shared = propagated.get(book.id)
         if shared:
-            card.reading_status = shared["reading_status"]
+            status = shared["reading_status"]
+            card.reading_status = ReadingStatus(status) if status else None
             card.is_favorite = shared["is_favorite"]
         mine = own.get(book.id)
         if mine:

@@ -35,7 +35,7 @@ class IllustrationOut(BaseModel):
     text: str
     style_prompt: str | None
     custom_prompt: str | None
-    status: str
+    status: Literal["pending", "generating", "completed", "failed"]
     error_message: str | None
     created_at: datetime
     updated_at: datetime

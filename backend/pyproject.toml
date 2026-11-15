@@ -42,6 +42,9 @@ asyncio_mode = "auto"
 markers = [
     "integration: runs the real app against real Postgres/Redis (tests/integration/conftest.py)",
 ]
+# A response whose value does not match its declared type still goes out,
+# with only a warning: here it fails, so the declared types stay true.
+filterwarnings = ["error:Pydantic serializer warnings:UserWarning"]
 
 [tool.ruff]
 target-version = "py312"

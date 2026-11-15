@@ -10,8 +10,7 @@
  *
  * It has no runtime content. A line that stops compiling means a field
  * was renamed, removed or retyped on one side only — fix `$lib/types`
- * (or the backend), not this file. A type listed under "known to differ"
- * is one that disagreed when this check was introduced.
+ * (or the backend), not this file.
  */
 import type * as App from "$lib/types";
 import type { components } from "./schema";
@@ -39,6 +38,10 @@ type Named<FromApi, InApp> = [Exclude<keyof InApp, keyof FromApi>] extends [
 /** …and each has a type the app's can hold. */
 type Fits<FromApi, InApp> = Sent<FromApi> extends InApp ? true : false;
 
+/** For what the app sends: the backend accepts whatever the app's type
+ *  can hold. */
+type Accepts<ByApi, FromApp> = FromApp extends ByApi ? true : false;
+
 // Field names: every type both sides have.
 // prettier-ignore
 export type Fields = [
@@ -48,7 +51,6 @@ export type Fields = [
   Yes<Named<Api["LibraryListOut"], App.LibraryOut>>,
   Yes<Named<Api["BookOut"], App.BookOut>>,
   Yes<Named<Api["SeriesOut"], App.SeriesOut>>,
-  Yes<Named<Api["GroupedItem"], App.GroupedItem>>,
   Yes<Named<Api["PaginatedGrouped"], App.PaginatedGrouped>>,
   Yes<Named<Api["WorkBookBrief"], App.WorkBookBrief>>,
   Yes<Named<Api["WorkOut"], App.WorkOut>>,
@@ -93,15 +95,11 @@ export type Fields = [
   Yes<Named<Api["CompanionConversationOut"], App.CompanionConversationOut>>,
 ];
 
-// Field types as well. Not listed: the types where the app knows more
-// than the backend declares (a `role` that is "user" | "admin" where the
-// backend says string, a progress object it describes as a plain
-// dictionary) — narrowing those belongs in the backend's schemas:
-//   UserOut, BookOut, SeriesOut, GroupedItem
-//   PaginatedGrouped, BookWithInteractionOut, PaginatedBooksWithInteraction, ExternalMetadataOut
-//   SyncProgressIn, SyncInteractionIn, SyncInteractionOut, BookSyncRequest
-//   BookSyncResponse, InteractionOut, LoginResponse, IllustrationOut
-//   CompanionMessageOut, CompanionConversationOut
+// Field types as well, for what the backend sends. Two are left out,
+// each holding a free-form object the backend passes through as stored
+// and only the app gives a shape to:
+//   ExternalMetadataOut (the archived source record, its reviews)
+//   BookSyncResponse (the progress object, verbatim)
 // prettier-ignore
 export type Types = [
   Yes<Fits<Api["ZhConversionSegment"], App.ZhConversionSegment>>,
@@ -135,4 +133,26 @@ export type Types = [
   Yes<Fits<Api["ApiTokenCreated"], App.ApiTokenCreated>>,
   Yes<Fits<Api["CompanionConversationSummary"], App.CompanionConversationSummary>>,
   Yes<Fits<Api["AllJobsResponse"], App.AllJobsResponse>>,
+  Yes<Fits<Api["UserOut"], App.UserOut>>,
+  Yes<Fits<Api["BookOut"], App.BookOut>>,
+  Yes<Fits<Api["SeriesOut"], App.SeriesOut>>,
+  Yes<Fits<(Api["GroupedSeries"] | Api["GroupedBook"]), App.GroupedItem>>,
+  Yes<Fits<Api["PaginatedGrouped"], App.PaginatedGrouped>>,
+  Yes<Fits<Api["BookWithInteractionOut"], App.BookWithInteractionOut>>,
+  Yes<Fits<Api["PaginatedBooksWithInteraction"], App.PaginatedBooksWithInteraction>>,
+  Yes<Fits<Api["SyncInteractionOut"], App.SyncInteractionOut>>,
+  Yes<Fits<Api["InteractionOut"], App.InteractionOut>>,
+  Yes<Fits<Api["LoginResponse"], App.LoginResponse>>,
+  Yes<Fits<Api["IllustrationOut"], App.IllustrationOut>>,
+  Yes<Fits<Api["CompanionMessageOut"], App.CompanionMessageOut>>,
+  Yes<Fits<Api["CompanionConversationOut"], App.CompanionConversationOut>>,
+];
+
+// …and for what the app sends, the other way round.
+// prettier-ignore
+export type Requests = [
+  Yes<Accepts<Api["SyncProgressIn"], App.SyncProgressIn>>,
+  Yes<Accepts<Api["SyncInteractionIn"], App.SyncInteractionIn>>,
+  Yes<Accepts<Api["BookSyncRequest"], App.BookSyncRequest>>,
+  Yes<Accepts<Api["ReferenceImageInput"], App.ReferenceImageInput>>,
 ];

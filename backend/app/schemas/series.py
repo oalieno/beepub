@@ -1,7 +1,7 @@
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.book import BookOut, BookWithInteractionOut
 
@@ -18,12 +18,18 @@ class SeriesOut(BaseModel):
     cover_book: BookOut | None = None
 
 
-class GroupedItem(BaseModel):
-    """One unit in the collapsed library view: a whole series or a lone book."""
+class GroupedSeries(BaseModel):
+    type: Literal["series"] = "series"
+    series: SeriesOut
 
-    type: Literal["series", "book"]
-    series: SeriesOut | None = None
-    book: BookWithInteractionOut | None = None
+
+class GroupedBook(BaseModel):
+    type: Literal["book"] = "book"
+    book: BookWithInteractionOut
+
+
+# One unit in the collapsed library view: a whole series or a lone book.
+GroupedItem = Annotated[GroupedSeries | GroupedBook, Field(discriminator="type")]
 
 
 class PaginatedGrouped(BaseModel):

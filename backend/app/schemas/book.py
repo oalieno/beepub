@@ -4,13 +4,16 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.models.reading import ReadingStatus
+from app.models.tag import TagCategory
+
 
 class BookTagNested(BaseModel):
     id: uuid.UUID
     tag: str
     label: str = ""
     label_hans: str = ""
-    category: str
+    category: TagCategory
     source: str = ""
     confidence: float
 
@@ -95,7 +98,7 @@ class PaginatedBooks(BaseModel):
 
 
 class BookWithInteractionOut(BookOut):
-    reading_status: str | None = None
+    reading_status: ReadingStatus | None = None
     is_favorite: bool = False
     user_rating: float | None = None
     reading_percentage: float | None = None

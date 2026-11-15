@@ -1,7 +1,5 @@
-export enum UserRole {
-  User = "user",
-  Admin = "admin",
-}
+export const UserRole = { User: "user", Admin: "admin" } as const;
+export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
 export interface TierBand {
   min: number; // inclusive lower bound (0.5-5)
@@ -116,7 +114,7 @@ export interface BookOut {
   popularity_score: number;
   calibre_id: number | null;
   calibre_added_at: string | null;
-  added_by: string;
+  added_by: string | null;
   created_at: string;
   updated_at: string;
   library_id: string | null;

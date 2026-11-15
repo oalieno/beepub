@@ -21,7 +21,7 @@ from app.schemas.bookshelf import (
     BookshelfSeriesAdd,
     BookshelfUpdate,
 )
-from app.schemas.series import GroupedItem
+from app.schemas.series import GroupedBook, GroupedItem, GroupedSeries
 from app.services.access import get_accessible_book, get_accessible_library
 from app.services.series import (
     _hydrate_grouped_books,
@@ -227,11 +227,11 @@ async def list_shelf_items(
         if r.book_id is not None:
             book = book_by_id.get(r.book_id)
             if book is not None:
-                items.append(GroupedItem(type="book", book=book))
+                items.append(GroupedBook(book=book))
         else:
             series = series_by_key.get((r.library_id, r.series_key))
             if series is not None:
-                items.append(GroupedItem(type="series", series=series))
+                items.append(GroupedSeries(series=series))
     return items
 
 

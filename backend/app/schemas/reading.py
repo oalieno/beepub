@@ -3,6 +3,8 @@ from datetime import date, datetime
 
 from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
+from app.models.reading import ReadingStatus
+
 
 def _dense_page_counts(value):
     """section_page_counts is the reader's cache of how many pages each
@@ -162,8 +164,8 @@ class ReadingGoalUpdate(BaseModel):
 class InteractionOut(BaseModel):
     rating: float | None
     is_favorite: bool
-    reading_progress: dict | None
-    reading_status: str | None
+    reading_progress: ProgressOut | None
+    reading_status: ReadingStatus | None
     started_at: date | None
     finished_at: date | None
     notes: str | None
@@ -228,7 +230,7 @@ class SyncInteractionIn(BaseModel):
     change together (mirroring PUT /reading-status). Notes are a group of
     their own; a stamped null notes is a deliberate clear."""
 
-    reading_status: str | None = None
+    reading_status: ReadingStatus | None = None
     started_at: date | None = None
     finished_at: date | None = None
     status_updated_at: AwareDatetime | None = None
@@ -238,18 +240,6 @@ class SyncInteractionIn(BaseModel):
     favorite_updated_at: AwareDatetime | None = None
     notes: str | None = None  # markdown
     notes_updated_at: AwareDatetime | None = None
-
-    @field_validator("reading_status")
-    @classmethod
-    def validate_reading_status(cls, v: str | None) -> str | None:
-        if v is None:
-            return v
-        from app.models.reading import ReadingStatus
-
-        valid = {s.value for s in ReadingStatus}
-        if v not in valid:
-            raise ValueError(f"must be one of: {', '.join(sorted(valid))}")
-        return v
 
     @field_validator("rating")
     @classmethod
@@ -266,7 +256,7 @@ class SyncInteractionIn(BaseModel):
 
 
 class SyncInteractionOut(BaseModel):
-    reading_status: str | None
+    reading_status: ReadingStatus | None
     started_at: date | None
     finished_at: date | None
     status_updated_at: datetime | None
