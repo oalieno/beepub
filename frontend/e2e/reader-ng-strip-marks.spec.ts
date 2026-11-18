@@ -452,17 +452,29 @@ test("keys move a screen along the strip: down the page in a horizontal book, le
   page,
   request,
 }) => {
+  // How far past the start of chapter `from` the reader is. (Not the
+  // strip's own position: the canvas is shifted, position and all, when
+  // an earlier chapter has joined and the strip has come to rest — which
+  // may be before or after the first key, by how fast the chapter loads.)
+  let from = 0;
+  const along = () =>
+    page.evaluate((from) => {
+      const s = window.__beepubReaderNG.core.strip;
+      const chapters = s.chapters as { index: number; top: number }[];
+      const top = chapters.find((c) => c.index === from)?.top;
+      return top == null ? NaN : (s.position as number) - top;
+    }, from);
   const settled = async () => {
-    let last = -1;
+    let last = NaN;
     await expect
       .poll(async () => {
-        const now = (await strip(page)).position;
+        const now = await along();
         const still = now === last;
         last = now;
         return still;
       })
       .toBe(true);
-    return (await strip(page)).position;
+    return along();
   };
   const press = async (key: string) => {
     await page.keyboard.press(key);
@@ -474,6 +486,7 @@ test("keys move a screen along the strip: down the page in a horizontal book, le
   await resetProgress(request, long);
   await openStrip(page, long, LONG_CHAPTERS_BOOK);
   await goTo(page, 1);
+  from = 1;
   let at = await settled();
   const step = Math.round((await strip(page)).screen * 0.9);
   for (const key of ["ArrowDown", "PageDown", " ", "ArrowRight"]) {
@@ -493,6 +506,7 @@ test("keys move a screen along the strip: down the page in a horizontal book, le
   await resetProgress(request, nine);
   await openStrip(page, nine, NINE_CHAPTERS_BOOK);
   await goTo(page, 2);
+  from = 2;
   expect((await strip(page)).vertical).toBe(true);
   at = await settled();
   const across = Math.round((await strip(page)).screen * 0.9);

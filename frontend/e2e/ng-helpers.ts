@@ -682,7 +682,18 @@ export async function setPagerSetting(
 ) {
   await page.getByRole("button", { name: "Reader settings" }).click();
   await page.getByTestId(row).getByRole("button", { name: label }).click();
+  await closeSettings(page);
+}
+
+/** Close the settings sheet and wait until the page takes a tap again:
+ *  while the sheet fades out its backdrop is still in the way, and for a
+ *  moment after it has gone the body is still shut to the pointer. */
+async function closeSettings(page: Page) {
   await page.keyboard.press("Escape");
+  await expect(
+    page.locator('[data-slot="sheet-content"], [data-slot="sheet-overlay"]'),
+  ).toHaveCount(0);
+  await expect(page.locator("body")).not.toHaveCSS("pointer-events", "none");
 }
 
 /** Press a stepper row's + or − in the settings sheet `times` times. */
@@ -696,7 +707,7 @@ export async function stepPagerSetting(
   const name = `${dir === "up" ? "Increase" : "Decrease"} ${setting}`;
   for (let i = 0; i < times; i++)
     await page.getByRole("button", { name }).click();
-  await page.keyboard.press("Escape");
+  await closeSettings(page);
 }
 
 /** Run the web build as the iOS app: Capacitor reads
