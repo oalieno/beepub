@@ -198,7 +198,7 @@ class TestDecodeToken:
     def test_wrong_secret_returns_none(self):
         token = jwt.encode(
             {"sub": "u", "exp": datetime.now(UTC) + timedelta(hours=1)},
-            "wrong-secret",
+            "a-different-secret-of-a-proper-length-0123",
             algorithm=ALGORITHM,
         )
         assert decode_token(token) is None

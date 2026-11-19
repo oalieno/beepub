@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from app import errors
 
@@ -70,7 +70,7 @@ def test_a_translated_sentence_is_not_raised_bare():
     assert not bare, bare
 
 
-def test_the_response_carries_the_code_beside_the_sentence():
+async def test_the_response_carries_the_code_beside_the_sentence():
     app = FastAPI()
     app.add_exception_handler(errors.ApiError, errors.api_error_handler)
 
@@ -82,11 +82,13 @@ def test_the_response_carries_the_code_beside_the_sentence():
     def overridden():
         raise errors.USERNAME_EXISTS(status_code=400, headers={"X-Why": "taken"})
 
-    client = TestClient(app)
-    resp = client.get("/default")
-    assert resp.status_code == 404
-    assert resp.json() == {"detail": "Book not found", "code": "book_not_found"}
-    resp = client.get("/overridden")
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        resp = await client.get("/default")
+        assert resp.status_code == 404
+        assert resp.json() == {"detail": "Book not found", "code": "book_not_found"}
+        resp = await client.get("/overridden")
     assert resp.status_code == 400
     assert resp.json()["code"] == "username_exists"
     assert resp.headers["x-why"] == "taken"
