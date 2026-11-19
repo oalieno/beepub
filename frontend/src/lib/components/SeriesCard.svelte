@@ -1,11 +1,11 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import type { SeriesOut } from "$lib/types";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
+  import type { SeriesOut } from "#lib/types.ts";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
   import StarRating from "./StarRating.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     series,

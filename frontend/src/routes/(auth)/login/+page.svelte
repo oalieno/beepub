@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { authApi } from "$lib/api/auth";
-  import { authStore } from "$lib/stores/auth";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { authApi } from "#lib/api/auth.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { Eye, EyeOff, Info, Settings } from "@lucide/svelte";
-  import { isNative } from "$lib/platform";
-  import { getServerUrl, switchAppMode } from "$lib/api/client";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Card from "$lib/components/ui/card";
-  import * as Tabs from "$lib/components/ui/tabs";
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { isNative } from "#lib/platform.ts";
+  import { getServerUrl, switchAppMode } from "#lib/api/client.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Card from "#lib/components/ui/card/index.ts";
+  import * as Tabs from "#lib/components/ui/tabs/index.ts";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
 
   let username = $state("");
   let password = $state("");

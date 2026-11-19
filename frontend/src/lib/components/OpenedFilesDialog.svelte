@@ -7,12 +7,12 @@
    */
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { isNative } from "$lib/platform";
-  import { isLocalMode } from "$lib/api/client";
-  import { librariesApi } from "$lib/api/libraries";
-  import { authStore } from "$lib/stores/auth";
-  import { activeLibrary } from "$lib/stores/activeLibrary";
-  import { uploadFiles } from "$lib/services/uploadQueue";
+  import { isNative } from "#lib/platform.ts";
+  import { isLocalMode } from "#lib/api/client.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { activeLibrary } from "#lib/stores/activeLibrary.ts";
+  import { uploadFiles } from "#lib/services/uploadQueue.ts";
   import {
     DEVICE_FORMATS,
     OPENED_FILE_EVENT,
@@ -20,13 +20,13 @@
     hasFormat,
     importToDevice,
     takeOpenedFiles,
-  } from "$lib/services/openedFiles";
-  import Modal from "$lib/components/Modal.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
-  import { UserRole, type LibraryOut, type UserOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/services/openedFiles.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import { UserRole, type LibraryOut, type UserOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   // Mode switches are a full page load; one read is enough.
   const localMode = isLocalMode();

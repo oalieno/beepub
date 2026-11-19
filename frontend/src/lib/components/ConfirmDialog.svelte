@@ -1,8 +1,8 @@
 <script lang="ts">
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { Button } from "$lib/components/ui/button";
-  import { confirmRequest } from "$lib/stores/confirm";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { confirmRequest } from "#lib/stores/confirm.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let request = $derived($confirmRequest);
 </script>

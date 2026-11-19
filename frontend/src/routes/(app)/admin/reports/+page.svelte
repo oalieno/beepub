@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { toastStore } from "$lib/stores/toast";
-  import type { BookReport } from "$lib/types";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { BookReport } from "#lib/types.ts";
   import { Check, Flag, CircleCheck } from "@lucide/svelte";
-  import { TableSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import { TableSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let ISSUE_LABELS = $derived<Record<string, string>>({
     corrupt_file: m.admin_reports_corrupt_file(),

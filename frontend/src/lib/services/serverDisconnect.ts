@@ -19,9 +19,9 @@
  */
 import { derived, readable } from "svelte/store";
 
-import { hasServerUrl, isLocalMode } from "$lib/api/client";
-import { isNative } from "$lib/platform";
-import { isOnline, networkConnected } from "$lib/services/network";
+import { hasServerUrl, isLocalMode } from "#lib/api/client.ts";
+import { isNative } from "#lib/platform.ts";
+import { isOnline, networkConnected } from "#lib/services/network.ts";
 
 const DISCONNECT_DELAY_MS = 10_000;
 

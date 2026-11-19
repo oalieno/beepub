@@ -13,18 +13,18 @@
  */
 import { get } from "svelte/store";
 
-import { parseKosyncXpointer } from "$lib/components/reader/kosync-xpointer";
+import { parseKosyncXpointer } from "#lib/components/reader/kosync-xpointer.ts";
 import {
   fetchProgress,
   pushProgress,
   type KosyncProgressRecord,
   type KosyncPushPayload,
-} from "$lib/kosync/client";
-import type { KosyncAccount } from "$lib/services/kosyncAccount";
-import type { LocalBookEntry } from "$lib/services/localLibrary";
+} from "#lib/kosync/client.ts";
+import type { KosyncAccount } from "#lib/services/kosyncAccount.ts";
+import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
 // Deliberately networkConnected, not getIsOnline(): the latter includes
 // BeePub-server reachability, which a third-party sync server doesn't need.
-import { networkConnected } from "$lib/services/network";
+import { networkConnected } from "#lib/services/network.ts";
 
 import { localSync } from "./local";
 import type {

@@ -2,20 +2,20 @@
   import { tick, untrack } from "svelte";
   import { page } from "$app/state";
   import { goto, afterNavigate } from "$app/navigation";
-  import { keyboardVisible } from "$lib/stores/keyboard";
-  import { authStore } from "$lib/stores/auth";
-  import { booksApi } from "$lib/api/books";
-  import { beepubSync } from "$lib/reading/beepub";
-  import { worksApi } from "$lib/api/works";
-  import { coverUrl } from "$lib/api/client";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { toastStore } from "$lib/stores/toast";
-  import type { DownloadRequest } from "$lib/stores/downloads";
-  import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
-  import DownloadButton from "$lib/components/DownloadButton.svelte";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import StarRating from "$lib/components/StarRating.svelte";
+  import { keyboardVisible } from "#lib/stores/keyboard.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { beepubSync } from "#lib/reading/beepub.ts";
+  import { worksApi } from "#lib/api/works.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { DownloadRequest } from "#lib/stores/downloads.ts";
+  import { refreshLinkedBookIds } from "#lib/stores/linkedBooks.ts";
+  import DownloadButton from "#lib/components/DownloadButton.svelte";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import StarRating from "#lib/components/StarRating.svelte";
   import type {
     BookOut,
     ExternalMetadataOut,
@@ -23,11 +23,11 @@
     HighlightOut,
     ReadingStatus,
     SeriesNeighborsOut,
-  } from "$lib/types";
-  import HighlightList from "$lib/components/HighlightList.svelte";
-  import BottomSheet from "$lib/components/BottomSheet.svelte";
-  import { BookDetailSkeleton } from "$lib/components/skeletons";
-  import { UserRole } from "$lib/types";
+  } from "#lib/types.ts";
+  import HighlightList from "#lib/components/HighlightList.svelte";
+  import BottomSheet from "#lib/components/BottomSheet.svelte";
+  import { BookDetailSkeleton } from "#lib/components/skeletons/index.ts";
+  import { UserRole } from "#lib/types.ts";
   import {
     BookOpen,
     EllipsisVertical,
@@ -40,23 +40,23 @@
     BookCopy,
     FileText,
   } from "@lucide/svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import { isNative } from "$lib/platform";
-  import { readingSyncStamp } from "$lib/services/readingSync";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import { isNative } from "#lib/platform.ts";
+  import { readingSyncStamp } from "#lib/services/readingSync.ts";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
   import { marked } from "marked";
-  import { sanitizeDescription } from "$lib/sanitize";
-  import ExternalRatings from "$lib/components/ExternalRatings.svelte";
-  import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
-  import BookMetadataSidebar from "$lib/components/BookMetadataSidebar.svelte";
-  import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
-  import BackToTop from "$lib/components/BackToTop.svelte";
+  import { sanitizeDescription } from "#lib/sanitize.ts";
+  import ExternalRatings from "#lib/components/ExternalRatings.svelte";
+  import ReadingStatusSelect from "#lib/components/ReadingStatusSelect.svelte";
+  import BookMetadataSidebar from "#lib/components/BookMetadataSidebar.svelte";
+  import BookNotesEditor from "#lib/components/BookNotesEditor.svelte";
+  import BackToTop from "#lib/components/BackToTop.svelte";
   import BookActions, {
     downloadRequestFor,
     type Edition,
-  } from "$lib/components/book-actions/BookActions.svelte";
-  import BookActionMenuItems from "$lib/components/book-actions/BookActionMenuItems.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/components/book-actions/BookActions.svelte";
+  import BookActionMenuItems from "#lib/components/book-actions/BookActionMenuItems.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   function newInteraction(
     overrides: Partial<InteractionOut> = {},
@@ -126,6 +126,8 @@
   // Persisted in sessionStorage to survive reader round-trip (component gets destroyed)
   let hasInternalHistory = $state(false);
   afterNavigate((nav) => {
+    if (nav.shallow && nav.type === "goto") return;
+
     if (nav.from) {
       // nav.from is null on initial page load (direct link), non-null for internal navigation
       if (!/\/read$/.test(nav.from.url.pathname)) {
@@ -181,6 +183,7 @@
     // is for a book no longer shown, and is dropped.
     const id = bookId;
     const current = () => id === bookId;
+
     const keep =
       <T,>(set: (v: T) => void) =>
       (v: T) => {
@@ -365,7 +368,7 @@
     // The book page no longer exists — replace it in history so back
     // doesn't land on a 404.
     goto(book?.library_id ? `/libraries/${book.library_id}` : "/", {
-      replaceState: true,
+      replace: true,
     });
   }
 </script>
@@ -514,8 +517,7 @@
         <div class="mt-auto pt-6 hidden md:flex items-center gap-2.5">
           {#if !isPhysical}
             <button
-              onclick={() =>
-                goto(`/books/${book!.id}/read`, { replaceState: true })}
+              onclick={() => goto(`/books/${book!.id}/read`, { replace: true })}
               class="h-10 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold px-5 rounded-full transition-colors whitespace-nowrap text-sm"
             >
               <BookOpen size={16} />
@@ -650,6 +652,7 @@
                 }))
               )
                 return;
+
               const prev = bookHighlights;
               // Optimistic remove, then delete immediately (no delayed undo).
               bookHighlights = bookHighlights.filter((h) => h.id !== hl.id);
@@ -814,8 +817,7 @@
     <div class="flex items-center gap-2.5" style="max-width: 900px;">
       {#if !isPhysical}
         <button
-          onclick={() =>
-            goto(`/books/${book!.id}/read`, { replaceState: true })}
+          onclick={() => goto(`/books/${book!.id}/read`, { replace: true })}
           class="h-12 flex-1 flex items-center justify-center gap-2 bg-foreground hover:bg-foreground/90 text-background font-semibold rounded-full transition-colors text-base"
         >
           <BookOpen size={16} />
@@ -873,9 +875,8 @@
         aria-label={m.book_more_actions()}
         class="h-12 w-12 flex items-center justify-center bg-card card-soft rounded-full text-muted-foreground transition-all"
         onclick={() => (showMobileActions = true)}
+        ><EllipsisVertical size={18} /></button
       >
-        <EllipsisVertical size={18} />
-      </button>
     </div>
   </div>
 

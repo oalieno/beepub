@@ -4,8 +4,8 @@
  * by lib/api; this module only translates Locator-shaped state at the
  * boundary.
  */
-import { booksApi } from "$lib/api/books";
-import { apiBase, getAuthHeader } from "$lib/api/client";
+import { booksApi } from "#lib/api/books.ts";
+import { apiBase, getAuthHeader } from "#lib/api/client.ts";
 
 import { cfiOf, locatorFromCfi } from "./locator";
 import { densePageCounts } from "./progress";

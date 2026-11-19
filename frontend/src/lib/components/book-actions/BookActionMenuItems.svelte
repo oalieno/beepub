@@ -1,6 +1,6 @@
 <script lang="ts">
   /** A book's actions as the items of a DropdownMenu (see BookActions). */
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
   import type { BookAction } from "./BookActions.svelte";
 
   let {

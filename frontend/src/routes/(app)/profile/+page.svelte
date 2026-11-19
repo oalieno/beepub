@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
-  import { authApi } from "$lib/api/auth";
-  import { get } from "$lib/api/client";
-  import { toastStore } from "$lib/stores/toast";
-  import { UserRole } from "$lib/types";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { authApi } from "#lib/api/auth.ts";
+  import { get } from "#lib/api/client.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { UserRole } from "#lib/types.ts";
   import {
     BookOpen,
     Highlighter,
@@ -19,15 +19,15 @@
     Eye,
     EyeOff,
   } from "@lucide/svelte";
-  import * as Avatar from "$lib/components/ui/avatar";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
-  import * as m from "$lib/paraglide/messages.js";
-  import LanguageSection from "$lib/components/settings/LanguageSection.svelte";
-  import AppearanceSection from "$lib/components/settings/AppearanceSection.svelte";
-  import ApiTokensSection from "$lib/components/settings/ApiTokensSection.svelte";
-  import EReaderSection from "$lib/components/settings/EReaderSection.svelte";
+  import * as Avatar from "#lib/components/ui/avatar/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import LanguageSection from "#lib/components/settings/LanguageSection.svelte";
+  import AppearanceSection from "#lib/components/settings/AppearanceSection.svelte";
+  import ApiTokensSection from "#lib/components/settings/ApiTokensSection.svelte";
+  import EReaderSection from "#lib/components/settings/EReaderSection.svelte";
 
   let isAdmin = $derived($authStore.user?.role === UserRole.Admin);
 

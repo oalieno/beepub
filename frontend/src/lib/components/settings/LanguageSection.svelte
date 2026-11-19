@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ChevronRight, Globe } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale, setLocale, locales } from "$lib/paraglide/runtime.js";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale, setLocale, locales } from "#lib/paraglide/runtime.js";
 
   let show = $state(false);
 

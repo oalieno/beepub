@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { BookshelfOut, GroupedItem } from "$lib/types";
+import type { BookshelfOut, GroupedItem } from "#lib/types.ts";
 
 export const bookshelvesApi = {
   list: () => get("/bookshelves") as Promise<BookshelfOut[]>,
@@ -40,5 +40,6 @@ export const bookshelvesApi = {
 };
 
 export const aiApi = {
-  getStatus: () => get("/ai/status") as Promise<import("$lib/types").AiStatus>,
+  getStatus: () =>
+    get("/ai/status") as Promise<import("#lib/types.ts").AiStatus>,
 };

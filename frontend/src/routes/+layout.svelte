@@ -4,23 +4,26 @@
   // a self-hosted library opens without one.
   import "@fontsource-variable/inter/wght.css";
   import "@fontsource-variable/playfair-display/wght.css";
-  import { browser } from "$app/environment";
+  import { browser } from "$app/env";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { authStore } from "$lib/stores/auth";
-  import { isNative } from "$lib/platform";
-  import { hasServerUrl, isLocalMode } from "$lib/api/client";
-  import { initNetworkWatcher } from "$lib/services/network";
-  import { initReadingSync, linkAndSyncAll } from "$lib/services/readingSync";
-  import Toast from "$lib/components/Toast.svelte";
-  import ConfirmDialog from "$lib/components/ConfirmDialog.svelte";
-  import SplashIntro from "$lib/components/SplashIntro.svelte";
-  import OpenedFilesDialog from "$lib/components/OpenedFilesDialog.svelte";
-  import ZhUploadPrompt from "$lib/components/ZhUploadPrompt.svelte";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { isNative } from "#lib/platform.ts";
+  import { hasServerUrl, isLocalMode } from "#lib/api/client.ts";
+  import { initNetworkWatcher } from "#lib/services/network.ts";
+  import {
+    initReadingSync,
+    linkAndSyncAll,
+  } from "#lib/services/readingSync.ts";
+  import Toast from "#lib/components/Toast.svelte";
+  import ConfirmDialog from "#lib/components/ConfirmDialog.svelte";
+  import SplashIntro from "#lib/components/SplashIntro.svelte";
+  import OpenedFilesDialog from "#lib/components/OpenedFilesDialog.svelte";
+  import ZhUploadPrompt from "#lib/components/ZhUploadPrompt.svelte";
   import { SplashScreen } from "@capacitor/splash-screen";
   import type { Snippet } from "svelte";
-  import type { UserOut } from "$lib/types";
+  import type { UserOut } from "#lib/types.ts";
 
   let {
     data,
@@ -118,7 +121,7 @@
         goto("/login");
         return;
       } else if (isDeviceOnlyPath(path)) {
-        goto("/libraries", { replaceState: true });
+        goto("/libraries", { replace: true });
         return;
       }
       nativeReady = true;

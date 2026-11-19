@@ -6,17 +6,17 @@
  */
 import { writable } from "svelte/store";
 
-import { booksApi } from "$lib/api/books";
-import type { LocalBookEntry } from "$lib/services/localLibrary";
+import { booksApi } from "#lib/api/books.ts";
+import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
 import {
   noteSimplifiedUploads,
   type PendingBook,
-} from "$lib/services/zhConvert";
+} from "#lib/services/zhConvert.ts";
 import {
   addTransfer,
   removeTransfer,
   updateTransfer,
-} from "$lib/stores/transfers";
+} from "#lib/stores/transfers.ts";
 
 interface UploadTask {
   title: string;
@@ -113,7 +113,8 @@ export function uploadLocalBooks(
     entries.map((entry) => ({
       title: entry.title,
       run: async () => {
-        const { uploadLocalBook } = await import("$lib/services/uploadLocal");
+        const { uploadLocalBook } =
+          await import("#lib/services/uploadLocal.ts");
         const { outcome, serverId } = await uploadLocalBook(entry, libraryId);
         return {
           status: outcome === "linked" ? "duplicate" : "done",

@@ -9,9 +9,9 @@
     Settings,
     Undo2,
   } from "@lucide/svelte";
-  import { toastStore } from "$lib/stores/toast";
+  import { toastStore } from "#lib/stores/toast.ts";
   import ProgressScrubber from "./ProgressScrubber.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     percentage = null,

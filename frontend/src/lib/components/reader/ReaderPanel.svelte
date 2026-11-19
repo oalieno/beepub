@@ -17,8 +17,8 @@
    *   reader page does it, so there is no closed state to animate from.
    */
   import type { Snippet } from "svelte";
-  import * as Sheet from "$lib/components/ui/sheet";
-  import { cn } from "$lib/utils";
+  import * as Sheet from "#lib/components/ui/sheet/index.ts";
+  import { cn } from "#lib/utils.ts";
 
   let {
     side,

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
   import { ArrowLeftRight, Search, Dices } from "@lucide/svelte";
-  import { isLocalMode } from "$lib/api/client";
-  import { navTitle } from "$lib/nav";
-  import { isNative } from "$lib/platform";
+  import { isLocalMode } from "#lib/api/client.ts";
+  import { navTitle } from "#lib/nav.ts";
+  import { isNative } from "#lib/platform.ts";
 
   let { onSearchOpen }: { onSearchOpen?: () => void } = $props();
 

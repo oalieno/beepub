@@ -1,5 +1,5 @@
 import { get, post, postForStream, put, patch, del, apiBase } from "./client";
-import { noteBookEdited } from "$lib/stores/editedBooks";
+import { noteBookEdited } from "#lib/stores/editedBooks.ts";
 import type {
   ZhConversion,
   ZhConversionPreview,
@@ -27,7 +27,7 @@ import type {
   SeriesNeighborsOut,
   StylePromptOut,
   TagBrowseSection,
-} from "$lib/types";
+} from "#lib/types.ts";
 
 export interface GroupedParams {
   search?: string;

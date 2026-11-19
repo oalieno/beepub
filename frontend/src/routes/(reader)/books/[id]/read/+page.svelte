@@ -11,7 +11,7 @@
     storedPagerShift,
     storedWritingMode,
     type ReaderSettings,
-  } from "$lib/reader/settings";
+  } from "#lib/reader/settings.ts";
   /**
    * The reader route. Loads a book through BookReader (the foliate-based
    * engine in $lib/reader) and wraps it in the product chrome: the desktop
@@ -32,32 +32,32 @@
    * &turn=fade|slide|curl|scroll|instant (instant — a bare jump — exists only
    * here).
    */
-  import type { ReaderFont } from "$lib/reader/fonts";
+  import type { ReaderFont } from "#lib/reader/fonts.ts";
   import { onDestroy, onMount, untrack } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
-  import { browser } from "$app/environment";
+  import { browser } from "$app/env";
   import { beforeNavigate, goto } from "$app/navigation";
-  import { portal } from "$lib/components/shelf/portal";
-  import { canCurl } from "$lib/platform";
+  import { portal } from "#lib/components/shelf/portal.ts";
+  import { canCurl } from "#lib/platform.ts";
   import { page } from "$app/state";
-  import { booksApi } from "$lib/api/books";
-  import { aiApi } from "$lib/api/bookshelves";
-  import { coverUrl, hasServerUrl, isLocalMode } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
+  import { booksApi } from "#lib/api/books.ts";
+  import { aiApi } from "#lib/api/bookshelves.ts";
+  import { coverUrl, hasServerUrl, isLocalMode } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
   import {
     emptyLocalInteraction,
     readLocalInteraction,
     setLocalReadingStatus,
     type LocalInteractionRecord,
-  } from "$lib/reading/local";
-  import { resolveReading } from "$lib/reading/resolve";
-  import type { BookSource } from "$lib/reading/source";
-  import type { SyncBackend } from "$lib/reading/sync";
-  import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import { getIsOnline, isOnline } from "$lib/services/network";
-  import { authStore } from "$lib/stores/auth";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { toastStore } from "$lib/stores/toast";
+  } from "#lib/reading/local.ts";
+  import { resolveReading } from "#lib/reading/resolve.ts";
+  import type { BookSource } from "#lib/reading/source.ts";
+  import type { SyncBackend } from "#lib/reading/sync.ts";
+  import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
+  import { getIsOnline, isOnline } from "#lib/services/network.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
   import {
     UserRole,
     type AiStatus,
@@ -66,15 +66,15 @@
     type InteractionOut,
     type SeriesNeighborsOut,
     type StylePromptOut,
-  } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type {
     Book,
     PageTurnMode,
     TocItem,
     WritingMode,
-  } from "$lib/reader/core";
-  import type { BookLoader } from "$lib/reader/loaders";
+  } from "#lib/reader/core.ts";
+  import type { BookLoader } from "#lib/reader/loaders/index.ts";
   import {
     comicPages,
     isPrePaginated,
@@ -83,23 +83,23 @@
     type PagerDirection,
     type PagerMode,
     type PagerTurn,
-  } from "$lib/reader/pages";
-  import BookReader from "$lib/components/reader/BookReader.svelte";
-  import ImagePager from "$lib/components/reader/ImagePager.svelte";
-  import CompanionSidebar from "$lib/components/reader/CompanionSidebar.svelte";
-  import GestureHintOverlay from "$lib/components/reader/GestureHintOverlay.svelte";
-  import HighlightSidebar from "$lib/components/reader/HighlightSidebar.svelte";
-  import IllustrationPromptModal from "$lib/components/reader/IllustrationPromptModal.svelte";
-  import IllustrationViewer from "$lib/components/reader/IllustrationViewer.svelte";
-  import ProgressScrubber from "$lib/components/reader/ProgressScrubber.svelte";
-  import ReaderBottomBar from "$lib/components/reader/ReaderBottomBar.svelte";
-  import ReaderSettingsSheet from "$lib/components/reader/ReaderSettingsSheet.svelte";
-  import ReaderTopBar from "$lib/components/reader/ReaderTopBar.svelte";
-  import SearchSidebar from "$lib/components/reader/SearchSidebar.svelte";
-  import TocSidebar from "$lib/components/reader/TocSidebar.svelte";
-  import Toolbar from "$lib/components/reader/Toolbar.svelte";
-  import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
+  } from "#lib/reader/pages.ts";
+  import BookReader from "#lib/components/reader/BookReader.svelte";
+  import ImagePager from "#lib/components/reader/ImagePager.svelte";
+  import CompanionSidebar from "#lib/components/reader/CompanionSidebar.svelte";
+  import GestureHintOverlay from "#lib/components/reader/GestureHintOverlay.svelte";
+  import HighlightSidebar from "#lib/components/reader/HighlightSidebar.svelte";
+  import IllustrationPromptModal from "#lib/components/reader/IllustrationPromptModal.svelte";
+  import IllustrationViewer from "#lib/components/reader/IllustrationViewer.svelte";
+  import ProgressScrubber from "#lib/components/reader/ProgressScrubber.svelte";
+  import ReaderBottomBar from "#lib/components/reader/ReaderBottomBar.svelte";
+  import ReaderSettingsSheet from "#lib/components/reader/ReaderSettingsSheet.svelte";
+  import ReaderTopBar from "#lib/components/reader/ReaderTopBar.svelte";
+  import SearchSidebar from "#lib/components/reader/SearchSidebar.svelte";
+  import TocSidebar from "#lib/components/reader/TocSidebar.svelte";
+  import Toolbar from "#lib/components/reader/Toolbar.svelte";
+  import ShareHighlightModal from "#lib/components/ShareHighlightModal.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
   import { BookX, Check, Undo2 } from "@lucide/svelte";
 
   let bookId = $derived(page.params.id as string);
@@ -114,6 +114,7 @@
   // Digest-linked server identity of a local book — AI features keep
   // working on downloaded/imported copies while online.
   let serverBookId = $state<string | null>(null);
+
   let aiEnabled = $derived(
     isBeepub || (!!localEntry && $isOnline && !!serverBookId),
   );
@@ -316,6 +317,7 @@
   function tryTocChapter(href: string) {
     const r = activeReader();
     if (!r || tryingToc === href) return;
+
     void attemptChapter(
       async () => (await r.displayChapter(href)) === true,
       href,
@@ -613,7 +615,7 @@
 
   function kosyncErrorToast(err: unknown) {
     // Manual actions get visible errors, unlike the silent auto path.
-    void import("$lib/kosync/client").then(({ KosyncError }) => {
+    void import("#lib/kosync/client.ts").then(({ KosyncError }) => {
       toastStore.error(
         err instanceof KosyncError && err.kind === "auth"
           ? m.kosync_error_auth()
@@ -627,10 +629,11 @@
     if (!entry || kosyncBusy) return;
     kosyncBusy = "pull";
     try {
-      const { getKosyncAccount } = await import("$lib/services/kosyncAccount");
+      const { getKosyncAccount } =
+        await import("#lib/services/kosyncAccount.ts");
       const account = await getKosyncAccount();
       if (!account) return;
-      const { manualKosyncPull } = await import("$lib/reading/kosync");
+      const { manualKosyncPull } = await import("#lib/reading/kosync.ts");
       const result = await manualKosyncPull(account, entry.digest);
       if (result.kind === "none") {
         toastStore.info(m.kosync_pull_none());
@@ -660,7 +663,7 @@
     try {
       // Land the current position in the backend first, then force it out.
       await activeReader()?.flushProgress();
-      const { manualKosyncPush } = await import("$lib/reading/kosync");
+      const { manualKosyncPush } = await import("#lib/reading/kosync.ts");
       const pushed = await manualKosyncPush(entry.digest);
       if (pushed) toastStore.success(m.kosync_pushed());
       else toastStore.info(m.kosync_push_not_ready());
@@ -720,7 +723,7 @@
   // silent no-op inside syncLocalBook and the stamped record ships on the
   // next sync opportunity instead.
   function pushLocalInteraction() {
-    void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+    void import("#lib/services/readingSync.ts").then(({ syncLocalBook }) =>
       syncLocalBook(bookId).catch(() => {}),
     );
   }
@@ -1022,6 +1025,7 @@
       }))
     )
       return;
+
     try {
       await reader?.removeHighlight(hl);
     } catch (e) {
@@ -1040,6 +1044,8 @@
     if (rendered || loadError) void portal.arrive();
   });
   beforeNavigate((nav) => {
+    if (nav.shallow && nav.type === "goto") return;
+
     const from = portal.origin;
     if (!from || !nav.to) return;
     const to = nav.to.url.pathname + nav.to.url.search;
@@ -1085,13 +1091,14 @@
         // newest position — but bounded: past 2.5s the sync continues in
         // the background and this session opens with local state.
         if (!isLocalMode() && hasServerUrl() && getIsOnline()) {
-          const { syncLocalBook } = await import("$lib/services/readingSync");
+          const { syncLocalBook } =
+            await import("#lib/services/readingSync.ts");
           await Promise.race([
             syncLocalBook(bookId).catch(() => {}),
             new Promise((resolve) => setTimeout(resolve, 2500)),
           ]);
           const { getLocalBookLinks } =
-            await import("$lib/services/localLibrary");
+            await import("#lib/services/localLibrary.ts");
           serverBookId = (await getLocalBookLinks())[bookId] ?? null;
           // Live-session adoption of the server ruler for entries the
           // sync backfill hasn't upgraded yet (persistence is doSync's
@@ -1183,6 +1190,7 @@
         // is already folded into the record.
         localInteraction =
           (await readLocalInteraction(bookId)) ?? emptyLocalInteraction();
+
         startLocalReadingTimer();
       }
     } catch (e) {
@@ -1204,16 +1212,16 @@
     const id = bookId;
     const kind = sync?.kind;
     setTimeout(() => {
-      void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+      void import("#lib/services/readingSync.ts").then(({ syncLocalBook }) =>
         syncLocalBook(id).catch(() => {}),
       );
       // The session's reading time is final — ship the ledger window.
-      void import("$lib/services/readingLedger").then(({ pushLedger }) =>
+      void import("#lib/services/readingLedger.ts").then(({ pushLedger }) =>
         pushLedger(),
       );
       // Closing the book shouldn't wait out the push throttle.
       if (kind === "kosync") {
-        void import("$lib/reading/kosync").then(({ flushKosyncPushes }) =>
+        void import("#lib/reading/kosync.ts").then(({ flushKosyncPushes }) =>
           flushKosyncPushes(),
         );
       }
@@ -1314,7 +1322,7 @@
             onprogress={(p) => (percentage = p.percentage)}
             onactivity={() => {
               if (!isBeepub)
-                void import("$lib/services/readingLedger").then(
+                void import("#lib/services/readingLedger.ts").then(
                   ({ tickReading }) => tickReading(),
                 );
             }}
@@ -1381,7 +1389,7 @@
               // the 'web' device row itself. Local/kosync books tick the
               // device ledger instead.
               if (!isBeepub)
-                void import("$lib/services/readingLedger").then(
+                void import("#lib/services/readingLedger.ts").then(
                   ({ tickReading }) => tickReading(),
                 );
             }}
@@ -1800,9 +1808,9 @@
                   ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
                   : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
                 onclick={() => (showEndOverlay = false)}
+                >{m.common_close()}</button
               >
-                {m.common_close()}
-              </button>
+
               <button
                 class="flex-1 rounded-lg bg-primary px-4 py-3 font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
                 onclick={() => openBookHere(seriesNext.id)}
@@ -1832,9 +1840,8 @@
                 ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
                 : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
               onclick={() => (showEndOverlay = false)}
+              >{m.common_close()}</button
             >
-              {m.common_close()}
-            </button>
           </div>
         {:else}
           <div class="flex flex-col items-center gap-6 px-10 py-14">
@@ -1856,9 +1863,8 @@
                 ? 'bg-ink-700 hover:bg-ink-600 text-ink-300'
                 : 'bg-ink-100 hover:bg-ink-200 text-ink-700'}"
               onclick={() => (showEndOverlay = false)}
+              >{m.common_close()}</button
             >
-              {m.common_close()}
-            </button>
           </div>
         {/if}
 

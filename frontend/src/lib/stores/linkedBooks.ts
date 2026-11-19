@@ -6,8 +6,8 @@
  */
 import { writable, type Readable } from "svelte/store";
 
-import { isNative } from "$lib/platform";
-import { getLocalBookLinks } from "$lib/services/localLibrary";
+import { isNative } from "#lib/platform.ts";
+import { getLocalBookLinks } from "#lib/services/localLibrary.ts";
 
 const store = writable<ReadonlySet<string>>(new Set());
 let loaded = false;

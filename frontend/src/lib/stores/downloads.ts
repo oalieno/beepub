@@ -14,18 +14,18 @@
  */
 import { get, writable, type Readable } from "svelte/store";
 
-import { apiBase, getAuthHeader } from "$lib/api/client";
-import * as m from "$lib/paraglide/messages.js";
+import { apiBase, getAuthHeader } from "#lib/api/client.ts";
+import * as m from "#lib/paraglide/messages.js";
 import {
   linkedServerBookIds,
   refreshLinkedBookIds,
-} from "$lib/stores/linkedBooks";
-import { toastStore } from "$lib/stores/toast";
+} from "#lib/stores/linkedBooks.ts";
+import { toastStore } from "#lib/stores/toast.ts";
 import {
   addTransfer,
   removeTransfer,
   updateTransfer,
-} from "$lib/stores/transfers";
+} from "#lib/stores/transfers.ts";
 
 export interface DownloadRequest {
   bookId: string;
@@ -143,8 +143,8 @@ async function pump(): Promise<void> {
 async function fetchToLibrary(job: Job): Promise<"done" | "duplicate"> {
   const [{ downloadEpubToLibrary }, { DuplicateBookError }] = await Promise.all(
     [
-      import("$lib/services/epubDownload"),
-      import("$lib/services/localLibrary"),
+      import("#lib/services/epubDownload.ts"),
+      import("#lib/services/localLibrary.ts"),
     ],
   );
   try {
@@ -161,7 +161,7 @@ async function fetchToLibrary(job: Job): Promise<"done" | "duplicate"> {
     });
     // Same bytes as the server file — the digest link is guaranteed, and
     // syncing starts right away.
-    void import("$lib/services/readingSync").then(({ linkAndSyncBook }) =>
+    void import("#lib/services/readingSync.ts").then(({ linkAndSyncBook }) =>
       linkAndSyncBook(entry),
     );
     return "done";
@@ -180,7 +180,7 @@ export async function shareBook(req: DownloadRequest): Promise<void> {
   if (get(store).has(req.bookId)) return;
   try {
     const { getLocalBookLinks, shareLocalBookFile } =
-      await import("$lib/services/localLibrary");
+      await import("#lib/services/localLibrary.ts");
     const links = await getLocalBookLinks();
     const localId = Object.keys(links).find((id) => links[id] === req.bookId);
     if (localId) {
@@ -188,7 +188,8 @@ export async function shareBook(req: DownloadRequest): Promise<void> {
       return;
     }
     setState(req.bookId, { state: "sharing", progress: 0 });
-    const { downloadEpubToDevice } = await import("$lib/services/epubDownload");
+    const { downloadEpubToDevice } =
+      await import("#lib/services/epubDownload.ts");
     await downloadEpubToDevice({
       url: fileUrl(req.bookId),
       headers: getAuthHeader(),

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { keyboardVisible } from "$lib/stores/keyboard";
+  import { keyboardVisible } from "#lib/stores/keyboard.ts";
   import { ArrowUp } from "@lucide/svelte";
 
   let {

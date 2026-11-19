@@ -1,10 +1,10 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { ChevronRight, RefreshCw, Rss } from "@lucide/svelte";
-  import KosyncSettingsDialog from "$lib/components/KosyncSettingsDialog.svelte";
-  import LanguageSection from "$lib/components/settings/LanguageSection.svelte";
-  import AppearanceSection from "$lib/components/settings/AppearanceSection.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import KosyncSettingsDialog from "#lib/components/KosyncSettingsDialog.svelte";
+  import LanguageSection from "#lib/components/settings/LanguageSection.svelte";
+  import AppearanceSection from "#lib/components/settings/AppearanceSection.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let kosyncOpen = $state(false);
 </script>

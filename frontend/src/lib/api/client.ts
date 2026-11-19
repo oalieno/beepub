@@ -1,11 +1,11 @@
-import * as m from "$lib/paraglide/messages.js";
-import { storeAccessToken } from "$lib/auth/tokens";
+import * as m from "#lib/paraglide/messages.js";
+import { storeAccessToken } from "#lib/auth/tokens.ts";
 import { errorMessage } from "./errors";
 import {
   getIsOnline,
   reportServerReachable,
   reportServerUnreachable,
-} from "$lib/services/network";
+} from "#lib/services/network.ts";
 
 const SERVER_URL_KEY = "serverUrl";
 const LOCAL_MODE_KEY = "localMode";

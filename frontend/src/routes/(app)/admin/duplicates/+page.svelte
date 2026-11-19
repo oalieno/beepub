@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { worksApi } from "$lib/api/works";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { toastStore } from "$lib/stores/toast";
-  import type { DuplicateGroup } from "$lib/types";
+  import { worksApi } from "#lib/api/works.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { DuplicateGroup } from "#lib/types.ts";
   import {
     BookOpen,
     Merge,
@@ -14,10 +14,10 @@
     TriangleAlert,
   } from "@lucide/svelte";
   import { onMount } from "svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { Button } from "$lib/components/ui/button";
-  import BackButton from "$lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
 
   let allGroups = $state<DuplicateGroup[]>([]);
   let scanning = $state(false);

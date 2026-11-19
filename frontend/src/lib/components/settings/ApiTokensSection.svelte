@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { ChevronRight, Copy, Check, KeySquare, Trash2 } from "@lucide/svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import * as Tabs from "$lib/components/ui/tabs";
-  import { getServerUrl } from "$lib/api/client";
-  import { tokensApi } from "$lib/api/tokens";
-  import type { ApiToken } from "$lib/types";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Tabs from "#lib/components/ui/tabs/index.ts";
+  import { getServerUrl } from "#lib/api/client.ts";
+  import { tokensApi } from "#lib/api/tokens.ts";
+  import type { ApiToken } from "#lib/types.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let expanded = $state(false);
   let loaded = $state(false);

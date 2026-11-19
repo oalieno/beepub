@@ -1,16 +1,16 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { authStore } from "$lib/stores/auth";
-  import { isLocalMode } from "$lib/api/client";
-  import { serverDisconnected } from "$lib/services/serverDisconnect";
-  import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
-  import DesktopSidebar from "$lib/components/DesktopSidebar.svelte";
-  import DisconnectScreen from "$lib/components/DisconnectScreen.svelte";
-  import MobileTabBar from "$lib/components/MobileTabBar.svelte";
-  import MobileTopBar from "$lib/components/MobileTopBar.svelte";
-  import SearchModal from "$lib/components/SearchModal.svelte";
-  import TransferPanel from "$lib/components/TransferPanel.svelte";
-  import { searchModalOpen } from "$lib/stores/search";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { isLocalMode } from "#lib/api/client.ts";
+  import { serverDisconnected } from "#lib/services/serverDisconnect.ts";
+  import { sidebarCollapsed, toggleSidebar } from "#lib/stores/sidebar.ts";
+  import DesktopSidebar from "#lib/components/DesktopSidebar.svelte";
+  import DisconnectScreen from "#lib/components/DisconnectScreen.svelte";
+  import MobileTabBar from "#lib/components/MobileTabBar.svelte";
+  import MobileTopBar from "#lib/components/MobileTopBar.svelte";
+  import SearchModal from "#lib/components/SearchModal.svelte";
+  import TransferPanel from "#lib/components/TransferPanel.svelte";
+  import { searchModalOpen } from "#lib/stores/search.ts";
   import type { Snippet } from "svelte";
 
   let { children }: { children: Snippet } = $props();

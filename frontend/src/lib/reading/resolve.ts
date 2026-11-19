@@ -4,14 +4,14 @@
  * Local books win: their ids are client-generated UUIDs, so a local
  * manifest hit is definitive. OPDS sources slot in here when they arrive.
  */
-import { isLocalMode } from "$lib/api/client";
-import { isNative } from "$lib/platform";
-import { getKosyncAccount } from "$lib/services/kosyncAccount";
+import { isLocalMode } from "#lib/api/client.ts";
+import { isNative } from "#lib/platform.ts";
+import { getKosyncAccount } from "#lib/services/kosyncAccount.ts";
 import {
   getLocalBook,
   getLocalBookLinks,
   type LocalBookEntry,
-} from "$lib/services/localLibrary";
+} from "#lib/services/localLibrary.ts";
 
 import { beepubSource, beepubSync } from "./beepub";
 import { localSource, localSourceFor, localSync } from "./local";

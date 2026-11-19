@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { formatSize } from "$lib/format";
+  import { formatSize } from "#lib/format.ts";
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { toastStore } from "$lib/stores/toast";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
   import type {
     CalibreCopyPreview,
     CalibreLibraryInfo,
     CalibreLibraryStatus,
     CalibreSyncStatus,
-  } from "$lib/types";
+  } from "#lib/types.ts";
   import {
     HardDrive,
     HardDriveDownload,
@@ -18,10 +18,10 @@
     Link,
     LoaderCircle,
   } from "@lucide/svelte";
-  import Modal from "$lib/components/Modal.svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import { Skeleton } from "$lib/components/ui/skeleton";
-  import * as m from "$lib/paraglide/messages.js";
+  import Modal from "#lib/components/Modal.svelte";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let libraries = $state<CalibreLibraryInfo[]>([]);
   let loading = $state(true);
@@ -274,7 +274,7 @@
   }
 
   function syncTooltip(
-    syncInfo: import("$lib/types").CalibreSyncStatus | null | undefined,
+    syncInfo: import("#lib/types.ts").CalibreSyncStatus | null | undefined,
   ): string | null {
     if (!syncInfo) return null;
     if (syncInfo.status === "completed") {

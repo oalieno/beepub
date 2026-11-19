@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const kept = new Map<string, string>();
 let native = true;
 
-vi.mock("$lib/platform", () => ({ isNative: () => native }));
+vi.mock("#lib/platform.ts", () => ({ isNative: () => native }));
 vi.mock("@capacitor/preferences", () => ({
   Preferences: {
     get: async ({ key }: { key: string }) => ({ value: kept.get(key) ?? null }),

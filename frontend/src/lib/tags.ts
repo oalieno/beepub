@@ -1,4 +1,4 @@
-import { getLocale } from "$lib/paraglide/runtime.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 const ACRONYMS = new Set(["ai", "bl", "cjk", "lgbtq", "rpg", "sf", "vr", "ya"]);
 

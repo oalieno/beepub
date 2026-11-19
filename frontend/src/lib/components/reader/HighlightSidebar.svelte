@@ -1,6 +1,6 @@
 <script lang="ts">
   import ReaderPanel from "./ReaderPanel.svelte";
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import {
     X,
     Trash2,
@@ -8,12 +8,12 @@
     CircleAlert,
     Hourglass,
   } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import HighlightList from "$lib/components/HighlightList.svelte";
-  import type { HighlightOut, IllustrationOut } from "$lib/types";
-  import { booksApi } from "$lib/api/books";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import * as m from "$lib/paraglide/messages.js";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import HighlightList from "#lib/components/HighlightList.svelte";
+  import type { HighlightOut, IllustrationOut } from "#lib/types.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   const STYLE_LABELS: Record<string, string> = $derived({
     ink_wash: m.reader_style_ink_wash(),

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { CalendarDate, type DateValue } from "@internationalized/date";
   import { CalendarIcon } from "@lucide/svelte";
-  import { Calendar } from "$lib/components/ui/calendar";
-  import * as Popover from "$lib/components/ui/popover";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale } from "$lib/paraglide/runtime.js";
+  import { Calendar } from "#lib/components/ui/calendar/index.ts";
+  import * as Popover from "#lib/components/ui/popover/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
 
   let {
     value = $bindable<string | null>(null),

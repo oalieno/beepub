@@ -6,21 +6,21 @@
    * phrase option rewrites marked; the highlights that go along are
    * counted.
    */
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
-  import { Switch } from "$lib/components/ui/switch";
-  import Modal from "$lib/components/Modal.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { booksApi } from "$lib/api/books";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import { Switch } from "#lib/components/ui/switch/index.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { booksApi } from "#lib/api/books.ts";
   import {
     convertBooks,
     rememberMode,
     rememberedMode,
     type PendingBook,
-  } from "$lib/services/zhConvert";
-  import { toastStore } from "$lib/stores/toast";
-  import type { ZhConversion, ZhConversionPreview } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/services/zhConvert.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { ZhConversion, ZhConversionPreview } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     open,

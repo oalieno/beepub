@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { authStore } from "$lib/stores/auth";
-  import { UserRole } from "$lib/types";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { UserRole } from "#lib/types.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import {
     Rss,
     Plus,
@@ -17,14 +17,14 @@
     Lock,
     ChevronRight,
   } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     catalogSide,
     listCatalogs,
     removeCatalog,
     saveCatalog,
     type CatalogInfo,
-  } from "$lib/opds/catalogs";
+  } from "#lib/opds/catalogs.ts";
 
   // Device catalogs (local mode) download onto the device; the server's
   // are shared and only admins manage them.

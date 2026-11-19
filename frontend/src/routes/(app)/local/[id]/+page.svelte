@@ -15,16 +15,16 @@
     Share,
     Trash2,
   } from "@lucide/svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import BackToTop from "$lib/components/BackToTop.svelte";
-  import BottomSheet from "$lib/components/BottomSheet.svelte";
-  import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import HighlightList from "$lib/components/HighlightList.svelte";
-  import ReadingStatusSelect from "$lib/components/ReadingStatusSelect.svelte";
-  import { BookDetailSkeleton } from "$lib/components/skeletons";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { isNative } from "$lib/platform";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import BackToTop from "#lib/components/BackToTop.svelte";
+  import BottomSheet from "#lib/components/BottomSheet.svelte";
+  import BookNotesEditor from "#lib/components/BookNotesEditor.svelte";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import HighlightList from "#lib/components/HighlightList.svelte";
+  import ReadingStatusSelect from "#lib/components/ReadingStatusSelect.svelte";
+  import { BookDetailSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import { isNative } from "#lib/platform.ts";
   import {
     emptyLocalInteraction,
     localSync,
@@ -33,7 +33,7 @@
     setLocalNotes,
     setLocalReadingStatus,
     type LocalInteractionRecord,
-  } from "$lib/reading/local";
+  } from "#lib/reading/local.ts";
   import {
     getLocalBook,
     getLocalCoverSrc,
@@ -42,13 +42,17 @@
     shareLocalBookFile,
     type LocalBookDetails,
     type LocalBookEntry,
-  } from "$lib/services/localLibrary";
-  import { sanitizeDescription } from "$lib/sanitize";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { keyboardVisible } from "$lib/stores/keyboard";
-  import { toastStore } from "$lib/stores/toast";
-  import type { HighlightOut, InteractionOut, ReadingStatus } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/services/localLibrary.ts";
+  import { sanitizeDescription } from "#lib/sanitize.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { keyboardVisible } from "#lib/stores/keyboard.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type {
+    HighlightOut,
+    InteractionOut,
+    ReadingStatus,
+  } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let bookId = $derived(page.params.id as string);
 
@@ -69,7 +73,7 @@
   );
 
   function read() {
-    goto(`/books/${bookId}/read`, { replaceState: true });
+    goto(`/books/${bookId}/read`, { replace: true });
   }
 
   function toggleWantToRead() {
@@ -91,7 +95,7 @@
   onMount(async () => {
     const found = await getLocalBook(bookId);
     if (!found) {
-      await goto("/local", { replaceState: true });
+      await goto("/local", { replace: true });
       return;
     }
     entry = found;
@@ -111,7 +115,7 @@
   });
 
   function pushSync() {
-    void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+    void import("#lib/services/readingSync.ts").then(({ syncLocalBook }) =>
       syncLocalBook(bookId).catch(() => {}),
     );
   }
@@ -196,11 +200,11 @@
       return;
     try {
       await removeLocalBook(bookId);
-      void import("$lib/stores/linkedBooks").then(({ refreshLinkedBookIds }) =>
-        refreshLinkedBookIds(),
+      void import("#lib/stores/linkedBooks.ts").then(
+        ({ refreshLinkedBookIds }) => refreshLinkedBookIds(),
       );
       toastStore.success(m.local_deleted());
-      await goto("/local", { replaceState: true });
+      await goto("/local", { replace: true });
     } catch (err) {
       toastStore.error((err as Error).message);
     }

@@ -3,13 +3,13 @@
  * from the server or arrived as one file; the reader gets a BookLoader
  * either way and never learns which.
  */
-import type { BookPayload } from "$lib/reading/source";
+import type { BookPayload } from "#lib/reading/source.ts";
 
-import { makeServerLoader } from "./server";
+import { makeServerLoader } from "./serverLibrary";
 import type { BookLoader } from "./types";
 
 export type { BookLoader } from "./types";
-export { LoaderHttpError, makeServerLoader } from "./server";
+export { LoaderHttpError, makeServerLoader } from "./serverLibrary";
 
 export async function loaderFromPayload(
   payload: BookPayload,

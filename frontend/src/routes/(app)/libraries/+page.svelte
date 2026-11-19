@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { authStore } from "$lib/stores/auth";
-  import { librariesApi } from "$lib/api/libraries";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import Modal from "$lib/components/Modal.svelte";
-  import CollectionCard from "$lib/components/CollectionCard.svelte";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import type { LibraryOut } from "$lib/types";
-  import { UserRole } from "$lib/types";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import CollectionCard from "#lib/components/CollectionCard.svelte";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import type { LibraryOut } from "#lib/types.ts";
+  import { UserRole } from "#lib/types.ts";
   import {
     EllipsisVertical,
     Library,
@@ -17,8 +17,8 @@
     Plus,
     Trash2,
   } from "@lucide/svelte";
-  import { CardListSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { CardListSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
   let allBooks = $state<{ count: number; previewIds: string[] }>({

@@ -1,4 +1,4 @@
-import type { TierBand } from "$lib/types";
+import type { TierBand } from "#lib/types.ts";
 
 // A tier preset is an ordered list of bands. `min` is the inclusive lower
 // bound of the band on the 0.5-5 rating scale; a rating belongs to the

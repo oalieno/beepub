@@ -6,13 +6,13 @@
    */
   import { onMount } from "svelte";
   import { HardDrive, Plus } from "@lucide/svelte";
-  import ContinueReadingRow from "$lib/components/ContinueReadingRow.svelte";
+  import ContinueReadingRow from "#lib/components/ContinueReadingRow.svelte";
   import LocalBookCard, {
     type LocalShelfEntry,
-  } from "$lib/components/LocalBookCard.svelte";
-  import { HomeSkeleton } from "$lib/components/skeletons";
-  import { continueItems, loadShelfEntries } from "$lib/services/localShelf";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/components/LocalBookCard.svelte";
+  import { HomeSkeleton } from "#lib/components/skeletons/index.ts";
+  import { continueItems, loadShelfEntries } from "#lib/services/localShelf.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let entries = $state<LocalShelfEntry[]>([]);
   let loading = $state(true);

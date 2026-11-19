@@ -1,19 +1,19 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { toastStore } from "$lib/stores/toast";
-  import type { UserOut } from "$lib/types";
-  import { UserRole } from "$lib/types";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { UserOut } from "#lib/types.ts";
+  import { UserRole } from "#lib/types.ts";
   import { Shield, User, UserPlus, ChevronRight } from "@lucide/svelte";
-  import { TableSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import { TableSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import { goto } from "$app/navigation";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let users = $state<UserOut[]>([]);
   let loading = $state(true);

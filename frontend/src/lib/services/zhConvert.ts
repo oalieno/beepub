@@ -6,13 +6,13 @@
  */
 import { writable } from "svelte/store";
 
-import { booksApi } from "$lib/api/books";
+import { booksApi } from "#lib/api/books.ts";
 import {
   addTransfer,
   removeTransfer,
   updateTransfer,
-} from "$lib/stores/transfers";
-import type { ZhConversion } from "$lib/types";
+} from "#lib/stores/transfers.ts";
+import type { ZhConversion } from "#lib/types.ts";
 
 export interface PendingBook {
   id: string;

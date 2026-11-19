@@ -4,25 +4,25 @@
    * so far live only on this device), reading activity, recently added.
    */
   import { onMount } from "svelte";
-  import { librariesApi } from "$lib/api/libraries";
-  import BookGrid from "$lib/components/BookGrid.svelte";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import BookGrid from "#lib/components/BookGrid.svelte";
   import ContinueReadingRow, {
     type ContinueReadingItem,
-  } from "$lib/components/ContinueReadingRow.svelte";
-  import ReadingActivityHeatmap from "$lib/components/ReadingActivityHeatmap.svelte";
-  import ReadingStreakCard from "$lib/components/ReadingStreakCard.svelte";
-  import { booksApi } from "$lib/api/books";
-  import { coverUrl } from "$lib/api/client";
-  import { isOnline } from "$lib/services/network";
-  import { readingSyncStamp } from "$lib/services/readingSync";
+  } from "#lib/components/ContinueReadingRow.svelte";
+  import ReadingActivityHeatmap from "#lib/components/ReadingActivityHeatmap.svelte";
+  import ReadingStreakCard from "#lib/components/ReadingStreakCard.svelte";
+  import { booksApi } from "#lib/api/books.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { isOnline } from "#lib/services/network.ts";
+  import { readingSyncStamp } from "#lib/services/readingSync.ts";
   import type {
     BookWithInteractionOut,
     LibraryOut,
     ReadingStats,
-  } from "$lib/types";
+  } from "#lib/types.ts";
   import { BookOpen } from "@lucide/svelte";
-  import { HomeSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { HomeSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let libraries = $state<LibraryOut[]>([]);
   let recentBooks = $state<BookWithInteractionOut[]>([]);

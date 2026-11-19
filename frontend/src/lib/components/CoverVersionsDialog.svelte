@@ -7,12 +7,12 @@
 </script>
 
 <script lang="ts">
-  import Modal from "$lib/components/Modal.svelte";
-  import MetadataVersionSearch from "$lib/components/MetadataVersionSearch.svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import { authedSrc } from "$lib/actions/authedSrc";
+  import Modal from "#lib/components/Modal.svelte";
+  import MetadataVersionSearch from "#lib/components/MetadataVersionSearch.svelte";
+  import * as m from "#lib/paraglide/messages.js";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
   import { Upload } from "@lucide/svelte";
-  import type { IsbnSourceResult } from "$lib/types";
+  import type { IsbnSourceResult } from "#lib/types.ts";
 
   // The cover's version picker — same gesture as the field dialogs,
   // with thumbnails instead of text and a manual-upload escape hatch.

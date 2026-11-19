@@ -3,12 +3,12 @@
  * wrapper over the shared EPUB download core that supplies OPDS Basic
  * auth and maps transport failures into the OPDS error vocabulary.
  */
-import type { LocalBookEntry } from "$lib/services/localLibrary";
-import { downloadEpubToLibrary } from "$lib/services/epubDownload";
+import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
+import { downloadEpubToLibrary } from "#lib/services/epubDownload.ts";
 import {
   DuplicateBookError,
   InvalidEpubError,
-} from "$lib/services/localLibrary";
+} from "#lib/services/localLibrary.ts";
 
 /** The catalog's credentials, as the device list stores them. */
 interface CatalogAuth {

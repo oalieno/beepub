@@ -13,8 +13,8 @@
    *   it.
    */
   import type { Snippet } from "svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { cn } from "$lib/utils";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import { cn } from "#lib/utils.ts";
 
   let {
     label,

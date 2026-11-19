@@ -10,8 +10,8 @@
   import ReaderPanel from "./ReaderPanel.svelte";
   import { CloudOff, LoaderCircle, X } from "@lucide/svelte";
   import { tick } from "svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import type { RecapOut } from "$lib/types";
+  import * as m from "#lib/paraglide/messages.js";
+  import type { RecapOut } from "#lib/types.ts";
 
   let {
     toc = [],

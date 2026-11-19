@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { isNative } from "$lib/platform";
-  import Modal from "$lib/components/Modal.svelte";
-  import CollectionCard from "$lib/components/CollectionCard.svelte";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import type { BookshelfOut, ReadingStatus } from "$lib/types";
+  import { bookshelvesApi } from "#lib/api/bookshelves.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { isNative } from "#lib/platform.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import CollectionCard from "#lib/components/CollectionCard.svelte";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import type { BookshelfOut, ReadingStatus } from "#lib/types.ts";
   import {
     Bookmark,
     BookOpenCheck,
@@ -22,8 +22,8 @@
     ShelvingUnit,
     Trash2,
   } from "@lucide/svelte";
-  import { CardListSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { CardListSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   // Goodreads-style exclusive shelves: reading statuses (plus the favorites
   // flag) pinned as system shelves. Purely a display wrapper over /my-books —
@@ -73,7 +73,7 @@
 
   async function loadDownloaded() {
     const { downloadedServerIds } =
-      await import("$lib/services/downloadedBooks");
+      await import("#lib/services/downloadedBooks.ts");
     const ids = await downloadedServerIds();
     const head = ids.slice(0, 12);
     const page = head.length

@@ -20,7 +20,7 @@
  * by the same server, so "server down" means the page never loaded.
  */
 import { writable, derived, get } from "svelte/store";
-import { isNative } from "$lib/platform";
+import { isNative } from "#lib/platform.ts";
 
 export const networkConnected = writable(true);
 const serverReachable = writable(true);
@@ -122,7 +122,7 @@ export function reportServerUnreachable(): void {
 
 async function probeServer(): Promise<void> {
   // Dynamic import to avoid a static cycle with the api client.
-  const { apiBase } = await import("$lib/api/client");
+  const { apiBase } = await import("#lib/api/client.ts");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 5000);
   try {

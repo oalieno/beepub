@@ -1,17 +1,17 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { scrollSnapshot } from "$lib/scrollSnapshot";
-  import { booksApi } from "$lib/api/books";
-  import { removedDownloads } from "$lib/services/downloadedBooks";
-  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
-  import { toastStore } from "$lib/stores/toast";
-  import BookGrid from "$lib/components/BookGrid.svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import type { BookWithInteractionOut, ReadingStatus } from "$lib/types";
+  import { scrollSnapshot } from "#lib/scrollSnapshot.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { removedDownloads } from "#lib/services/downloadedBooks.ts";
+  import { linkedServerBookIds } from "#lib/stores/linkedBooks.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import BookGrid from "#lib/components/BookGrid.svelte";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import type { BookWithInteractionOut, ReadingStatus } from "#lib/types.ts";
   import { BookOpen } from "@lucide/svelte";
-  import { BookGridSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { BookGridSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   type TabKey =
     | "currently_reading"
@@ -58,7 +58,7 @@
     }
     if (offset === 0) {
       const { downloadedServerIds } =
-        await import("$lib/services/downloadedBooks");
+        await import("#lib/services/downloadedBooks.ts");
       downloadedIds = await downloadedServerIds();
     }
     const slice = downloadedIds.slice(cursor, cursor + PAGE_SIZE);

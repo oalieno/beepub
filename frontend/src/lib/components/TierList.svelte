@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { GroupedItem } from "$lib/types";
+  import type { GroupedItem } from "#lib/types.ts";
 
   // One placed unit: a book or a whole series, with the rating that decides
   // which tier it lands in (null = unrated).
@@ -10,11 +10,11 @@
 </script>
 
 <script lang="ts">
-  import type { TierBand } from "$lib/types";
-  import { tierFor } from "$lib/tiers";
+  import type { TierBand } from "#lib/types.ts";
+  import { tierFor } from "#lib/tiers.ts";
   import BookCard from "./BookCard.svelte";
   import SeriesCard from "./SeriesCard.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     entries,

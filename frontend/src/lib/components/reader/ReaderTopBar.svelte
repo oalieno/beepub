@@ -1,8 +1,8 @@
 <script lang="ts">
   import { ArrowLeft } from "@lucide/svelte";
   import { goto } from "$app/navigation";
-  import { getIsOnline } from "$lib/services/network";
-  import * as m from "$lib/paraglide/messages.js";
+  import { getIsOnline } from "#lib/services/network.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     bookId = "",
@@ -40,7 +40,7 @@
         onback
           ? onback()
           : goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
-              replaceState: true,
+              replace: true,
             })}
       aria-label={m.reader_back_to_detail()}
     >

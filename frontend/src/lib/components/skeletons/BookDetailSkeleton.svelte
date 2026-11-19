@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
 </script>
 
 <div role="status" aria-label="Loading" data-testid="book-detail-skeleton">

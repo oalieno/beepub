@@ -237,7 +237,7 @@ const LANDING_WAIT_MS = 300;
  *  turn for missed and asks again. */
 const READY_WAIT_MS = 200;
 /** The longest a turn stays on bare paper. A request that has stalled
- *  is given up by the loader long before (loaders/server.ts); this only
+ *  is given up by the loader long before (loaders/serverLibrary.ts); this only
  *  bounds what nothing else does. */
 const PENDING_MAX_MS = 60_000;
 /** The page's content comes up on the paper over this long. */

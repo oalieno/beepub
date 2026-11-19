@@ -11,41 +11,41 @@
     LibraryBig,
     List,
   } from "@lucide/svelte";
-  import * as Select from "$lib/components/ui/select";
-  import * as m from "$lib/paraglide/messages.js";
-  import BookGrid from "$lib/components/BookGrid.svelte";
-  import BookShelf from "$lib/components/shelf/BookShelf.svelte";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import BookGrid from "#lib/components/BookGrid.svelte";
+  import BookShelf from "#lib/components/shelf/BookShelf.svelte";
   import BookTable, {
     type RowDraft,
     type RowField,
-  } from "$lib/components/BookTable.svelte";
+  } from "#lib/components/BookTable.svelte";
   import { goto } from "$app/navigation";
-  import BookCard from "$lib/components/BookCard.svelte";
-  import SeriesCard from "$lib/components/SeriesCard.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import LibrarySelectionPanel from "$lib/components/LibrarySelectionPanel.svelte";
-  import BookActions from "$lib/components/book-actions/BookActions.svelte";
-  import { BookTableSkeleton } from "$lib/components/skeletons";
+  import BookCard from "#lib/components/BookCard.svelte";
+  import SeriesCard from "#lib/components/SeriesCard.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import LibrarySelectionPanel from "#lib/components/LibrarySelectionPanel.svelte";
+  import BookActions from "#lib/components/book-actions/BookActions.svelte";
+  import { BookTableSkeleton } from "#lib/components/skeletons/index.ts";
   import { tick, untrack } from "svelte";
-  import { localizedTagLabel } from "$lib/tags";
-  import { authStore } from "$lib/stores/auth";
-  import { editedBooks, withEdit } from "$lib/stores/editedBooks";
+  import { localizedTagLabel } from "#lib/tags.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { editedBooks, withEdit } from "#lib/stores/editedBooks.ts";
   import {
     applyClick,
     NO_SELECTION,
     only,
     type TableSelection,
-  } from "$lib/services/tableSelection";
+  } from "#lib/services/tableSelection.ts";
   import type {
     BookOut,
     BookWithInteractionOut,
     GroupedItem,
     PaginatedBooksWithInteraction,
     PaginatedGrouped,
-  } from "$lib/types";
-  import { toastStore } from "$lib/stores/toast";
-  import { booksApi } from "$lib/api/books";
-  import { UserRole } from "$lib/types";
+  } from "#lib/types.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { UserRole } from "#lib/types.ts";
 
   // "Most relevant" exists only while there is a query to be relevant to.
   const RELEVANCE = "relevance:asc";

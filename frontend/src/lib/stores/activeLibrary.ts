@@ -1,5 +1,5 @@
 import { derived, writable } from "svelte/store";
-import { browser } from "$app/environment";
+import { browser } from "$app/env";
 
 // Calibre-style "active library": the 書庫 nav entry jumps straight to the
 // last-visited library; the cards page one level up is the switcher.

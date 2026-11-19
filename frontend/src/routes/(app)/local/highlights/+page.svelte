@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
-  import { isNative } from "$lib/platform";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import ShareHighlightModal from "$lib/components/ShareHighlightModal.svelte";
-  import type { HighlightOut } from "$lib/types";
+  import { isNative } from "#lib/platform.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import ShareHighlightModal from "#lib/components/ShareHighlightModal.svelte";
+  import type { HighlightOut } from "#lib/types.ts";
   import { Highlighter, Share2, Trash2 } from "@lucide/svelte";
-  import { HighlightListSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { HighlightListSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let highlights = $state<HighlightOut[]>([]);
   let bookData = $state<Record<string, { title: string; authors: string[] }>>(
@@ -38,8 +38,9 @@
       return;
     }
     try {
-      const { listLocalBooks } = await import("$lib/services/localLibrary");
-      const { readLocalHighlightRecords } = await import("$lib/reading/local");
+      const { listLocalBooks } = await import("#lib/services/localLibrary.ts");
+      const { readLocalHighlightRecords } =
+        await import("#lib/reading/local.ts");
       const books = await listLocalBooks();
       const all: HighlightOut[] = [];
       const data: Record<string, { title: string; authors: string[] }> = {};
@@ -73,7 +74,7 @@
     const prev = highlights;
     highlights = highlights.filter((h) => h.id !== hl.id);
     try {
-      const { localSync } = await import("$lib/reading/local");
+      const { localSync } = await import("#lib/reading/local.ts");
       await localSync.deleteHighlight(hl.book_id, hl.id);
       toastStore.success(m.highlights_removed());
     } catch (e) {

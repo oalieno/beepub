@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { recallProgress, rememberProgress } from "$lib/reader/progress-cache";
+  import {
+    recallProgress,
+    rememberProgress,
+  } from "#lib/reader/progress-cache.ts";
   /**
    * ImagePager — the renderer for pre-paginated image books (comics packed
    * from a CBZ, bought image-only manga EPUBs). It never lays the wrapper
@@ -17,9 +20,9 @@
    * Must sit inside the reader root div (.reader-light / .reader-dark).
    */
   import { onDestroy, onMount, tick, untrack } from "svelte";
-  import type { Book, NavInput, TocItem } from "$lib/reader/core";
-  import type { BookLoader } from "$lib/reader/loaders/types";
-  import { PageImageCache } from "$lib/reader/page-images";
+  import type { Book, NavInput, TocItem } from "#lib/reader/core.ts";
+  import type { BookLoader } from "#lib/reader/loaders/types.ts";
+  import { PageImageCache } from "#lib/reader/page-images.ts";
   import {
     buildSpreads,
     displayOrder,
@@ -32,25 +35,28 @@
     type PagerDirection,
     type PagerMode,
     type PagerTurn,
-  } from "$lib/reader/pages";
+  } from "#lib/reader/pages.ts";
   import {
     PageCurl,
     type CurlDirection,
     type CurlSheet,
-  } from "$lib/reader/curl";
+  } from "#lib/reader/curl.ts";
   import {
     flattenToc,
     tocLabelForSection,
     type TocEntry,
-  } from "$lib/reader/toc";
-  import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
+  } from "#lib/reader/toc.ts";
+  import {
+    cfiOf as cfiOfLocator,
+    locatorFromCfi,
+  } from "#lib/reading/locator.ts";
   import type {
     ProgressSave,
     ProgressState,
     SyncBackend,
-  } from "$lib/reading/sync";
-  import * as m from "$lib/paraglide/messages.js";
-  import Spinner from "$lib/components/Spinner.svelte";
+  } from "#lib/reading/sync.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import Spinner from "#lib/components/Spinner.svelte";
 
   let {
     bookId,

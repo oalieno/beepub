@@ -1,5 +1,5 @@
-import { metadataApi } from "$lib/api/metadata";
-import type { MetadataSourceOut } from "$lib/types";
+import { metadataApi } from "#lib/api/metadata.ts";
+import type { MetadataSourceOut } from "#lib/types.ts";
 
 // The plugin registry is static per backend process — fetch once per
 // session and share across consumers (ExternalRatings, admin pages).

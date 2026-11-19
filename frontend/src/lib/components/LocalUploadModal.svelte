@@ -4,14 +4,14 @@
    * only): the device's books that aren't on the server yet, picked and
    * sent together. A file the server already has is linked, not sent.
    */
-  import { Button } from "$lib/components/ui/button";
-  import { Checkbox } from "$lib/components/ui/checkbox";
-  import Modal from "$lib/components/Modal.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import { toastStore } from "$lib/stores/toast";
-  import { uploadLocalBooks } from "$lib/services/uploadQueue";
-  import * as m from "$lib/paraglide/messages.js";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { uploadLocalBooks } from "#lib/services/uploadQueue.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     open,
@@ -31,7 +31,7 @@
     if (!open) return;
     entries = null;
     selected = {};
-    import("$lib/services/uploadLocal")
+    import("#lib/services/uploadLocal.ts")
       .then(({ unlinkedLocalBooks }) => unlinkedLocalBooks())
       .then((list) => {
         // Every row bound from the start: a bindable prop can't bind to

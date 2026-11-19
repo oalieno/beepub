@@ -2,16 +2,16 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import { toastStore } from "$lib/stores/toast";
-  import { authStore } from "$lib/stores/auth";
-  import { activeLibrary } from "$lib/stores/activeLibrary";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import * as Select from "$lib/components/ui/select";
-  import { librariesApi } from "$lib/api/libraries";
-  import { UserRole, type LibraryOut } from "$lib/types";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import BackButton from "$lib/components/BackButton.svelte";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { activeLibrary } from "#lib/stores/activeLibrary.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { UserRole, type LibraryOut } from "#lib/types.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
   import {
     BookCheck,
     BookOpen,
@@ -24,38 +24,38 @@
     Rss,
     Search,
   } from "@lucide/svelte";
-  import { BookGridSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  import { BookGridSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     fetchFeed,
     fetchSearchTemplate,
     OpdsError,
     type OpdsCredentials,
-  } from "$lib/opds/client";
+  } from "#lib/opds/client.ts";
   import {
     buildSearchUrl,
     type OpdsBookEntry,
     type OpdsEntry,
     type OpdsFeed,
-  } from "$lib/opds/parse";
-  import type { OpdsCoverLoader } from "$lib/opds/covers";
+  } from "#lib/opds/parse.ts";
+  import type { OpdsCoverLoader } from "#lib/opds/covers.ts";
   import {
     catalogSide,
     getCatalog,
     saveCatalog,
     type CatalogInfo,
-  } from "$lib/opds/catalogs";
+  } from "#lib/opds/catalogs.ts";
   import {
     catalogItemKey,
     catalogItemStates,
     enqueueCatalogBook,
-  } from "$lib/opds/queue";
+  } from "#lib/opds/queue.ts";
   import {
     fetchServerFeed,
     fetchServerSearchTemplate,
     importableDownload,
     serverImageUrl,
-  } from "$lib/opds/server";
+  } from "#lib/opds/serverCatalogs.ts";
 
   const catalogId = page.params.id ?? "";
   // Device catalogs download onto the device; server catalogs import into
@@ -355,7 +355,7 @@
       return;
     }
     if (side === "device" && found.username) {
-      const { OpdsCoverLoader } = await import("$lib/opds/covers");
+      const { OpdsCoverLoader } = await import("#lib/opds/covers.ts");
       coverLoader = new OpdsCoverLoader({
         username: found.username,
         password: found.password ?? "",

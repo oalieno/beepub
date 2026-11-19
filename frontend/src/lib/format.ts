@@ -4,7 +4,7 @@
  * Dates are written in the language BeePub is set to — not the
  * browser's, which can differ (an English browser, the app in Chinese).
  */
-import { getLocale } from "$lib/paraglide/runtime.js";
+import { getLocale } from "#lib/paraglide/runtime.js";
 
 const DATE_STYLES = {
   /** "Nov 15" — where the year would be noise (a list of recent marks). */

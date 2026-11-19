@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onDestroy, tick } from "svelte";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import { sanitizeHtml } from "$lib/sanitize";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { sanitizeHtml } from "#lib/sanitize.ts";
   import { marked } from "marked";
-  import * as m from "$lib/paraglide/messages.js";
-  import * as Tabs from "$lib/components/ui/tabs";
+  import * as m from "#lib/paraglide/messages.js";
+  import * as Tabs from "#lib/components/ui/tabs/index.ts";
   import {
     NotebookPen,
     Pencil,

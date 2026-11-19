@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Flame, Check, Pencil, Target, Minus, Plus } from "@lucide/svelte";
-  import * as Popover from "$lib/components/ui/popover";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import type { ReadingStats } from "$lib/types";
+  import * as Popover from "#lib/components/ui/popover/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import type { ReadingStats } from "#lib/types.ts";
 
   let {
     stats,

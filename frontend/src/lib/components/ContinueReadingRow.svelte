@@ -17,9 +17,9 @@
    * reader straight away — the one shortcut past the book page. Shared by
    * the home page (server books) and the device shelf (local books).
    */
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     items,

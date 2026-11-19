@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { toastStore } from "$lib/stores/toast";
-  import type { AdminStats } from "$lib/types";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { AdminStats } from "#lib/types.ts";
   import {
     Users,
     BookOpen,
@@ -16,9 +16,9 @@
     Copy,
     Plug,
   } from "@lucide/svelte";
-  import { DashboardSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import { DashboardSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let stats = $state<AdminStats | null>(null);
   let loading = $state(true);

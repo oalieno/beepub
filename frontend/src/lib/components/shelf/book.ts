@@ -1,5 +1,5 @@
 // How a book is named on the bookshelf.
-import type { BookOut } from "$lib/types";
+import type { BookOut } from "#lib/types.ts";
 
 const authors = (b: BookOut) =>
   b.display_authors ?? b.authors ?? b.epub_authors ?? [];

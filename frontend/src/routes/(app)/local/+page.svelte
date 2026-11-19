@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { formatSize } from "$lib/format";
+  import { formatSize } from "#lib/format.ts";
   import { onMount, untrack } from "svelte";
   import { goto } from "$app/navigation";
-  import { isNative } from "$lib/platform";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { deviceImported } from "$lib/services/openedFiles";
-  import { Button } from "$lib/components/ui/button";
-  import * as Select from "$lib/components/ui/select";
+  import { isNative } from "#lib/platform.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { deviceImported } from "#lib/services/openedFiles.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
   import {
     ArrowUpDown,
     ChevronRight,
@@ -19,12 +19,12 @@
     Search,
     X,
   } from "@lucide/svelte";
-  import BottomSheet from "$lib/components/BottomSheet.svelte";
+  import BottomSheet from "#lib/components/BottomSheet.svelte";
   import LocalBookCard, {
     type LocalShelfEntry,
-  } from "$lib/components/LocalBookCard.svelte";
-  import { BookGridSkeleton } from "$lib/components/skeletons";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/components/LocalBookCard.svelte";
+  import { BookGridSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   // The local library's shelf: a root tab, so no back navigation.
 
@@ -96,8 +96,8 @@
     }
     try {
       const { getLocalStorageUsage } =
-        await import("$lib/services/localLibrary");
-      const { loadShelfEntries } = await import("$lib/services/localShelf");
+        await import("#lib/services/localLibrary.ts");
+      const { loadShelfEntries } = await import("#lib/services/localShelf.ts");
       entries = await loadShelfEntries();
       totalSize = await getLocalStorageUsage();
     } catch {
@@ -113,10 +113,10 @@
     if (!file) return;
     importing = true;
     const { importLocalBook, DuplicateBookError, InvalidEpubError } =
-      await import("$lib/services/localLibrary");
+      await import("#lib/services/localLibrary.ts");
     try {
       const entry = await importLocalBook(file);
-      const { toShelfEntry } = await import("$lib/services/localShelf");
+      const { toShelfEntry } = await import("#lib/services/localShelf.ts");
       entries = [await toShelfEntry(entry, {}), ...entries];
       totalSize += entry.fileSize;
       toastStore.success(m.local_import_success({ title: entry.title }));
@@ -139,7 +139,8 @@
 
   async function handleExport(entry: LocalShelfEntry) {
     try {
-      const { shareLocalBookFile } = await import("$lib/services/localLibrary");
+      const { shareLocalBookFile } =
+        await import("#lib/services/localLibrary.ts");
       await shareLocalBookFile(entry.id);
     } catch (err) {
       // Dismissing the share sheet also rejects — that is not an error.
@@ -161,11 +162,11 @@
     )
       return;
     try {
-      const { removeLocalBook } = await import("$lib/services/localLibrary");
+      const { removeLocalBook } = await import("#lib/services/localLibrary.ts");
       await removeLocalBook(entry.id);
       // Removal also unlinks — drop the "on this device" badge upstream.
-      void import("$lib/stores/linkedBooks").then(({ refreshLinkedBookIds }) =>
-        refreshLinkedBookIds(),
+      void import("#lib/stores/linkedBooks.ts").then(
+        ({ refreshLinkedBookIds }) => refreshLinkedBookIds(),
       );
       entries = entries.filter((b) => b.id !== entry.id);
       totalSize = entries.reduce((sum, b) => sum + b.fileSize, 0);

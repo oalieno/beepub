@@ -17,7 +17,7 @@ import {
   ShelvingUnit,
   User,
 } from "@lucide/svelte";
-import * as m from "$lib/paraglide/messages.js";
+import * as m from "#lib/paraglide/messages.js";
 
 export type NavMode = "server" | "local";
 

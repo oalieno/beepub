@@ -10,7 +10,7 @@
  * A backend test holds this list against the backend's: a code on one
  * side only fails it.
  */
-import * as m from "$lib/paraglide/messages.js";
+import * as m from "#lib/paraglide/messages.js";
 
 const MESSAGES: Record<string, () => string> = {
   access_denied: () => m.error_access_denied(),

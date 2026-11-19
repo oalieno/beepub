@@ -1,25 +1,25 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { booksApi } from "$lib/api/books";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
+  import { booksApi } from "#lib/api/books.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
   import {
     searchApi,
     type SemanticSearchResult,
     type KeywordSearchResult,
-  } from "$lib/api/search";
-  import type { BookOut } from "$lib/types";
-  import { searchModalQuery } from "$lib/stores/search";
+  } from "#lib/api/search.ts";
+  import type { BookOut } from "#lib/types.ts";
+  import { searchModalQuery } from "#lib/stores/search.ts";
   import { get } from "svelte/store";
   import { untrack } from "svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import * as m from "#lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import {
     getHistory,
     recordSearch,
     removeSearch,
     clearHistory,
-  } from "$lib/stores/searchHistory";
+  } from "#lib/stores/searchHistory.ts";
   import {
     Search,
     BookOpen,

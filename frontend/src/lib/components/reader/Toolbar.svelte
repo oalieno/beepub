@@ -13,9 +13,9 @@
     MessageCircle,
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
-  import { getIsOnline } from "$lib/services/network";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { getIsOnline } from "#lib/services/network.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     bookId = "",
@@ -93,7 +93,7 @@
       onback
         ? onback()
         : goto(backHref ?? (getIsOnline() ? `/books/${bookId}` : "/local"), {
-            replaceState: true,
+            replace: true,
           })}
   >
     <ArrowLeft size={20} />

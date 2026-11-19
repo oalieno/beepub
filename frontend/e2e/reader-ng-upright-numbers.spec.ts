@@ -18,7 +18,7 @@ import {
 
 /**
  * reader-ng: short numbers stand upright in a book forced vertical
- * (tate-chu-yoko, `$lib/reader/tcy.ts`). The rendered section gets
+ * (tate-chu-yoko, `#lib/reader/tcy.ts`). The rendered section gets
  * `<beepub-tcy>` wrappers around short digit runs — and nothing that is
  * stored or exchanged may notice: CFIs (progress, highlights, search
  * hits), highlight text and quote context are byte-identical to what the

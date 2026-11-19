@@ -1,18 +1,16 @@
-import { redirect, type Handle, type RequestEvent } from "@sveltejs/kit";
-import { sequence } from "@sveltejs/kit/hooks";
-import { env } from "$env/dynamic/private";
-import { building } from "$app/environment";
-import { paraglideMiddleware } from "$lib/paraglide/server.js";
+import { redirect, type RequestEvent } from "@sveltejs/kit";
+import { sequence, type Handle } from "@sveltejs/kit/hooks";
+import { BACKEND_URL } from "$app/env/private";
+import { building } from "$app/env";
+import { paraglideMiddleware } from "#lib/paraglide/server.js";
 import {
   cookieName,
   defineCustomServerStrategy,
-} from "$lib/paraglide/runtime.js";
+} from "#lib/paraglide/runtime.js";
 import {
   BROWSER_LOCALE_STRATEGY,
   localeFromAcceptLanguage,
-} from "$lib/i18n/browserLocale";
-
-const BACKEND_URL = env.BACKEND_URL || "http://backend:8000";
+} from "#lib/i18n/browserLocale.ts";
 
 // A visitor who hasn't picked a language gets the browser's. Paraglide
 // asks custom strategies before the cookie, so a chosen language is
@@ -29,17 +27,16 @@ defineCustomServerStrategy(BROWSER_LOCALE_STRATEGY, {
 });
 
 const i18nHandle: Handle = ({ event, resolve }) =>
-  paraglideMiddleware(
-    event.request,
-    ({ request: localizedRequest, locale }) => {
-      event.request = localizedRequest;
-      return resolve(event, {
-        transformPageChunk: ({ html }) => {
-          return html.replace("%lang%", locale);
-        },
-      });
-    },
-  );
+  // (The request paraglide hands back differs from the one it was given
+  // only under its URL strategy, which this app does not use; the event's
+  // request is read-only now and stays as it came.)
+  paraglideMiddleware(event.request, ({ locale }) => {
+    return resolve(event, {
+      transformPageChunk: ({ html }) => {
+        return html.replace("%lang%", locale);
+      },
+    });
+  });
 
 // The refresh cookie is sent with every request — it has to reach this
 // hook, which is what renews an access token that has run out. Older
@@ -58,10 +55,12 @@ async function tryRefresh(
       headers: { Cookie: `refresh_token=${refreshToken}` },
     });
     if (!res.ok) return null;
+
     const body = (await res.json()) as {
       access_token?: string;
       expires_in?: number;
     };
+
     if (!body.access_token) return null;
     return {
       accessToken: body.access_token,

@@ -1,6 +1,6 @@
 <script lang="ts" module>
-  import type { LocalBookEntry } from "$lib/services/localLibrary";
-  import type { ReadingStatus } from "$lib/types";
+  import type { LocalBookEntry } from "#lib/services/localLibrary.ts";
+  import type { ReadingStatus } from "#lib/types.ts";
 
   /** A shelf entry with its per-mount presentation state resolved. */
   export type LocalShelfEntry = LocalBookEntry & {
@@ -15,7 +15,7 @@
 </script>
 
 <script lang="ts">
-  import { formatSize } from "$lib/format";
+  import { formatSize } from "#lib/format.ts";
   import { goto } from "$app/navigation";
   import {
     Bookmark,
@@ -25,9 +25,9 @@
     Share,
     Trash2,
   } from "@lucide/svelte";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     entry,

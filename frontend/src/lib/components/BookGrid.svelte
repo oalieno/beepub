@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { BookOut } from "$lib/types";
+  import type { BookOut } from "#lib/types.ts";
   import BookCard from "./BookCard.svelte";
 
   let {

@@ -13,7 +13,7 @@ import {
   isTcy,
   selectedText,
   unwrapBoundaries,
-} from "$lib/reader/tcy";
+} from "#lib/reader/tcy.ts";
 import { snapRangeToWordBounds } from "./word-snap";
 
 export interface IOSTouchCallbacks {

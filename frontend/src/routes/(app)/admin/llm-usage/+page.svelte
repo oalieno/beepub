@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { toastStore } from "$lib/stores/toast";
-  import type { LlmUsageResponse, LlmUsageByFeature } from "$lib/types";
-  import { Skeleton } from "$lib/components/ui/skeleton";
-  import { TableSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { LlmUsageResponse, LlmUsageByFeature } from "#lib/types.ts";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
+  import { TableSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let data = $state<LlmUsageResponse | null>(null);
   let loading = $state(true);

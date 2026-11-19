@@ -13,8 +13,8 @@ import {
   localInteractionKey,
   localProgressKey,
   readLocalBookBytes,
-} from "$lib/services/localLibrary";
-import type { HighlightOut, ReadingStatus } from "$lib/types";
+} from "#lib/services/localLibrary.ts";
+import type { HighlightOut, ReadingStatus } from "#lib/types.ts";
 
 import { cfiOf, locatorFromCfi } from "./locator";
 import { densePageCounts } from "./progress";

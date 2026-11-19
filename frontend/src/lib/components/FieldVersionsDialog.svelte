@@ -13,11 +13,11 @@
 </script>
 
 <script lang="ts">
-  import Modal from "$lib/components/Modal.svelte";
-  import MetadataVersionSearch from "$lib/components/MetadataVersionSearch.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import Modal from "#lib/components/Modal.svelte";
+  import MetadataVersionSearch from "#lib/components/MetadataVersionSearch.svelte";
+  import * as m from "#lib/paraglide/messages.js";
   import { ExternalLink } from "@lucide/svelte";
-  import type { IsbnSourceResult } from "$lib/types";
+  import type { IsbnSourceResult } from "#lib/types.ts";
 
   // One field's version picker: existing versions on top (EPUB original
   // + every source that has a value for this field), search below.

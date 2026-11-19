@@ -4,8 +4,8 @@
  * device) and the server's (shared, admin-managed, imports into a server
  * library). Pages ask here and never mix the two.
  */
-import { isLocalMode } from "$lib/api/client";
-import { isNative } from "$lib/platform";
+import { isLocalMode } from "#lib/api/client.ts";
+import { isNative } from "#lib/platform.ts";
 
 export type CatalogSide = "device" | "server";
 
@@ -32,8 +32,8 @@ export function catalogSide(): CatalogSide {
   return isNative() && isLocalMode() ? "device" : "server";
 }
 
-type DeviceCatalog = import("$lib/services/opdsCatalogs").OpdsCatalog;
-type ServerCatalog = import("./server").ServerCatalog;
+type DeviceCatalog = import("#lib/services/opdsCatalogs.ts").OpdsCatalog;
+type ServerCatalog = import("./serverCatalogs").ServerCatalog;
 
 function fromDevice(c: DeviceCatalog): CatalogInfo {
   return {
@@ -59,10 +59,10 @@ function fromServer(c: ServerCatalog): CatalogInfo {
 
 export async function listCatalogs(side: CatalogSide): Promise<CatalogInfo[]> {
   if (side === "device") {
-    const { listCatalogs } = await import("$lib/services/opdsCatalogs");
+    const { listCatalogs } = await import("#lib/services/opdsCatalogs.ts");
     return (await listCatalogs()).map(fromDevice);
   }
-  const { serverCatalogs } = await import("./server");
+  const { serverCatalogs } = await import("./serverCatalogs");
   return (await serverCatalogs.list()).map(fromServer);
 }
 
@@ -71,11 +71,11 @@ export async function getCatalog(
   id: string,
 ): Promise<CatalogInfo | null> {
   if (side === "device") {
-    const { getCatalog } = await import("$lib/services/opdsCatalogs");
+    const { getCatalog } = await import("#lib/services/opdsCatalogs.ts");
     const found = await getCatalog(id);
     return found ? fromDevice(found) : null;
   }
-  const { serverCatalogs } = await import("./server");
+  const { serverCatalogs } = await import("./serverCatalogs");
   try {
     return fromServer(await serverCatalogs.get(id));
   } catch (err) {
@@ -91,11 +91,11 @@ export async function saveCatalog(
 ): Promise<CatalogInfo | null> {
   if (side === "device") {
     const { addCatalog, updateCatalog } =
-      await import("$lib/services/opdsCatalogs");
+      await import("#lib/services/opdsCatalogs.ts");
     const saved = id ? await updateCatalog(id, input) : await addCatalog(input);
     return saved ? fromDevice(saved) : null;
   }
-  const { serverCatalogs } = await import("./server");
+  const { serverCatalogs } = await import("./serverCatalogs");
   const body = {
     name: input.name,
     url: input.url,
@@ -114,10 +114,10 @@ export async function removeCatalog(
   id: string,
 ): Promise<void> {
   if (side === "device") {
-    const { removeCatalog } = await import("$lib/services/opdsCatalogs");
+    const { removeCatalog } = await import("#lib/services/opdsCatalogs.ts");
     await removeCatalog(id);
     return;
   }
-  const { serverCatalogs } = await import("./server");
+  const { serverCatalogs } = await import("./serverCatalogs");
   await serverCatalogs.remove(id);
 }

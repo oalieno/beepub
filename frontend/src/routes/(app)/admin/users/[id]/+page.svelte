@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { page } from "$app/state";
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import type { UserOut, UserLibraryAccess } from "$lib/types";
-  import { UserRole } from "$lib/types";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import type { UserOut, UserLibraryAccess } from "#lib/types.ts";
+  import { UserRole } from "#lib/types.ts";
   import {
     Shield,
     User,
@@ -17,14 +17,14 @@
     Trash2,
     TriangleAlert,
   } from "@lucide/svelte";
-  import { authStore } from "$lib/stores/auth";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import { authStore } from "#lib/stores/auth.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import { goto } from "$app/navigation";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let userId = $derived(page.params.id as string);
   let user = $state<UserOut | null>(null);

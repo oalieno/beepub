@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Modal from "$lib/components/Modal.svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import * as Select from "$lib/components/ui/select";
+  import Modal from "#lib/components/Modal.svelte";
+  import * as m from "#lib/paraglide/messages.js";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
 
   const ISSUE_OPTIONS = $derived([
     { value: "corrupt_file", label: m.report_corrupt_file() },

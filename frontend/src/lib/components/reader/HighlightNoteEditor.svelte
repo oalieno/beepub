@@ -1,6 +1,6 @@
 <script lang="ts">
   import ReaderDialog from "./ReaderDialog.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     note = "",

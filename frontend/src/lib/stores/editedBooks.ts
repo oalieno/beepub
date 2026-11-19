@@ -5,7 +5,7 @@
  */
 import { writable } from "svelte/store";
 
-import type { BookOut } from "$lib/types";
+import type { BookOut } from "#lib/types.ts";
 
 export const editedBooks = writable<ReadonlyMap<string, BookOut>>(new Map());
 

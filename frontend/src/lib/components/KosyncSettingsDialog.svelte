@@ -1,20 +1,20 @@
 <script lang="ts">
   import SparkMD5 from "spark-md5";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Dialog from "$lib/components/ui/dialog";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
   import { Loader2 } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     KosyncError,
     registerAccount,
     verifyAuth,
     type KosyncCredentials,
-  } from "$lib/kosync/client";
-  import type { KosyncAccount } from "$lib/services/kosyncAccount";
+  } from "#lib/kosync/client.ts";
+  import type { KosyncAccount } from "#lib/services/kosyncAccount.ts";
 
   let { open = $bindable(false) }: { open?: boolean } = $props();
 
@@ -30,7 +30,8 @@
     if (!open) return;
     formError = "";
     void (async () => {
-      const { getKosyncAccount } = await import("$lib/services/kosyncAccount");
+      const { getKosyncAccount } =
+        await import("#lib/services/kosyncAccount.ts");
       account = await getKosyncAccount();
       loaded = true;
     })();
@@ -112,7 +113,8 @@
         await attempt(kind, creds);
         formUrl = creds.serverUrl;
       }
-      const { setKosyncAccount } = await import("$lib/services/kosyncAccount");
+      const { setKosyncAccount } =
+        await import("#lib/services/kosyncAccount.ts");
       account = await setKosyncAccount(creds);
       formPassword = "";
       toastStore.success(
@@ -129,7 +131,8 @@
 
   async function setAutoSync(on: boolean) {
     if (!account || account.autoSync === on) return;
-    const { setKosyncAutoSync } = await import("$lib/services/kosyncAccount");
+    const { setKosyncAutoSync } =
+      await import("#lib/services/kosyncAccount.ts");
     account = await setKosyncAutoSync(on);
   }
 
@@ -143,7 +146,8 @@
       }))
     )
       return;
-    const { clearKosyncAccount } = await import("$lib/services/kosyncAccount");
+    const { clearKosyncAccount } =
+      await import("#lib/services/kosyncAccount.ts");
     await clearKosyncAccount();
     account = null;
     toastStore.success(m.kosync_logged_out());

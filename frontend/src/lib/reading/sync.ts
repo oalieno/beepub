@@ -3,7 +3,7 @@
  * progress and highlights. The BeePub server is one implementation; a
  * local store and third-party kosync servers arrive with later phases.
  */
-import type { HighlightOut } from "$lib/types";
+import type { HighlightOut } from "#lib/types.ts";
 
 import type { Locator } from "./locator";
 

@@ -13,12 +13,12 @@
 import { Preferences } from "@capacitor/preferences";
 import { get } from "svelte/store";
 
-import { activityApi } from "$lib/api/activity";
-import { hasServerUrl, isLocalMode } from "$lib/api/client";
-import { isNative } from "$lib/platform";
-import { getDeviceId } from "$lib/services/deviceId";
-import { getIsOnline } from "$lib/services/network";
-import { authStore } from "$lib/stores/auth";
+import { activityApi } from "#lib/api/activity.ts";
+import { hasServerUrl, isLocalMode } from "#lib/api/client.ts";
+import { isNative } from "#lib/platform.ts";
+import { getDeviceId } from "#lib/services/deviceId.ts";
+import { getIsOnline } from "#lib/services/network.ts";
+import { authStore } from "#lib/stores/auth.ts";
 
 const LEDGER_KEY = "reading-ledger";
 /** Mirrors the backend accumulator's MAX_READING_SESSION_GAP — a longer

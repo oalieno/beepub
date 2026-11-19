@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
 
   let { rows = 5, columns = 4 }: { rows?: number; columns?: number } = $props();
 </script>

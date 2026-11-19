@@ -5,9 +5,9 @@
    */
   import { onMount } from "svelte";
   import { Check, ChevronRight, Copy, TabletSmartphone } from "@lucide/svelte";
-  import { getServerUrl } from "$lib/api/client";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { getServerUrl } from "#lib/api/client.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let expanded = $state(false);
   let copied = $state<string | null>(null);

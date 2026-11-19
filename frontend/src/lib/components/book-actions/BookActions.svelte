@@ -1,8 +1,8 @@
 <script lang="ts" module>
   import type { Heart } from "@lucide/svelte";
-  import type { BookOut } from "$lib/types";
-  import type { DownloadRequest } from "$lib/stores/downloads";
-  import type { booksApi as BooksApi } from "$lib/api/books";
+  import type { BookOut } from "#lib/types.ts";
+  import type { DownloadRequest } from "#lib/stores/downloads.ts";
+  import type { booksApi as BooksApi } from "#lib/api/books.ts";
 
   /** One thing a book's ⋯ menu offers. */
   export interface BookAction {
@@ -68,24 +68,24 @@
     HardDrive,
     Library as LibraryIcon,
   } from "@lucide/svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import { Button } from "$lib/components/ui/button";
-  import Modal from "$lib/components/Modal.svelte";
-  import ReportIssueModal from "$lib/components/ReportIssueModal.svelte";
-  import ZhConvertDialog from "$lib/components/ZhConvertDialog.svelte";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { coverUrl } from "$lib/api/client";
-  import { booksApi } from "$lib/api/books";
-  import { worksApi } from "$lib/api/works";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
-  import { librariesApi } from "$lib/api/libraries";
-  import { authStore } from "$lib/stores/auth";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import { shareBook } from "$lib/stores/downloads";
-  import { isNative } from "$lib/platform";
-  import { UserRole, type BookshelfOut, type LibraryOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import Modal from "#lib/components/Modal.svelte";
+  import ReportIssueModal from "#lib/components/ReportIssueModal.svelte";
+  import ZhConvertDialog from "#lib/components/ZhConvertDialog.svelte";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { worksApi } from "#lib/api/works.ts";
+  import { bookshelvesApi } from "#lib/api/bookshelves.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import { shareBook } from "#lib/stores/downloads.ts";
+  import { isNative } from "#lib/platform.ts";
+  import { UserRole, type BookshelfOut, type LibraryOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     book,

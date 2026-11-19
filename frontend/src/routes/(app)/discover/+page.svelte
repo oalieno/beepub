@@ -1,17 +1,17 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { booksApi } from "$lib/api/books";
-  import BookGrid from "$lib/components/BookGrid.svelte";
-  import BookCard from "$lib/components/BookCard.svelte";
-  import type { BookWithInteractionOut, TagBrowseSection } from "$lib/types";
+  import { booksApi } from "#lib/api/books.ts";
+  import BookGrid from "#lib/components/BookGrid.svelte";
+  import BookCard from "#lib/components/BookCard.svelte";
+  import type { BookWithInteractionOut, TagBrowseSection } from "#lib/types.ts";
   import { Compass, Sparkles } from "@lucide/svelte";
   import {
     BookGridSkeleton,
     BrowseSectionSkeleton,
-  } from "$lib/components/skeletons";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
-  import { localizedTagLabel } from "$lib/tags";
+  } from "#lib/components/skeletons/index.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { localizedTagLabel } from "#lib/tags.ts";
 
   let recommendations = $state<BookWithInteractionOut[]>([]);
   let browseSections = $state<TagBrowseSection[]>([]);

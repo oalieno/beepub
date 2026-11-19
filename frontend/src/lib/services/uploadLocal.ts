@@ -4,16 +4,16 @@
  * file is already on the server is linked instead — either way the copy
  * then syncs its reading state with the server book.
  */
-import { booksApi } from "$lib/api/books";
-import { sanitizeFilename } from "$lib/services/epubDownload";
+import { booksApi } from "#lib/api/books.ts";
+import { sanitizeFilename } from "#lib/services/epubDownload.ts";
 import {
   getLocalBookLinks,
   listLocalBooks,
   readLocalBookBytes,
   setLocalBookLink,
   type LocalBookEntry,
-} from "$lib/services/localLibrary";
-import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
+} from "#lib/services/localLibrary.ts";
+import { refreshLinkedBookIds } from "#lib/stores/linkedBooks.ts";
 
 /** Local books not yet on the server, newest import first. */
 export async function unlinkedLocalBooks(): Promise<LocalBookEntry[]> {
@@ -46,7 +46,7 @@ export async function uploadLocalBook(
   await setLocalBookLink(entry.id, serverId);
   void refreshLinkedBookIds();
   // Ship the accumulated reading state to the server book.
-  void import("$lib/services/readingSync").then(({ syncLocalBook }) =>
+  void import("#lib/services/readingSync.ts").then(({ syncLocalBook }) =>
     syncLocalBook(entry.id).catch(() => {}),
   );
   return { outcome, serverId };

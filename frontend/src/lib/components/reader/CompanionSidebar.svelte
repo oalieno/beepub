@@ -1,6 +1,6 @@
 <script lang="ts">
   import ReaderPanel from "./ReaderPanel.svelte";
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import {
     X,
     ArrowUp,
@@ -17,16 +17,16 @@
     RotateCw,
   } from "@lucide/svelte";
   import { onMount, onDestroy, tick } from "svelte";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
   import type {
     AiStatus,
     CompanionConversationSummary,
     CompanionMessageOut,
-  } from "$lib/types";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/types.ts";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     bookId,

@@ -1,5 +1,5 @@
-import { browser } from "$app/environment";
-import { getServerUrl, isLocalMode } from "$lib/api/client";
+import { browser } from "$app/env";
+import { getServerUrl, isLocalMode } from "#lib/api/client.ts";
 import type { LayoutLoad } from "./$types";
 
 const isCapacitor = import.meta.env.VITE_CAPACITOR === "true";
@@ -19,7 +19,7 @@ export const load: LayoutLoad = async ({ data }) => {
     if (isLocalMode()) return { user: null };
     // (Before the login is looked for: the system may have cleared the
     // web view's storage since the app was last open.)
-    const { restoreTokens } = await import("$lib/auth/tokens");
+    const { restoreTokens } = await import("#lib/auth/tokens.ts");
     await restoreTokens();
     const token = localStorage.getItem("token");
     if (!token) return { user: null };
@@ -34,17 +34,19 @@ export const load: LayoutLoad = async ({ data }) => {
         // The access token has run out since the app was last open; the
         // refresh token, which lasts far longer, gets a new one. Only
         // when that is refused too is the person signed out.
-        const { refreshAccessToken } = await import("$lib/api/client");
+        const { refreshAccessToken } = await import("#lib/api/client.ts");
+
         const fresh = (await refreshAccessToken())
           ? localStorage.getItem("token")
           : null;
+
         if (fresh) res = await me(fresh);
       }
       if (res.ok) return { user: await res.json() };
     } catch {
       // Server unreachable — try cached user for offline mode
       try {
-        const { getCachedUser } = await import("$lib/stores/auth");
+        const { getCachedUser } = await import("#lib/stores/auth.ts");
         const cached = await getCachedUser();
         if (cached) return { user: cached };
       } catch {

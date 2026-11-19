@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { formatDate } from "$lib/format";
+  import { formatDate } from "#lib/format.ts";
   import { Trash2, Share2, TriangleAlert } from "@lucide/svelte";
-  import type { HighlightOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import type { HighlightOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     highlights = [],

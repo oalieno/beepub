@@ -1,6 +1,6 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import type { BookOut, BookWithInteractionOut } from "$lib/types";
+  import type { BookOut, BookWithInteractionOut } from "#lib/types.ts";
   import {
     TriangleAlert,
     BookCopy,
@@ -10,13 +10,13 @@
     ArrowDownToLine,
     CircleDashed,
   } from "@lucide/svelte";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
-  import { downloads } from "$lib/stores/downloads";
-  import { editedBooks, withEdit } from "$lib/stores/editedBooks";
-  import * as m from "$lib/paraglide/messages.js";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { linkedServerBookIds } from "#lib/stores/linkedBooks.ts";
+  import { downloads } from "#lib/stores/downloads.ts";
+  import { editedBooks, withEdit } from "#lib/stores/editedBooks.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let { book: row }: { book: BookOut } = $props();
   // A list restored on back predates an edit made on the book page.

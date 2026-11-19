@@ -2,7 +2,7 @@
 // the face of its spine (drawn once per book), and a cover for a book
 // that has none.
 import * as THREE from "three";
-import { loadAuthedImage } from "$lib/actions/authedSrc";
+import { loadAuthedImage } from "#lib/actions/authedSrc.ts";
 import type { Part, ShelfBook } from "./engine";
 
 export type RGB = [number, number, number];

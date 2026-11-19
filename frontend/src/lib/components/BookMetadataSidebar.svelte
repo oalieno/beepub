@@ -1,9 +1,9 @@
 <script lang="ts">
   import { ChevronLeft, ChevronRight } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { localizedTagLabel } from "$lib/tags";
-  import type { BookOut, SeriesNeighborsOut } from "$lib/types";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { localizedTagLabel } from "#lib/tags.ts";
+  import type { BookOut, SeriesNeighborsOut } from "#lib/types.ts";
 
   let {
     book,

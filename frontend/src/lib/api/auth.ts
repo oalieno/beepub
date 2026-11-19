@@ -1,5 +1,5 @@
 import { get, post, put } from "./client";
-import type { LoginResponse, UserOut } from "$lib/types";
+import type { LoginResponse, UserOut } from "#lib/types.ts";
 
 export const authApi = {
   register: (body: { username: string; password: string }) =>

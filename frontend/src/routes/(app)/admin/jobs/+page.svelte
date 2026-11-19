@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import { adminApi } from "$lib/api/admin";
-  import { aiApi } from "$lib/api/bookshelves";
-  import { toastStore } from "$lib/stores/toast";
-  import type { AiStatus, JobStatus } from "$lib/types";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { aiApi } from "#lib/api/bookshelves.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { AiStatus, JobStatus } from "#lib/types.ts";
   import {
     FileText,
     Search,
@@ -16,9 +16,9 @@
     Square,
     Timer,
   } from "@lucide/svelte";
-  import { FormSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import { FormSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let jobs = $state<JobStatus[]>([]);
   let aiStatus = $state<AiStatus | null>(null);

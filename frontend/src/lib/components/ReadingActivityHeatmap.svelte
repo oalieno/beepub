@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     data = [],

@@ -10,7 +10,7 @@
 // same lamp — onto a canvas that covers the screen, whose camera stands
 // exactly where the shelf's does. Nothing is swapped for a stand-in.
 import * as THREE from "three";
-import { loadAuthedImage } from "$lib/actions/authedSrc";
+import { loadAuthedImage } from "#lib/actions/authedSrc.ts";
 import {
   DIVE_MS,
   SURFACE_MS,

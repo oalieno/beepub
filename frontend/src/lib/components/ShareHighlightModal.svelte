@@ -1,9 +1,9 @@
 <script lang="ts">
-  import ReaderDialog from "$lib/components/reader/ReaderDialog.svelte";
+  import ReaderDialog from "#lib/components/reader/ReaderDialog.svelte";
   import { X, Download, Share2, LoaderCircle } from "@lucide/svelte";
   import ShareHighlightCard from "./ShareHighlightCard.svelte";
-  import type { HighlightOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import type { HighlightOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     open = false,

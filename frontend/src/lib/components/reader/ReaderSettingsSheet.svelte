@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as Sheet from "$lib/components/ui/sheet";
+  import * as Sheet from "#lib/components/ui/sheet/index.ts";
   import {
     Minus,
     Plus,
@@ -17,12 +17,12 @@
     ArrowRight,
     ArrowLeft,
   } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     DEFAULT_READER_FONT,
     READER_FONTS,
     type ReaderFont,
-  } from "$lib/reader/fonts";
+  } from "#lib/reader/fonts.ts";
 
   const fontLabel: Record<(typeof READER_FONTS)[number], () => string> = {
     mincho: m.reader_font_mincho,
@@ -30,10 +30,14 @@
     kai: m.reader_font_kai,
     system: m.reader_font_system,
   };
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import type { WritingMode } from "$lib/reader/core";
-  import type { PagerDirection, PagerMode, PagerTurn } from "$lib/reader/pages";
-  import { canCurl } from "$lib/platform";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import type { WritingMode } from "#lib/reader/core.ts";
+  import type {
+    PagerDirection,
+    PagerMode,
+    PagerTurn,
+  } from "#lib/reader/pages.ts";
+  import { canCurl } from "#lib/platform.ts";
 
   /**
    * The reader's settings sheet. Rows appear when their handler is

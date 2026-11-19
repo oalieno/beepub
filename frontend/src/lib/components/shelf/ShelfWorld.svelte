@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount, untrack } from "svelte";
-  import { browser } from "$app/environment";
+  import { browser } from "$app/env";
   import { goto } from "$app/navigation";
-  import { booksApi } from "$lib/api/books";
-  import { coverUrl } from "$lib/api/client";
-  import type { BookOut, InteractionOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import { booksApi } from "#lib/api/books.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import type { BookOut, InteractionOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type { Shelf, ShelfBook } from "./engine";
   import { iris, type Pool } from "./iris";
   import { authorOf, authorsOf, titleOf } from "./book";
@@ -25,23 +25,24 @@
     empty = "",
     mark,
     disc,
-  }: {
+
     /** The door's bee, and the pool of honey behind it: the ring opens
      *  out of that pool, and closes back into it. */
+    /** The end of the shelf is near: load more, if there are more. */
+    /** Out of the bookshelf, back to the list. */
+    /** The list's search, shown here too. */
+    /** The list is loading (a search under way). */
+    /** What to say when there are no books. */
+  }: {
     mark: HTMLElement;
     disc: HTMLElement;
     books?: BookOut[];
-    /** The end of the shelf is near: load more, if there are more. */
     onend?: () => void;
-    /** Out of the bookshelf, back to the list. */
     onexit?: () => void;
-    /** The list's search, shown here too. */
     query?: string;
     onquery?: (q: string) => void;
     placeholder?: string;
-    /** The list is loading (a search under way). */
     busy?: boolean;
-    /** What to say when there are no books. */
     empty?: string;
   } = $props();
 
@@ -143,6 +144,7 @@
           failed: () => (failed = true),
         },
       );
+
       shelf = made;
     });
     // Books stand on the shelf (or there are none to stand).
@@ -150,6 +152,7 @@
     const look = setInterval(() => {
       const n = untrack(() => books.length);
       const drawn = Number(host.dataset.drawn ?? 0);
+
       if (
         failed ||
         (n > 0 && drawn >= Math.min(6, n)) ||

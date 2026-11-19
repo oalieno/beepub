@@ -1,22 +1,22 @@
 <script lang="ts">
   import { tick, untrack } from "svelte";
   import { page } from "$app/state";
-  import { goto, replaceState, afterNavigate } from "$app/navigation";
-  import { isNative } from "$lib/platform";
-  import { authStore } from "$lib/stores/auth";
-  import { librariesApi } from "$lib/api/libraries";
-  import { booksApi } from "$lib/api/books";
-  import { libraryUploaded, uploadFiles } from "$lib/services/uploadQueue";
-  import { toastStore } from "$lib/stores/toast";
-  import { setActiveLibrary } from "$lib/stores/activeLibrary";
-  import BookBrowser from "$lib/components/BookBrowser.svelte";
-  import type { BookBrowserState } from "$lib/components/BookBrowser.svelte";
-  import Modal from "$lib/components/Modal.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { LibraryDetailSkeleton } from "$lib/components/skeletons";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import type { LibraryOut } from "$lib/types";
-  import { UserRole } from "$lib/types";
+  import { goto, afterNavigate } from "$app/navigation";
+  import { isNative } from "#lib/platform.ts";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { libraryUploaded, uploadFiles } from "#lib/services/uploadQueue.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { setActiveLibrary } from "#lib/stores/activeLibrary.ts";
+  import BookBrowser from "#lib/components/BookBrowser.svelte";
+  import type { BookBrowserState } from "#lib/components/BookBrowser.svelte";
+  import Modal from "#lib/components/Modal.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { LibraryDetailSkeleton } from "#lib/components/skeletons/index.ts";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import type { LibraryOut } from "#lib/types.ts";
+  import { UserRole } from "#lib/types.ts";
   import {
     ArrowLeftRight,
     BookCopy,
@@ -25,9 +25,9 @@
     Upload,
     X,
   } from "@lucide/svelte";
-  import LocalUploadModal from "$lib/components/LocalUploadModal.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import * as m from "$lib/paraglide/messages.js";
+  import LocalUploadModal from "#lib/components/LocalUploadModal.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type { Snapshot } from "./$types";
 
   // The "all" pseudo-library spans every accessible library.
@@ -110,6 +110,8 @@
   // Also runs on same-route navigation (library A -> library B), which does
   // NOT remount this component — every bit of per-library state resets here.
   afterNavigate(async (nav) => {
+    if (nav.shallow && nav.type === "goto") return;
+
     // The same library, reached again without leaving it (the global
     // search's Enter sends its query here; Back returns from that): the
     // browser reads its query — or the state to restore — only when it
@@ -147,7 +149,7 @@
       // Don't leave the active library pointing at a dead id — the nav
       // entry would bounce through this error on every tap.
       setActiveLibrary(ALL);
-      goto("/libraries", { replaceState: true });
+      goto("/libraries", { replace: true });
       return;
     }
     setActiveLibrary(id);
@@ -184,7 +186,8 @@
   }
 
   function handleStateChange(state: BookBrowserState) {
-    const url = new URL(page.url);
+    const url = new URL(page.url.href);
+
     if (state.searchQuery) url.searchParams.set("search", state.searchQuery);
     else url.searchParams.delete("search");
     if (state.filterAuthor) url.searchParams.set("author", state.filterAuthor);
@@ -200,7 +203,8 @@
     else url.searchParams.delete("sort");
     if (state.collapse) url.searchParams.set("collapse", "1");
     else url.searchParams.delete("collapse");
-    replaceState(url, {});
+
+    goto(url, { shallow: true, replace: true });
   }
 
   // Two-step upload: files are listed first (a chance to catch a wrong
@@ -244,6 +248,7 @@
   const shownAt = Date.now();
   $effect(() => {
     const landed = $libraryUploaded;
+
     if (landed && landed.libraryId === id && landed.at > shownAt)
       untrack(() => (reloadNonce += 1));
   });

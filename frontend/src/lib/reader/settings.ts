@@ -131,7 +131,7 @@ export interface Device {
 
 /** The settings to open the reader with. */
 export function readSettings(
-  query: URLSearchParams,
+  query: Pick<URLSearchParams, "get" | "has">,
   device: Device,
 ): ReaderSettings {
   const d = DEFAULT_SETTINGS;

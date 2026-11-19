@@ -23,7 +23,7 @@
  */
 import { beepubSync } from "./beepub";
 import { localSync } from "./local";
-import type { HighlightOut } from "$lib/types";
+import type { HighlightOut } from "#lib/types.ts";
 import type {
   HighlightDraft,
   HighlightPatch,
@@ -88,7 +88,7 @@ export function makeLinkedSync(localBookId: string): SyncBackend {
       try {
         // Dynamic import: readingSync pulls in stores the reading layer
         // shouldn't load eagerly.
-        const { syncLocalBook } = await import("$lib/services/readingSync");
+        const { syncLocalBook } = await import("#lib/services/readingSync.ts");
         await withBudget(
           syncLocalBook(localBookId).catch(() => {}),
           MERGE_BUDGET_MS,
@@ -101,7 +101,7 @@ export function makeLinkedSync(localBookId: string): SyncBackend {
   }
 
   function pushSoon(): void {
-    void import("$lib/services/readingSync")
+    void import("#lib/services/readingSync.ts")
       .then(({ pushLocalBook }) => pushLocalBook(localBookId))
       .catch(() => {
         // Offline: the foreground/online triggers push it later.

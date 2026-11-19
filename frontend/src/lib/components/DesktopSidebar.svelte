@@ -1,21 +1,21 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { authStore } from "$lib/stores/auth";
-  import { sidebarCollapsed, toggleSidebar } from "$lib/stores/sidebar";
-  import { isNative } from "$lib/platform";
-  import { activeLibraryHref } from "$lib/stores/activeLibrary";
-  import * as m from "$lib/paraglide/messages.js";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { sidebarCollapsed, toggleSidebar } from "#lib/stores/sidebar.ts";
+  import { isNative } from "#lib/platform.ts";
+  import { activeLibraryHref } from "#lib/stores/activeLibrary.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     Search as SearchIcon,
     Dices,
     PanelLeftClose,
     PanelLeftOpen,
   } from "@lucide/svelte";
-  import { isLocalMode } from "$lib/api/client";
-  import { navLinks as buildNavLinks } from "$lib/nav";
-  import * as Avatar from "$lib/components/ui/avatar";
-  import { Separator } from "$lib/components/ui/separator";
-  import { UserRole } from "$lib/types";
+  import { isLocalMode } from "#lib/api/client.ts";
+  import { navLinks as buildNavLinks } from "#lib/nav.ts";
+  import * as Avatar from "#lib/components/ui/avatar/index.ts";
+  import { Separator } from "#lib/components/ui/separator/index.ts";
+  import { UserRole } from "#lib/types.ts";
 
   let { onSearchOpen }: { onSearchOpen?: () => void } = $props();
 

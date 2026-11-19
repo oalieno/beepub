@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { toastStore } from "$lib/stores/toast";
-  import { booksApi } from "$lib/api/books";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import type { BookOut } from "$lib/types";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import type { BookOut } from "#lib/types.ts";
   import { BookOpen, RotateCcw, Sparkles } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   type Phase = "idle" | "tearing" | "revealed";
 

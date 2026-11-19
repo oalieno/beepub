@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
   import BookCardSkeleton from "./BookCardSkeleton.svelte";
 
   let { sections = 3 }: { sections?: number } = $props();

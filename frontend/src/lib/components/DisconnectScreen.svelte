@@ -1,10 +1,10 @@
 <script lang="ts">
   import { CloudOff } from "@lucide/svelte";
-  import { switchAppMode } from "$lib/api/client";
-  import { Button } from "$lib/components/ui/button";
-  import { checkServerNow } from "$lib/services/network";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { switchAppMode } from "#lib/api/client.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { checkServerNow } from "#lib/services/network.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let checking = $state(false);
 

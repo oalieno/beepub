@@ -15,9 +15,9 @@
  */
 import { get, writable } from "svelte/store";
 
-import { booksApi } from "$lib/api/books";
-import { hasServerUrl, isLocalMode } from "$lib/api/client";
-import { isNative } from "$lib/platform";
+import { booksApi } from "#lib/api/books.ts";
+import { hasServerUrl, isLocalMode } from "#lib/api/client.ts";
+import { isNative } from "#lib/platform.ts";
 import {
   emptyLocalInteraction,
   readLocalHighlightRecords,
@@ -29,8 +29,8 @@ import {
   type LocalHighlightRecord,
   type LocalInteractionRecord,
   type LocalProgressRecord,
-} from "$lib/reading/local";
-import { densePageCounts } from "$lib/reading/progress";
+} from "#lib/reading/local.ts";
+import { densePageCounts } from "#lib/reading/progress.ts";
 import {
   clearLocalBookLink,
   getLocalBook,
@@ -39,16 +39,16 @@ import {
   setLocalBookLink,
   updateLocalBookMeta,
   type LocalBookEntry,
-} from "$lib/services/localLibrary";
-import { getIsOnline, isOnline } from "$lib/services/network";
-import { pushLedger } from "$lib/services/readingLedger";
-import { authStore } from "$lib/stores/auth";
-import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
+} from "#lib/services/localLibrary.ts";
+import { getIsOnline, isOnline } from "#lib/services/network.ts";
+import { pushLedger } from "#lib/services/readingLedger.ts";
+import { authStore } from "#lib/stores/auth.ts";
+import { refreshLinkedBookIds } from "#lib/stores/linkedBooks.ts";
 import type {
   BookSyncResponse,
   SyncInteractionIn,
   SyncProgressIn,
-} from "$lib/types";
+} from "#lib/types.ts";
 
 const FULL_SYNC_COOLDOWN_MS = 30_000;
 

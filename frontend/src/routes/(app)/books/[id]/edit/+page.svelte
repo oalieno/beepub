@@ -2,32 +2,32 @@
   import { page } from "$app/state";
   import { afterNavigate, goto } from "$app/navigation";
   import { onDestroy, onMount } from "svelte";
-  import { booksApi } from "$lib/api/books";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { getMetadataSources } from "$lib/stores/metadataSources";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { booksApi } from "#lib/api/books.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { getMetadataSources } from "#lib/stores/metadataSources.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { ExternalLink, ImageIcon, Layers } from "@lucide/svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
   import FieldVersionsDialog, {
     type FieldVersion,
-  } from "$lib/components/FieldVersionsDialog.svelte";
+  } from "#lib/components/FieldVersionsDialog.svelte";
   import CoverVersionsDialog, {
     type CoverVersion,
-  } from "$lib/components/CoverVersionsDialog.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Textarea } from "$lib/components/ui/textarea";
+  } from "#lib/components/CoverVersionsDialog.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import { Textarea } from "#lib/components/ui/textarea/index.ts";
   import type {
     BookOut,
     IsbnSourceResult,
     MetadataRecord,
     MetadataSourceOut,
-  } from "$lib/types";
+  } from "#lib/types.ts";
 
   // Fine-tuning is per field: the form is the destination, and every
   // sourced field carries a versions entry — a dialog comparing the
@@ -69,6 +69,7 @@
     | { kind: "file"; file: File; preview: string }
     | null
   >(null);
+
   // source → page URL, applied via the pinned-URL flow on save so the
   // archive follows the user's pick (ratings included).
   let pendingBindings = $state<Record<string, string>>({});
@@ -87,6 +88,7 @@
   // and the two back buttons chase each other forever.
   let cameFromApp = $state(false);
   afterNavigate((nav) => {
+    if (nav.shallow && nav.type === "goto") return;
     if (nav.from) cameFromApp = true;
   });
 
@@ -129,7 +131,9 @@
           : originalValue("tags"),
         description: loaded.description ?? originalValue("description"),
       };
+
       fieldSources = { ...(loaded.field_sources ?? {}) };
+
       pool = rows
         .filter((row) => row.record)
         .map((row) => ({
@@ -259,6 +263,7 @@
   function seriesOverrides(): boolean {
     const series = form.series.trim();
     const index = String(form.series_index ?? "").trim();
+
     return (
       series !== "" &&
       (series !== originalValue("series") ||

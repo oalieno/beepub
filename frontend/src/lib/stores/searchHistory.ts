@@ -1,7 +1,7 @@
 import { get } from "svelte/store";
-import { browser } from "$app/environment";
-import { authStore } from "$lib/stores/auth";
-import { isLocalMode } from "$lib/api/client";
+import { browser } from "$app/env";
+import { authStore } from "#lib/stores/auth.ts";
+import { isLocalMode } from "#lib/api/client.ts";
 
 /** Recent searches of the global search (⌘K): one list per account on
  *  this device, newest first. Logging out leaves it in place. */

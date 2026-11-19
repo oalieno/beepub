@@ -1,10 +1,10 @@
 <script lang="ts">
   import { fly } from "svelte/transition";
   import { backOut, cubicIn } from "svelte/easing";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { CircleCheck, CircleX, Info, TriangleAlert, X } from "@lucide/svelte";
-  import type { ToastType } from "$lib/stores/toast";
+  import type { ToastType } from "#lib/stores/toast.ts";
 
   const icons = {
     success: CircleCheck,

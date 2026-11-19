@@ -1,9 +1,9 @@
-import type { HandleClientError } from "@sveltejs/kit";
-import { defineCustomClientStrategy } from "$lib/paraglide/runtime.js";
+import type { HandleClientError } from "@sveltejs/kit/hooks";
+import { defineCustomClientStrategy } from "#lib/paraglide/runtime.js";
 import {
   BROWSER_LOCALE_STRATEGY,
   localeFromLanguages,
-} from "$lib/i18n/browserLocale";
+} from "#lib/i18n/browserLocale.ts";
 
 // A visitor who hasn't picked a language gets the browser's. Not stored:
 // the choice in the language menu is what sticks.

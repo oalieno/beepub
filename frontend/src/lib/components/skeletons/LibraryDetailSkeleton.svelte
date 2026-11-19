@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Skeleton } from "$lib/components/ui/skeleton";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
   import BookGridSkeleton from "./BookGridSkeleton.svelte";
   import BookTableSkeleton from "./BookTableSkeleton.svelte";
 

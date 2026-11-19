@@ -1,11 +1,11 @@
 <script lang="ts">
   import { ChevronRight, Sun, Moon, Monitor } from "@lucide/svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
   import {
     themePreference,
     setThemePreference,
     type ThemePreference,
-  } from "$lib/stores/theme";
+  } from "#lib/stores/theme.ts";
 
   let show = $state(false);
   const themeOptions: {

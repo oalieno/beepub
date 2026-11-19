@@ -4,9 +4,9 @@
    * clicked (choosing the view never goes in by itself). Through it the bookshelf is the whole screen (ShelfWorld);
    * leaving that comes back here.
    */
-  import { browser } from "$app/environment";
-  import type { BookOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import { browser } from "$app/env";
+  import type { BookOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import Bee from "./Bee.svelte";
   import { portal } from "./portal";
   import ShelfWorld from "./ShelfWorld.svelte";
@@ -20,20 +20,21 @@
     busy = false,
     empty = "",
     oninside,
+
+    /** The end of the shelf is near: load more, if there are more. */
+    /** The list's search, shown inside too. */
+    /** The list is loading (a search under way). */
+    /** What to say inside when there are no books. */
+    /** Told whenever the bookshelf is entered or left, so that the list
+     *  keeps this mounted while inside. */
   }: {
     books?: BookOut[];
-    /** The end of the shelf is near: load more, if there are more. */
     onend?: () => void;
-    /** The list's search, shown inside too. */
     query?: string;
     onquery?: (q: string) => void;
     placeholder?: string;
-    /** The list is loading (a search under way). */
     busy?: boolean;
-    /** What to say inside when there are no books. */
     empty?: string;
-    /** Told whenever the bookshelf is entered or left, so that the list
-     *  keeps this mounted while inside. */
     oninside?: (inside: boolean) => void;
   } = $props();
 
@@ -109,7 +110,7 @@
     <svg class="trail" viewBox="0 0 240 150" aria-hidden="true">
       <path
         d="M6 132C42 150 92 140 96 104C99 76 62 70 60 96C58 124 120 132 164 104C186 90 204 74 218 60"
-      />
+      ></path>
     </svg>
     <!-- The bee is the way in. Inside, it is in there, not here; each
          time the bookshelf is left it comes up again from below, as it
@@ -136,8 +137,8 @@
     <div class="tap" aria-hidden="true">
       <span class="font-book">{m.shelf_tap_me()}</span>
       <svg viewBox="0 0 64 48">
-        <path d="M58 6C40 3 17 11 9 36" />
-        <path d="M9 36l1-13M9 36l12-6" />
+        <path d="M58 6C40 3 17 11 9 36"></path>
+        <path d="M9 36l1-13M9 36l12-6"></path>
       </svg>
     </div>
   </div>

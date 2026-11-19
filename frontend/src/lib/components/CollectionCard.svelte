@@ -1,8 +1,8 @@
 <script lang="ts">
   import { BookOpen } from "@lucide/svelte";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import * as m from "$lib/paraglide/messages.js";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type { Snippet } from "svelte";
 
   interface Props {

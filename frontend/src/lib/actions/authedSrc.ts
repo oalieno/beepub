@@ -4,7 +4,7 @@
  *
  * Usage: <img use:authedSrc={url} alt="..." />
  */
-import { getAuthHeader } from "$lib/api/client";
+import { getAuthHeader } from "#lib/api/client.ts";
 
 function isNativeRuntime(): boolean {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

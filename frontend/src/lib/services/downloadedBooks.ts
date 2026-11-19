@@ -6,13 +6,13 @@
  */
 import { writable } from "svelte/store";
 
-import { getIsOnline } from "$lib/services/network";
+import { getIsOnline } from "#lib/services/network.ts";
 import {
   getLocalBookLinks,
   listLocalBooks,
   removeLocalBook,
-} from "$lib/services/localLibrary";
-import { refreshLinkedBookIds } from "$lib/stores/linkedBooks";
+} from "#lib/services/localLibrary.ts";
+import { refreshLinkedBookIds } from "#lib/stores/linkedBooks.ts";
 
 /** Server ids whose copy was removed this session — pages kept alive
  *  across navigation (the Downloaded shelf restored on back) drop them
@@ -47,7 +47,7 @@ export async function removeDownload(serverBookId: string): Promise<void> {
   const localId = Object.keys(links).find((k) => links[k] === serverBookId);
   if (!localId) return;
   if (!getIsOnline()) throw new UnsyncedCopyError();
-  const { pushLocalBook } = await import("$lib/services/readingSync");
+  const { pushLocalBook } = await import("#lib/services/readingSync.ts");
   try {
     await pushLocalBook(localId);
   } catch {

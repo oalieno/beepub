@@ -11,13 +11,13 @@
  */
 import { writable } from "svelte/store";
 
-import { isLocalMode } from "$lib/api/client";
-import * as m from "$lib/paraglide/messages.js";
+import { isLocalMode } from "#lib/api/client.ts";
+import * as m from "#lib/paraglide/messages.js";
 import {
   addTransfer,
   removeTransfer,
   updateTransfer,
-} from "$lib/stores/transfers";
+} from "#lib/stores/transfers.ts";
 
 /** Must match AppDelegate.swift. */
 const INBOX = "opened-books";
@@ -113,7 +113,7 @@ async function importOne(file: File, transferId: string): Promise<void> {
   }
   updateTransfer(transferId, { status: "running" });
   const { importLocalBook, DuplicateBookError, InvalidEpubError } =
-    await import("$lib/services/localLibrary");
+    await import("#lib/services/localLibrary.ts");
   try {
     const entry = await importLocalBook(file);
     updateTransfer(transferId, {

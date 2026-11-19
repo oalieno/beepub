@@ -7,12 +7,12 @@
  */
 import { writable, type Readable } from "svelte/store";
 
-import * as m from "$lib/paraglide/messages.js";
+import * as m from "#lib/paraglide/messages.js";
 import {
   addTransfer,
   removeTransfer,
   updateTransfer,
-} from "$lib/stores/transfers";
+} from "#lib/stores/transfers.ts";
 
 import { OpdsError } from "./errors";
 import type { OpdsBookEntry } from "./parse";
@@ -117,7 +117,7 @@ async function run(job: Job): Promise<void> {
 async function importToServer(
   job: Job,
 ): Promise<{ status: "imported" | "duplicate"; href: string }> {
-  const { importToServer } = await import("./server");
+  const { importToServer } = await import("./serverCatalogs");
   const { status, book } = await importToServer(
     job.catalogId,
     job.entry,
@@ -130,7 +130,7 @@ async function download(
   job: Job,
 ): Promise<{ status: "imported" | "duplicate"; href: string }> {
   const { downloadAndImport } = await import("./download");
-  const { DuplicateBookError } = await import("$lib/services/localLibrary");
+  const { DuplicateBookError } = await import("#lib/services/localLibrary.ts");
   try {
     const entry = await downloadAndImport(job.entry, job.auth ?? {}, (pct) => {
       setState(job.key, { status: "downloading", pct });

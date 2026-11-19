@@ -10,9 +10,9 @@
    * the caption). The styles at the bottom answer to those.
    */
   import { onMount } from "svelte";
-  import { Button } from "$lib/components/ui/button";
-  import type { BookOut, InteractionOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import type { BookOut, InteractionOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { authorsOf, titleOf } from "./book";
 
   let {

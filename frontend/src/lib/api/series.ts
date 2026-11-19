@@ -1,5 +1,5 @@
 import { get, put } from "./client";
-import type { SeriesOut } from "$lib/types";
+import type { SeriesOut } from "#lib/types.ts";
 
 export const seriesApi = {
   // Explicitly-rated series (across all libraries) — for the tier page.

@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { get } from "$lib/api/client";
-  import { toastStore } from "$lib/stores/toast";
-  import type { AdminSettings } from "$lib/types";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
-  import * as Card from "$lib/components/ui/card";
-  import * as Select from "$lib/components/ui/select";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { get } from "#lib/api/client.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { AdminSettings } from "#lib/types.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import * as Card from "#lib/components/ui/card/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
   import { Eye, EyeOff, Save } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { FormSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { FormSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let settings = $state<AdminSettings | null>(null);
   let loading = $state(true);

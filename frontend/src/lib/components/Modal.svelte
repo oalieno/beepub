@@ -1,7 +1,7 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
-  import * as Dialog from "$lib/components/ui/dialog";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Dialog from "#lib/components/ui/dialog/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type { Snippet } from "svelte";
 
   let {

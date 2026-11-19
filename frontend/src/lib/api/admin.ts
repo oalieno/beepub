@@ -1,5 +1,5 @@
 import { get, post, put, patch, del } from "./client";
-import type { UserOut, UserLibraryAccess } from "$lib/types";
+import type { UserOut, UserLibraryAccess } from "#lib/types.ts";
 
 export const adminApi = {
   // Users
@@ -36,12 +36,12 @@ export const adminApi = {
 
   // Stats
   getStats: () =>
-    get("/admin/stats") as Promise<import("$lib/types").AdminStats>,
+    get("/admin/stats") as Promise<import("#lib/types.ts").AdminStats>,
 
   // Calibre integration
   getCalibreLibraries: () =>
     get("/admin/calibre/libraries") as Promise<
-      import("$lib/types").CalibreLibraryInfo[]
+      import("#lib/types.ts").CalibreLibraryInfo[]
     >,
 
   linkCalibreLibrary: (data: {
@@ -55,7 +55,7 @@ export const adminApi = {
 
   previewCalibreCopy: (libraryId: string) =>
     get(`/admin/calibre/libraries/${libraryId}/copy`) as Promise<
-      import("$lib/types").CalibreCopyPreview
+      import("#lib/types.ts").CalibreCopyPreview
     >,
 
   copyCalibreLibrary: (libraryId: string, skipUnreadable = false) =>
@@ -74,15 +74,17 @@ export const adminApi = {
 
   getCalibreLibraryStatus: (libraryId: string) =>
     get(`/admin/calibre/libraries/${libraryId}/status`) as Promise<
-      import("$lib/types").CalibreLibraryStatus
+      import("#lib/types.ts").CalibreLibraryStatus
     >,
 
   // App Settings
   getSettings: () =>
-    get("/admin/settings") as Promise<import("$lib/types").AdminSettings>,
+    get("/admin/settings") as Promise<import("#lib/types.ts").AdminSettings>,
 
-  updateSettings: (data: Partial<import("$lib/types").AdminSettings>) =>
-    put("/admin/settings", data) as Promise<import("$lib/types").AdminSettings>,
+  updateSettings: (data: Partial<import("#lib/types.ts").AdminSettings>) =>
+    put("/admin/settings", data) as Promise<
+      import("#lib/types.ts").AdminSettings
+    >,
 
   getAiModels: (provider: string) =>
     get(`/admin/ai/models?provider=${provider}`) as Promise<
@@ -97,7 +99,7 @@ export const adminApi = {
 
   // Job Queue
   getJobs: () =>
-    get("/admin/jobs") as Promise<import("$lib/types").AllJobsResponse>,
+    get("/admin/jobs") as Promise<import("#lib/types.ts").AllJobsResponse>,
 
   triggerJob: (jobType: string) =>
     post(`/admin/jobs/${jobType}`, {}) as Promise<{
@@ -121,14 +123,14 @@ export const adminApi = {
     const params = new URLSearchParams({ period });
     if (feature) params.set("feature", feature);
     return get(`/admin/llm-usage?${params}`) as Promise<
-      import("$lib/types").LlmUsageResponse
+      import("#lib/types.ts").LlmUsageResponse
     >;
   },
 
   // Book Reports
   getReports: (resolved: boolean = false) =>
     get(`/admin/reports?resolved=${resolved}`) as Promise<
-      import("$lib/types").BookReport[]
+      import("#lib/types.ts").BookReport[]
     >,
 
   resolveReport: (reportId: string) =>

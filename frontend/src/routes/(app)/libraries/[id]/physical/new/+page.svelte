@@ -2,18 +2,18 @@
   import { page } from "$app/state";
   import { goto } from "$app/navigation";
   import { onMount } from "svelte";
-  import { booksApi } from "$lib/api/books";
-  import { librariesApi } from "$lib/api/libraries";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { booksApi } from "#lib/api/books.ts";
+  import { librariesApi } from "#lib/api/libraries.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { BookCopy, ExternalLink, Search } from "@lucide/svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Textarea } from "$lib/components/ui/textarea";
-  import type { IsbnSourceResult } from "$lib/types";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import { Textarea } from "#lib/components/ui/textarea/index.ts";
+  import type { IsbnSourceResult } from "#lib/types.ts";
 
   // The form is the destination; online sources are an autocomplete
   // that fills it. One row per search hit — ISBN/URL lookups already

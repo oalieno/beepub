@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { sanitizeHtml } from "$lib/sanitize";
+  import { sanitizeHtml } from "#lib/sanitize.ts";
 
   let {
     content,

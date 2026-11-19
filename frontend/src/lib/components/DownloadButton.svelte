@@ -7,17 +7,17 @@
    */
   import { Check, Download } from "@lucide/svelte";
 
-  import { authStore } from "$lib/stores/auth";
-  import { confirmDialog } from "$lib/stores/confirm";
+  import { authStore } from "#lib/stores/auth.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
   import {
     cancelDownloads,
     downloads,
     enqueueDownloads,
     type DownloadRequest,
-  } from "$lib/stores/downloads";
-  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/stores/downloads.ts";
+  import { linkedServerBookIds } from "#lib/stores/linkedBooks.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     request,
@@ -39,7 +39,7 @@
     removing = true;
     try {
       const { removeDownload, UnsyncedCopyError } =
-        await import("$lib/services/downloadedBooks");
+        await import("#lib/services/downloadedBooks.ts");
       try {
         await removeDownload(request.bookId);
         toastStore.success(m.download_removed());

@@ -24,7 +24,7 @@ import { Directory, Filesystem } from "@capacitor/filesystem";
 import {
   importLocalBook,
   type LocalBookEntry,
-} from "$lib/services/localLibrary";
+} from "#lib/services/localLibrary.ts";
 
 export function sanitizeFilename(title: string): string {
   const cleaned = title

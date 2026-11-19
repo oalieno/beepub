@@ -1,10 +1,10 @@
 <script lang="ts">
   import ReaderDialog from "./ReaderDialog.svelte";
   import { X, ChevronDown, ChevronUp } from "@lucide/svelte";
-  import type { IllustrationOut } from "$lib/types";
-  import { booksApi } from "$lib/api/books";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import * as m from "$lib/paraglide/messages.js";
+  import type { IllustrationOut } from "#lib/types.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   const STYLE_LABELS: Record<string, string> = $derived({
     ink_wash: m.reader_style_ink_wash(),

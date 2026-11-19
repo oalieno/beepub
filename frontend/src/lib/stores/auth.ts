@@ -1,9 +1,9 @@
 import { writable } from "svelte/store";
-import { invalidateAll } from "$app/navigation";
-import { isNative } from "$lib/platform";
-import { apiBase } from "$lib/api/client";
-import { accessToken, clearTokens, storeTokens } from "$lib/auth/tokens";
-import type { LoginResponse, UserOut } from "$lib/types";
+import { refreshAll } from "$app/navigation";
+import { isNative } from "#lib/platform.ts";
+import { apiBase } from "#lib/api/client.ts";
+import { accessToken, clearTokens, storeTokens } from "#lib/auth/tokens.ts";
+import type { LoginResponse, UserOut } from "#lib/types.ts";
 
 const CACHED_USER_KEY = "cached-user";
 
@@ -77,7 +77,7 @@ function createAuthStore() {
       // Rerun the layout loads: page.data.user is cached load output and
       // survives client-side navigation, so without this the app chrome
       // keeps rendering the logged-in shell until a full restart.
-      await invalidateAll();
+      await refreshAll();
     },
     setUser: (user: UserOut) => {
       update((s) => ({ ...s, user }));

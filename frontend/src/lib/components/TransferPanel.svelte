@@ -17,8 +17,8 @@
     RotateCw,
     X,
   } from "@lucide/svelte";
-  import BottomSheet from "$lib/components/BottomSheet.svelte";
-  import { keyboardVisible } from "$lib/stores/keyboard";
+  import BottomSheet from "#lib/components/BottomSheet.svelte";
+  import { keyboardVisible } from "#lib/stores/keyboard.ts";
   import {
     clearSettledTransfers,
     transferSummary,
@@ -26,8 +26,8 @@
     transfersCollapsed,
     type Transfer,
     type TransferKind,
-  } from "$lib/stores/transfers";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/stores/transfers.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     /** Height of the phone's bottom chrome the bar sits above. */

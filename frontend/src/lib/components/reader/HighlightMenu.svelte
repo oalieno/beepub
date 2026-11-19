@@ -9,7 +9,7 @@
     NotebookPen,
     Underline,
   } from "@lucide/svelte";
-  import { toastStore } from "$lib/stores/toast";
+  import { toastStore } from "#lib/stores/toast.ts";
   import {
     HIGHLIGHT_COLORS,
     HIGHLIGHT_LINE_COLORS,
@@ -18,7 +18,7 @@
     parseHighlightColor,
     type HighlightStyle,
   } from "./highlight-style";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     hasExisting = false,

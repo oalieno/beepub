@@ -1,18 +1,18 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { scrollSnapshot } from "$lib/scrollSnapshot";
-  import { booksApi } from "$lib/api/books";
-  import { seriesApi } from "$lib/api/series";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
-  import { toastStore } from "$lib/stores/toast";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import StarRating from "$lib/components/StarRating.svelte";
-  import BookNotesEditor from "$lib/components/BookNotesEditor.svelte";
-  import BookGrid from "$lib/components/BookGrid.svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import Modal from "$lib/components/Modal.svelte";
-  import { BookDetailSkeleton } from "$lib/components/skeletons";
+  import { scrollSnapshot } from "#lib/scrollSnapshot.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { seriesApi } from "#lib/api/series.ts";
+  import { bookshelvesApi } from "#lib/api/bookshelves.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import StarRating from "#lib/components/StarRating.svelte";
+  import BookNotesEditor from "#lib/components/BookNotesEditor.svelte";
+  import BookGrid from "#lib/components/BookGrid.svelte";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import Modal from "#lib/components/Modal.svelte";
+  import { BookDetailSkeleton } from "#lib/components/skeletons/index.ts";
   import {
     BookOpen,
     Check,
@@ -20,20 +20,20 @@
     ListPlus,
     LoaderCircle,
   } from "@lucide/svelte";
-  import { isNative } from "$lib/platform";
-  import { authStore } from "$lib/stores/auth";
+  import { isNative } from "#lib/platform.ts";
+  import { authStore } from "#lib/stores/auth.ts";
   import {
     cancelDownloads,
     downloads,
     enqueueDownloads,
-  } from "$lib/stores/downloads";
-  import { linkedServerBookIds } from "$lib/stores/linkedBooks";
+  } from "#lib/stores/downloads.ts";
+  import { linkedServerBookIds } from "#lib/stores/linkedBooks.ts";
   import type {
     BookshelfOut,
     BookWithInteractionOut,
     SeriesOut,
-  } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let name = $derived(page.url.searchParams.get("name") ?? "");
   let library = $derived(page.url.searchParams.get("library") ?? "");

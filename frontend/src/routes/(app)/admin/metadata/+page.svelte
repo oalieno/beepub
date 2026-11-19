@@ -1,19 +1,19 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { adminApi } from "$lib/api/admin";
-  import { metadataApi } from "$lib/api/metadata";
-  import { invalidateMetadataSources } from "$lib/stores/metadataSources";
-  import { toastStore } from "$lib/stores/toast";
-  import type { MetadataSourceOut, MetadataSourceStats } from "$lib/types";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import { Button } from "$lib/components/ui/button";
-  import { Badge } from "$lib/components/ui/badge";
-  import * as Card from "$lib/components/ui/card";
-  import * as Collapsible from "$lib/components/ui/collapsible";
-  import * as Tooltip from "$lib/components/ui/tooltip";
-  import { Switch } from "$lib/components/ui/switch";
-  import { Checkbox } from "$lib/components/ui/checkbox";
+  import { adminApi } from "#lib/api/admin.ts";
+  import { metadataApi } from "#lib/api/metadata.ts";
+  import { invalidateMetadataSources } from "#lib/stores/metadataSources.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import type { MetadataSourceOut, MetadataSourceStats } from "#lib/types.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Badge } from "#lib/components/ui/badge/index.ts";
+  import * as Card from "#lib/components/ui/card/index.ts";
+  import * as Collapsible from "#lib/components/ui/collapsible/index.ts";
+  import * as Tooltip from "#lib/components/ui/tooltip/index.ts";
+  import { Switch } from "#lib/components/ui/switch/index.ts";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
   import {
     BookText,
     ChevronDown,
@@ -25,10 +25,10 @@
     Star,
     Tags as TagsIcon,
   } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { FormSkeleton } from "$lib/components/skeletons";
-  import BackButton from "$lib/components/BackButton.svelte";
-  import * as m from "$lib/paraglide/messages.js";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { FormSkeleton } from "#lib/components/skeletons/index.ts";
+  import BackButton from "#lib/components/BackButton.svelte";
+  import * as m from "#lib/paraglide/messages.js";
 
   let sources = $state<MetadataSourceOut[]>([]);
   let stats = $state<Record<string, MetadataSourceStats>>({});

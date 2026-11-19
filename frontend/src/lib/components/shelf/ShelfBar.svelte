@@ -6,9 +6,9 @@
   import ArrowLeft from "@lucide/svelte/icons/arrow-left";
   import Search from "@lucide/svelte/icons/search";
   import X from "@lucide/svelte/icons/x";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import * as m from "$lib/paraglide/messages.js";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import Bee from "./Bee.svelte";
 
   let {

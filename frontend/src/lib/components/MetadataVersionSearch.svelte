@@ -1,12 +1,12 @@
 <script lang="ts">
-  import * as m from "$lib/paraglide/messages.js";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
+  import * as m from "#lib/paraglide/messages.js";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
   import { Search } from "@lucide/svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { Input } from "$lib/components/ui/input";
-  import { Button } from "$lib/components/ui/button";
-  import type { IsbnSourceResult } from "$lib/types";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import type { IsbnSourceResult } from "#lib/types.ts";
 
   // The search half of a versions dialog: one input, three clue kinds
   // (URL / ISBN / title). Fetched records are handed to the parent —

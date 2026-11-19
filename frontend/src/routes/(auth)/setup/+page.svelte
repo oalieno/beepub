@@ -1,13 +1,13 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
-  import { getServerUrl, setServerUrl } from "$lib/api/client";
-  import { isNative } from "$lib/platform";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  import { getServerUrl, setServerUrl } from "#lib/api/client.ts";
+  import { isNative } from "#lib/platform.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import { BookOpen, Server, LoaderCircle, ArrowLeft } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
 
   // One face for every entry (the /mode server card — first run
   // included — the pencil, the login page's server button): the current
@@ -22,7 +22,7 @@
     if (history.length > 1) {
       history.back();
     } else {
-      goto("/", { replaceState: true });
+      goto("/", { replace: true });
     }
   }
 

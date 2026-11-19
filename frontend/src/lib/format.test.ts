@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 // The language BeePub is set to; the generated runtime is not needed to
 // know what a date looks like in it.
-vi.mock("$lib/paraglide/runtime.js", () => ({ getLocale: () => "en" }));
+vi.mock("#lib/paraglide/runtime.js", () => ({ getLocale: () => "en" }));
 
 import { formatDate, formatSize } from "./format";
 

@@ -1,5 +1,5 @@
 import { get, post, del } from "./client";
-import type { ApiToken, ApiTokenCreated } from "$lib/types";
+import type { ApiToken, ApiTokenCreated } from "#lib/types.ts";
 
 export const tokensApi = {
   list: () => get("/tokens") as Promise<ApiToken[]>,

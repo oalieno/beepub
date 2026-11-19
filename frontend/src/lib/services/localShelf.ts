@@ -4,16 +4,16 @@
  * shelf page and Home (both modes), which is where the continue-reading
  * row lives.
  */
-import type { LocalShelfEntry } from "$lib/components/LocalBookCard.svelte";
-import type { ContinueReadingItem } from "$lib/components/ContinueReadingRow.svelte";
-import { isNative } from "$lib/platform";
-import { readLocalInteraction, readLocalProgress } from "$lib/reading/local";
+import type { LocalShelfEntry } from "#lib/components/LocalBookCard.svelte";
+import type { ContinueReadingItem } from "#lib/components/ContinueReadingRow.svelte";
+import { isNative } from "#lib/platform.ts";
+import { readLocalInteraction, readLocalProgress } from "#lib/reading/local.ts";
 import {
   getLocalBookLinks,
   getLocalCoverSrc,
   listLocalBooks,
   type LocalBookEntry,
-} from "$lib/services/localLibrary";
+} from "#lib/services/localLibrary.ts";
 
 /** Cover URIs are re-derived per mount, so they ride beside the entry
  *  instead of living in the manifest. */

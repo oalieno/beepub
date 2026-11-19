@@ -14,11 +14,11 @@
     IllustrationOut,
     EpubImageInfo,
     ReferenceImageInput,
-  } from "$lib/types";
-  import { booksApi } from "$lib/api/books";
-  import { apiBase } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/types.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { apiBase } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   const MAX_REFS = 4;
 

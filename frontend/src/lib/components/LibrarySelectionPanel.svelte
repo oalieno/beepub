@@ -6,27 +6,27 @@
    * unless typed into; a field emptied goes back to each book's own value.
    */
   import { onDestroy } from "svelte";
-  import { Button } from "$lib/components/ui/button";
-  import { Input } from "$lib/components/ui/input";
-  import { Label } from "$lib/components/ui/label";
-  import * as Select from "$lib/components/ui/select";
-  import GeneratedCover from "$lib/components/GeneratedCover.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import { coverUrl } from "$lib/api/client";
-  import { authedSrc } from "$lib/actions/authedSrc";
-  import { booksApi } from "$lib/api/books";
-  import { toastStore } from "$lib/stores/toast";
-  import { sanitizeDescription } from "$lib/sanitize";
+  import { Button } from "#lib/components/ui/button/index.ts";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import { Label } from "#lib/components/ui/label/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import GeneratedCover from "#lib/components/GeneratedCover.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
+  import { coverUrl } from "#lib/api/client.ts";
+  import { authedSrc } from "#lib/actions/authedSrc.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { sanitizeDescription } from "#lib/sanitize.ts";
   import {
     replaceTitles,
     seriesNumbers,
     type Numbering,
-  } from "$lib/services/tableSelection";
-  import { Checkbox } from "$lib/components/ui/checkbox";
+  } from "#lib/services/tableSelection.ts";
+  import { Checkbox } from "#lib/components/ui/checkbox/index.ts";
   import { X } from "@lucide/svelte";
-  import type { BookOut, BookWithInteractionOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale } from "$lib/paraglide/runtime.js";
+  import type { BookOut, BookWithInteractionOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
 
   let {
     books,

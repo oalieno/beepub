@@ -5,15 +5,15 @@
     hasServerUrl,
     isLocalMode,
     switchAppMode,
-  } from "$lib/api/client";
-  import * as m from "$lib/paraglide/messages.js";
-  import { isNative } from "$lib/platform";
+  } from "#lib/api/client.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { isNative } from "#lib/platform.ts";
   import { ArrowLeft, Check, Pencil, Server, Smartphone } from "@lucide/svelte";
-  import { Button } from "$lib/components/ui/button";
+  import { Button } from "#lib/components/ui/button/index.ts";
 
   // Modes are a native concept — web is served by the server it uses.
   if (typeof window !== "undefined" && !isNative()) {
-    void goto("/", { replaceState: true });
+    void goto("/", { replace: true });
   }
 
   // One-time reads — switching always goes through a full page load.
@@ -26,7 +26,7 @@
     if (history.length > 1) {
       history.back();
     } else {
-      goto("/", { replaceState: true });
+      goto("/", { replace: true });
     }
   }
 </script>

@@ -4,8 +4,8 @@
    * phone. The Sheet, with the handle and the padding these lists share.
    */
   import type { Snippet } from "svelte";
-  import * as Sheet from "$lib/components/ui/sheet";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Sheet from "#lib/components/ui/sheet/index.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     open = $bindable(false),

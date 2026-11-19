@@ -15,7 +15,7 @@
 // nav bar stays vanished until the keyboard opens again.
 import { writable, type Readable } from "svelte/store";
 
-import { isNative } from "$lib/platform";
+import { isNative } from "#lib/platform.ts";
 
 const state = writable(false);
 let armed = false;

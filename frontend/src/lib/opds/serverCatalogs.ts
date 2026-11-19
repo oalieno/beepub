@@ -5,8 +5,8 @@
  * same parser the device catalogs use, fed the final URL the server
  * reached so relative links resolve right.
  */
-import { apiBase, del, get, post, put } from "$lib/api/client";
-import type { BookOut } from "$lib/types";
+import { apiBase, del, get, post, put } from "#lib/api/client.ts";
+import type { BookOut } from "#lib/types.ts";
 
 import { OpdsError } from "./errors";
 import {

@@ -10,7 +10,7 @@
  */
 import { CapacitorHttp, type HttpResponse } from "@capacitor/core";
 
-import { uint8ToBase64 } from "$lib/services/base64";
+import { uint8ToBase64 } from "#lib/services/base64.ts";
 
 import { OpdsError } from "./errors";
 import {

@@ -4,8 +4,8 @@
    * the batch whether to convert them (zhConvert). Mounted app-wide, since
    * uploads finish in the background, wherever the reader has gone.
    */
-  import ZhConvertDialog from "$lib/components/ZhConvertDialog.svelte";
-  import { simplifiedUploads } from "$lib/services/zhConvert";
+  import ZhConvertDialog from "#lib/components/ZhConvertDialog.svelte";
+  import { simplifiedUploads } from "#lib/services/zhConvert.ts";
 
   let open = $derived($simplifiedUploads.length > 0);
 </script>

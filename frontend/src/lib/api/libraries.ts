@@ -1,5 +1,5 @@
 import { get, post, put, del } from "./client";
-import type { LibraryOut } from "$lib/types";
+import type { LibraryOut } from "#lib/types.ts";
 
 export const librariesApi = {
   list: () => get("/libraries") as Promise<LibraryOut[]>,

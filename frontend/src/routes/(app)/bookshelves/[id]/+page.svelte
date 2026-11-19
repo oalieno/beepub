@@ -1,29 +1,29 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { page } from "$app/state";
-  import { scrollSnapshot } from "$lib/scrollSnapshot";
-  import { bookshelvesApi } from "$lib/api/bookshelves";
-  import { toastStore } from "$lib/stores/toast";
-  import { confirmDialog } from "$lib/stores/confirm";
-  import BookCard from "$lib/components/BookCard.svelte";
-  import SeriesCard from "$lib/components/SeriesCard.svelte";
-  import TierList from "$lib/components/TierList.svelte";
-  import type { TierEntry } from "$lib/components/TierList.svelte";
-  import { BookGridSkeleton } from "$lib/components/skeletons";
-  import { Skeleton } from "$lib/components/ui/skeleton";
-  import * as Select from "$lib/components/ui/select";
+  import { scrollSnapshot } from "#lib/scrollSnapshot.ts";
+  import { bookshelvesApi } from "#lib/api/bookshelves.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { confirmDialog } from "#lib/stores/confirm.ts";
+  import BookCard from "#lib/components/BookCard.svelte";
+  import SeriesCard from "#lib/components/SeriesCard.svelte";
+  import TierList from "#lib/components/TierList.svelte";
+  import type { TierEntry } from "#lib/components/TierList.svelte";
+  import { BookGridSkeleton } from "#lib/components/skeletons/index.ts";
+  import { Skeleton } from "#lib/components/ui/skeleton/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
   import { BookOpen, LayoutGrid, Layers, X } from "@lucide/svelte";
-  import BackButton from "$lib/components/BackButton.svelte";
+  import BackButton from "#lib/components/BackButton.svelte";
   import {
     TIER_PRESETS,
     DEFAULT_PRESET_KEY,
     bandsForKey,
     loadShelfThemeKey,
     saveShelfThemeKey,
-  } from "$lib/tiers";
-  import * as m from "$lib/paraglide/messages.js";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import type { BookshelfOut, GroupedItem } from "$lib/types";
+  } from "#lib/tiers.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import type { BookshelfOut, GroupedItem } from "#lib/types.ts";
 
   let shelfId = $derived(page.params.id as string);
 

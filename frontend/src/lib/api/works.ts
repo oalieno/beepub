@@ -1,5 +1,5 @@
 import { get, post, patch, del } from "./client";
-import type { DuplicateSuggestionsOut, WorkOut } from "$lib/types";
+import type { DuplicateSuggestionsOut, WorkOut } from "#lib/types.ts";
 
 export const worksApi = {
   create: (bookIds: string[]) =>

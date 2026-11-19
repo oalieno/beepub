@@ -1,11 +1,11 @@
 <script lang="ts">
   import { page } from "$app/state";
-  import { isLocalMode } from "$lib/api/client";
-  import { navTabs } from "$lib/nav";
-  import { isNative } from "$lib/platform";
-  import { activeLibraryHref } from "$lib/stores/activeLibrary";
-  import { keyboardVisible } from "$lib/stores/keyboard";
-  import * as m from "$lib/paraglide/messages.js";
+  import { isLocalMode } from "#lib/api/client.ts";
+  import { navTabs } from "#lib/nav.ts";
+  import { isNative } from "#lib/platform.ts";
+  import { activeLibraryHref } from "#lib/stores/activeLibrary.ts";
+  import { keyboardVisible } from "#lib/stores/keyboard.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   // Mode switches are a full page load, so a one-time read is enough.
   const mode = isLocalMode() ? "local" : "server";

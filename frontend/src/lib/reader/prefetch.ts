@@ -62,7 +62,7 @@ import {
   backgroundFetchAllowed,
   getIsOnline,
   isOnline,
-} from "$lib/services/network";
+} from "#lib/services/network.ts";
 
 import type { BookLoader } from "./loaders";
 

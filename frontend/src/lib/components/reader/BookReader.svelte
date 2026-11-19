@@ -1,5 +1,8 @@
 <script lang="ts">
-  import { recallProgress, rememberProgress } from "$lib/reader/progress-cache";
+  import {
+    recallProgress,
+    rememberProgress,
+  } from "#lib/reader/progress-cache.ts";
   /**
    * BookReader — the thinnest Svelte container around ReaderCore. Mounts
    * the paginator into a full-size div, feeds it theme CSS and layout
@@ -23,38 +26,41 @@
     Relocation,
     TocItem,
     WritingMode,
-  } from "$lib/reader/core";
-  import { AnnotationLayer, type Annotation } from "$lib/reader/annotations";
-  import type { BookLoader } from "$lib/reader/loaders";
-  import { verifyAnchors } from "$lib/reader/anchor";
-  import { isSectionLoadError } from "$lib/reader/load-error";
-  import { unwrapBoundaries, wholeText } from "$lib/reader/tcy";
+  } from "#lib/reader/core.ts";
+  import { AnnotationLayer, type Annotation } from "#lib/reader/annotations.ts";
+  import type { BookLoader } from "#lib/reader/loaders/index.ts";
+  import { verifyAnchors } from "#lib/reader/anchor.ts";
+  import { isSectionLoadError } from "#lib/reader/load-error.ts";
+  import { unwrapBoundaries, wholeText } from "#lib/reader/tcy.ts";
   import {
     activeTocEntry,
     flattenToc,
     tocLabelForSection,
     type TocEntry,
-  } from "$lib/reader/toc";
-  import { cfiOf as cfiOfLocator, locatorFromCfi } from "$lib/reading/locator";
+  } from "#lib/reader/toc.ts";
+  import {
+    cfiOf as cfiOfLocator,
+    locatorFromCfi,
+  } from "#lib/reading/locator.ts";
   import {
     densePageCounts,
     percentFromPosition,
     positionFromPercent,
     sectionTickPercents,
     usableWeights,
-  } from "$lib/reading/progress";
-  import type { BookSource } from "$lib/reading/source";
+  } from "#lib/reading/progress.ts";
+  import type { BookSource } from "#lib/reading/source.ts";
   import type {
     ProgressSave,
     ProgressState,
     SyncBackend,
-  } from "$lib/reading/sync";
-  import { booksApi } from "$lib/api/books";
-  import type { HighlightOut, IllustrationOut } from "$lib/types";
-  import { toastStore } from "$lib/stores/toast";
-  import * as m from "$lib/paraglide/messages.js";
+  } from "#lib/reading/sync.ts";
+  import { booksApi } from "#lib/api/books.ts";
+  import type { HighlightOut, IllustrationOut } from "#lib/types.ts";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import * as m from "#lib/paraglide/messages.js";
   import type { SearchResult } from "./search";
-  import Spinner from "$lib/components/Spinner.svelte";
+  import Spinner from "#lib/components/Spinner.svelte";
   import FootnotePopup from "./FootnotePopup.svelte";
   import HighlightMenu from "./HighlightMenu.svelte";
   import HighlightNoteEditor from "./HighlightNoteEditor.svelte";
@@ -78,7 +84,7 @@
     leadBookFonts,
     routeLegacyMing,
     type ReaderFont,
-  } from "$lib/reader/fonts";
+  } from "#lib/reader/fonts.ts";
   import { isIOSDevice, setupSwipeNavigation } from "./touch-navigation";
   import { snapRangeToWordBounds } from "./word-snap";
 
@@ -2262,7 +2268,7 @@ ${darkOverrides}
     }
     // Dynamic import: the paginator registers a custom element at module
     // evaluation, which has no meaning during SSR.
-    const { ReaderCore } = await import("$lib/reader/core");
+    const { ReaderCore } = await import("#lib/reader/core.ts");
     if (destroyed) return;
     const c = new ReaderCore(container, {
       onload: handleLoad,
@@ -2317,7 +2323,8 @@ ${darkOverrides}
     try {
       const payload = await source.openBook(bookId);
       streamed = payload.kind === "stream";
-      const { loaderFromPayload } = await import("$lib/reader/loaders");
+      const { loaderFromPayload } =
+        await import("#lib/reader/loaders/index.ts");
       const loader = await loaderFromPayload(payload);
       // The list loads alongside the book; a failure leaves the page
       // readable without marks rather than blocking it.

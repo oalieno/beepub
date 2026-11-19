@@ -11,10 +11,10 @@
 import { Filesystem, Directory } from "@capacitor/filesystem";
 import { Preferences } from "@capacitor/preferences";
 import { Capacitor } from "@capacitor/core";
-import { getServerUrl } from "$lib/api/client";
-import { computePartialMd5 } from "$lib/services/partialMd5";
-import { uint8ToBase64 } from "$lib/services/base64";
-import { isImageBookShare, isPictureText } from "$lib/reader/picture";
+import { getServerUrl } from "#lib/api/client.ts";
+import { computePartialMd5 } from "#lib/services/partialMd5.ts";
+import { uint8ToBase64 } from "#lib/services/base64.ts";
+import { isImageBookShare, isPictureText } from "#lib/reader/picture.ts";
 
 const MANIFEST_KEY = "local-library";
 const LINKS_KEY_PREFIX = "local-links";
@@ -217,8 +217,8 @@ interface ParsedBook {
  *  is an InvalidEpubError. */
 async function openEpub(buf: ArrayBuffer): Promise<ParsedBook> {
   const [{ EPUB }, { makeLocalLoader }] = await Promise.all([
-    import("$lib/reader/vendor/foliate/epub.js"),
-    import("$lib/reader/loaders/local"),
+    import("#lib/reader/vendor/foliate/epub.js"),
+    import("#lib/reader/loaders/local.ts"),
   ]);
   try {
     const loader = await makeLocalLoader(buf);

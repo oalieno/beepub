@@ -2,7 +2,7 @@
   import ReaderPanel from "./ReaderPanel.svelte";
   import { Search, X, LoaderCircle } from "@lucide/svelte";
   import type { SearchResult } from "./search";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     darkMode = false,

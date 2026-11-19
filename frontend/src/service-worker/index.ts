@@ -1,17 +1,18 @@
-/// <reference types="@sveltejs/kit" />
-/// <reference no-default-lib="true"/>
-/// <reference lib="esnext" />
-/// <reference lib="webworker" />
-
-import { build, files, version } from "$service-worker";
-
-const sw = self as unknown as ServiceWorkerGlobalScope;
+import { version } from "$app/env";
+import { assets, immutable } from "$app/manifest";
+import { self as sw } from "$app/service-worker";
 
 const CACHE = `cache-${version}`;
 
+/** The manifest's paths are relative to the base path, which this app
+ *  leaves at the root: as requested, each starts with a slash. */
+const fromRoot = (path: string) => (path.startsWith("/") ? path : `/${path}`);
+
 const ASSETS = [
-  ...build, // the app itself (JS/CSS bundles, and the fonts beside them)
-  ...files, // everything in `static`
+  // the app itself (JS/CSS bundles, and the fonts beside them)
+  ...immutable.map((file) => fromRoot(file.path)),
+  // everything in `static`
+  ...assets.map((file) => fromRoot(file.path)),
 ];
 const ASSET_SET = new Set(ASSETS);
 

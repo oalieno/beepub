@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { booksApi } from "$lib/api/books";
-  import * as m from "$lib/paraglide/messages.js";
-  import { toastStore } from "$lib/stores/toast";
-  import { getMetadataSources } from "$lib/stores/metadataSources";
+  import { booksApi } from "#lib/api/books.ts";
+  import * as m from "#lib/paraglide/messages.js";
+  import { toastStore } from "#lib/stores/toast.ts";
+  import { getMetadataSources } from "#lib/stores/metadataSources.ts";
   import { onMount } from "svelte";
   import { Pencil, Plus, Unlink, Ban } from "@lucide/svelte";
-  import * as Popover from "$lib/components/ui/popover";
-  import type { ExternalMetadataOut } from "$lib/types";
+  import * as Popover from "#lib/components/ui/popover/index.ts";
+  import type { ExternalMetadataOut } from "#lib/types.ts";
 
   let {
     bookId,

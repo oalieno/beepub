@@ -12,7 +12,7 @@
  * which the system leaves alone — and put back from there at start-up
  * if the working copy has gone.
  */
-import { isNative } from "$lib/platform";
+import { isNative } from "#lib/platform.ts";
 
 const ACCESS = "token";
 const REFRESH = "refresh_token";

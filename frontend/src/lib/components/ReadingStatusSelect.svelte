@@ -6,10 +6,10 @@
     CircleX,
     BookMarked,
   } from "@lucide/svelte";
-  import * as Select from "$lib/components/ui/select";
-  import DatePicker from "$lib/components/DatePicker.svelte";
-  import type { ReadingStatus, InteractionOut } from "$lib/types";
-  import * as m from "$lib/paraglide/messages.js";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import DatePicker from "#lib/components/DatePicker.svelte";
+  import type { ReadingStatus, InteractionOut } from "#lib/types.ts";
+  import * as m from "#lib/paraglide/messages.js";
 
   let {
     interaction,

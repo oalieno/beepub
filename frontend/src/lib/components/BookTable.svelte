@@ -1,5 +1,5 @@
 <script lang="ts" module>
-  import type { ReadingStatus } from "$lib/types";
+  import type { ReadingStatus } from "#lib/types.ts";
 
   /** The fields a row edits in place. */
   export type RowField = "title" | "authors" | "series";
@@ -15,9 +15,9 @@
 </script>
 
 <script lang="ts">
-  import { formatSize } from "$lib/format";
+  import { formatSize } from "#lib/format.ts";
   import type { Snippet } from "svelte";
-  import type { BookWithInteractionOut } from "$lib/types";
+  import type { BookWithInteractionOut } from "#lib/types.ts";
   import {
     ArrowDown,
     ArrowUp,
@@ -30,14 +30,14 @@
   } from "@lucide/svelte";
   import { goto } from "$app/navigation";
   import { tick } from "svelte";
-  import { Input } from "$lib/components/ui/input";
-  import * as Select from "$lib/components/ui/select";
-  import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
-  import { getLocale } from "$lib/paraglide/runtime.js";
-  import * as m from "$lib/paraglide/messages.js";
-  import { editedBooks, withEdit } from "$lib/stores/editedBooks";
-  import BookActionMenuItems from "$lib/components/book-actions/BookActionMenuItems.svelte";
-  import type { BookAction } from "$lib/components/book-actions/BookActions.svelte";
+  import { Input } from "#lib/components/ui/input/index.ts";
+  import * as Select from "#lib/components/ui/select/index.ts";
+  import * as DropdownMenu from "#lib/components/ui/dropdown-menu/index.ts";
+  import { getLocale } from "#lib/paraglide/runtime.js";
+  import * as m from "#lib/paraglide/messages.js";
+  import { editedBooks, withEdit } from "#lib/stores/editedBooks.ts";
+  import BookActionMenuItems from "#lib/components/book-actions/BookActionMenuItems.svelte";
+  import type { BookAction } from "#lib/components/book-actions/BookActions.svelte";
 
   let {
     books,

@@ -3,16 +3,16 @@
  *
  * `schema.d.ts` is generated from the backend's own description of its
  * API (`pnpm gen:api`, from `openapi.json` — kept current by a backend
- * test). `$lib/types` is written by hand and is what the app uses. This
+ * test). `#lib/types.ts` is written by hand and is what the app uses. This
  * file makes the compiler compare the two: for each type both sides
  * have, every field the app expects must be one the backend sends, with
  * a type the app's can hold.
  *
  * It has no runtime content. A line that stops compiling means a field
- * was renamed, removed or retyped on one side only — fix `$lib/types`
+ * was renamed, removed or retyped on one side only — fix `#lib/types.ts`
  * (or the backend), not this file.
  */
-import type * as App from "$lib/types";
+import type * as App from "#lib/types.ts";
 import type { components } from "./schema";
 
 type Api = components["schemas"];
