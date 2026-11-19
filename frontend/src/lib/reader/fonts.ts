@@ -20,11 +20,7 @@ import legacyMingNames from "./fonts/legacy-ming.json";
  *  reached only by `?font=serif` — the tests' fixed ground, as
  *  `?turn=instant` is. */
 export type ReaderFont =
-  | "mincho"
-  | "gothic"
-  | "kai"
-  | "system"
-  | "system-serif";
+  "mincho" | "gothic" | "kai" | "system" | "system-serif";
 
 /** The choices the settings offer, in their order. */
 export const READER_FONTS = ["mincho", "gothic", "kai", "system"] as const;

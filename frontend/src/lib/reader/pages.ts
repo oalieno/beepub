@@ -224,11 +224,7 @@ export function pageFromPercent(pct: number, total: number): number {
  *  horizontal with gaps (reading-direction aware), or webtoon (vertical,
  *  edge to edge, no gaps). */
 export type PagerMode =
-  | "single"
-  | "double"
-  | "vertical"
-  | "horizontal"
-  | "webtoon";
+  "single" | "double" | "vertical" | "horizontal" | "webtoon";
 /** Reading direction: the book's own, or forced either way. */
 export type PagerDirection = "auto" | "ltr" | "rtl";
 /** How a paged (single / double) book turns: the next page at once, or a

@@ -141,8 +141,7 @@
     tick().then(() =>
       setTimeout(() => {
         const input = document.getElementById(`row-edit-${editingField}`) as
-          | HTMLInputElement
-          | undefined;
+          HTMLInputElement | undefined;
         input?.focus();
         input?.setSelectionRange(input.value.length, input.value.length);
       }),

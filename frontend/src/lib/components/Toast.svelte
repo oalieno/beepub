@@ -178,6 +178,7 @@
 <div
   class="fixed left-1/2 -translate-x-1/2 z-[150] flex flex-col-reverse md:flex-col items-center gap-2 max-w-sm w-full pointer-events-none px-4 toast-position"
   data-testid="toasts"
+  data-toasts
 >
   {#each $toastStore as toast (toast.id)}
     {@const IconComponent = icons[toast.type]}

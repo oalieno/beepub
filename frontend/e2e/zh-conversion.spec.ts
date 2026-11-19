@@ -98,7 +98,7 @@ test("an upload with Simplified books asks once, then converts them", async ({
   await prompt.getByRole("switch", { name: /Also use Taiwan wording/ }).click();
   await expect(after).toContainText("軟體工程師");
   await expect(after.locator(".zh-mark")).toHaveText(["軟體"]);
-  await prompt.getByRole("button", { name: "Book to preview" }).click();
+  await prompt.getByRole("combobox", { name: "Book to preview" }).click();
   await page.getByRole("option", { name: "灯塔守夜人" }).click();
   await expect(after).toHaveText("守夜人把網路斷了，只留一盞燈。");
 

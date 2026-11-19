@@ -18,10 +18,7 @@ import type { NavTarget, OverlayerInstance } from "./core";
  *  slab the old reader laid over a passage that has an AI illustration
  *  (clickable, pulsing while it generates). */
 export type AnnotationKind =
-  | "highlight"
-  | "underline"
-  | "squiggly"
-  | "illustration";
+  "highlight" | "underline" | "squiggly" | "illustration";
 
 export interface AnnotationStyle {
   kind: AnnotationKind;

@@ -14,6 +14,7 @@
     overlayClass,
     children,
     showCloseButton = true,
+    onInteractOutside,
     ...restProps
   }: WithoutChildrenOrChild<DialogPrimitive.ContentProps> & {
     portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DialogPortal>>;
@@ -22,6 +23,17 @@
     children: Snippet;
     showCloseButton?: boolean;
   } = $props();
+
+  // A toast said over the dialog sits outside it, but touching the toast
+  // (its action, or the swipe that sends it away) is not touching the page
+  // behind: the dialog stays open.
+  function interactOutside(e: PointerEvent) {
+    if (e.target instanceof Element && e.target.closest("[data-toasts]")) {
+      e.preventDefault();
+      return;
+    }
+    onInteractOutside?.(e);
+  }
 </script>
 
 <DialogPortal {...portalProps}>
@@ -37,6 +49,7 @@
       "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[calc(50%_+_(env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px))_/_2)] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] max-h-[calc(100dvh_-_env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px)_-_2rem)] overflow-y-auto translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg",
       className,
     )}
+    onInteractOutside={interactOutside}
     {...restProps}
   >
     {@render children?.()}

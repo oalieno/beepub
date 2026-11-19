@@ -10,11 +10,7 @@ import { derived, get, writable } from "svelte/store";
 
 export type TransferKind = "download" | "import" | "upload" | "convert";
 export type TransferStatus =
-  | "queued"
-  | "running"
-  | "done"
-  | "duplicate"
-  | "failed";
+  "queued" | "running" | "done" | "duplicate" | "failed";
 
 export interface Transfer {
   id: string;

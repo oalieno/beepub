@@ -41,11 +41,7 @@ export interface KosyncPushPayload {
 }
 
 export type KosyncErrorKind =
-  | "auth"
-  | "http"
-  | "network"
-  | "parse"
-  | "conflict";
+  "auth" | "http" | "network" | "parse" | "conflict";
 
 /** Typed transport failure; the UI translates by `kind`. */
 export class KosyncError extends Error {

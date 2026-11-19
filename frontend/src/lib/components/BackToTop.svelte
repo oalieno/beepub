@@ -3,10 +3,10 @@
   import { keyboardVisible } from "$lib/stores/keyboard";
   import { ArrowUp } from "@lucide/svelte";
 
-  let { threshold = 400, bottomOffset = "5.5rem" } = $props<{
-    threshold?: number;
-    bottomOffset?: string;
-  }>();
+  let {
+    threshold = 400,
+    bottomOffset = "5.5rem",
+  }: { threshold?: number; bottomOffset?: string } = $props();
 
   let visible = $state(false);
 

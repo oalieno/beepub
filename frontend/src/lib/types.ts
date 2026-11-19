@@ -369,10 +369,7 @@ export interface BookSyncResponse {
 }
 
 export type ReadingStatus =
-  | "want_to_read"
-  | "currently_reading"
-  | "read"
-  | "did_not_finish";
+  "want_to_read" | "currently_reading" | "read" | "did_not_finish";
 
 export interface MetadataSourceOut {
   name: string;
