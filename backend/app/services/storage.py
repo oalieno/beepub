@@ -1,5 +1,6 @@
 import os
 import uuid
+from collections.abc import Callable
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -114,6 +115,39 @@ def write_cover_thumbnail(cover_path: str) -> bool:
     except Exception:
         delete_file(tmp)
         return False
+
+
+def make_missing_thumbnails(
+    covers_dir: str, on_progress: Callable[[int, int], None] | None = None
+) -> tuple[int, int, int]:
+    """Give every cover in `covers_dir` a thumbnail it lacks, or one older
+    than itself: (covers seen, thumbnails made, failed).
+
+    A cover written now gets its thumbnail as it is written; this is for
+    the ones stored before thumbnails existed. A cover whose thumbnail is
+    current costs two stats, so a second run does nothing and an
+    interrupted one resumes. `on_progress(seen, made)` is called every
+    thousand covers."""
+    seen = made = failed = 0
+    if not os.path.isdir(covers_dir):
+        return seen, made, failed
+    for entry in os.scandir(covers_dir):
+        if not entry.is_file() or not is_cover_file(entry.name):
+            continue
+        seen += 1
+        thumbnail = cover_thumbnail_path(entry.path)
+        try:
+            fresh = os.stat(thumbnail).st_mtime_ns >= entry.stat().st_mtime_ns
+        except OSError:
+            fresh = False
+        if not fresh:
+            if write_cover_thumbnail(entry.path):
+                made += 1
+            else:
+                failed += 1
+        if on_progress and seen % 1000 == 0:
+            on_progress(seen, made)
+    return seen, made, failed
 
 
 def is_cover_file(path: str) -> bool:

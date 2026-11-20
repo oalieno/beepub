@@ -64,6 +64,7 @@ celery.conf.update(
         "app.tasks.bulk_jobs",
         "app.tasks.calibre_sync",
         "app.tasks.digests",
+        "app.tasks.covers",
     ],
     beat_schedule={
         "calibre-auto-sync": {

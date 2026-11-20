@@ -8,7 +8,11 @@ from sqlalchemy import select
 
 from app.database import AsyncSessionLocal
 from app.models.book import Book
-from app.services.storage import THUMBNAIL_WIDTH, cover_thumbnail_path
+from app.services.storage import (
+    THUMBNAIL_WIDTH,
+    cover_thumbnail_path,
+    make_missing_thumbnails,
+)
 from tests.integration.util import create_library, upload_epub
 
 
@@ -67,7 +71,7 @@ async def test_a_replaced_cover_has_a_new_thumbnail(admin_client):
 
 async def test_a_book_without_a_thumbnail_answers_with_its_cover(admin_client):
     """Covers stored before thumbnails were made have none until the
-    one-off script has run."""
+    worker's walk (or the script) has made them."""
     library_id = await create_library(admin_client)
     book = await upload_epub(admin_client, library_id)
     cover = await _cover_path(book["id"])
@@ -79,15 +83,12 @@ async def test_a_book_without_a_thumbnail_answers_with_its_cover(admin_client):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/jpeg"
 
-    # The script makes the missing one, and only that.
-    from pathlib import Path
-
-    from scripts.make_cover_thumbnails import run
-
-    _seen, made, failed = run(Path(cover).parent)
+    # The walk makes the missing one, and only that.
+    covers = os.path.dirname(cover)
+    _seen, made, failed = make_missing_thumbnails(covers)
     assert made >= 1 and failed == 0
     assert os.path.exists(cover_thumbnail_path(cover))
-    assert run(Path(cover).parent)[1:] == (0, 0)
+    assert make_missing_thumbnails(covers)[1:] == (0, 0)
     response = await admin_client.get(
         f"/api/books/{book['id']}/cover", params={"size": "thumb"}
     )
